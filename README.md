@@ -1,4 +1,4 @@
-ascs
+ascs (a successor of st_asio_wrapper)
 ===============
 Overview
 -
