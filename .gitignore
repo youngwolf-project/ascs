@@ -1,0 +1,11 @@
+Debug/
+debug/
+Release/
+release/
+*.mk
+!config.mk
+Makefile
+*.txt
+*.project
+*.workspace
+.*
