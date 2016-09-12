@@ -27,9 +27,9 @@ All source codes are placed in directory `include/ascs/`, demos are placed in di
 Demos:
 -
 ###echo_server:
-Demonstrate how to implement tcp servers, it cantains two servers, one is the simplest server (normal server), which just send characters from keyboard to all clients from `client`, and receive messages from all clients (then display them); the other is echo server, which send every received message from `echo_client` back.</br>
+Demonstrate how to implement tcp servers, it cantains two servers, one is the simplest server (normal server), which just send characters from keyboard to all clients (from `client` demo), and receive messages from all clients (from `client` demo), then display them; the other is echo server, which send every received message from `echo_client` demo back.</br>
 ###client:
-Demonstrate how to implement tcp client, it simply send characters from keyboard to normal server in `echo_server`, and receive messages from `echo_server` (then display them).</br>
+Demonstrate how to implement tcp client, it simply send characters from keyboard to normal server in `echo_server`, and receive messages from normal server in `echo_server`, then display them.</br>
 ###echo_client:
 Used to test `ascs`'s performance (whith `echo server`).</br>
 ###file_server:
