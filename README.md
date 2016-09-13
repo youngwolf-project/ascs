@@ -23,7 +23,7 @@ Create a `service_pump` object, create a `tcp_client` object, set server address
 Call `connector::send_msg` when you have messages need to send.</br>
 Directory structure:
 -
-All source codes are placed in directory `include/ascs/`, demos are placed in directory `samples`, documents are placed in directory `doc`.</br>
+All source codes are placed in directory `include/ascs/`, demos are placed in directory `examples`, documents are placed in directory `doc`.</br>
 Demos:
 -
 ###echo_server:
