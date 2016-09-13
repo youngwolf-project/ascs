@@ -14,13 +14,13 @@ ascs is an asynchronous c/s framework based on Asio(non-Boost), besides all bene
 Quick start:
 -
 ###server:
-Derive your own socket from `server_socket`, you must at least re-write the `on_msg` or `on_msg_handle` virtual function and handle messages in it;</br>
-Create a `service_pump` object, create a `server` object, call `service_pump::start_service`;</br>
-Call `server_socket::send_msg` when you have messages need to send.</br>
+Derive your own socket from `server_socket_base`, you must at least re-write the `on_msg` or `on_msg_handle` virtual function and handle messages in it;</br>
+Create a `service_pump` object, create a `server_base` object, call `service_pump::start_service`;</br>
+Call `server_socket_base::send_msg` when you have messages need to send.</br>
 ###client:
-Derive your own socket from `connector`, you must at least re-write the `on_msg` or `on_msg_handle` virtual function and handle messages in it;</br>
-Create a `service_pump` object, create a `tcp_client` object, set server address via `connector::set_server_addr`, call `service_pump::start_service`;</br>
-Call `connector::send_msg` when you have messages need to send.</br>
+Derive your own socket from `connector_base`, you must at least re-write the `on_msg` or `on_msg_handle` virtual function and handle messages in it;</br>
+Create a `service_pump` object, create a `tcp::client` object, set server address via `connector_base::set_server_addr`, call `service_pump::start_service`;</br>
+Call `connector_base::send_msg` when you have messages need to send.</br>
 Directory structure:
 -
 All source codes are placed in directory `include/ascs/`, demos are placed in directory `examples`, documents are placed in directory `doc`.</br>
