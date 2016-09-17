@@ -1,0 +1,95 @@
+
+#ifndef ASCS_ASYNC_ACCEPT_NUM
+#define ASCS_ASYNC_ACCEPT_NUM			1
+同时投递多少个async_accept。
+#endif
+
+#ifndef ASCS_TCP_DEFAULT_IP_VERSION
+#define ASCS_TCP_DEFAULT_IP_VERSION asio::ip::tcp::v4()
+为监听套接字绑定地址时，在不指定ip的情况下，指定ip地址的版本（v4还是v6），如果指定了ip，则ip地址的版本可以从ip中推导出来。
+#endif
+
+namespace ascs { namespace tcp {
+
+服务端服务器类，主要功能是监听和接受连接，连接管理继承于Pool
+template<typename Socket, typename Pool = object_pool<Socket>, typename Server = i_server>
+class server_base : public Server, public Pool
+{
+public:
+	server_base(service_pump& service_pump_);
+
+	template<typename Arg>
+	server_base(service_pump& service_pump_, Arg arg);
+ssl使用。
+
+	void set_server_addr(unsigned short port, const std::string& ip = std::string());
+	const asio::ip::tcp::endpoint& get_server_addr() const;
+设置获取监听地址。
+
+	void stop_listen();
+停止监听。
+
+	bool is_listening() const;
+是否正在监听。
+
+	virtual service_pump& get_service_pump();
+	virtual const service_pump& get_service_pump() const;
+	virtual bool del_client(const std::shared_ptr<timer>& client_ptr);
+实现i_server中的三个纯虚接口。del_client的功能主要是调用object_pool的del_object函数，并输出一些信息，主要用于连接断开时调用，
+也可用于主动断开连接，但是用tcp::socket的force_close或者graceful_close更理合理一些。
+
+	void close_all_client();
+关闭所有连接，退出服务器时使用。
+
+	void broadcast_msg(const std::string& str, bool can_overflow = false);
+	void broadcast_msg(const char* pstr, size_t len, bool can_overflow = false);
+	void broadcast_msg(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false);
+
+	void broadcast_native_msg(const std::string& str, bool can_overflow = false);
+	void broadcast_native_msg(const char* pstr, size_t len, bool can_overflow = false);
+	void broadcast_native_msg(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false);
+
+	void safe_broadcast_msg(const std::string& str, bool can_overflow = false);
+	void safe_broadcast_msg(const char* pstr, size_t len, bool can_overflow = false);
+	void safe_broadcast_msg(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false);
+
+	void safe_broadcast_native_msg(const std::string& str, bool can_overflow = false);
+	void safe_broadcast_native_msg(const char* pstr, size_t len, bool can_overflow = false);
+	void safe_broadcast_native_msg(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false);
+对每一个连接调用tcp::socket中的同名函数。
+
+protected:
+	virtual void init();
+	virtual void uninit();
+实现i_service纯虚接口，在启动和关闭service的时候，由service_pump调用。
+
+	virtual bool on_accept(typename server_base::object_ctype& client_ptr);
+一个连接成功被接受后调用这个函数，如果返回true，连接将被object_pool管理；如果返回false，那么可能意味着你不想要这个连接
+（你应该在返回false之前关闭这个socket）或者你想自己管理这个连接（你应该在返回false之前调用client_ptr->start以开始数据接收），
+总之ojbect_pool不再维护这个连接。
+
+	virtual bool on_accept_error(const asio::error_code& ec, typename Pool::object_ctype& client_ptr);
+在接受连接失败时回调这个函数，如果你想忽略这个错误且马上继续接受新连接，则返回true；如果你想忽略这个错误且等一段时间之后再继续接受新连接，
+则启动一个定时器并返回fale，当定时器到达时，调用start_next_accept()函数；如果你想永远终止再接受新连接，则不要重写这个虚函数，如果你
+非要重写，那么在你的代码后面调用stop_listen()且返回false。
+
+	void start_next_accept();
+开始下一次异步接受连接，抽象成一个方法是因为两个地方需要调用，一是init内，一accept_handler内。
+使用者也可以随时调用这个方法，如果你想增加一些异步accept的话（参看ASCS_ASYNC_ACCEPT_NUM宏）。
+
+protected:
+	bool add_client(typename server_base::object_ctype& client_ptr);
+添加一条连接到对象池（调用object_pool::add_object），如果成功，打印一些连接建议相关的信息。
+
+	void accept_handler(const error_code& ec, typename server_base::object_ctype& client_ptr);
+异步接受到连接时asio回调，如果出错（ec为真），将调用stop_listen，否则继续异步接受连接（start_next_accept）。
+
+protected:
+	asio::ip::tcp::endpoint server_addr;
+监听地址。
+	asio::ip::tcp::acceptor acceptor;
+连接异步接受器。
+};
+
+}} //namespace
+

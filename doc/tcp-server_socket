@@ -1,0 +1,49 @@
+
+namespace ascs { namespace tcp {
+
+服务端套接字类
+template<typename Packer, typename Unpacker, typename Server = i_server, typename Socket = asio::ip::tcp::socket>
+class server_socket_base : public socket_base<Socket, Packer, Unpacker>, public std::enable_shared_from_this<server_socket_base<Packer, Unpacker, Server, Socket>>
+{
+public:
+	server_socket_base(Server& server_);
+
+	template<typename Arg>
+	server_socket_base(Server& server_, Arg& arg);
+ssl使用。
+
+	virtual void reset();
+重置所有，object_pool在重用时会调用。server_socket_base的子类可重写它以重置自己的状态，记得最后需要调用本类的reset。
+
+	void disconnect();
+直接调用force_close。
+
+	void force_close();
+强制退出————调用父类的同名函数。
+
+	void graceful_close(bool sync = true);
+优雅关闭————调用父类的同名函数。
+
+	void show_info(const char* head, const char* tail) const;
+在head和tail中间，显示对方的地址（IP加端口）。
+
+	void show_info(const char* head, const char* tail, const asio::error_code& ec) const;
+同上，但加上了显示ec.message.data()的内容。
+
+protected:
+	virtual bool do_start();
+开始，这里开始的意义是，马上开始接收数据。
+
+	virtual void on_unpack_error();
+解包错误，默认的行为是关闭连接，可以重写以自定义行为。
+
+	virtual void on_recv_error(const error_code& ec);
+连接断开，默认的行为是调用i_server::del_client，可以重写以自定义行为。
+
+protected:
+	Server& server;
+用于操控server_base，server_base在创建（其实是object_pool，server_base是其子类）server_socket_base的时候，会把自己的引用通过构造函数传入。
+};
+
+}} //namespace
+

@@ -1,0 +1,242 @@
+﻿
+namespace ascs
+{
+
+template<typename Socket, typename Packer, typename Unpacker, typename InMsgType = typename Packer::msg_type, typename OutMsgType = typename Unpacker::msg_type>
+class socket: public timer
+{
+public:
+	效率统计，注意这个功能会轻微的影响性能，默认关闭，可以通过ASCS_FULL_STATISTIC宏来开启。在关闭情况下，所有整数项统计（uint_fast64_t）仍然有效，
+	所有时间统计项将无效（stat_duration）。在打开情况下，时间统计的数据类型其实是std::chrono::system_clock::time_point。
+	struct statistic
+	{
+		statistic();
+		void reset();
+		由于统计涉及多个方面，并且是多线程修改不同的部分，这个函数只是在某些特殊情况下才可以调用，比如在构造函数里面，或者只有一个service线程，
+		所以这个函数基本上还是用在对象重用时。
+
+		statistic& operator +=(const struct statistic& other);
+		std::string to_string() const;
+
+		消息发送相关的统计
+		uint_fast64_t send_msg_sum; 成功发送到asio的消息条数
+		uint_fast64_t send_byte_sum; 成功发送到asio的消息总字节数
+		stat_duration send_delay_sum; 从消息发送（send_(native_)msg, post_(native_)msg，不包括打包时间）到真正发送（asio::async_write）的延迟时间
+		stat_duration send_time_sum; 从真正的消息发送（asio::async_write）到发送完成（发送到SOCKET缓存），这一项体现了你的网络吞吐率，注意吞吐率低
+		不代表是你的问题，也有可能是接收方慢了。
+
+		消息接收相关统计
+		uint_fast64_t recv_msg_sum; 收到的消息条数
+		uint_fast64_t recv_byte_sum; 收到的消息总字节数
+		stat_duration dispatch_dealy_sum; 从消息解包完成之后，到on_msg_handle的时间延迟，如果这项偏大，可能是因为service线程总不够用
+		stat_duration recv_idle_sum; 暂停消息接收的总时间，如果接收缓存满，或者在发送缓存满的情况下调用了post_(native_)msg，将会暂停消息接收，
+		注意，在回调on_msg期间，也算是暂停了消息接收。
+#ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
+		stat_duration handle_time_1_sum; 调用on_msg花费的总时间
+#endif
+		stat_duration handle_time_2_sum; 调用on_msg_handle花费的总时间
+	};
+
+protected:
+	typedef std::list<InMsgType> in_container_type;
+	typedef typename Unpacker::container_type out_container_type;
+
+	socket(asio::io_service& io_service_);
+
+	template<typename Arg>
+	socket(asio::io_service& io_service_, Arg& arg);
+ssl使用。
+
+	void reset_state();
+重置所有状态。
+
+	void clear_buffer();
+清空所有buffer。
+
+public:
+	void id(uint_fast64_t id);
+
+	uint_fast64_t id() const;
+id的设置与获取，注意使用者不可设置id，只有socket的创建者（object_pool或者其继承者）才可设置id，
+除非这个socket没有被任何对象池管理。
+
+	Socket& next_layer();
+	const Socket& next_layer() const;
+	typename Socket::lowest_layer_type& lowest_layer();
+	const typename Socket::lowest_layer_type& lowest_layer() const;
+底层对象，它应该是一个asio::ip::tcp::socket，asio::ip::udp::socket或者
+asio::ssl::stream<asio::ip::tcp::socket>对象及其从它们继承的对象。
+最底层对象其实就是调用底层对象的lowest_layer()，我们真正要读写的其实就是最底层对象。
+
+	virtual bool obsoleted();
+判断本对象是否可以被重用或者被释放。
+
+	bool started() const;
+是否已经开始，已经开始意思是已经调用过start()了，多次调用start()会有严重的包乱顺问题，好在我在某个版本
+增加了防止多次调用start()的功能，之前靠用户保证，现在ascs库可以保证，即使用户多次调用也没问题。
+
+	boos started() const;
+是否已经调用过下面的start函数，多次调用start是没有意义的，只有第一次调用有效。
+
+	void start();
+开始，开始的动作由子类实现，本函数只是简单的判断start是否已经被调用过了，如果没有，则调用do_start函数（纯虚）。
+
+	bool send_msg();
+发送缓存里面的消息，如果当前已经在发送消息了，则调用本函数无任何作用。
+socket内部有消息发送缓存，当连接未建立的时候，用户仍然可以发送消息（注意缓存满问题），这些消息会缓存起来，
+当连接建立之后，会自动开始真正的发送消息，这个功能就是调用这个函数实现的。
+
+	void suspend_send_msg(bool suspend);
+	bool suspend_send_msg() const;
+暂停／恢复消息发送，这里指暂停／恢复真正的消息发送，所以就算暂停了消息发送，在发送缓存可用的情况下，send_msg和send_safe_msg
+仍然可以成功调用。
+注意，如果消息发送处于暂停状态，则safe_send_msg在发送缓存溢出的情况下，马上返回失败，而不是等待发送缓存直到可用为止。
+post_msg不受这个属性的影响，所以post_msg一定只能在on_msg和on_msg_handle里面调用，再次强调。
+
+	void suspend_dispatch_msg(bool suspend);
+	bool suspend_dispatch_msg() const;
+暂停／恢复消息派发，这里的消息派发，是指当socket收到消息的时候，调用on_msg或者on_msg_handle，这个功能有什么用呢？
+当你在处理一个耗时消息时，不管你是在on_msg还是on_msg_handle里面处理，处理过程中，都将消耗掉一个service线程，那么必将对自己和
+其它socket的数据收发造成一定的影响（当所有service线程耗尽时，就不是一定的影响了，而是所有的socket在这期间都将无法发送和
+接收数据），为了解决这个问题，你可以开启一个线程来做这个耗时业务，但记得在启动线程之前，先暂停消息派发，线程结束之前，再恢复
+消息派发，这样消息就不会乱序，否则由于你开启线程之后，马上退出了on_msg或者on_msg_handle，那么下一条消息（如果有的话）将马上被
+派发，这样就出现了乱序问题（前一条消息还未处理完，后一条消息就被派发了）。
+
+	std::shared_ptr<i_packer<typename Packer::msg_type>> inner_packer();
+	std::shared_ptr<const i_packer<typename Packer::msg_type>> inner_packer() const;
+
+	void inner_packer(const std::shared_ptr<i_packer<typename Packer::msg_type>>& _packer_);
+获取／修改打包器。
+注意，运行时修改打包器是非线程安全的，它会与消息发送冲突，由于消息发送和打包器修改都是使用者触发的，所以如果有资源竞争，使用者
+有义务解决冲突问题。不支持多线程一是为了效率，二是这个功能用得很少。
+
+	bool is_send_buffer_available();
+判断消息发送缓存是否可用，即里面的消息数量是否小于ASCS_MAX_MSG_NUM条，如果以can_overflow为true调用任何消息发送函数（如send_msg），
+将马上成功而无论消息发送缓存是否可用，所以可能会造成消息发送缓存大小不可控。
+
+	bool direct_send_msg(const InMsgType& msg, bool can_overflow = false);
+	bool direct_send_msg(InMsgType&& msg, bool can_overflow = false);
+直接发送消息（放入消息发送缓存）而不再调用i_packer::pack_msg函数，其实socket内部在发送消息时也是调用这个函数，只是在调用
+之前先调用了i_packer::pack_msg而已。
+
+	bool direct_post_msg(const InMsgType& msg, bool can_overflow = false);
+	bool direct_post_msg(InMsgType&& msg, bool can_overflow = false);
+同上，它们之前的区别就是send_msg和post_msg之间的区别。
+
+	size_t get_pending_post_msg_num();
+	size_t get_pending_send_msg_num();
+	size_t get_pending_recv_msg_num();
+获取缓存里面的消息数量，其中post和send缓存里面的消息是打包过的；recv缓存里面的消息是解包过后的，下同。
+
+	void peek_first_pending_post_msg(InMsgType& msg);
+	void peek_first_pending_send_msg(InMsgType& msg);
+	void peek_first_pending_recv_msg(OutMsgType& msg);
+偷看一下缓存中第一个包，如果得到一个空包（msg.empty()等于true），则说明缓存里面没有消息。
+
+	void pop_first_pending_post_msg(InMsgType& msg);
+	void pop_first_pending_send_msg(InMsgType& msg);
+	void pop_first_pending_recv_msg(OutMsgType& msg);
+弹出缓存中第一个包，如果得到一个空包（msg.empty()等于true），则说明缓存里面没有消息。
+
+	void pop_all_pending_post_msg(in_container_type& msg_list);
+	void pop_all_pending_send_msg(in_container_type& msg_list);
+	void pop_all_pending_recv_msg(out_container_type& msg_list);
+弹出缓存中所有包，相当于清空了缓存。
+
+protected:
+	virtual bool do_start() = 0;
+子类重写，请看tcp:server_socket、tcp::connector、udp::socket和ssl::connector的实现。
+
+	virtual bool do_send_msg() = 0;
+真正的消息发送（调用asio函数），具体怎么发请看tcp::socket和udp::socket的实现。
+
+	virtual bool is_send_allowed() const;
+是否允许发送消息，对于socket来说，只要未暂停消息发送，就是允许消息发送，子类重写这个函数实现自己的判断逻辑，然后加上
+socket的判断结果，最终确认是否可发送数据。请看tcp::socket、tcp::connector和udp::socket的实现。
+
+	virtual void on_send_error(const error_code& ec);
+	virtual void on_recv_error(const asio::error_code& ec) = 0;
+发送接收失败时回调，对于tcp::socket，如果需要连接断开事件，建议重写on_recv_error。
+
+#ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
+	virtual bool on_msg(OutMsgType& msg) = 0;
+收到一条消息时回调，返回true表示消息被成功处理，返回false表示消息无法立即处理，于是进入接收缓存，通过on_msg_handle再次派发。
+#endif
+
+	virtual bool on_msg_handle(OutMsgType& msg, bool link_down) = 0;
+从接收缓存派发一条消息，返回true表示消息被成功处理，返回false表示消息无法立即处理，于是将暂停一小段时间之后继续重试（异步）；
+如果link_down，则无论返回true还是false，都将当成消息已经处理，将继续派发下一条消息（同步地），在连接断开时，会置link_down为真，
+此时需要尽快的派发完所有剩余的消息。
+
+#ifdef ASCS_WANT_MSG_SEND_NOTIFY
+	virtual void on_msg_send(InMsgType& msg);
+成功发送（消息写入底层socket缓存）一个消息之后回调，消息是打包过后的。
+#endif
+
+#ifdef ASCS_WANT_ALL_MSG_SEND_NOTIFY
+	virtual void on_all_msg_send(InMsgType& msg);
+当发送缓存由非空变为空的时候回调，消息是打包过后的。
+#endif
+
+	void dispatch_msg();
+派发消息，它要么直接调用on_msg，要么把消息放入消息接收缓存，最后调用do_dispatch_msg，如果消息处理完毕（调用on_msg）
+或者都放入了消息接收缓存，则调用do_start以继续接收数据。
+
+	void do_dispatch_msg(bool need_lock);
+调用io_service::post发出一个异步调用，调度到时回调msg_handler。
+
+	bool do_direct_send_msg(InMsgType&& msg);
+	bool do_direct_post_msg(InMsgType&& msg);
+把消息直接放入消息发送缓存，在direct_send_msg和direct_post_msg中有调用。
+
+private:
+	bool timer_handler(unsigned char id);
+处理所有定时器
+
+	void msg_handler();
+异步派发接收缓存里面的消息时，asio调用本函数，在这个函数里面将调用on_msg_handle，然后调用do_dispatch_msg继承派发消息。
+
+protected:
+	uint_fast64_t _id;
+保存在对象池中时，作为key，所以必须唯一，对象池用hash作为容器以快速查找。
+	Socket next_layer_;
+前面在next_layer里面解释过了。
+
+	InMsgType last_send_msg;
+	OutMsgType last_dispatch_msg;
+由于是异步发送和派发消息，这两个成员变量保证其在异步处理过程中的有效性。
+	std::shared_ptr<i_packer<MsgDataType>> packer_;
+打包器。
+
+	in_container_type post_msg_buffer, send_msg_buffer;
+	out_container_type recv_msg_buffer, temp_msg_buffer;
+	std::shared_mutex post_msg_buffer_mutex, send_msg_buffer_mutex;
+	std::shared_mutex recv_msg_buffer_mutex;
+缓存及操作它们时需要的互斥体，访问temp_msg_buffer无需互斥，它只能在内部访问，作用是当收到消息之后，发现需要存入接收缓存
+（on_msg返回false），但接收缓存已满，那么多余的消息将被存放于temp_msg_buffer，并且不再继续接收消息，直到temp_msg_buffer
+里面的消息全部被处理掉，或者移到了recv_msg_buffer，socket会周期性的做以上尝试。
+post_msg_buffer和send_msg_buffer里面存放的都是待发送的消息，通过send_msg发送的消息，只会进入send_msg_buffer，通过post_msg
+发送的消息，如果发送缓存足够的话，会进入send_msg_buffer，如果不够的话，则会进入post_msg_buffer，当post_msg_buffer非空时，
+tcp::socket或者udp::socket将暂停接收消息，直到post_msg_buffer里面的消息全部被移入send_msg_buffer，这样设计有什么用呢？
+考虑如下情况，你需要发送一个消息，但不想发送缓存溢出，也不想等待直到发送缓存可用，你会怎么做？你不得不把这个消息暂存起来，
+然后立即退出on_msg或者on_msg_handle，然后开个定时器周期性的尝试发送暂存的消息。由于你在第一个消息产生的结果还没有送入发送
+缓存就退出了on_msg或者on_msg_handle，那么第二个消息会接着被派发，第二个消息产生的结果你也必须暂存起来，那么你是不是需要
+一个链表来暂存这些还未送入发送缓存的消息呢？这个链表就是post_msg_buffer。socket通过post_msg_buffer和post_msg为你做了上面
+的工作，你只需要把send_msg改为调用post_msg即可，这个调用既不会失败，也不会阻塞线程，还不会让发送缓存失控。
+post_msg_buffer不做大小限制，那为什么不会让发送缓存失控呢？这个我在教程里面强调过，post_msg只能在on_msg或者on_msg_handle
+里面调用，如果消息进入了post_msg_buffer，消息派发将被暂停（最终将导致接受缓存满，进而暂停消息接收），那么on_msg或者
+on_msg_handle将不再被调用，所以最终post_msg_buffer将会被消化（移至send_msg_buffer），socket将会周期性的尝试消化
+post_msg_buffer中的消息。
+
+	bool posting;
+	bool sending, suspend_send_msg_;
+	bool dispatching, suspend_dispatch_msg_;
+内部使用的一些状态，看名字应该能猜到其意思。
+
+	bool started_;
+	std::shared_mutex start_mutex;
+是否已经开始，开始的概念由子类具体实现，socket只是记录是否已经调用过start函数而已。
+};
+
+} //namespace
+

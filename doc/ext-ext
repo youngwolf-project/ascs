@@ -1,0 +1,26 @@
+﻿
+包括了扩展公共函数、类、接口、宏等东西，扩展不属于ascs库，可以随意被替换。
+
+1. 宏
+ASCS_MSG_BUFFER_SIZE， 对于打包器来说，打包后的消息将不能大于这个值，对于解包器来说，
+只能解小于等于（解包前）这个值的消息，否则会出错。对于采用固定缓存的解包器来说（unpacker即可），这个值意味着固定缓存的大小。
+
+2. 类
+class string_buffer : public std::string, public i_buffer
+{
+public:
+	virtual bool empty() const {return std::string::empty();}
+	virtual size_t size() const {return std::string::size();}
+	virtual const char* data() const {return std::string::data();}
+};
+包装std::string，实现i_buffer接口，这样这个缓存就可被运行时替换。
+
+class basic_buffer : public asio::detail::noncopyable
+一个简单的缓存，远远比std::string简单，无法自动增长，效率会高点。
+
+class ascs_cpu_timer;
+代替boost::timer::cpu_timer，std中还没有引入任何timer。
+
+3. 函数
+inline std::list<std::string> split_string(const std::string& str);
+拆分字节串，只能以' '或者'\t'为间隔符，代替boost::tokenizer，std中还没有引入类似的功能库。

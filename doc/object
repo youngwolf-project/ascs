@@ -1,0 +1,9 @@
+﻿
+hook异步调用时的回调函数，以便这个回调函数所在的对象不会被释放，直到所有异步调用结束或者被取消。
+只支持对1个待定参数和2个待定参数的函数对象的包装，具体用法举例：
+未hook之前，如果你的异步调用是这样的：
+asio::async_write(socket, buffer, std::bind(&socket_base::send_handler, this, std::placeholders::_1, std::placeholders::_2));
+那么look之后应该是这样的：
+asio::async_write(socket, buffer, ASCS_THIS make_handler_error_size(std::bind(&socket_base::send_handler, this, std::placeholders::_1, std::placeholders::_2)));
+
+如果定义了ASCS_ENHANCED_STABILITY宏，则ascs中所有异步调用的函数对象被都将被自动的hook，对于用户自己的异步调用，hook与否由你自己决定。

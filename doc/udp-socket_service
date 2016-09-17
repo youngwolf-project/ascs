@@ -1,0 +1,29 @@
+
+namespace ascs { namespace udp {
+
+支持多个套接字的udp服务
+template<typename Socket, typename Pool = object_pool<Socket>>
+class service_base : public multi_socket_service<Socke, Pool>
+{
+public:
+	service_base(service_pump& service_pump_);
+
+	using super::add_socket;
+	typename Pool::object_type add_socket(unsigned short port, const std::string& ip = std::string());
+创建或者重用一个对象，然后以reset为true调用父类的同名函数。
+
+	void disconnect(typename Pool::object_ctype& socket_ptr);
+	void disconnect();
+	void force_close(typename Pool::object_ctype& socket_ptr);
+	void force_close();
+	void graceful_close(typename Pool::object_ctype& socket_ptr);
+	void graceful_close();
+带socket_ptr参数者会把socket_ptr从容器中删除，然后调用socket_ptr的同名函数。
+不带socket_ptr参数者不会从容器中删除任何对象，只对容器中所有对象调用同名函数。
+
+protected:
+	virtual void uninit();
+实现i_service的纯虚接口，由service_pump在stop_service时调用，跟single_socket_service::uninit功能一样，只是对所有套接字都做一个“结束”操作。
+};
+
+}} //namespace
