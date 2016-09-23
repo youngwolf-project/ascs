@@ -94,12 +94,12 @@ public:
 	echo_socket::statistic get_statistic()
 	{
 		echo_socket::statistic stat;
-		do_something_to_all([&stat](object_ctype& item) {stat += item->get_statistic(); });
+		do_something_to_all([&stat](const auto& item) {stat += item->get_statistic(); });
 
 		return stat;
 	}
 
-	void begin(size_t msg_num, const char* msg, size_t msg_len) {do_something_to_all([=](object_ctype& item) {item->begin(msg_num, msg, msg_len);});}
+	void begin(size_t msg_num, const char* msg, size_t msg_len) {do_something_to_all([=](const auto& item) {item->begin(msg_num, msg, msg_len);});}
 };
 
 int main(int argc, const char* argv[])

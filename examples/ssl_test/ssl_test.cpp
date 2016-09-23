@@ -88,7 +88,7 @@ int main(int argc, const char* argv[])
 			sp.start_service();
 		}
 		else if (RECONNECT_COMMAND == str)
-			client_.graceful_close(true);
+			client_.graceful_shutdown(true);
 		*/
 		else
 			server_.broadcast_msg(str);

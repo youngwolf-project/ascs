@@ -26,7 +26,7 @@ protected:
 public:
 	static const unsigned char TIMER_BEGIN = super::TIMER_END;
 	static const unsigned char TIMER_CONNECT = TIMER_BEGIN;
-	static const unsigned char TIMER_ASYNC_CLOSE = TIMER_BEGIN + 1;
+	static const unsigned char TIMER_ASYNC_SHUTDOWN = TIMER_BEGIN + 1;
 	static const unsigned char TIMER_END = TIMER_BEGIN + 10;
 
 	connector_base(asio::io_service& io_service_) : super(io_service_), connected(false), reconnecting(true)
@@ -57,33 +57,33 @@ public:
 	bool is_connected() const {return connected;}
 
 	//if the connection is broken unexpectedly, connector_base will try to reconnect to the server automatically.
-	void disconnect(bool reconnect = false) {force_close(reconnect);}
-	void force_close(bool reconnect = false)
+	void disconnect(bool reconnect = false) {force_shutdown(reconnect);}
+	void force_shutdown(bool reconnect = false)
 	{
-		if (1 != ASCS_THIS close_state)
+		if (1 != ASCS_THIS shutdown_state)
 		{
-			show_info("client link:", "been closed.");
+			show_info("client link:", "been shut down.");
 			reconnecting = reconnect;
 			connected = false;
 		}
 
-		super::force_close();
+		super::force_shutdown();
 	}
 
-	//sync must be false if you call graceful_close in on_msg
-	void graceful_close(bool reconnect = false, bool sync = true)
+	//sync must be false if you call graceful_shutdown in on_msg
+	void graceful_shutdown(bool reconnect = false, bool sync = true)
 	{
-		if (ASCS_THIS is_closing())
+		if (ASCS_THIS is_shutting_down())
 			return;
 		else if (!is_connected())
-			return force_close(reconnect);
+			return force_shutdown(reconnect);
 
-		show_info("client link:", "been closing gracefully.");
+		show_info("client link:", "being shut down gracefully.");
 		reconnecting = reconnect;
 		connected = false;
 
-		if (super::graceful_close(sync))
-			ASCS_THIS set_timer(TIMER_ASYNC_CLOSE, 10, std::bind(&connector_base::async_close_handler, this, std::placeholders::_1, ASCS_GRACEFUL_CLOSE_MAX_DURATION * 100));
+		if (super::graceful_shutdown(sync))
+			ASCS_THIS set_timer(TIMER_ASYNC_SHUTDOWN, 10, [this](auto id)->bool {return ASCS_THIS async_shutdown_handler(id, ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION * 100);});
 	}
 
 	void show_info(const char* head, const char* tail) const
@@ -108,7 +108,7 @@ protected:
 		if (!ASCS_THIS stopped())
 		{
 			if (reconnecting && !is_connected())
-				ASCS_THIS lowest_layer().async_connect(server_addr, ASCS_THIS make_handler_error(std::bind(&connector_base::connect_handler, this, std::placeholders::_1)));
+				ASCS_THIS lowest_layer().async_connect(server_addr, ASCS_THIS make_handler_error([this](const auto& ec) {ASCS_THIS connect_handler(ec);}));
 			else
 				ASCS_THIS do_recv_msg();
 
@@ -121,14 +121,15 @@ protected:
 	//after how much time(ms), connector_base will try to reconnect to the server, negative means give up.
 	virtual int prepare_reconnect(const asio::error_code& ec) {return ASCS_RECONNECT_INTERVAL;}
 	virtual void on_connect() {unified_out::info_out("connecting success.");}
-	virtual bool is_send_allowed() const {return is_connected() && super::is_send_allowed();}
-	virtual void on_unpack_error() {unified_out::info_out("can not unpack msg."); force_close();}
+	virtual bool is_closable() {return !reconnecting;}
+	virtual bool is_send_allowed() {return is_connected() && super::is_send_allowed();}
+	virtual void on_unpack_error() {unified_out::info_out("can not unpack msg."); force_shutdown();}
 	virtual void on_recv_error(const asio::error_code& ec)
 	{
-		show_info("client link:", "broken/closed", ec);
+		show_info("client link:", "broken/been shut down", ec);
 
-		force_close(ASCS_THIS is_closing() ? reconnecting : prepare_reconnect(ec) >= 0);
-		ASCS_THIS close_state = 0;
+		force_shutdown(ASCS_THIS is_shutting_down() ? reconnecting : prepare_reconnect(ec) >= 0);
+		ASCS_THIS shutdown_state = 0;
 
 		if (reconnecting)
 			ASCS_THIS start();
@@ -149,7 +150,7 @@ protected:
 			auto delay = prepare_reconnect(ec);
 			if (delay >= 0)
 			{
-				ASCS_THIS set_timer(TIMER_CONNECT, delay, [this](unsigned char id)->bool {ASCS_THIS do_start(); return false;});
+				ASCS_THIS set_timer(TIMER_CONNECT, delay, [this](auto id)->bool {ASCS_THIS do_start(); return false;});
 				return true;
 			}
 		}
@@ -158,22 +159,22 @@ protected:
 	}
 
 private:
-	bool async_close_handler(unsigned char id, ssize_t loop_num)
+	bool async_shutdown_handler(unsigned char id, ssize_t loop_num)
 	{
-		assert(TIMER_ASYNC_CLOSE == id);
+		assert(TIMER_ASYNC_SHUTDOWN == id);
 
-		if (2 == ASCS_THIS close_state)
+		if (2 == ASCS_THIS shutdown_state)
 		{
 			--loop_num;
 			if (loop_num > 0)
 			{
-				ASCS_THIS update_timer_info(id, 10, std::bind(&connector_base::async_close_handler, this, std::placeholders::_1, loop_num));
+				ASCS_THIS update_timer_info(id, 10, [loop_num, this](auto id)->bool {return ASCS_THIS async_shutdown_handler(id, loop_num);});
 				return true;
 			}
 			else
 			{
-				unified_out::info_out("failed to graceful close within %d seconds", ASCS_GRACEFUL_CLOSE_MAX_DURATION);
-				force_close(reconnecting);
+				unified_out::info_out("failed to graceful shutdown within %d seconds", ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION);
+				force_shutdown(reconnecting);
 			}
 		}
 

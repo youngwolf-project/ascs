@@ -11,8 +11,8 @@
  *
  * license: www.boost.org/LICENSE_1_0.txt
  *
- * 2016.9.13	version 1.0.0
- * Based on st_asio_wrapper 1.1.3.
+ * 2016.9.25	version 1.0.0
+ * Based on st_asio_wrapper 1.2.0.
  * Directory structure refactoring.
  * Classes renaming, remove 'st_', 'tcp_' and 'udp_' prefix.
  * File renaming, remove 'st_asio_wrapper_' prefix.
@@ -40,6 +40,9 @@
 		static_assert(__clang_major__ > 3 || (__clang_major__ == 3 && __clang_minor__ >= 4), "ascs need Clang 3.4 or higher.");
 	#else
 		static_assert(__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 9), "ascs need GCC 4.9 or higher.");
+		#if __GNUC__ > 5
+		#define ASCS_HAS_STD_SHARED_MUTEX
+		#endif
 	#endif
 
 	#if !defined(__cplusplus) || __cplusplus <= 201103L
@@ -84,6 +87,22 @@ static_assert(ASCS_MAX_MSG_NUM > 0, "message capacity must be bigger than zero."
 
 //if defined, asio::steady_timer will be used in ascs::timer, otherwise, asio::system_timer will be used.
 //#define ASCS_USE_STEADY_TIMER
+
+//after this duration, this socket can be freed from the heap or reused,
+//you must define this macro as a value, not just define it, the value means the duration, unit is second.
+//if macro ST_ASIO_ENHANCED_STABILITY been defined, this macro will always be zero.
+#ifdef ASCS_ENHANCED_STABILITY
+#if defined(ASCS_DELAY_CLOSE) && ASCS_DELAY_CLOSE != 0
+#warning ASCS_DELAY_CLOSE will always be zero if ASCS_ENHANCED_STABILITY macro been defined.
+#endif
+#undef ASCS_DELAY_CLOSE
+#define ASCS_DELAY_CLOSE 0
+#else
+#ifndef ASCS_DELAY_CLOSE
+#define ASCS_DELAY_CLOSE	5 //seconds
+#endif
+static_assert(ASCS_DELAY_CLOSE > 0, "ASCS_DELAY_CLOSE must be bigger than zero.");
+#endif
 
 //full statistic include time consumption, or only numerable informations will be gathered
 //#define ASCS_FULL_STATISTIC
@@ -154,11 +173,11 @@ static_assert(ASCS_MAX_OBJECT_NUM > 0, "object capacity must be bigger than zero
 #endif
 static_assert(ASCS_SERVICE_THREAD_NUM > 0, "service thread number be bigger than zero.");
 
-//graceful closing must finish within this duration, otherwise, socket will be forcedly closed.
-#ifndef ASCS_GRACEFUL_CLOSE_MAX_DURATION
-#define ASCS_GRACEFUL_CLOSE_MAX_DURATION	5 //seconds
+//graceful shutdown must finish within this duration, otherwise, socket will be forcedly shut down.
+#ifndef ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION
+#define ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION	5 //seconds
 #endif
-static_assert(ASCS_GRACEFUL_CLOSE_MAX_DURATION > 0, "graceful close duration must be bigger than zero.");
+static_assert(ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION > 0, "graceful shutdown duration must be bigger than zero.");
 
 //if connecting (or reconnecting) failed, delay how much milliseconds before reconnecting, negative value means stop reconnecting,
 //you can also rewrite ascs::tcp::connector_base::prepare_reconnect(), and return a negative value.

@@ -32,25 +32,6 @@ public:
 	typedef std::unordered_map<uint_fast64_t, object_type> container_type;
 
 protected:
-	struct invalid_object
-	{
-		object_ctype object_ptr;
-
-#ifdef ASCS_ENHANCED_STABILITY
-		invalid_object(object_ctype& object_ptr_) : object_ptr(object_ptr_) {assert(object_ptr);}
-
-		bool is_timeout() const {return true;}
-		bool is_timeout(time_t now) const {return true;}
-#else
-		const time_t kick_out_time;
-		invalid_object(object_ctype& object_ptr_) : object_ptr(object_ptr_), kick_out_time(time(nullptr)) {assert(object_ptr);}
-
-		bool is_timeout() const {return is_timeout(time(nullptr));}
-		bool is_timeout(time_t now) const {return kick_out_time <= now - ASCS_OBSOLETED_OBJECT_LIFE_TIME;}
-#endif
-	};
-
-protected:
 	static const unsigned char TIMER_BEGIN = timer::TIMER_END;
 	static const unsigned char TIMER_FREE_SOCKET = TIMER_BEGIN;
 	static const unsigned char TIMER_CLEAR_SOCKET = TIMER_BEGIN + 1;
@@ -61,10 +42,10 @@ protected:
 	void start()
 	{
 #ifdef ASCS_FREE_OBJECT_INTERVAL
-		set_timer(TIMER_FREE_SOCKET, 1000 * ASCS_FREE_OBJECT_INTERVAL, [this](unsigned char id)->bool {ASCS_THIS free_object(); return true;});
+		set_timer(TIMER_FREE_SOCKET, 1000 * ASCS_FREE_OBJECT_INTERVAL, [this](auto id)->bool {ASCS_THIS free_object(); return true;});
 #endif
 #ifdef ASCS_CLEAR_OBJECT_INTERVAL
-		set_timer(TIMER_CLEAR_SOCKET, 1000 * ASCS_CLEAR_OBJECT_INTERVAL, [this](unsigned char id)->bool {ASCS_THIS clear_obsoleted_object(); return true;});
+		set_timer(TIMER_CLEAR_SOCKET, 1000 * ASCS_CLEAR_OBJECT_INTERVAL, [this](auto id)->bool {ASCS_THIS clear_obsoleted_object(); return true;});
 #endif
 	}
 
@@ -114,11 +95,10 @@ protected:
 	object_type reuse_object()
 	{
 		std::unique_lock<std::shared_mutex> lock(invalid_object_can_mutex);
-		//objects are order by time, so we don't have to go through all items in invalid_object_can
-		for (auto iter = std::begin(invalid_object_can); iter != std::end(invalid_object_can) && iter->is_timeout(); ++iter)
-			if (iter->object_ptr.unique() && iter->object_ptr->obsoleted())
+		for (auto iter = std::begin(invalid_object_can); iter != std::end(invalid_object_can); ++iter)
+			if ((*iter).unique() && (*iter)->obsoleted())
 			{
-				auto object_ptr(std::move(iter->object_ptr));
+				auto object_ptr(std::move(*iter));
 				invalid_object_can.erase(iter);
 				lock.unlock();
 
@@ -209,32 +189,32 @@ public:
 	{
 		std::shared_lock<std::shared_mutex> lock(invalid_object_can_mutex);
 		assert(index < invalid_object_can.size());
-		return index < invalid_object_can.size() ? std::next(std::begin(invalid_object_can), index)->object_ptr : object_type();
+		return index < invalid_object_can.size() ? *std::next(std::begin(invalid_object_can), index) : object_type();
 	}
 
 	//this method has linear complexity, please note.
 	object_type invalid_object_find(uint_fast64_t id)
 	{
 		std::shared_lock<std::shared_mutex> lock(invalid_object_can_mutex);
-		auto iter = std::find_if(std::begin(invalid_object_can), std::end(invalid_object_can), [id](const invalid_object& item) {return id == item.object_ptr->id();});
-		return iter == std::end(invalid_object_can) ? object_type() : iter->object_ptr;
+		auto iter = std::find_if(std::begin(invalid_object_can), std::end(invalid_object_can), [id](const auto& item) {return item->is_equal_to(id);});
+		return iter == std::end(invalid_object_can) ? object_type() : *iter;
 	}
 
 	//this method has linear complexity, please note.
 	object_type invalid_object_pop(uint_fast64_t id)
 	{
 		std::shared_lock<std::shared_mutex> lock(invalid_object_can_mutex);
-		auto iter = std::find_if(std::begin(invalid_object_can), std::end(invalid_object_can), [id](const invalid_object& item) {return id == item.object_ptr->id();});
+		auto iter = std::find_if(std::begin(invalid_object_can), std::end(invalid_object_can), [id](const auto& item) {return item->is_equal_to(id);});
 		if (iter != std::end(invalid_object_can))
 		{
-			auto object_ptr = iter->object_ptr;
+			auto object_ptr(std::move(*iter));
 			invalid_object_can.erase(iter);
 			return object_ptr;
 		}
 		return object_type();
 	}
 
-	void list_all_object() {do_something_to_all([](object_ctype& item) {item->show_info("", ""); });}
+	void list_all_object() {do_something_to_all([](const auto& item) {item->show_info("", ""); });}
 
 	//Kick out obsoleted objects
 	//Consider the following assumptions:
@@ -243,21 +223,13 @@ public:
 	//object_pool will automatically invoke this function if ASCS_CLEAR_OBJECT_INTERVAL been defined
 	size_t clear_obsoleted_object()
 	{
-		std::list<object_type> objects;
+		decltype(invalid_object_can) objects;
 
 		std::unique_lock<std::shared_mutex> lock(object_can_mutex);
 		for (auto iter = std::begin(object_can); iter != std::end(object_can);)
 			if (iter->second.unique() && iter->second->obsoleted())
 			{
-#ifdef ASCS_REUSE_OBJECT
-				iter->second->show_info("object:", "is obsoleted, kick it out, it will be reused in the future.");
-#else
-				iter->second->show_info("object:", "is obsoleted, kick it out, it will be freed in the future.");
-#endif
-#ifdef ASCS_ENHANCED_STABILITY
-				iter->second->close();
-#endif
-				objects.push_back(iter->second);
+				objects.push_back(std::move(iter->second));
 				iter = object_can.erase(iter);
 			}
 			else
@@ -270,48 +242,35 @@ public:
 			unified_out::warning_out(ASCS_SF " object(s) been kicked out!", size);
 
 			std::unique_lock<std::shared_mutex> lock(invalid_object_can_mutex);
-			invalid_object_can.insert(std::end(invalid_object_can), std::begin(objects), std::end(objects));
+			invalid_object_can.splice(std::end(invalid_object_can), objects);
 		}
 
 		return size;
 	}
 
-	//free or close a specific number of objects
+	//free a specific number of objects
 	//if you used object pool(define ASCS_REUSE_OBJECT), you can manually call this function to free some objects after the object pool(invalid_object_size())
-	// goes big enough for memory saving(because the objects in invalid_object_can are waiting for reusing and will never be freed),
-	// you can also define ASCS_FREE_OBJECT_INTERVAL to let object_pool to call this function automatically and periodically, but objects will only be closed.
+	// goes big enough for memory saving(because the objects in invalid_object_can are waiting for reusing and will never be freed).
 	//if you don't used object pool, object_pool will invoke this function automatically and periodically, so you don't need to invoke this function exactly
-	//return affected object number, if just_close equal to true, then closed objects will be treated as unaffected.
-#ifdef ASCS_REUSE_OBJECT
-	size_t free_object(size_t num = -1, bool just_close = true)
-#else
-	size_t free_object(size_t num = -1, bool just_close = false)
-#endif
+	//return affected object number.
+	size_t free_object(size_t num = -1)
 	{
 		size_t num_affected = 0;
+
 		std::unique_lock<std::shared_mutex> lock(invalid_object_can_mutex);
-		//objects are order by time, so we don't have to go through all items in invalid_object_can
-		for (auto iter = std::begin(invalid_object_can); num > 0 && iter != std::end(invalid_object_can) && iter->is_timeout();)
-			if (iter->object_ptr.unique() && iter->object_ptr->obsoleted())
+		for (auto iter = std::begin(invalid_object_can); num > 0 && iter != std::end(invalid_object_can);)
+			if ((*iter).unique() && (*iter)->obsoleted())
 			{
 				--num;
-				if (just_close)
-				{
-					if (iter->object_ptr->close())
-						++num_affected;
-					++iter;
-				}
-				else
-				{
-					++num_affected;
-					iter = invalid_object_can.erase(iter);
-				}
+				++num_affected;
+				iter = invalid_object_can.erase(iter);
 			}
 			else
 				++iter;
+		lock.unlock();
 
 		if (num_affected > 0)
-			unified_out::warning_out(ASCS_SF " object(s) been %s!", num_affected, just_close ? "closed" : "freed");
+			unified_out::warning_out(ASCS_SF " object(s) been freed!", num_affected);
 
 		return num_affected;
 	}
@@ -332,9 +291,9 @@ protected:
 	//because all objects are dynamic created and stored in object_can, maybe when receiving error occur
 	//(you are recommended to delete the object from object_can, for example via tcp::server_base::del_client), some other asynchronous calls are still queued in asio::io_service,
 	//and will be dequeued in the future, we must guarantee these objects not be freed from the heap or reused, so we move these objects from object_can to invalid_object_can,
-	//and free them from the heap or reuse them in the near future, see ASCS_OBSOLETED_OBJECT_LIFE_TIME macro for more details.
+	//and free them from the heap or reuse them in the near future.
 	//if ASCS_CLEAR_OBJECT_INTERVAL been defined, clear_obsoleted_object() will be invoked automatically and periodically to move all invalid objects into invalid_object_can.
-	std::list<invalid_object> invalid_object_can;
+	list<object_type> invalid_object_can;
 	std::shared_mutex invalid_object_can_mutex;
 };
 

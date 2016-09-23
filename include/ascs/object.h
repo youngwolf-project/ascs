@@ -29,24 +29,25 @@ public:
 
 #ifdef ASCS_ENHANCED_STABILITY
 	template<typename CallbackHandler>
-	void post(const CallbackHandler& handler) {auto unused(ASCS_THIS async_call_indicator); io_service_.post([=]() {handler();});}
+	void post(const CallbackHandler& handler) {auto unused(async_call_indicator); io_service_.post([=]() {handler();});}
 	template<typename CallbackHandler>
-	void post(CallbackHandler&& handler) {auto unused(ASCS_THIS async_call_indicator); io_service_.post([=]() {handler();});}
+	void post(CallbackHandler&& handler) {auto unused(async_call_indicator); io_service_.post([=]() {handler();});}
 	bool is_async_calling() const {return !async_call_indicator.unique();}
+	bool is_last_async_call() const {return async_call_indicator.use_count() <= 2;} //can only be called in callbacks
 
 	template<typename CallbackHandler>
 	std::function<void(const asio::error_code&)> make_handler_error(CallbackHandler&& handler) const
-		{std::shared_ptr<char>unused(async_call_indicator); return [=](const asio::error_code& ec) {handler(ec);};}
+		{auto unused(async_call_indicator); return [=](const auto& ec) {handler(ec);};}
 	template<typename CallbackHandler>
 	std::function<void(const asio::error_code&)> make_handler_error(const CallbackHandler& handler) const
-		{std::shared_ptr<char>unused(async_call_indicator); return [=](const asio::error_code& ec) {handler(ec);};}
+		{auto unused(async_call_indicator); return [=](const auto& ec) {handler(ec);};}
 
 	template<typename CallbackHandler>
 	std::function<void(const asio::error_code&, size_t)> make_handler_error_size(CallbackHandler&& handler) const
-		{std::shared_ptr<char>unused(async_call_indicator); return [=](const asio::error_code& ec, size_t bytes_transferred) {handler(ec, bytes_transferred);};}
+		{auto unused(async_call_indicator); return [=](const auto& ec, auto bytes_transferred) {handler(ec, bytes_transferred);};}
 	template<typename CallbackHandler>
 	std::function<void(const asio::error_code&, size_t)> make_handler_error_size(CallbackHandler& handler) const
-		{std::shared_ptr<char>unused(async_call_indicator); return [=](const asio::error_code& ec, size_t bytes_transferred) {handler(ec, bytes_transferred);};}
+		{auto unused(async_call_indicator); return [=](const auto& ec, auto bytes_transferred) {handler(ec, bytes_transferred);};}
 
 protected:
 	void reset() {async_call_indicator = std::make_shared<char>('\0');}
@@ -59,6 +60,7 @@ protected:
 	template<typename CallbackHandler>
 	void post(CallbackHandler&& handler) {io_service_.post(std::move(handler));}
 	bool is_async_calling() const {return false;}
+	bool is_last_async_call() const {return true;}
 
 	template<typename F>
 	inline F&& make_handler_error(F&& f) const {return std::move(f);}

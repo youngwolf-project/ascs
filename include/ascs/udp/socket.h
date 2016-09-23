@@ -78,9 +78,9 @@ public:
 	}
 	const asio::ip::udp::endpoint& get_local_addr() const {return local_addr;}
 
-	void disconnect() {force_close();}
-	void force_close() {show_info("link:", "been closed."); do_close();}
-	void graceful_close() {force_close();}
+	void disconnect() {force_shutdown();}
+	void force_shutdown() {show_info("link:", "been shut down."); shutdown();}
+	void graceful_shutdown() {force_shutdown();}
 
 	//get or change the unpacker at runtime
 	//changing unpacker at runtime is not thread-safe, this operation can only be done in on_msg(), reset() or constructor, please pay special attention
@@ -130,10 +130,10 @@ protected:
 			ASCS_THIS send_msg_buffer.front().swap(last_send_msg);
 			ASCS_THIS send_msg_buffer.pop_front();
 
-			std::shared_lock<std::shared_mutex> lock(close_mutex);
+			std::shared_lock<std::shared_mutex> lock(shutdown_mutex);
 			last_send_msg.restart();
 			ASCS_THIS next_layer().async_send_to(asio::buffer(last_send_msg.data(), last_send_msg.size()), last_send_msg.peer_addr,
-				ASCS_THIS make_handler_error_size(std::bind(&socket_base::send_handler, this, std::placeholders::_1, std::placeholders::_2)));
+				ASCS_THIS make_handler_error_size([this](const auto& ec, auto bytes_transferred) {ASCS_THIS send_handler(ec, bytes_transferred);}));
 		}
 
 		return ASCS_THIS sending;
@@ -144,12 +144,12 @@ protected:
 		auto recv_buff = unpacker_->prepare_next_recv();
 		assert(asio::buffer_size(recv_buff) > 0);
 
-		std::shared_lock<std::shared_mutex> lock(close_mutex);
+		std::shared_lock<std::shared_mutex> lock(shutdown_mutex);
 		ASCS_THIS next_layer().async_receive_from(recv_buff, peer_addr,
-			ASCS_THIS make_handler_error_size(std::bind(&socket_base::recv_handler, this, std::placeholders::_1, std::placeholders::_2)));
+			ASCS_THIS make_handler_error_size([this](const auto& ec, auto bytes_transferred) {ASCS_THIS recv_handler(ec, bytes_transferred);}));
 	}
 
-	virtual bool is_send_allowed() const {return ASCS_THIS lowest_layer().is_open() && super::is_send_allowed();}
+	virtual bool is_send_allowed() {return ASCS_THIS lowest_layer().is_open() && super::is_send_allowed();}
 	//can send data or not(just put into send buffer)
 
 	virtual void on_recv_error(const asio::error_code& ec)
@@ -164,18 +164,19 @@ protected:
 
 	virtual bool on_msg_handle(out_msg_type& msg, bool link_down) {unified_out::debug_out("recv(" ASCS_SF "): %s", msg.size(), msg.data()); return true;}
 
-	void do_close()
+	void shutdown()
 	{
 		ASCS_THIS stop_all_timer();
+		ASCS_THIS close(); //must after stop_all_timer(), it's very important
 		ASCS_THIS started_ = false;
-//		ASCS_THIS reset_state();
+//		reset_state();
 
 		if (ASCS_THIS lowest_layer().is_open())
 		{
 			asio::error_code ec;
 			ASCS_THIS lowest_layer().shutdown(asio::ip::udp::socket::shutdown_both, ec);
 
-			std::unique_lock<std::shared_mutex> lock(close_mutex);
+			std::unique_lock<std::shared_mutex> lock(shutdown_mutex);
 			ASCS_THIS lowest_layer().close(ec);
 		}
 	}
@@ -240,7 +241,7 @@ protected:
 	std::shared_ptr<i_unpacker<typename Packer::msg_type>> unpacker_;
 	asio::ip::udp::endpoint peer_addr, local_addr;
 
-	std::shared_mutex close_mutex;
+	std::shared_mutex shutdown_mutex;
 };
 
 }} //namespace

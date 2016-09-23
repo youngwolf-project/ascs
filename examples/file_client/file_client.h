@@ -169,7 +169,7 @@ public:
 	void start()
 	{
 		begin_time.restart();
-		set_timer(UPDATE_PROGRESS, 50, std::bind(&file_client::update_progress_handler, this, std::placeholders::_1, -1));
+		set_timer(UPDATE_PROGRESS, 50, [this](auto id)->bool {return ASCS_THIS update_progress_handler(id, -1);});
 	}
 
 	void stop(const std::string& file_name)
@@ -181,8 +181,8 @@ public:
 	fl_type get_total_rest_size()
 	{
 		fl_type total_rest_size = 0;
-		do_something_to_all([&total_rest_size](object_ctype& item) {total_rest_size += *item;});
-//		do_something_to_all([&total_rest_size](object_ctype& item) {total_rest_size += item->get_rest_size();});
+		do_something_to_all([&total_rest_size](const auto& item) {total_rest_size += *item;});
+//		do_something_to_all([&total_rest_size](const auto& item) {total_rest_size += item->get_rest_size();});
 
 		return total_rest_size;
 	}
@@ -201,7 +201,7 @@ private:
 				printf("\r%u%%", new_percent);
 				fflush(stdout);
 
-				ASCS_THIS update_timer_info(id, 50, std::bind(&file_client::update_progress_handler, this, std::placeholders::_1, new_percent));
+				ASCS_THIS update_timer_info(id, 50, [new_percent, this](auto id)->bool {return ASCS_THIS update_progress_handler(id, new_percent);});
 			}
 		}
 

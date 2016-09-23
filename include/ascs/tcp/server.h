@@ -26,7 +26,7 @@ public:
 
 	server_base(service_pump& service_pump_) : Pool(service_pump_), acceptor(service_pump_) {set_server_addr(ASCS_SERVER_PORT);}
 	template<typename Arg>
-	server_base(service_pump& service_pump_, Arg arg) : Pool(service_pump_, arg), acceptor(service_pump_) {set_server_addr(ASCS_SERVER_PORT);}
+	server_base(service_pump& service_pump_, const Arg& arg) : Pool(service_pump_, arg), acceptor(service_pump_) {set_server_addr(ASCS_SERVER_PORT);}
 
 	bool set_server_addr(unsigned short port, const std::string& ip = std::string())
 	{
@@ -55,12 +55,12 @@ public:
 	virtual bool del_client(const std::shared_ptr<timer>& client_ptr)
 	{
 		auto raw_client_ptr(std::dynamic_pointer_cast<Socket>(client_ptr));
-		return raw_client_ptr && ASCS_THIS del_object(raw_client_ptr) ? raw_client_ptr->force_close(), true : false;
+		return raw_client_ptr && ASCS_THIS del_object(raw_client_ptr) ? raw_client_ptr->force_shutdown(), true : false;
 	}
 
-	//do not use graceful_close() as client does, because in this function, object_can_mutex has been locked, graceful_close will wait until on_recv_error() been invoked,
+	//do not use graceful_shutdown() as client does, because in this function, object_can_mutex has been locked, graceful_shutdown will wait until on_recv_error() been invoked,
 	//but in on_recv_error(), we need to lock object_can_mutex too(in del_object()), this will cause dead lock
-	void close_all_client() {ASCS_THIS do_something_to_all([](typename Pool::object_ctype& item) {item->force_close();});}
+	void shutdown_all_client() {ASCS_THIS do_something_to_all([](const auto& item) {item->force_shutdown();});}
 
 	///////////////////////////////////////////////////
 	//msg sending interface
@@ -73,8 +73,8 @@ public:
 	///////////////////////////////////////////////////
 
 	void disconnect(typename Pool::object_ctype& client_ptr) {ASCS_THIS del_object(client_ptr); client_ptr->disconnect();}
-	void force_close(typename Pool::object_ctype& client_ptr) {ASCS_THIS del_object(client_ptr); client_ptr->force_close();}
-	void graceful_close(typename Pool::object_ctype& client_ptr, bool sync = true) {ASCS_THIS del_object(client_ptr); client_ptr->graceful_close(sync);}
+	void force_shutdown(typename Pool::object_ctype& client_ptr) {ASCS_THIS del_object(client_ptr); client_ptr->force_shutdown();}
+	void graceful_shutdown(typename Pool::object_ctype& client_ptr, bool sync = true) {ASCS_THIS del_object(client_ptr); client_ptr->graceful_shutdown(sync);}
 
 protected:
 	virtual bool init()
@@ -96,7 +96,7 @@ protected:
 
 		return true;
 	}
-	virtual void uninit() {ASCS_THIS stop(); stop_listen(); close_all_client();}
+	virtual void uninit() {ASCS_THIS stop(); stop_listen(); shutdown_all_client();}
 	virtual bool on_accept(typename Pool::object_ctype& client_ptr) {return true;}
 
 	//if you want to ignore this error and continue to accept new connections immediately, return true in this virtual function;
@@ -117,7 +117,7 @@ protected:
 	virtual void start_next_accept()
 	{
 		auto client_ptr = ASCS_THIS create_object(*this);
-		acceptor.async_accept(client_ptr->lowest_layer(), std::bind(&server_base::accept_handler, this, std::placeholders::_1, client_ptr));
+		acceptor.async_accept(client_ptr->lowest_layer(), [=](const auto& ec) {ASCS_THIS accept_handler(ec, client_ptr);});
 	}
 
 protected:
@@ -130,7 +130,7 @@ protected:
 		}
 
 		client_ptr->show_info("client:", "been refused because of too many clients.");
-		client_ptr->force_close();
+		client_ptr->force_shutdown();
 		return false;
 	}
 

@@ -5,7 +5,7 @@
 #define ASCS_SERVER_PORT		9527
 #define ASCS_ASYNC_ACCEPT_NUM	5
 #define ASCS_REUSE_OBJECT //use objects pool
-#define ASCS_FREE_OBJECT_INTERVAL	60
+//#define ST_ASIO_FREE_OBJECT_INTERVAL	60 //it's useless if ST_ASIO_REUSE_OBJECT macro been defined
 //#define ASCS_FORCE_TO_USE_MSG_RECV_BUFFER //force to use the msg recv buffer
 #define ASCS_ENHANCED_STABILITY
 //#define ASCS_FULL_STATISTIC //full statistic will slightly impact efficiency.
@@ -118,7 +118,7 @@ public:
 	echo_socket::statistic get_statistic()
 	{
 		echo_socket::statistic stat;
-		do_something_to_all([&stat](object_ctype& item) {stat += item->get_statistic();});
+		do_something_to_all([&stat](const auto& item) {stat += item->get_statistic();});
 
 		return stat;
 	}
@@ -186,9 +186,9 @@ int main(int argc, const char* argv[])
 		}
 		//the following two commands demonstrate how to suspend msg dispatching, no matter recv buffer been used or not
 		else if (SUSPEND_COMMAND == str)
-			echo_server_.do_something_to_all([](echo_server::object_ctype& item) {item->suspend_dispatch_msg(true);});
+			echo_server_.do_something_to_all([](const auto& item) {item->suspend_dispatch_msg(true);});
 		else if (RESUME_COMMAND == str)
-			echo_server_.do_something_to_all([](echo_server::object_ctype& item) {item->suspend_dispatch_msg(false);});
+			echo_server_.do_something_to_all([](const auto& item) {item->suspend_dispatch_msg(false);});
 		else if (LIST_ALL_CLIENT == str)
 		{
 			puts("clients from normal server:");
@@ -209,11 +209,11 @@ int main(int argc, const char* argv[])
 			//send \0 character too, because asio_client used basic_buffer as its msg type, it will not append \0 character automatically as std::string does,
 			//so need \0 character when printing it.
 			if (!msg.empty())
-				server_.do_something_to_all([&msg](tcp::server_base<normal_server_socket>::object_ctype& item) {item->direct_send_msg(msg);});
+				server_.do_something_to_all([&msg](const auto& item) {item->direct_send_msg(msg);});
 
 			//if asio_client is using stream_unpacker
 //			if (!str.empty())
-//				server_.do_something_to_all([&str](tcp::server_base<normal_server_socket>::object_ctype& item) {item->direct_send_msg(str);});
+//				server_.do_something_to_all([&str](const auto& item) {item->direct_send_msg(str);});
 		}
 	}
 

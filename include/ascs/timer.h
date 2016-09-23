@@ -136,7 +136,7 @@ public:
 	DO_SOMETHING_TO_ALL_MUTEX(timer_can, timer_can_mutex)
 	DO_SOMETHING_TO_ONE_MUTEX(timer_can, timer_can_mutex)
 
-	void stop_all_timer() {do_something_to_all([this](timer_cinfo& item) {ASCS_THIS stop_timer(*const_cast<timer_info*>(&item));});}
+	void stop_all_timer() {do_something_to_all([this](const auto& item) {ASCS_THIS stop_timer(*const_cast<timer_info*>(&item));});}
 
 protected:
 	void reset() {object::reset();}
@@ -146,7 +146,7 @@ protected:
 		ti.timer->expires_from_now(milliseconds(ti.milliseconds));
 		//return true from call_back to continue the timer, or the timer will stop
 		ti.timer->async_wait(
-			make_handler_error([this, &ti](const asio::error_code& ec) {if (!ec && ti.call_back(ti.id) && timer::timer_info::TIMER_OK == ti.status) ASCS_THIS start_timer(ti);}));
+			make_handler_error([this, &ti](const auto& ec) {if (!ec && ti.call_back(ti.id) && timer::timer_info::TIMER_OK == ti.status) ASCS_THIS start_timer(ti);}));
 	}
 
 	void stop_timer(timer_info& ti)

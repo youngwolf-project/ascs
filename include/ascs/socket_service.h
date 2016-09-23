@@ -32,7 +32,7 @@ public:
 
 protected:
 	virtual bool init() {ASCS_THIS reset(); ASCS_THIS start(); return Socket::started();}
-	virtual void uninit() {ASCS_THIS graceful_close();}
+	virtual void uninit() {ASCS_THIS graceful_shutdown();}
 };
 
 template<typename Socket, typename Pool>
@@ -44,11 +44,11 @@ protected:
 
 	multi_socket_service(service_pump& service_pump_) : Pool(service_pump_) {}
 	template<typename Arg>
-	multi_socket_service(service_pump& service_pump_, Arg arg) : Pool(service_pump_, arg) {}
+	multi_socket_service(service_pump& service_pump_, const Arg& arg) : Pool(service_pump_, arg) {}
 
 	virtual bool init()
 	{
-		ASCS_THIS do_something_to_all([](typename Pool::object_ctype& item) {item->reset(); item->start();});
+		ASCS_THIS do_something_to_all([](const auto& item) {item->reset(); item->start();});
 		ASCS_THIS start();
 		return true;
 	}

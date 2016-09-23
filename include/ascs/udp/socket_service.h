@@ -39,14 +39,14 @@ public:
 
 	//functions with a socket_ptr parameter will remove the link from object pool first, then call corresponding function
 	void disconnect(typename Pool::object_ctype& socket_ptr) {ASCS_THIS del_object(socket_ptr); socket_ptr->disconnect();}
-	void disconnect() {ASCS_THIS do_something_to_all([](typename Pool::object_ctype& item) {item->disconnect();});}
-	void force_close(typename Pool::object_ctype& socket_ptr) {ASCS_THIS del_object(socket_ptr); socket_ptr->force_close();}
-	void force_close() {ASCS_THIS do_something_to_all([](typename Pool::object_ctype& item) {item->force_close();});}
-	void graceful_close(typename Pool::object_ctype& socket_ptr) {ASCS_THIS del_object(socket_ptr); socket_ptr->graceful_close();}
-	void graceful_close() {ASCS_THIS do_something_to_all([](typename Pool::object_ctype& item) {item->graceful_close();});}
+	void disconnect() {ASCS_THIS do_something_to_all([](const auto& item) {item->disconnect();});}
+	void force_shutdown(typename Pool::object_ctype& socket_ptr) {ASCS_THIS del_object(socket_ptr); socket_ptr->force_shutdown();}
+	void force_shutdown() {ASCS_THIS do_something_to_all([](const auto& item) {item->force_shutdown();});}
+	void graceful_shutdown(typename Pool::object_ctype& socket_ptr) {ASCS_THIS del_object(socket_ptr); socket_ptr->graceful_shutdown();}
+	void graceful_shutdown() {ASCS_THIS do_something_to_all([](const auto& item) {item->graceful_shutdown();});}
 
 protected:
-	virtual void uninit() {ASCS_THIS stop(); graceful_close();}
+	virtual void uninit() {ASCS_THIS stop(); graceful_shutdown();}
 };
 
 }} //namespace

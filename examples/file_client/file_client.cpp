@@ -59,7 +59,7 @@ int main(int argc, const char* argv[])
 		{
 			str.erase(0, sizeof(REQUEST_FILE));
 			auto files = split_string(str);
-			do_something_to_all(files, [&](const std::string& item) {
+			do_something_to_all(files, [&](const auto& item) {
 				completed_client_num = 0;
 				file_size = 0;
 
@@ -67,7 +67,7 @@ int main(int argc, const char* argv[])
 				if (client.find(0)->get_file(item))
 				{
 					//if you always return false, do_something_to_one will be equal to do_something_to_all.
-					client.do_something_to_one([&item](file_client::object_ctype& item2)->bool {if (0 != item2->id()) item2->get_file(item); return false;});
+					client.do_something_to_one([&item](auto& item2)->bool {if (0 != item2->id()) item2->get_file(item); return false;});
 					client.start();
 
 					while (completed_client_num != (unsigned short) link_num)

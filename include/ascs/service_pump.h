@@ -102,7 +102,7 @@ public:
 		temp_service_can.splice(std::end(temp_service_can), service_can);
 		lock.unlock();
 
-		ascs::do_something_to_all(temp_service_can, [this](object_type& item) {ASCS_THIS stop_and_free(item);});
+		ascs::do_something_to_all(temp_service_can, [this](auto& item) {ASCS_THIS stop_and_free(item);});
 	}
 
 	void start_service(int thread_num = ASCS_SERVICE_THREAD_NUM) {if (!is_service_started()) do_service(thread_num);}
@@ -144,7 +144,7 @@ public:
 	//stop the service, must be invoked explicitly when the service need to stop, for example, close the application
 	//only for service pump started by 'run_service', this function will return immediately,
 	//only the return from 'run_service' means service pump ended.
-	void end_service() {if (is_service_started()) do_something_to_all([](object_type& item) {item->stop_service();});}
+	void end_service() {if (is_service_started()) do_something_to_all([](auto& item) {item->stop_service();});}
 
 	bool is_running() const {return !stopped();}
 	bool is_service_started() const {return started;}
@@ -157,10 +157,10 @@ protected:
 		unified_out::info_out("service pump started.");
 
 		reset(); //this is needed when restart service
-		do_something_to_all([](object_type& item) {item->start_service();});
+		do_something_to_all([](auto& item) {item->start_service();});
 		add_service_thread(thread_num);
 	}
-	void wait_service() {ascs::do_something_to_all(service_threads, [](std::thread& t) {t.join();}); unified_out::info_out("service pump end."); started = false;}
+	void wait_service() {ascs::do_something_to_all(service_threads, [](auto& t) {t.join();}); unified_out::info_out("service pump end."); started = false;}
 
 	void stop_and_free(object_type i_service_)
 	{
