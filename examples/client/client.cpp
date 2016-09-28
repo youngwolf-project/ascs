@@ -39,8 +39,8 @@ public:
 	static void debug_out(const char* fmt, ...) {all_out_helper2("debug");}
 };
 
-#include <ascs/ext/client.h>
-using namespace ascs::ext;
+#include <ascs/ext/tcp.h>
+using namespace ascs::ext::tcp;
 
 #define QUIT_COMMAND	"quit"
 #define RESTART_COMMAND	"restart"
@@ -57,8 +57,7 @@ int main(int argc, const char* argv[])
 		puts("type " QUIT_COMMAND " to end.");
 
 	service_pump sp;
-	sclient client(sp);
-	//there is no corresponding echo client, because echo server with echo client will cause dead loop, and occupy almost all the network resource
+	single_client client(sp);
 
 //	argv[2] = "::1" //ipv6
 //	argv[2] = "127.0.0.1" //ipv4

@@ -74,7 +74,7 @@ public:
 
 protected:
 	void force_shutdown() {if (1 != shutdown_state) shutdown();}
-	bool graceful_shutdown(bool sync = true) //will block until shutdown success or time out if sync equal to true
+	bool graceful_shutdown(bool sync) //will block until shutdown success or time out if sync equal to true
 	{
 		if (is_shutting_down())
 			return false;
@@ -82,7 +82,7 @@ protected:
 			shutdown_state = 2;
 
 		asio::error_code ec;
-		ASCS_THIS lowest_layer().shutdown(asio::ip::tcp::socket::shutdown_send, ec);
+		this->lowest_layer().shutdown(asio::ip::tcp::socket::shutdown_send, ec);
 		if (ec) //graceful shutdown is impossible
 		{
 			shutdown();
@@ -107,11 +107,11 @@ protected:
 	//must mutex send_msg_buffer before invoke this function
 	virtual bool do_send_msg()
 	{
-		if (!is_send_allowed() || ASCS_THIS stopped())
-			ASCS_THIS sending = false;
-		else if (!ASCS_THIS sending && !ASCS_THIS send_msg_buffer.empty())
+		if (!is_send_allowed() || this->stopped())
+			this->sending = false;
+		else if (!this->sending && !this->send_msg_buffer.empty())
 		{
-			ASCS_THIS sending = true;
+			this->sending = true;
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
 			const size_t max_send_size = 0;
 #else
@@ -120,22 +120,22 @@ protected:
 			size_t size = 0;
 			auto end_time = super::statistic::now();
 			std::vector<asio::const_buffer> bufs;
-			for (auto iter = std::begin(ASCS_THIS send_msg_buffer); last_send_msg.empty();)
+			for (auto iter = std::begin(this->send_msg_buffer); last_send_msg.empty();)
 			{
 				size += iter->size();
 				bufs.push_back(asio::buffer(iter->data(), iter->size()));
-				ASCS_THIS stat.send_delay_sum += end_time - iter->begin_time;
+				this->stat.send_delay_sum += end_time - iter->begin_time;
 				++iter;
-				if (size >= max_send_size || iter == std::end(ASCS_THIS send_msg_buffer))
-					last_send_msg.splice(std::end(last_send_msg), ASCS_THIS send_msg_buffer, std::begin(ASCS_THIS send_msg_buffer), iter);
+				if (size >= max_send_size || iter == std::end(this->send_msg_buffer))
+					last_send_msg.splice(std::end(last_send_msg), this->send_msg_buffer, std::begin(this->send_msg_buffer), iter);
 			}
 
 			last_send_msg.front().restart();
-			asio::async_write(ASCS_THIS next_layer(), bufs,
-				ASCS_THIS make_handler_error_size([this](const auto& ec, auto bytes_transferred) {ASCS_THIS send_handler(ec, bytes_transferred);}));
+			asio::async_write(this->next_layer(), bufs,
+				this->make_handler_error_size([this](const auto& ec, auto bytes_transferred) {this->send_handler(ec, bytes_transferred);}));
 		}
 
-		return ASCS_THIS sending;
+		return this->sending;
 	}
 
 	virtual void do_recv_msg()
@@ -143,9 +143,9 @@ protected:
 		auto recv_buff = unpacker_->prepare_next_recv();
 		assert(asio::buffer_size(recv_buff) > 0);
 
-		asio::async_read(ASCS_THIS next_layer(), recv_buff,
-			[this](const auto& ec, auto bytes_transferred)->size_t {return ASCS_THIS unpacker_->completion_condition(ec, bytes_transferred);},
-			ASCS_THIS make_handler_error_size([this](const auto& ec, auto bytes_transferred) {ASCS_THIS recv_handler(ec, bytes_transferred);}));
+		asio::async_read(this->next_layer(), recv_buff,
+			[this](const auto& ec, auto bytes_transferred)->size_t {return this->unpacker_->completion_condition(ec, bytes_transferred);},
+			this->make_handler_error_size([this](const auto& ec, auto bytes_transferred) {this->recv_handler(ec, bytes_transferred);}));
 	}
 
 	virtual bool is_send_allowed() {return !is_shutting_down() && super::is_send_allowed();}
@@ -163,16 +163,18 @@ protected:
 
 	void shutdown()
 	{
+		std::unique_lock<std::shared_mutex> lock(shutdown_mutex);
+
 		shutdown_state = 1;
-		ASCS_THIS stop_all_timer();
-		ASCS_THIS close(); //must after stop_all_timer(), it's very important
-		ASCS_THIS started_ = false;
+		this->stop_all_timer();
+		this->close(); //must after stop_all_timer(), it's very important
+		this->started_ = false;
 //		reset_state();
 
-		if (ASCS_THIS lowest_layer().is_open())
+		if (this->lowest_layer().is_open())
 		{
 			asio::error_code ec;
-			ASCS_THIS lowest_layer().shutdown(asio::ip::tcp::socket::shutdown_both, ec);
+			this->lowest_layer().shutdown(asio::ip::tcp::socket::shutdown_both, ec);
 		}
 	}
 
@@ -186,16 +188,16 @@ private:
 			auto msg_num = temp_msg_can.size();
 			if (msg_num > 0)
 			{
-				ASCS_THIS stat.recv_msg_sum += msg_num;
-				ASCS_THIS temp_msg_buffer.resize(ASCS_THIS temp_msg_buffer.size() + msg_num);
-				auto op_iter = ASCS_THIS temp_msg_buffer.rbegin();
+				this->stat.recv_msg_sum += msg_num;
+				this->temp_msg_buffer.resize(this->temp_msg_buffer.size() + msg_num);
+				auto op_iter = this->temp_msg_buffer.rbegin();
 				for (auto iter = temp_msg_can.rbegin(); iter != temp_msg_can.rend();)
 				{
-					ASCS_THIS stat.recv_byte_sum += (++iter).base()->size();
+					this->stat.recv_byte_sum += (++iter).base()->size();
 					(++op_iter).base()->swap(*iter.base());
 				}
 			}
-			ASCS_THIS dispatch_msg();
+			this->dispatch_msg();
 
 			if (!unpack_ok)
 			{
@@ -205,22 +207,22 @@ private:
 			}
 		}
 		else
-			ASCS_THIS on_recv_error(ec);
+			this->on_recv_error(ec);
 	}
 
 	void send_handler(const asio::error_code& ec, size_t bytes_transferred)
 	{
 		if (!ec)
 		{
-			ASCS_THIS stat.send_time_sum += super::statistic::now() - last_send_msg.front().begin_time;
-			ASCS_THIS stat.send_byte_sum += bytes_transferred;
-			ASCS_THIS stat.send_msg_sum += last_send_msg.size();
+			this->stat.send_time_sum += super::statistic::now() - last_send_msg.front().begin_time;
+			this->stat.send_byte_sum += bytes_transferred;
+			this->stat.send_msg_sum += last_send_msg.size();
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
-			ASCS_THIS on_msg_send(last_send_msg.front());
+			this->on_msg_send(last_send_msg.front());
 #endif
 		}
 		else
-			ASCS_THIS on_send_error(ec);
+			this->on_send_error(ec);
 
 #ifdef ASCS_WANT_ALL_MSG_SEND_NOTIFY
 		typename super::in_msg msg;
@@ -228,13 +230,13 @@ private:
 #endif
 		last_send_msg.clear();
 
-		std::unique_lock<std::shared_mutex> lock(ASCS_THIS send_msg_buffer_mutex);
-		ASCS_THIS sending = false;
+		std::unique_lock<std::shared_mutex> lock(this->send_msg_buffer_mutex);
+		this->sending = false;
 
 		//send msg sequentially, that means second send only after first send success
 #ifdef ASCS_WANT_ALL_MSG_SEND_NOTIFY
 		if (!ec && !do_send_msg())
-			ASCS_THIS on_all_msg_send(msg);
+			this->on_all_msg_send(msg);
 #else
 		if (!ec)
 			do_send_msg();
@@ -245,6 +247,8 @@ protected:
 	typename super::in_container_type last_send_msg;
 	std::shared_ptr<i_unpacker<out_msg_type>> unpacker_;
 	int shutdown_state; //2-the first step of graceful shutdown, 1-force shutdown, 0-normal state
+
+	std::shared_mutex shutdown_mutex;
 };
 
 }} //namespace

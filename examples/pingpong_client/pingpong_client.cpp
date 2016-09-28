@@ -10,9 +10,11 @@
 #define ASCS_DEFAULT_UNPACKER stream_unpacker //non-protocol
 //configuration
 
-#include <ascs/ext/client.h>
+#include <ascs/ext/tcp.h>
 using namespace ascs;
+using namespace ascs::tcp;
 using namespace ascs::ext;
+using namespace ascs::ext::tcp;
 
 #ifdef _MSC_VER
 #define atoll _atoi64
@@ -86,7 +88,7 @@ private:
 	uint64_t total_bytes, send_bytes, recv_bytes;
 };
 
-class echo_client : public tcp::client_base<echo_socket>
+class echo_client : public client_base<echo_socket>
 {
 public:
 	echo_client(service_pump& service_pump_) : client_base<echo_socket>(service_pump_) {}

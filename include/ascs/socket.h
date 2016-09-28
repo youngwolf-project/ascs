@@ -128,24 +128,18 @@ public:
 	};
 
 protected:
-	struct in_msg : public InMsgType
+	template<typename T>
+	struct msg_with_begin_time : public T
 	{
-		in_msg() {restart();}
+		msg_with_begin_time() {restart();}
 		void restart() {restart(statistic::now());}
 		void restart(const typename statistic::stat_time& begin_time_) {begin_time = begin_time_;}
 
 		typename statistic::stat_time begin_time;
 	};
 
-	struct out_msg : public OutMsgType
-	{
-		out_msg() {restart();}
-		void restart() {restart(statistic::now());}
-		void restart(const typename statistic::stat_time& begin_time_) {begin_time = begin_time_;}
-
-		typename statistic::stat_time begin_time;
-	};
-
+	typedef msg_with_begin_time<InMsgType> in_msg;
+	typedef msg_with_begin_time<OutMsgType> out_msg;
 	typedef list<in_msg> in_container_type;
 	typedef list<out_msg> out_container_type;
 
@@ -210,7 +204,7 @@ public:
 #ifndef ASCS_ENHANCED_STABILITY
 			closing ||
 #endif
-			ASCS_THIS is_async_calling())
+			this->is_async_calling())
 			return false;
 
 		std::unique_lock<std::shared_mutex> lock(recv_msg_buffer_mutex, std::try_to_lock);
@@ -351,7 +345,7 @@ protected:
 #ifndef ASCS_ENHANCED_STABILITY
 			closing = true;
 #endif
-			set_timer(TIMER_DELAY_CLOSE, ASCS_DELAY_CLOSE * 1000 + 50, [this](auto id)->bool {return ASCS_THIS timer_handler(id);});
+			set_timer(TIMER_DELAY_CLOSE, ASCS_DELAY_CLOSE * 1000 + 50, [this](auto id)->bool {return this->timer_handler(id);});
 		}
 	}
 
@@ -391,7 +385,7 @@ protected:
 		else
 		{
 			recv_idle_begin_time = statistic::now();
-			set_timer(TIMER_DISPATCH_MSG, 50, [this](auto id)->bool {return ASCS_THIS timer_handler(id);});
+			set_timer(TIMER_DISPATCH_MSG, 50, [this](auto id)->bool {return this->timer_handler(id);});
 		}
 	}
 
@@ -413,7 +407,7 @@ protected:
 			else if (!last_dispatch_msg.empty())
 			{
 				dispatching = true;
-				post([this]() {ASCS_THIS msg_handler();});
+				post([this]() {this->msg_handler();});
 			}
 			else if (!recv_msg_buffer.empty())
 			{
@@ -422,7 +416,7 @@ protected:
 				recv_msg_buffer.pop_front();
 
 				dispatching = true;
-				post([this]() {ASCS_THIS msg_handler();});
+				post([this]() {this->msg_handler();});
 			}
 		}
 
@@ -431,7 +425,7 @@ protected:
 #ifndef ASCS_DISCARD_MSG_WHEN_LINK_DOWN
 			if (!last_dispatch_msg.empty())
 				on_msg_handle(last_dispatch_msg, true);
-			ascs::do_something_to_all(recv_msg_buffer, [this](auto& msg) {ASCS_THIS on_msg_handle(msg, true);});
+			ascs::do_something_to_all(recv_msg_buffer, [this](auto& msg) {this->on_msg_handle(msg, true);});
 #endif
 			last_dispatch_msg.clear();
 			recv_msg_buffer.clear();
@@ -461,7 +455,7 @@ protected:
 			if (!posting)
 			{
 				posting = true;
-				set_timer(TIMER_HANDLE_POST_BUFFER, 50, [this](auto id)->bool {return ASCS_THIS timer_handler(id);});
+				set_timer(TIMER_HANDLE_POST_BUFFER, 50, [this](auto id)->bool {return this->timer_handler(id);});
 			}
 		}
 
@@ -500,7 +494,7 @@ private:
 			do_dispatch_msg(true);
 			break;
 		case TIMER_DELAY_CLOSE:
-			if (!ASCS_THIS is_last_async_call())
+			if (!this->is_last_async_call())
 				return true;
 			else if (lowest_layer().is_open())
 			{
@@ -532,7 +526,7 @@ private:
 		if (!re) //dispatch failed, re-dispatch
 		{
 			last_dispatch_msg.restart(end_time);
-			set_timer(TIMER_RE_DISPATCH_MSG, 50, [this](auto id)->bool {return ASCS_THIS timer_handler(id);});
+			set_timer(TIMER_RE_DISPATCH_MSG, 50, [this](auto id)->bool {return this->timer_handler(id);});
 		}
 		else //dispatch msg sequentially, which means second dispatching only after first dispatching success
 		{

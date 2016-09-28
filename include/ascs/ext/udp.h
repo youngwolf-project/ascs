@@ -19,19 +19,19 @@
 #include "../udp/socket_service.h"
 
 #ifndef ASCS_DEFAULT_PACKER
-#define ASCS_DEFAULT_PACKER packer
+#define ASCS_DEFAULT_PACKER ascs::ext::packer
 #endif
 
 #ifndef ASCS_DEFAULT_UDP_UNPACKER
-#define ASCS_DEFAULT_UDP_UNPACKER udp_unpacker
+#define ASCS_DEFAULT_UDP_UNPACKER ascs::ext::udp_unpacker
 #endif
 
-namespace ascs { namespace ext {
+namespace ascs { namespace ext { namespace udp {
 
-typedef udp::socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UDP_UNPACKER> udp_socket;
-typedef single_socket_service<udp_socket> udp_sservice;
-typedef udp::service_base<udp_socket> udp_service;
+typedef ascs::udp::socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UDP_UNPACKER> socket;
+typedef ascs::single_socket_service<ascs::ext::udp::socket> single_service;
+typedef ascs::udp::service_base<ascs::ext::udp::socket> service;
 
-}} //namespace
+}}} //namespace
 
 #endif /* _ASCS_EXT_UDP_H_ */

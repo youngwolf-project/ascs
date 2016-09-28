@@ -1,30 +1,4 @@
 ﻿
-#ifndef ASCS_MAX_OBJECT_NUM
-#define ASCS_MAX_OBJECT_NUM			4096
-#endif
-
-#ifndef ASCS_REUSE_OBJECT
-	#ifndef ASCS_FREE_OBJECT_INTERVAL
-	#define ASCS_FREE_OBJECT_INTERVAL	10
-如果未开启对象池，将自动开启一个定时器，用于定时释放（从内存中删除）失效的对象（失效对象是指obsoleted()返回true,
-智能指针只有一个引用并且超时了的对象，超时请参看ASCS_OBSOLETED_OBJECT_LIFE_TIME宏），用这个宏指定定时器间隔，单位为秒。
-如果开启了对象池，将不会自动开启这个定时器，但使用者可以自己定义这个宏以强迫object_pool开启这个定时器（建议间隔
-就不能再是10秒了，应该更长一点，比如1分钟），然后失效对象将会被关闭（调用对象的close()函数以释放SOCKET句柄）而不是被释放。
-其实这个定时器就是以不同的参数调用free_object()函数而已，所以用户也可以自己开定时器来更灵活的控制如果释放或者关闭对象。
-	#endif
-#endif
-
-//#define ASCS_CLEAR_OBJECT_INTERVAL		60
-自动清除（从对象池移出到临时链表）失效对象，这个功能有什么用呢？
-如果在连接断开时，你没有或者不想去从对象池中删除，那么可以让object_pool周期性的查找失效连接，
-然后移出对象池，这样一次遍历可以操作多条连接，对于短连接效率可能会更高，对于长连接，建议每次连接断开时，调用
-tcp::server_base::del_client(）马上清除这条连接。用这个宏指定定时器间隔，单位为秒。
-
-#ifndef ASCS_OBSOLETED_OBJECT_LIFE_TIME
-#define ASCS_OBSOLETED_OBJECT_LIFE_TIME	5
-失效对象（并且已经移动到临时链表中的对象），多久时间之后，可以重用或者释放/关闭，单位为秒。
-#endif
-
 namespace ascs
 {
 

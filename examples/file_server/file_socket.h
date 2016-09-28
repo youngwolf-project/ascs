@@ -3,8 +3,8 @@
 #define FILE_SOCKET_H_
 
 #include "packer_unpacker.h"
-#include <ascs/ext/server.h>
-using namespace ascs::ext;
+#include <ascs/ext/tcp.h>
+using namespace ascs::ext::tcp;
 
 class file_socket : public base_socket, public server_socket
 {

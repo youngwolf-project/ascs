@@ -14,12 +14,11 @@ public:
 
 	void disconnect(typename Pool::object_ctype& socket_ptr);
 	void disconnect();
-	void force_close(typename Pool::object_ctype& socket_ptr);
-	void force_close();
-	void graceful_close(typename Pool::object_ctype& socket_ptr);
-	void graceful_close();
-带socket_ptr参数者会把socket_ptr从容器中删除，然后调用socket_ptr的同名函数。
-不带socket_ptr参数者不会从容器中删除任何对象，只对容器中所有对象调用同名函数。
+	void force_shutdown(typename Pool::object_ctype& socket_ptr);
+	void force_shutdown();
+	void graceful_shutdown(typename Pool::object_ctype& socket_ptr);
+	void graceful_shutdown();
+先从对象池中删除socket_ptr，然后调用client_ptr的同名函数。对于没有socket_ptr参数的重载，对所有对象调用同名函数。
 
 protected:
 	virtual void uninit();

@@ -12,6 +12,7 @@
 
 #include <ascs/tcp/server.h>
 using namespace ascs;
+using namespace ascs::tcp;
 
 #include "file_socket.h"
 
@@ -29,7 +30,7 @@ int main(int argc, const char* argv[])
 		puts("type " QUIT_COMMAND " to end.");
 
 	service_pump sp;
-	tcp::server_base<file_socket> file_server_(sp);
+	server_base<file_socket> file_server_(sp);
 
 	if (argc > 2)
 		file_server_.set_server_addr(atoi(argv[1]), argv[2]);

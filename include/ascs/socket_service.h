@@ -31,8 +31,8 @@ public:
 	single_socket_service(service_pump& service_pump_, Arg& arg) : i_service(service_pump_), Socket(service_pump_, arg) {}
 
 protected:
-	virtual bool init() {ASCS_THIS reset(); ASCS_THIS start(); return Socket::started();}
-	virtual void uninit() {ASCS_THIS graceful_shutdown();}
+	virtual bool init() {this->reset(); this->start(); return Socket::started();}
+	virtual void uninit() {this->graceful_shutdown();}
 };
 
 template<typename Socket, typename Pool>
@@ -48,8 +48,8 @@ protected:
 
 	virtual bool init()
 	{
-		ASCS_THIS do_something_to_all([](const auto& item) {item->reset(); item->start();});
-		ASCS_THIS start();
+		this->do_something_to_all([](const auto& item) {item->reset(); item->start();});
+		this->start();
 		return true;
 	}
 
@@ -57,9 +57,9 @@ public:
 	//parameter reset valid only if the service pump already started, or service pump will call object pool's init function before start service pump
 	bool add_socket(typename Pool::object_ctype& socket_ptr, bool reset = true)
 	{
-		if (ASCS_THIS add_object(socket_ptr))
+		if (this->add_object(socket_ptr))
 		{
-			if (ASCS_THIS get_service_pump().is_service_started()) //service already started
+			if (this->get_service_pump().is_service_started()) //service already started
 			{
 				if (reset)
 					socket_ptr->reset();

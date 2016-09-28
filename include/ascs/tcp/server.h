@@ -55,12 +55,8 @@ public:
 	virtual bool del_client(const std::shared_ptr<timer>& client_ptr)
 	{
 		auto raw_client_ptr(std::dynamic_pointer_cast<Socket>(client_ptr));
-		return raw_client_ptr && ASCS_THIS del_object(raw_client_ptr) ? raw_client_ptr->force_shutdown(), true : false;
+		return raw_client_ptr && this->del_object(raw_client_ptr) ? raw_client_ptr->force_shutdown(), true : false;
 	}
-
-	//do not use graceful_shutdown() as client does, because in this function, object_can_mutex has been locked, graceful_shutdown will wait until on_recv_error() been invoked,
-	//but in on_recv_error(), we need to lock object_can_mutex too(in del_object()), this will cause dead lock
-	void shutdown_all_client() {ASCS_THIS do_something_to_all([](const auto& item) {item->force_shutdown();});}
 
 	///////////////////////////////////////////////////
 	//msg sending interface
@@ -72,9 +68,13 @@ public:
 	//msg sending interface
 	///////////////////////////////////////////////////
 
-	void disconnect(typename Pool::object_ctype& client_ptr) {ASCS_THIS del_object(client_ptr); client_ptr->disconnect();}
-	void force_shutdown(typename Pool::object_ctype& client_ptr) {ASCS_THIS del_object(client_ptr); client_ptr->force_shutdown();}
-	void graceful_shutdown(typename Pool::object_ctype& client_ptr, bool sync = true) {ASCS_THIS del_object(client_ptr); client_ptr->graceful_shutdown(sync);}
+	//functions with a client_ptr parameter will remove the link from object pool first, then call corresponding function.
+	void disconnect(typename Pool::object_ctype& client_ptr) {this->del_object(client_ptr); client_ptr->disconnect();}
+	void disconnect() {this->do_something_to_all([=](const auto& item) {item->disconnect();});}
+	void force_shutdown(typename Pool::object_ctype& client_ptr) {this->del_object(client_ptr); client_ptr->force_shutdown();}
+	void force_shutdown() {this->do_something_to_all([=](const auto& item) {item->force_shutdown();});}
+	void graceful_shutdown(typename Pool::object_ctype& client_ptr, bool sync = false) {this->del_object(client_ptr); client_ptr->graceful_shutdown(sync);}
+	void graceful_shutdown() {this->do_something_to_all([](const auto& item) {item->graceful_shutdown();});} //async must be false(the default value), or dead lock will occur.
 
 protected:
 	virtual bool init()
@@ -89,14 +89,14 @@ protected:
 		acceptor.listen(asio::ip::tcp::acceptor::max_connections, ec); assert(!ec);
 		if (ec) {get_service_pump().stop(); unified_out::error_out("listen failed."); return false;}
 
-		ASCS_THIS start();
+		this->start();
 
 		for (auto i = 0; i < ASCS_ASYNC_ACCEPT_NUM; ++i)
 			start_next_accept();
 
 		return true;
 	}
-	virtual void uninit() {ASCS_THIS stop(); stop_listen(); shutdown_all_client();}
+	virtual void uninit() {this->stop(); stop_listen(); force_shutdown();}
 	virtual bool on_accept(typename Pool::object_ctype& client_ptr) {return true;}
 
 	//if you want to ignore this error and continue to accept new connections immediately, return true in this virtual function;
@@ -116,14 +116,14 @@ protected:
 
 	virtual void start_next_accept()
 	{
-		auto client_ptr = ASCS_THIS create_object(*this);
-		acceptor.async_accept(client_ptr->lowest_layer(), [=](const auto& ec) {ASCS_THIS accept_handler(ec, client_ptr);});
+		auto client_ptr = this->create_object(*this);
+		acceptor.async_accept(client_ptr->lowest_layer(), [=](const auto& ec) {this->accept_handler(ec, client_ptr);});
 	}
 
 protected:
 	bool add_client(typename Pool::object_ctype& client_ptr)
 	{
-		if (ASCS_THIS add_object(client_ptr))
+		if (this->add_object(client_ptr))
 		{
 			client_ptr->show_info("client:", "arrive.");
 			return true;

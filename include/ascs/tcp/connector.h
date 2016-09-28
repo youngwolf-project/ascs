@@ -60,7 +60,7 @@ public:
 	void disconnect(bool reconnect = false) {force_shutdown(reconnect);}
 	void force_shutdown(bool reconnect = false)
 	{
-		if (1 != ASCS_THIS shutdown_state)
+		if (1 != this->shutdown_state)
 		{
 			show_info("client link:", "been shut down.");
 			reconnecting = reconnect;
@@ -71,9 +71,12 @@ public:
 	}
 
 	//sync must be false if you call graceful_shutdown in on_msg
+	//furthermore, you're recommended to call this function with sync equal to false in all service threads,
+	//all callbacks will be called in service threads.
+	//this function is not thread safe, please note.
 	void graceful_shutdown(bool reconnect = false, bool sync = true)
 	{
-		if (ASCS_THIS is_shutting_down())
+		if (this->is_shutting_down())
 			return;
 		else if (!is_connected())
 			return force_shutdown(reconnect);
@@ -83,13 +86,13 @@ public:
 		connected = false;
 
 		if (super::graceful_shutdown(sync))
-			ASCS_THIS set_timer(TIMER_ASYNC_SHUTDOWN, 10, [this](auto id)->bool {return ASCS_THIS async_shutdown_handler(id, ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION * 100);});
+			this->set_timer(TIMER_ASYNC_SHUTDOWN, 10, [this](auto id)->bool {return this->async_shutdown_handler(id, ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION * 100);});
 	}
 
 	void show_info(const char* head, const char* tail) const
 	{
 		asio::error_code ec;
-		auto ep = ASCS_THIS lowest_layer().local_endpoint(ec);
+		auto ep = this->lowest_layer().local_endpoint(ec);
 		if (!ec)
 			unified_out::info_out("%s %s:%hu %s", head, ep.address().to_string().c_str(), ep.port(), tail);
 	}
@@ -97,7 +100,7 @@ public:
 	void show_info(const char* head, const char* tail, const asio::error_code& ec) const
 	{
 		asio::error_code ec2;
-		auto ep = ASCS_THIS lowest_layer().local_endpoint(ec2);
+		auto ep = this->lowest_layer().local_endpoint(ec2);
 		if (!ec2)
 			unified_out::info_out("%s %s:%hu %s (%d %s)", head, ep.address().to_string().c_str(), ep.port(), tail, ec.value(), ec.message().data());
 	}
@@ -105,12 +108,12 @@ public:
 protected:
 	virtual bool do_start() //connect or receive
 	{
-		if (!ASCS_THIS stopped())
+		if (!this->stopped())
 		{
 			if (reconnecting && !is_connected())
-				ASCS_THIS lowest_layer().async_connect(server_addr, ASCS_THIS make_handler_error([this](const auto& ec) {ASCS_THIS connect_handler(ec);}));
+				this->lowest_layer().async_connect(server_addr, this->make_handler_error([this](const auto& ec) {this->connect_handler(ec);}));
 			else
-				ASCS_THIS do_recv_msg();
+				this->do_recv_msg();
 
 			return true;
 		}
@@ -128,29 +131,29 @@ protected:
 	{
 		show_info("client link:", "broken/been shut down", ec);
 
-		force_shutdown(ASCS_THIS is_shutting_down() ? reconnecting : prepare_reconnect(ec) >= 0);
-		ASCS_THIS shutdown_state = 0;
+		force_shutdown(this->is_shutting_down() ? reconnecting : prepare_reconnect(ec) >= 0);
+		this->shutdown_state = 0;
 
 		if (reconnecting)
-			ASCS_THIS start();
+			this->start();
 	}
 
 	bool prepare_next_reconnect(const asio::error_code& ec)
 	{
-		if ((asio::error::operation_aborted != ec || reconnecting) && !ASCS_THIS stopped())
+		if ((asio::error::operation_aborted != ec || reconnecting) && !this->stopped())
 		{
 #ifdef _WIN32
 			if (asio::error::connection_refused != ec && asio::error::network_unreachable != ec && asio::error::timed_out != ec)
 #endif
 			{
 				asio::error_code ec;
-				ASCS_THIS lowest_layer().close(ec);
+				this->lowest_layer().close(ec);
 			}
 
 			auto delay = prepare_reconnect(ec);
 			if (delay >= 0)
 			{
-				ASCS_THIS set_timer(TIMER_CONNECT, delay, [this](auto id)->bool {ASCS_THIS do_start(); return false;});
+				this->set_timer(TIMER_CONNECT, delay, [this](auto id)->bool {this->do_start(); return false;});
 				return true;
 			}
 		}
@@ -159,16 +162,16 @@ protected:
 	}
 
 private:
-	bool async_shutdown_handler(unsigned char id, ssize_t loop_num)
+	bool async_shutdown_handler(unsigned char id, size_t loop_num)
 	{
 		assert(TIMER_ASYNC_SHUTDOWN == id);
 
-		if (2 == ASCS_THIS shutdown_state)
+		if (2 == this->shutdown_state)
 		{
 			--loop_num;
 			if (loop_num > 0)
 			{
-				ASCS_THIS update_timer_info(id, 10, [loop_num, this](auto id)->bool {return ASCS_THIS async_shutdown_handler(id, loop_num);});
+				this->update_timer_info(id, 10, [loop_num, this](auto id)->bool {return this->async_shutdown_handler(id, loop_num);});
 				return true;
 			}
 			else
@@ -186,9 +189,9 @@ private:
 		if (!ec)
 		{
 			connected = reconnecting = true;
-			ASCS_THIS reset_state();
+			this->reset_state();
 			on_connect();
-			ASCS_THIS send_msg(); //send buffer may have msgs, send them
+			this->send_msg(); //send buffer may have msgs, send them
 			do_start();
 		}
 		else

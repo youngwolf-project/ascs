@@ -3,9 +3,11 @@
 #define FILE_CLIENT_H_
 
 #include "../file_server/packer_unpacker.h"
-#include <ascs/ext/client.h>
+#include <ascs/ext/tcp.h>
 using namespace ascs;
+using namespace ascs::tcp;
 using namespace ascs::ext;
+using namespace ascs::ext::tcp;
 
 extern std::atomic_ushort completed_client_num;
 extern int link_num;
@@ -157,10 +159,10 @@ private:
 	int index;
 };
 
-class file_client : public tcp::client_base<file_socket>
+class file_client : public client_base<file_socket>
 {
 public:
-	static const unsigned char TIMER_BEGIN = tcp::client_base<file_socket>::TIMER_END;
+	static const unsigned char TIMER_BEGIN = client_base<file_socket>::TIMER_END;
 	static const unsigned char UPDATE_PROGRESS = TIMER_BEGIN;
 	static const unsigned char TIMER_END = TIMER_BEGIN + 10;
 
@@ -169,7 +171,7 @@ public:
 	void start()
 	{
 		begin_time.restart();
-		set_timer(UPDATE_PROGRESS, 50, [this](auto id)->bool {return ASCS_THIS update_progress_handler(id, -1);});
+		set_timer(UPDATE_PROGRESS, 50, [this](auto id)->bool {return this->update_progress_handler(id, -1);});
 	}
 
 	void stop(const std::string& file_name)
@@ -201,7 +203,7 @@ private:
 				printf("\r%u%%", new_percent);
 				fflush(stdout);
 
-				ASCS_THIS update_timer_info(id, 50, [new_percent, this](auto id)->bool {return ASCS_THIS update_progress_handler(id, new_percent);});
+				this->update_timer_info(id, 50, [new_percent, this](auto id)->bool {return this->update_progress_handler(id, new_percent);});
 			}
 		}
 

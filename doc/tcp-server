@@ -1,14 +1,4 @@
 
-#ifndef ASCS_ASYNC_ACCEPT_NUM
-#define ASCS_ASYNC_ACCEPT_NUM			1
-同时投递多少个async_accept。
-#endif
-
-#ifndef ASCS_TCP_DEFAULT_IP_VERSION
-#define ASCS_TCP_DEFAULT_IP_VERSION asio::ip::tcp::v4()
-为监听套接字绑定地址时，在不指定ip的情况下，指定ip地址的版本（v4还是v6），如果指定了ip，则ip地址的版本可以从ip中推导出来。
-#endif
-
 namespace ascs { namespace tcp {
 
 服务端服务器类，主要功能是监听和接受连接，连接管理继承于Pool
@@ -58,6 +48,14 @@ ssl使用。
 	void safe_broadcast_native_msg(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false);
 对每一个连接调用tcp::socket中的同名函数。
 
+	void disconnect(typename Pool::object_ctype& client_ptr);
+	void disconnect();
+	void force_shutdown(typename Pool::object_ctype& client_ptr);
+	void force_shutdown();
+	void graceful_shutdown(typename Pool::object_ctype& client_ptr);
+	void graceful_shutdown();
+先从对象池中删除client_ptr，然后以默认参数调用client_ptr的同名函数，对于没有client_ptr参数的重载，不删除任何对象并对所有对象以默认参数调用同名函数。
+
 protected:
 	virtual void init();
 	virtual void uninit();
@@ -82,7 +80,8 @@ protected:
 添加一条连接到对象池（调用object_pool::add_object），如果成功，打印一些连接建议相关的信息。
 
 	void accept_handler(const error_code& ec, typename server_base::object_ctype& client_ptr);
-异步接受到连接时asio回调，如果出错（ec为真），将调用stop_listen，否则继续异步接受连接（start_next_accept）。
+异步接受到连接时asio回调，如果出错（ec为真），将调用on_accept_error()，否则继续异步接受连接（start_next_accept）,
+如果on_accept_error()返回true，也将继续异步接受连接（start_next_accept）。
 
 protected:
 	asio::ip::tcp::endpoint server_addr;

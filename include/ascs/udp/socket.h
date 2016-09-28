@@ -45,11 +45,11 @@ public:
 		super::reset();
 
 		asio::error_code ec;
-		ASCS_THIS lowest_layer().open(local_addr.protocol(), ec); assert(!ec);
+		this->lowest_layer().open(local_addr.protocol(), ec); assert(!ec);
 #ifndef ASCS_NOT_REUSE_ADDRESS
-		ASCS_THIS lowest_layer().set_option(asio::socket_base::reuse_address(true), ec); assert(!ec);
+		this->lowest_layer().set_option(asio::socket_base::reuse_address(true), ec); assert(!ec);
 #endif
-		ASCS_THIS lowest_layer().bind(local_addr, ec); assert(!ec);
+		this->lowest_layer().bind(local_addr, ec); assert(!ec);
 		if (ec)
 			unified_out::error_out("bind failed.");
 	}
@@ -109,7 +109,7 @@ public:
 protected:
 	virtual bool do_start()
 	{
-		if (!ASCS_THIS stopped())
+		if (!this->stopped())
 		{
 			do_recv_msg();
 			return true;
@@ -121,22 +121,22 @@ protected:
 	//must mutex send_msg_buffer before invoke this function
 	virtual bool do_send_msg()
 	{
-		if (!is_send_allowed() || ASCS_THIS stopped())
-			ASCS_THIS sending = false;
-		else if (!ASCS_THIS sending && !ASCS_THIS send_msg_buffer.empty())
+		if (!is_send_allowed() || this->stopped())
+			this->sending = false;
+		else if (!this->sending && !this->send_msg_buffer.empty())
 		{
-			ASCS_THIS sending = true;
-			ASCS_THIS stat.send_delay_sum += super::statistic::now() - ASCS_THIS send_msg_buffer.front().begin_time;
-			ASCS_THIS send_msg_buffer.front().swap(last_send_msg);
-			ASCS_THIS send_msg_buffer.pop_front();
+			this->sending = true;
+			this->stat.send_delay_sum += super::statistic::now() - this->send_msg_buffer.front().begin_time;
+			this->send_msg_buffer.front().swap(last_send_msg);
+			this->send_msg_buffer.pop_front();
 
-			std::shared_lock<std::shared_mutex> lock(shutdown_mutex);
 			last_send_msg.restart();
-			ASCS_THIS next_layer().async_send_to(asio::buffer(last_send_msg.data(), last_send_msg.size()), last_send_msg.peer_addr,
-				ASCS_THIS make_handler_error_size([this](const auto& ec, auto bytes_transferred) {ASCS_THIS send_handler(ec, bytes_transferred);}));
+			std::shared_lock<std::shared_mutex> lock(shutdown_mutex);
+			this->next_layer().async_send_to(asio::buffer(last_send_msg.data(), last_send_msg.size()), last_send_msg.peer_addr,
+				this->make_handler_error_size([this](const auto& ec, auto bytes_transferred) {this->send_handler(ec, bytes_transferred);}));
 		}
 
-		return ASCS_THIS sending;
+		return this->sending;
 	}
 
 	virtual void do_recv_msg()
@@ -145,11 +145,11 @@ protected:
 		assert(asio::buffer_size(recv_buff) > 0);
 
 		std::shared_lock<std::shared_mutex> lock(shutdown_mutex);
-		ASCS_THIS next_layer().async_receive_from(recv_buff, peer_addr,
-			ASCS_THIS make_handler_error_size([this](const auto& ec, auto bytes_transferred) {ASCS_THIS recv_handler(ec, bytes_transferred);}));
+		this->next_layer().async_receive_from(recv_buff, peer_addr,
+			this->make_handler_error_size([this](const auto& ec, auto bytes_transferred) {this->recv_handler(ec, bytes_transferred);}));
 	}
 
-	virtual bool is_send_allowed() {return ASCS_THIS lowest_layer().is_open() && super::is_send_allowed();}
+	virtual bool is_send_allowed() {return this->lowest_layer().is_open() && super::is_send_allowed();}
 	//can send data or not(just put into send buffer)
 
 	virtual void on_recv_error(const asio::error_code& ec)
@@ -166,18 +166,18 @@ protected:
 
 	void shutdown()
 	{
-		ASCS_THIS stop_all_timer();
-		ASCS_THIS close(); //must after stop_all_timer(), it's very important
-		ASCS_THIS started_ = false;
+		std::unique_lock<std::shared_mutex> lock(shutdown_mutex);
+
+		this->stop_all_timer();
+		this->close(); //must after stop_all_timer(), it's very important
+		this->started_ = false;
 //		reset_state();
 
-		if (ASCS_THIS lowest_layer().is_open())
+		if (this->lowest_layer().is_open())
 		{
 			asio::error_code ec;
-			ASCS_THIS lowest_layer().shutdown(asio::ip::udp::socket::shutdown_both, ec);
-
-			std::unique_lock<std::shared_mutex> lock(shutdown_mutex);
-			ASCS_THIS lowest_layer().close(ec);
+			this->lowest_layer().shutdown(asio::ip::udp::socket::shutdown_both, ec);
+			this->lowest_layer().close(ec);
 		}
 	}
 
@@ -186,11 +186,11 @@ private:
 	{
 		if (!ec && bytes_transferred > 0)
 		{
-			++ASCS_THIS stat.recv_msg_sum;
-			ASCS_THIS stat.recv_byte_sum += bytes_transferred;
-			ASCS_THIS temp_msg_buffer.resize(ASCS_THIS temp_msg_buffer.size() + 1);
-			ASCS_THIS temp_msg_buffer.back().swap(peer_addr, unpacker_->parse_msg(bytes_transferred));
-			ASCS_THIS dispatch_msg();
+			++this->stat.recv_msg_sum;
+			this->stat.recv_byte_sum += bytes_transferred;
+			this->temp_msg_buffer.resize(this->temp_msg_buffer.size() + 1);
+			this->temp_msg_buffer.back().swap(peer_addr, unpacker_->parse_msg(bytes_transferred));
+			this->dispatch_msg();
 		}
 #ifdef _MSC_VER
 		else if (asio::error::connection_refused == ec || asio::error::connection_reset == ec)
@@ -206,15 +206,15 @@ private:
 		{
 			assert(bytes_transferred == last_send_msg.size());
 
-			ASCS_THIS stat.send_time_sum += super::statistic::now() - last_send_msg.begin_time;
-			ASCS_THIS stat.send_byte_sum += bytes_transferred;
-			++ASCS_THIS stat.send_msg_sum;
+			this->stat.send_time_sum += super::statistic::now() - last_send_msg.begin_time;
+			this->stat.send_byte_sum += bytes_transferred;
+			++this->stat.send_msg_sum;
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
-			ASCS_THIS on_msg_send(last_send_msg);
+			this->on_msg_send(last_send_msg);
 #endif
 		}
 		else
-			ASCS_THIS on_send_error(ec);
+			this->on_send_error(ec);
 
 #ifdef ASCS_WANT_ALL_MSG_SEND_NOTIFY
 		typename super::in_msg msg;
@@ -222,15 +222,15 @@ private:
 #endif
 		last_send_msg.clear();
 
-		std::unique_lock<std::shared_mutex> lock(ASCS_THIS send_msg_buffer_mutex);
-		ASCS_THIS sending = false;
+		std::unique_lock<std::shared_mutex> lock(this->send_msg_buffer_mutex);
+		this->sending = false;
 
 		//send msg sequentially, that means second send only after first send success
 		//under windows, send a msg to addr_any may cause sending errors, please note
 		//for UDP in ascs, sending error will not stop the following sending.
 #ifdef ASCS_WANT_ALL_MSG_SEND_NOTIFY
 		if (!do_send_msg())
-			ASCS_THIS on_all_msg_send(msg);
+			this->on_all_msg_send(msg);
 #else
 		do_send_msg();
 #endif

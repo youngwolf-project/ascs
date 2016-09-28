@@ -10,9 +10,10 @@
 #define ASCS_DEFAULT_UNPACKER stream_unpacker //non-protocol
 //configuration
 
-#include <ascs/ext/server.h>
+#include <ascs/ext/tcp.h>
 using namespace ascs;
-using namespace ascs::ext;
+using namespace ascs::tcp;
+using namespace ascs::ext::tcp;
 
 #ifdef _MSC_VER
 #define atoll _atoi64
@@ -33,7 +34,7 @@ protected:
 	virtual bool on_msg_handle(out_msg_type& msg, bool link_down) {return direct_post_msg(std::move(msg));}
 };
 
-class echo_server : public tcp::server_base<echo_socket>
+class echo_server : public server_base<echo_socket>
 {
 public:
 	echo_server(service_pump& service_pump_) : server_base(service_pump_) {}

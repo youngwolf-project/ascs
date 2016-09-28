@@ -12,7 +12,7 @@
 
 #include <ascs/ext/ssl.h>
 using namespace ascs;
-using namespace ascs::ext;
+using namespace ascs::ext::ssl;
 
 #define QUIT_COMMAND	"quit"
 #define RESTART_COMMAND	"restart"
@@ -28,23 +28,23 @@ int main(int argc, const char* argv[])
 
 	service_pump sp;
 
-	ssl_server server_(sp, asio::ssl::context::sslv23_server);
-	server_.ssl_context().set_options(asio::ssl::context::default_workarounds | asio::ssl::context::no_sslv2 | asio::ssl::context::single_dh_use);
-	server_.ssl_context().set_verify_mode(asio::ssl::context::verify_peer | asio::ssl::context::verify_fail_if_no_peer_cert);
-	server_.ssl_context().load_verify_file("client_certs/server.crt");
-	server_.ssl_context().use_certificate_chain_file("certs/server.crt");
-	server_.ssl_context().use_private_key_file("certs/server.key", asio::ssl::context::pem);
-	server_.ssl_context().use_tmp_dh_file("certs/dh1024.pem");
+	server server_(sp, asio::ssl::context::sslv23_server);
+	server_.context().set_options(asio::ssl::context::default_workarounds | asio::ssl::context::no_sslv2 | asio::ssl::context::single_dh_use);
+	server_.context().set_verify_mode(asio::ssl::context::verify_peer | asio::ssl::context::verify_fail_if_no_peer_cert);
+	server_.context().load_verify_file("client_certs/server.crt");
+	server_.context().use_certificate_chain_file("certs/server.crt");
+	server_.context().use_private_key_file("certs/server.key", asio::ssl::context::pem);
+	server_.context().use_tmp_dh_file("certs/dh1024.pem");
 
 ///*
 	//method #1
-	ssl_client client_(sp, asio::ssl::context::sslv23_client);
-	client_.ssl_context().set_options(asio::ssl::context::default_workarounds | asio::ssl::context::no_sslv2 | asio::ssl::context::single_dh_use);
-	client_.ssl_context().set_verify_mode(asio::ssl::context::verify_peer | asio::ssl::context::verify_fail_if_no_peer_cert);
-	client_.ssl_context().load_verify_file("certs/server.crt");
-	client_.ssl_context().use_certificate_chain_file("client_certs/server.crt");
-	client_.ssl_context().use_private_key_file("client_certs/server.key", asio::ssl::context::pem);
-	client_.ssl_context().use_tmp_dh_file("client_certs/dh1024.pem");
+	client client_(sp, asio::ssl::context::sslv23_client);
+	client_.context().set_options(asio::ssl::context::default_workarounds | asio::ssl::context::no_sslv2 | asio::ssl::context::single_dh_use);
+	client_.context().set_verify_mode(asio::ssl::context::verify_peer | asio::ssl::context::verify_fail_if_no_peer_cert);
+	client_.context().load_verify_file("certs/server.crt");
+	client_.context().use_certificate_chain_file("client_certs/server.crt");
+	client_.context().use_private_key_file("client_certs/server.key", asio::ssl::context::pem);
+	client_.context().use_tmp_dh_file("client_certs/dh1024.pem");
 
 	//please config the ssl context before creating any clients.
 	client_.add_client();
@@ -52,7 +52,7 @@ int main(int argc, const char* argv[])
 //*/
 /*
 	//method #2
-	//to use ssl_sclient, we must construct ssl context first.
+	//to use single_client, we must construct ssl context first.
 	asio::ssl::context ctx(asio::ssl::context::sslv23_client);
 	ctx.set_options(asio::ssl::context::default_workarounds | asio::ssl::context::no_sslv2 | asio::ssl::context::single_dh_use);
 	ctx.set_verify_mode(asio::ssl::context::verify_peer | asio::ssl::context::verify_fail_if_no_peer_cert);
@@ -61,7 +61,7 @@ int main(int argc, const char* argv[])
 	ctx.use_private_key_file("client_certs/server.key", asio::ssl::context::pem);
 	ctx.use_tmp_dh_file("client_certs/dh1024.pem");
 
-	ssl_sclient client_(sp, ctx);
+	single_client client_(sp, ctx);
 */
 	sp.start_service();
 	while(sp.is_running())

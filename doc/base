@@ -1,18 +1,7 @@
 ﻿
-包括了公共函数、类、接口、宏等东西。
+包括了公共函数、类、接口等。
 
-1. 宏
-ASCS_HAS_STD_SHARED_MUTEX， 如果你的编译器报shared_mutex重复定义，请定义该宏；
-ASCS_SERVER_IP， 默认IP，可以通过这个宏修改，也可以直接在参数中修改；
-ASCS_SERVER_PORT， 默认端口，可以通过这个宏修改，也可以直接在参数中修改；
-ASCS_MAX_MSG_NUM， socket中最多能缓存的消息条数，由于采用的是list，所以内存用到多少分配多少，注意发送和接收缓存都可以达到这个大小，而不共享这个大小。
-ASCS_SF， 打印size_t时用的格式符，vc和gcc不一样。
-ASCS_THIS， 访问父类的函数或者成员时使用，解决vc崩溃问题（部分版本）。
-ASCS_UNIFIED_OUT_BUF_NUM， log打印时缓存大小。
-ASCS_NO_UNIFIED_OUT， 关闭log打印。
-ASCS_CUSTOM_LOG， 定义之后，用户必须提供自己的log打印函数（unified_out::fatal_out/error_out/warning_out/info_out/debug_out）。
-
-2. 接口
+1. 接口
 i_server:
 用于在server_socket_base中调用server_base，server_socket_base使用，server_base实现，
 如果想增加更多的功能，则继承自i_server实现自己的接口，继承自server_base并实现这个新接口，最后继承自server_socket_base以使用这个新接口。
@@ -38,7 +27,13 @@ asio会调用completion_condition，如果返回0，说明已经成功的接收�
 udp::i_unpacker:
 udp解包器必须实现这个接口。
 
-3. 类
+2. 类
+dummy_packer:
+仅仅提供发送消息的类型以便通过编译，无法真正的打包，所以只能通过direct_send_msg等发送消息。
+
+std_list:
+封装自std::list，优化了其size()的复杂度，达到O(1)，只在gcc 5.1以下才生效。
+
 auto_buffer：
 如果想要运行时替换打包解包器，则打包解包器必须以auto_buffer或者shared_buffer作为消息类型（你写个类似的也可，但没有必要，如果需要更多的功能可以用继承）。
 这个类是不允许被复制的，用户只负责分配内存。
@@ -58,7 +53,7 @@ log打印函数，只是打印到屏幕，如果需要更详细的功能需要�
 unified_out：
 调用log_formater打印log，如果定义ASCS_NO_UNIFIED_OUT，所有log打印函数将变成空函数，什么也不做。
 
-4. 函数
+3. 函数
 do_something_to_all：
 对容器（不得是类map容器，比如map，unordered_map等）中的所有对象执行一个动作，动作由一个函数对象（std::function）决定。
 可以选择带锁和不带锁，如果带锁，加的是共享锁，请注意。

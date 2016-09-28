@@ -102,7 +102,7 @@ public:
 		temp_service_can.splice(std::end(temp_service_can), service_can);
 		lock.unlock();
 
-		ascs::do_something_to_all(temp_service_can, [this](auto& item) {ASCS_THIS stop_and_free(item);});
+		ascs::do_something_to_all(temp_service_can, [this](auto& item) {this->stop_and_free(item);});
 	}
 
 	void start_service(int thread_num = ASCS_SERVICE_THREAD_NUM) {if (!is_service_started()) do_service(thread_num);}
@@ -148,7 +148,7 @@ public:
 
 	bool is_running() const {return !stopped();}
 	bool is_service_started() const {return started;}
-	void add_service_thread(int thread_num) {for (auto i = 0; i < thread_num; ++i) service_threads.push_back(std::thread([this]() {asio::error_code ec; ASCS_THIS run(ec);}));}
+	void add_service_thread(int thread_num) {for (auto i = 0; i < thread_num; ++i) service_threads.push_back(std::thread([this]() {asio::error_code ec; this->run(ec);}));}
 
 protected:
 	void do_service(int thread_num)
@@ -160,7 +160,7 @@ protected:
 		do_something_to_all([](auto& item) {item->start_service();});
 		add_service_thread(thread_num);
 	}
-	void wait_service() {ascs::do_something_to_all(service_threads, [](auto& t) {t.join();}); unified_out::info_out("service pump end."); started = false;}
+	void wait_service() {ascs::do_something_to_all(service_threads, [](auto& t) {t.join();}); service_threads.clear(); unified_out::info_out("service pump end."); started = false;}
 
 	void stop_and_free(object_type i_service_)
 	{

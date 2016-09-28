@@ -35,20 +35,20 @@ public:
 	size_t valid_size()
 	{
 		size_t size = 0;
-		ASCS_THIS do_something_to_all([&size](const auto& item) {if (item->is_connected()) ++size;});
+		this->do_something_to_all([&size](const auto& item) {if (item->is_connected()) ++size;});
 		return size;
 	}
 
 	typename Pool::object_type add_client()
 	{
-		auto client_ptr(ASCS_THIS create_object());
-		return ASCS_THIS add_socket(client_ptr, false) ? client_ptr : typename Pool::object_type();
+		auto client_ptr(this->create_object());
+		return this->add_socket(client_ptr, false) ? client_ptr : typename Pool::object_type();
 	}
 	typename Pool::object_type add_client(unsigned short port, const std::string& ip = ASCS_SERVER_IP)
 	{
-		auto client_ptr(ASCS_THIS create_object());
+		auto client_ptr(this->create_object());
 		client_ptr->set_server_addr(port, ip);
-		return ASCS_THIS add_socket(client_ptr, false) ? client_ptr : typename Pool::object_type();
+		return this->add_socket(client_ptr, false) ? client_ptr : typename Pool::object_type();
 	}
 
 	///////////////////////////////////////////////////
@@ -64,15 +64,15 @@ public:
 
 	//functions with a client_ptr parameter will remove the link from object pool first, then call corresponding function, if you want to reconnect to the server,
 	//please call client_ptr's 'disconnect' 'force_shutdown' or 'graceful_shutdown' with true 'reconnect' directly.
-	void disconnect(typename Pool::object_ctype& client_ptr) {ASCS_THIS del_object(client_ptr); client_ptr->disconnect(false);}
-	void disconnect(bool reconnect = false) {ASCS_THIS do_something_to_all([=](const auto& item) {item->disconnect(reconnect);});}
-	void force_shutdown(typename Pool::object_ctype& client_ptr) {ASCS_THIS del_object(client_ptr); client_ptr->force_shutdown(false);}
-	void force_shutdown(bool reconnect = false) {ASCS_THIS do_something_to_all([=](const auto& item) {item->force_shutdown(reconnect);});}
-	void graceful_shutdown(typename Pool::object_ctype& client_ptr, bool sync = true) {ASCS_THIS del_object(client_ptr); client_ptr->graceful_shutdown(false, sync);}
-	void graceful_shutdown(bool reconnect = false, bool sync = true) {ASCS_THIS do_something_to_all([=](const auto& item) {item->graceful_shutdown(reconnect, sync);});}
+	void disconnect(typename Pool::object_ctype& client_ptr) {this->del_object(client_ptr); client_ptr->disconnect();}
+	void disconnect(bool reconnect = false) {this->do_something_to_all([=](const auto& item) {item->disconnect(reconnect);});}
+	void force_shutdown(typename Pool::object_ctype& client_ptr) {this->del_object(client_ptr); client_ptr->force_shutdown();}
+	void force_shutdown(bool reconnect = false) {this->do_something_to_all([=](const auto& item) {item->force_shutdown(reconnect);});}
+	void graceful_shutdown(typename Pool::object_ctype& client_ptr, bool sync = true) {this->del_object(client_ptr); client_ptr->graceful_shutdown(false, sync);}
+	void graceful_shutdown(bool reconnect = false, bool sync = true) {this->do_something_to_all([=](const auto& item) {item->graceful_shutdown(reconnect, sync);});}
 
 protected:
-	virtual void uninit() {ASCS_THIS stop(); graceful_shutdown();}
+	virtual void uninit() {this->stop(); graceful_shutdown();}
 };
 
 }} //namespace

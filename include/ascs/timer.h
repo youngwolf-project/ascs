@@ -51,10 +51,10 @@ protected:
 		enum timer_status {TIMER_OK, TIMER_CANCELED};
 
 		unsigned char id;
-		timer_status status;
-		size_t milliseconds;
-		std::function<bool(unsigned char)> call_back;
-		std::shared_ptr<timer_type> timer;
+		mutable timer_status status;
+		mutable size_t milliseconds;
+		mutable std::function<bool(unsigned char)> call_back;
+		mutable std::shared_ptr<timer_type> timer;
 
 		bool operator <(const timer_info& other) const {return id < other.id;}
 	};
@@ -76,14 +76,14 @@ public:
 		if (iter == std::end(timer_can))
 		{
 			iter = timer_can.insert(ti).first;
-			const_cast<timer_info*>(&*iter)->timer = std::make_shared<timer_type>(io_service_);
+			iter->timer = std::make_shared<timer_type>(io_service_);
 		}
 		lock.unlock();
 
 		//items in timer_can not locked
-		const_cast<timer_info*>(&*iter)->status = timer_info::TIMER_OK;
-		const_cast<timer_info*>(&*iter)->milliseconds = milliseconds;
-		const_cast<timer_info*>(&*iter)->call_back.swap(call_back);
+		iter->status = timer_info::TIMER_OK;
+		iter->milliseconds = milliseconds;
+		iter->call_back.swap(call_back);
 
 		if (start)
 			start_timer(*iter);
@@ -129,14 +129,14 @@ public:
 		if (iter != std::end(timer_can))
 		{
 			lock.unlock();
-			stop_timer(*const_cast<timer_info*>(&*iter));
+			stop_timer(*iter);
 		}
 	}
 
 	DO_SOMETHING_TO_ALL_MUTEX(timer_can, timer_can_mutex)
 	DO_SOMETHING_TO_ONE_MUTEX(timer_can, timer_can_mutex)
 
-	void stop_all_timer() {do_something_to_all([this](const auto& item) {ASCS_THIS stop_timer(*const_cast<timer_info*>(&item));});}
+	void stop_all_timer() {do_something_to_all([this](const auto& item) {this->stop_timer(item);});}
 
 protected:
 	void reset() {object::reset();}
@@ -146,10 +146,10 @@ protected:
 		ti.timer->expires_from_now(milliseconds(ti.milliseconds));
 		//return true from call_back to continue the timer, or the timer will stop
 		ti.timer->async_wait(
-			make_handler_error([this, &ti](const auto& ec) {if (!ec && ti.call_back(ti.id) && timer::timer_info::TIMER_OK == ti.status) ASCS_THIS start_timer(ti);}));
+			make_handler_error([this, &ti](const auto& ec) {if (!ec && ti.call_back(ti.id) && timer::timer_info::TIMER_OK == ti.status) this->start_timer(ti);}));
 	}
 
-	void stop_timer(timer_info& ti)
+	void stop_timer(timer_cinfo& ti)
 	{
 		asio::error_code ec;
 		ti.timer->cancel(ec);

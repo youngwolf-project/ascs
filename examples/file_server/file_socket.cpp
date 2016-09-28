@@ -1,6 +1,7 @@
 
 //configuration
 #define ASCS_SERVER_PORT		5050
+#define ASCS_ASYNC_ACCEPT_NUM	5
 #define ASCS_CLEAR_OBJECT_INTERVAL	60
 #define ASCS_ENHANCED_STABILITY
 #define ASCS_WANT_MSG_SEND_NOTIFY
@@ -107,6 +108,7 @@ void file_socket::handle_msg(out_msg_ctype& msg)
 
 //restore configuration
 #undef ASCS_SERVER_PORT
+#undef ASCS_ASYNC_ACCEPT_NUM
 #undef ASCS_CLEAR_OBJECT_INTERVAL
 #undef ASCS_ENHANCED_STABILITY
 #undef ASCS_WANT_MSG_SEND_NOTIFY

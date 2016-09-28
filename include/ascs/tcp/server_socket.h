@@ -40,25 +40,29 @@ public:
 	void disconnect() {force_shutdown();}
 	void force_shutdown()
 	{
-		if (1 != ASCS_THIS shutdown_state)
+		if (1 != this->shutdown_state)
 			show_info("server link:", "been shut down.");
 
 		super::force_shutdown();
 	}
 
-	void graceful_shutdown(bool sync = true)
+	//sync must be false if you call graceful_shutdown in on_msg
+	//furthermore, you're recommended to call this function with sync equal to false in all service threads,
+	//all callbacks will be called in service threads.
+	//this function is not thread safe, please note.
+	void graceful_shutdown(bool sync = false)
 	{
-		if (!ASCS_THIS is_shutting_down())
+		if (!this->is_shutting_down())
 			show_info("server link:", "being shut down gracefully.");
 
 		if (super::graceful_shutdown(sync))
-			ASCS_THIS set_timer(TIMER_ASYNC_SHUTDOWN, 10, [this](auto id)->bool {return ASCS_THIS async_shutdown_handler(id, ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION * 100);});
+			this->set_timer(TIMER_ASYNC_SHUTDOWN, 10, [this](auto id)->bool {return this->async_shutdown_handler(id, ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION * 100);});
 	}
 
 	void show_info(const char* head, const char* tail) const
 	{
 		asio::error_code ec;
-		auto ep = ASCS_THIS lowest_layer().remote_endpoint(ec);
+		auto ep = this->lowest_layer().remote_endpoint(ec);
 		if (!ec)
 			unified_out::info_out("%s %s:%hu %s", head, ep.address().to_string().c_str(), ep.port(), tail);
 	}
@@ -66,7 +70,7 @@ public:
 	void show_info(const char* head, const char* tail, const asio::error_code& ec) const
 	{
 		asio::error_code ec2;
-		auto ep = ASCS_THIS lowest_layer().remote_endpoint(ec2);
+		auto ep = this->lowest_layer().remote_endpoint(ec2);
 		if (!ec2)
 			unified_out::info_out("%s %s:%hu %s (%d %s)", head, ep.address().to_string().c_str(), ep.port(), tail, ec.value(), ec.message().data());
 	}
@@ -74,41 +78,41 @@ public:
 protected:
 	virtual bool do_start()
 	{
-		if (!ASCS_THIS stopped())
+		if (!this->stopped())
 		{
-			ASCS_THIS do_recv_msg();
+			this->do_recv_msg();
 			return true;
 		}
 
 		return false;
 	}
 
-	virtual void on_unpack_error() {unified_out::error_out("can not unpack msg."); ASCS_THIS force_shutdown();}
+	virtual void on_unpack_error() {unified_out::error_out("can not unpack msg."); this->force_shutdown();}
 	//do not forget to force_shutdown this socket(in del_client(), there's a force_shutdown() invocation)
 	virtual void on_recv_error(const asio::error_code& ec)
 	{
-		ASCS_THIS show_info("server link:", "broken/been shut down", ec);
+		this->show_info("server link:", "broken/been shut down", ec);
 
 #ifdef ASCS_CLEAR_OBJECT_INTERVAL
-		ASCS_THIS force_shutdown();
+		this->force_shutdown();
 #else
-		server.del_client(std::dynamic_pointer_cast<timer>(ASCS_THIS shared_from_this()));
+		server.del_client(std::dynamic_pointer_cast<timer>(this->shared_from_this()));
 #endif
 
-		ASCS_THIS shutdown_state = 0;
+		this->shutdown_state = 0;
 	}
 
 private:
-	bool async_shutdown_handler(unsigned char id, ssize_t loop_num)
+	bool async_shutdown_handler(unsigned char id, size_t loop_num)
 	{
 		assert(TIMER_ASYNC_SHUTDOWN == id);
 
-		if (2 == ASCS_THIS shutdown_state)
+		if (2 == this->shutdown_state)
 		{
 			--loop_num;
 			if (loop_num > 0)
 			{
-				ASCS_THIS update_timer_info(id, 10, [loop_num, this](auto id)->bool {return ASCS_THIS async_shutdown_handler(id, loop_num);});
+				this->update_timer_info(id, 10, [loop_num, this](auto id)->bool {return this->async_shutdown_handler(id, loop_num);});
 				return true;
 			}
 			else

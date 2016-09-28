@@ -32,21 +32,21 @@ public:
 	using super::add_socket;
 	typename Pool::object_type add_socket(unsigned short port, const std::string& ip = std::string())
 	{
-		auto socket_ptr(ASCS_THIS create_object());
+		auto socket_ptr(this->create_object());
 		socket_ptr->set_local_addr(port, ip);
-		return ASCS_THIS add_socket(socket_ptr) ? socket_ptr : typename Pool::object_type();
+		return this->add_socket(socket_ptr) ? socket_ptr : typename Pool::object_type();
 	}
 
 	//functions with a socket_ptr parameter will remove the link from object pool first, then call corresponding function
-	void disconnect(typename Pool::object_ctype& socket_ptr) {ASCS_THIS del_object(socket_ptr); socket_ptr->disconnect();}
-	void disconnect() {ASCS_THIS do_something_to_all([](const auto& item) {item->disconnect();});}
-	void force_shutdown(typename Pool::object_ctype& socket_ptr) {ASCS_THIS del_object(socket_ptr); socket_ptr->force_shutdown();}
-	void force_shutdown() {ASCS_THIS do_something_to_all([](const auto& item) {item->force_shutdown();});}
-	void graceful_shutdown(typename Pool::object_ctype& socket_ptr) {ASCS_THIS del_object(socket_ptr); socket_ptr->graceful_shutdown();}
-	void graceful_shutdown() {ASCS_THIS do_something_to_all([](const auto& item) {item->graceful_shutdown();});}
+	void disconnect(typename Pool::object_ctype& socket_ptr) {this->del_object(socket_ptr); socket_ptr->disconnect();}
+	void disconnect() {this->do_something_to_all([](const auto& item) {item->disconnect();});}
+	void force_shutdown(typename Pool::object_ctype& socket_ptr) {this->del_object(socket_ptr); socket_ptr->force_shutdown();}
+	void force_shutdown() {this->do_something_to_all([](const auto& item) {item->force_shutdown();});}
+	void graceful_shutdown(typename Pool::object_ctype& socket_ptr) {this->del_object(socket_ptr); socket_ptr->graceful_shutdown();}
+	void graceful_shutdown() {this->do_something_to_all([](const auto& item) {item->graceful_shutdown();});}
 
 protected:
-	virtual void uninit() {ASCS_THIS stop(); graceful_shutdown();}
+	virtual void uninit() {this->stop(); graceful_shutdown();}
 };
 
 }} //namespace

@@ -1,61 +1,12 @@
-/*
- * config.h
- *
- *  Created on: 2016-9-14
- *      Author: youngwolf
- *		email: mail2tao@163.com
- *		QQ: 676218192
- *		Community on QQ: 198941541
- *
- * ascs top header file.
- *
- * license: www.boost.org/LICENSE_1_0.txt
- *
- * 2016.9.25	version 1.0.0
- * Based on st_asio_wrapper 1.2.0.
- * Directory structure refactoring.
- * Classes renaming, remove 'st_', 'tcp_' and 'udp_' prefix.
- * File renaming, remove 'st_asio_wrapper_' prefix.
- * Distinguish TCP and UDP related classes and files by tcp/udp namespace and tcp/udp directory.
- * Need c++14, if your compiler detected duplicated 'shared_mutex' definition, please define ASCS_HAS_STD_SHARED_MUTEX macro.
- * Need to define ASIO_STANDALONE and ASIO_HAS_STD_CHRONO macros.
- *
- */
-
-#ifndef _ASCS_CONFIG_H_
-#define _ASCS_CONFIG_H_
-
-#if defined(_MSC_VER) && (_MSC_VER >= 1200)
-# pragma once
-#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+﻿
+宏定义以及编译器版本，asio版本检查等。
 
 #define ASCS_VER		10000	//[x]xyyzz -> [x]x.[y]y.[z]z
 #define ASCS_VERSION	"1.0.0"
 
-//asio and compiler check
-#ifdef _MSC_VER
-	#define ASCS_SF "%Iu" //printing format for 'size_t'
-	static_assert(_MSC_VER >= 1900, "ascs need Visual C++ 14.0 or higher.");
-#elif defined(__GNUC__)
-	#define ASCS_SF "%zu" //printing format for 'size_t'
-	#ifdef __clang__
-		static_assert(__clang_major__ > 3 || (__clang_major__ == 3 && __clang_minor__ >= 4), "ascs need Clang 3.4 or higher.");
-	#else
-		static_assert(__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 9), "ascs need GCC 4.9 or higher.");
-		#if __GNUC__ > 5
-		#define ASCS_HAS_STD_SHARED_MUTEX
-		#endif
-	#endif
-
-	#if !defined(__cplusplus) || __cplusplus <= 201103L
-		#error ascs at least need c++14.
-	#endif
-#else
-	#error ascs only support Visual C++, GCC and Clang.
+#if !defined(__clang__) && defined(__GNUC__) && __GNUC__ > 5
+#define ASCS_HAS_STD_SHARED_MUTEX
 #endif
-
-static_assert(ASIO_VERSION >= 101001, "ascs need asio 1.10.1 or higher.");
-//asio and compiler check
 
 //configurations
 #ifndef ASCS_SERVER_IP
@@ -65,30 +16,40 @@ static_assert(ASIO_VERSION >= 101001, "ascs need asio 1.10.1 or higher.");
 #define ASCS_SERVER_PORT		5050
 #endif
 static_assert(ASCS_SERVER_PORT > 0, "server port must be bigger than zero.");
+服务端和客户端共用。
 
 //msg send and recv buffer's maximum size (list::size()), corresponding buffers are expanded dynamically, which means only allocate memory when needed.
 #ifndef ASCS_MAX_MSG_NUM
 #define ASCS_MAX_MSG_NUM		1024
 #endif
 static_assert(ASCS_MAX_MSG_NUM > 0, "message capacity must be bigger than zero.");
+消息接收缓存和发送缓存最大存储消息数，采用了list容器，所以是用到多少分配多少。
 
 //buffer (on stack) size used when writing logs.
 #ifndef ASCS_UNIFIED_OUT_BUF_NUM
 #define ASCS_UNIFIED_OUT_BUF_NUM	2048
 #endif
+输出日志时用到的缓存大小。
 
 //use customized log system (you must provide unified_out::fatal_out/error_out/warning_out/info_out/debug_out)
 //#define ASCS_CUSTOM_LOG
+是否采用自定义日志输入系统，你必须提供自己的unified_out::fatal_out/error_out/warning_out/info_out/debug_out。
 
 //don't write any logs.
 //#define ASCS_NO_UNIFIED_OUT
+是否禁止日志输出。
 
 //if defined, service_pump will catch exceptions for asio::io_service::run(), and all function objects in asynchronous calls
 //will be hooked by ascs::object, this can avoid the object been freed during asynchronous call.
 //#define ASCS_ENHANCED_STABILITY
+增加安全性，如果定义，将：
+1. 为asio::io_service::run()捕捉异常，捕捉到后，会回调ascs::service_pump::on_exception，如果返回true，则再次调用asio::io_service::run；
+2. 所有用于异步回调的函数对象都将被hook，这样将保证对对象重用或释放的绝对安全；
+3. ASCS_DELAY_CLOSE宏将恒定为0。
 
 //if defined, asio::steady_timer will be used in ascs::timer, otherwise, asio::system_timer will be used.
 //#define ASCS_USE_STEADY_TIMER
+如果定义，则定时器使用asio::steady_timer，否则使用asio::system_timer。
 
 //after this duration, this socket can be freed from the heap or reused,
 //you must define this macro as a value, not just define it, the value means the duration, unit is second.
@@ -140,6 +101,8 @@ static_assert(ASCS_MAX_OBJECT_NUM > 0, "object capacity must be bigger than zero
 		#error free object interval must be bigger than zero.
 	#endif
 #endif
+如果未开启对象池，将自动开启一个定时器，用于定时释放（从内存中删除）失效的对象（失效对象是指obsoleted()返回true,
+智能指针只有一个引用并且无任何异步调用的对象。
 
 //define ASCS_CLEAR_OBJECT_INTERVAL macro to let object_pool to invoke clear_obsoleted_object() automatically and periodically
 //this feature may affect performance with huge number of objects, so re-write tcp::server_socket_base::on_recv_error and invoke object_pool::del_object()
@@ -149,6 +112,10 @@ static_assert(ASCS_MAX_OBJECT_NUM > 0, "object capacity must be bigger than zero
 #if defined(ASCS_CLEAR_OBJECT_INTERVAL) && ASCS_CLEAR_OBJECT_INTERVAL <= 0
 	#error clear object interval must be bigger than zero.
 #endif
+自动清除（从对象池移出到临时链表）失效对象，这个功能有什么用呢？
+如果在连接断开时，你没有或者不想去从对象池中删除，那么可以让object_pool周期性的查找失效连接，
+然后移出对象池，这样一次遍历可以操作多条连接，对于短连接效率可能会更高，对于长连接，建议每次连接断开时，调用
+tcp::server_base::del_client()马上清除这条连接。用这个宏指定定时器间隔，单位为秒。
 
 //IO thread number
 //listening, msg sending and receiving, msg handling(on_msg_handle() and on_msg()), all timers(include user timers) and other asynchronous calls(ascs::object::post())
@@ -157,6 +124,7 @@ static_assert(ASCS_MAX_OBJECT_NUM > 0, "object capacity must be bigger than zero
 #define ASCS_SERVICE_THREAD_NUM	8
 #endif
 static_assert(ASCS_SERVICE_THREAD_NUM > 0, "service thread number be bigger than zero.");
+同时开启多少个线程执行asio::io_service::run函数。
 
 //graceful shutdown must finish within this duration, otherwise, socket will be forcedly shut down.
 #ifndef ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION
@@ -169,12 +137,14 @@ static_assert(ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION > 0, "graceful shutdown durati
 #ifndef ASCS_RECONNECT_INTERVAL
 #define ASCS_RECONNECT_INTERVAL	500 //millisecond(s)
 #endif
+异步连接，asio返回失败之后，暂停一定时间继续重试（即再次调用asnc_connect）。
 
 //how many async_accept delivery concurrently
 #ifndef ASCS_ASYNC_ACCEPT_NUM
 #define ASCS_ASYNC_ACCEPT_NUM	1
 #endif
 static_assert(ASCS_ASYNC_ACCEPT_NUM > 0, "async accept number must be bigger than zero.");
+同时投递多少个async_accept。
 
 //in set_server_addr, if the IP is empty, ASCS_TCP_DEFAULT_IP_VERSION will define the IP version, or the IP version will be deduced by the IP address.
 //asio::ip::tcp::v4() means ipv4 and asio::ip::tcp::v6() means ipv6.
@@ -184,6 +154,7 @@ static_assert(ASCS_ASYNC_ACCEPT_NUM > 0, "async accept number must be bigger tha
 #ifndef ASCS_UDP_DEFAULT_IP_VERSION
 #define ASCS_UDP_DEFAULT_IP_VERSION asio::ip::udp::v4()
 #endif
+绑定地址时，在不指定ip的情况下，指定ip地址的版本（v4还是v6），如果指定了ip，则ip地址的版本可以从ip中推导出来。
 
 //close port reuse
 //#define ASCS_NOT_REUSE_ADDRESS
@@ -193,5 +164,3 @@ static_assert(ASCS_ASYNC_ACCEPT_NUM > 0, "async accept number must be bigger tha
 namespace std {typedef shared_timed_mutex shared_mutex;}
 #endif
 //configurations
-
-#endif /* _ASCS_CONFIG_H_ */

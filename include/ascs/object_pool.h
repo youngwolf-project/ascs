@@ -41,11 +41,11 @@ protected:
 
 	void start()
 	{
-#ifdef ASCS_FREE_OBJECT_INTERVAL
-		set_timer(TIMER_FREE_SOCKET, 1000 * ASCS_FREE_OBJECT_INTERVAL, [this](auto id)->bool {ASCS_THIS free_object(); return true;});
+#ifdef ASCS_REUSE_OBJECT
+		set_timer(TIMER_FREE_SOCKET, 1000 * ASCS_FREE_OBJECT_INTERVAL, [this](auto id)->bool {this->free_object(); return true;});
 #endif
 #ifdef ASCS_CLEAR_OBJECT_INTERVAL
-		set_timer(TIMER_CLEAR_SOCKET, 1000 * ASCS_CLEAR_OBJECT_INTERVAL, [this](auto id)->bool {ASCS_THIS clear_obsoleted_object(); return true;});
+		set_timer(TIMER_CLEAR_SOCKET, 1000 * ASCS_CLEAR_OBJECT_INTERVAL, [this](auto id)->bool {this->clear_obsoleted_object(); return true;});
 #endif
 	}
 

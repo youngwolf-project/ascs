@@ -64,14 +64,14 @@ public:
 protected:
 	virtual bool do_start() //connect or receive
 	{
-		if (!ASCS_THIS stopped())
+		if (!this->stopped())
 		{
-			if (ASCS_THIS reconnecting && !ASCS_THIS is_connected())
-				ASCS_THIS lowest_layer().async_connect(ASCS_THIS server_addr, ASCS_THIS make_handler_error([this](const auto& ec) {ASCS_THIS connect_handler(ec);}));
+			if (this->reconnecting && !this->is_connected())
+				this->lowest_layer().async_connect(this->server_addr, this->make_handler_error([this](const auto& ec) {this->connect_handler(ec);}));
 			else if (!authorized_)
-				ASCS_THIS next_layer().async_handshake(asio::ssl::stream_base::client, ASCS_THIS make_handler_error([this](const auto& ec) {ASCS_THIS handshake_handler(ec);}));
+				this->next_layer().async_handshake(asio::ssl::stream_base::client, this->make_handler_error([this](const auto& ec) {this->handshake_handler(ec);}));
 			else
-				ASCS_THIS do_recv_msg();
+				this->do_recv_msg();
 
 			return true;
 		}
@@ -93,15 +93,15 @@ protected:
 	bool shutdown_ssl()
 	{
 		bool re = false;
-		if (!ASCS_THIS is_shutting_down() && authorized_)
+		if (!this->is_shutting_down() && authorized_)
 		{
-			ASCS_THIS show_info("ssl client link:", "been shut down.");
-			ASCS_THIS shutdown_state = 2;
-			ASCS_THIS reconnecting = false;
+			this->show_info("ssl client link:", "been shut down.");
+			this->shutdown_state = 2;
+			this->reconnecting = false;
 			authorized_ = false;
 
 			asio::error_code ec;
-			ASCS_THIS next_layer().shutdown(ec);
+			this->next_layer().shutdown(ec);
 
 			re = !ec;
 		}
@@ -114,13 +114,13 @@ private:
 	{
 		if (!ec)
 		{
-			ASCS_THIS connected = ASCS_THIS reconnecting = false;
-			ASCS_THIS reset_state();
-			ASCS_THIS on_connect();
+			this->connected = this->reconnecting = false;
+			this->reset_state();
+			this->on_connect();
 			do_start();
 		}
 		else
-			ASCS_THIS prepare_next_reconnect(ec);
+			this->prepare_next_reconnect(ec);
 	}
 
 	void handshake_handler(const asio::error_code& ec)
@@ -129,7 +129,7 @@ private:
 		if (!ec)
 		{
 			authorized_ = true;
-			ASCS_THIS send_msg(); //send buffer may have msgs, send them
+			this->send_msg(); //send buffer may have msgs, send them
 			do_start();
 		}
 		else
@@ -151,10 +151,10 @@ public:
 	using super::TIMER_END;
 
 	object_pool(service_pump& service_pump_, const asio::ssl::context::method& m) : super(service_pump_), ctx(m) {}
-	asio::ssl::context& ssl_context() {return ctx;}
+	asio::ssl::context& context() {return ctx;}
 
 	using super::create_object;
-	typename object_pool::object_type create_object() {return create_object(ASCS_THIS sp, ctx);}
+	typename object_pool::object_type create_object() {return create_object(this->sp, ctx);}
 	template<typename Arg>
 	typename object_pool::object_type create_object(Arg& arg) {return create_object(arg, ctx);}
 
@@ -192,8 +192,8 @@ protected:
 
 	virtual void start_next_accept()
 	{
-		auto client_ptr = ASCS_THIS create_object(*this);
-		ASCS_THIS acceptor.async_accept(client_ptr->lowest_layer(), [client_ptr, this](const auto& ec) {ASCS_THIS accept_handler(ec, client_ptr);});
+		auto client_ptr = this->create_object(*this);
+		this->acceptor.async_accept(client_ptr->lowest_layer(), [client_ptr, this](const auto& ec) {this->accept_handler(ec, client_ptr);});
 	}
 
 private:
@@ -201,17 +201,17 @@ private:
 	{
 		if (!ec)
 		{
-			if (ASCS_THIS on_accept(client_ptr))
+			if (this->on_accept(client_ptr))
 				client_ptr->next_layer().async_handshake(asio::ssl::stream_base::server, [client_ptr, this](const auto& ec) {
-					ASCS_THIS on_handshake(ec, client_ptr);
-					if (!ec && ASCS_THIS add_client(client_ptr))
+					this->on_handshake(ec, client_ptr);
+					if (!ec && this->add_client(client_ptr))
 						client_ptr->start();
 				});
 
 			start_next_accept();
 		}
 		else
-			ASCS_THIS stop_listen();
+			this->stop_listen();
 	}
 };
 

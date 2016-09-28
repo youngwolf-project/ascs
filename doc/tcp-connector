@@ -1,9 +1,4 @@
 
-#ifndef ASCS_RECONNECT_INTERVAL
-#define ASCS_RECONNECT_INTERVAL		500 //millisecond(s)
-异步连接，asio返回失败之后，暂停一定时间继续重试（即再次调用asnc_connect）。
-#endif
-
 namespace ascs { namespace tcp {
 
 带连接功能的tcp::socket_base，算是一个真正的客户端了
@@ -31,13 +26,14 @@ public:
 是否已经连接成功。
 
 	void disconnect(bool reconnect = false);
-直接调用force_close。
+直接调用force_shutdown。
 
-	void force_close(bool reconnect = false);
-强制关闭————调用父类的do_close，如果reconnect为true，则关闭之后，马上重新连接服务器。
+	void force_shutdown(bool reconnect = false);
+强制关闭————调用父类的shutdown，如果reconnect为true，则关闭之后，马上重新连接服务器。
 
-	void graceful_close(bool reconnect = false, bool sync = true);
-优雅关闭，调用父类的graceful_close函数，reconnect参数的意义同上，sync参数直接传递给父类。
+	void graceful_shutdown(bool reconnect = false, bool sync = true);
+优雅关闭，调用父类的graceful_shutdown函数，reconnect参数的意义同上，sync参数直接传递给父类。
+在on_msg中，请以sync为false调用该函数，在其它所有service线程中，推荐也用sync为false调用该函数。
 
 	void show_info(const char* head, const char* tail) const;
 在head和tail中间，显示自己的地址（IP加端口）。
@@ -55,6 +51,9 @@ virtual int prepare_reconnect(const asio::error_code& ec);
 	virtual void on_connect();
 连接成功时回调，用户重写它以得到连接成功事件。
 
+	virtual bool is_closable();
+如果正在重连接，则不允许close这个connector。
+
 	virtual bool is_send_allowed() const;
 是否可发送数据，is_connected加上父类的is_send_allowed为最终的判定结果。
 
@@ -68,8 +67,8 @@ virtual int prepare_reconnect(const asio::error_code& ec);
 如果允许（io_service仍然在运行且prepare_reconnect返回大于等于0），启动定时器以延时一小段时间之后重新连接服务器。
 
 private:
-	bool async_close_handler(unsigned char id, ssize_t loop_num);
-异步优雅关闭超时定时器。
+	bool async_shutdown_handler(unsigned char id, ssize_t loop_num);
+异步优雅关闭（shutdown）超时定时器。
 
 	void connect_handler(const error_code& ec);
 连接成功或者失败后由asio回调。

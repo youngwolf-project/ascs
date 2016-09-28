@@ -2,7 +2,7 @@
 namespace ascs { namespace tcp {
 
 支持多条连接的tcp客户端
-template<typename Socket = connector, typename Pool = object_pool<Socket>>
+template<typename Socket, typename Pool = object_pool<Socket>>
 class client_base : public multi_socket_service<Socket, Pool>
 {
 public:
@@ -41,12 +41,11 @@ ssl使用。
 
 	void disconnect(typename Pool::object_ctype& client_ptr);
 	void disconnect(bool reconnect = false);
-	void force_close(typename Pool::object_ctype& client_ptr);
-	void force_close(bool reconnect = false);
-	void graceful_close(typename Pool::object_ctype& client_ptr, bool sync = true);
-	void graceful_close(bool reconnect = false, bool sync = true);
-带client_ptr参数者会把client_ptr从容器中删除，然后调用client_ptr的同名函数且不做重连接。
-不带client_ptr参数者不会从容器中删除任何对象，只对容器中所有对象调用同名函数，是否重连接由reconnect决定。
+	void force_shutdown(typename Pool::object_ctype& client_ptr);
+	void force_shutdown(bool reconnect = false);
+	void graceful_shutdown(typename Pool::object_ctype& client_ptr, bool sync = true);
+	void graceful_shutdown(bool reconnect = false, bool sync = true);
+先从对象池中删除client_ptr，然后以默认参数调用client_ptr的同名函数。对于没有client_ptr参数的重载，不删除任何对象并对所有对象调用同名函数，参数直接传递。
 
 protected:
 	virtual void uninit();

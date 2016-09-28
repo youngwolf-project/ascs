@@ -16,13 +16,14 @@ ssl使用。
 重置所有，object_pool在重用时会调用。server_socket_base的子类可重写它以重置自己的状态，记得最后需要调用本类的reset。
 
 	void disconnect();
-直接调用force_close。
+直接调用force_shutdown。
 
-	void force_close();
+	void force_shutdown();
 强制退出————调用父类的同名函数。
 
-	void graceful_close(bool sync = true);
+	void graceful_shutdown(bool sync = true);
 优雅关闭————调用父类的同名函数。
+在on_msg中，请以sync为false调用该函数，在其它所有service线程中，推荐也用sync为false调用该函数。
 
 	void show_info(const char* head, const char* tail) const;
 在head和tail中间，显示对方的地址（IP加端口）。

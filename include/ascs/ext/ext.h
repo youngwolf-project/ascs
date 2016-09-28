@@ -81,8 +81,8 @@ public:
 	void resume() {start();}
 	void stop() {if (!started) return; started = false; elapsed_seconds += std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::system_clock::now() - start_time).count();}
 
-	bool stopped() const { return !started; }
-	float elapsed() const {if (!started) return elapsed_seconds; else return std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::system_clock::now() - start_time).count();}
+	bool stopped() const {return !started;}
+	float elapsed() const {if (!started) return elapsed_seconds; return std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::system_clock::now() - start_time).count();}
 
 protected:
 	bool started;

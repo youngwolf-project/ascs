@@ -8,7 +8,7 @@
 
 #include <ascs/ext/udp.h>
 using namespace ascs;
-using namespace ascs::ext;
+using namespace ascs::ext::udp;
 
 #define QUIT_COMMAND	"quit"
 #define RESTART_COMMAND	"restart"
@@ -30,7 +30,7 @@ int main(int argc, const char* argv[])
 
 	std::string str;
 	service_pump sp;
-	udp_sservice service(sp);
+	single_service service(sp);
 	service.set_local_addr(local_port);
 
 	sp.start_service();

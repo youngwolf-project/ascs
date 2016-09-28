@@ -27,9 +27,11 @@
 #define ASCS_DEFAULT_UNPACKER prefix_suffix_unpacker
 #endif
 
-#include <ascs/ext/client.h>
+#include <ascs/ext/tcp.h>
 using namespace ascs;
+using namespace ascs::tcp;
 using namespace ascs::ext;
+using namespace ascs::ext::tcp;
 
 #ifdef _MSC_VER
 #define atoll _atoi64
@@ -144,10 +146,10 @@ private:
 	size_t recv_index, msg_num;
 };
 
-class test_client : public tcp::client_base<echo_socket>
+class test_client : public client_base<echo_socket>
 {
 public:
-	test_client(service_pump& service_pump_) : tcp::client_base<echo_socket>(service_pump_) {}
+	test_client(service_pump& service_pump_) : client_base<echo_socket>(service_pump_) {}
 
 	uint64_t get_recv_bytes()
 	{
@@ -225,6 +227,8 @@ int main(int argc, const char* argv[])
 
 	service_pump sp;
 	test_client client(sp);
+	//echo client means to cooperate with echo server while doing performance test, it will not send msgs back as echo server does,
+	//otherwise, dead loop will occur, network resource will be exhausted.
 
 //	argv[2] = "::1" //ipv6
 //	argv[2] = "127.0.0.1" //ipv4
@@ -289,22 +293,26 @@ int main(int argc, const char* argv[])
 					n = 1;
 
 				if ('+' == str[0])
-					for (; n > 0 && client.add_client(port, ip); ++link_num, --n);
+					for (; n > 0 && client.add_client(port, ip); --n);
 				else
 				{
 					if (n > client.size())
 						n = client.size();
 
 					client.shutdown_some_client(n);
-					link_num = client.size();
 				}
 
+				link_num = client.size();
 				continue;
 			}
 
 #ifdef ASCS_CLEAR_OBJECT_INTERVAL
 			link_num = client.size();
-			printf("link number: " ASCS_SF "\n", link_num);
+			if (link_num != client.valid_size())
+			{
+				puts("please wait for a while, because st_object_pool has not cleaned up invalid links.");
+				continue;
+			}
 #endif
 			size_t msg_num = 1024;
 			size_t msg_len = 1024; //must greater than or equal to sizeof(size_t)

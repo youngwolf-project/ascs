@@ -28,15 +28,6 @@
 
 #include "config.h"
 
-#if defined _MSC_VER
-#define ASCS_SF "%Iu"
-#define ASCS_THIS //workaround to make up the BOOST_AUTO's defect under vc2008 and compiler bugs before vc2012
-#define ssize_t SSIZE_T
-#else // defined __GNUC__
-#define ASCS_SF "%zu"
-#define ASCS_THIS this->
-#endif
-
 namespace ascs
 {
 
@@ -362,7 +353,7 @@ template<typename _Predicate> void NAME(const _Predicate& __pred) const {for (au
 //used by both TCP and UDP
 #define SAFE_SEND_MSG_CHECK \
 { \
-	if (!ASCS_THIS is_send_allowed() || ASCS_THIS stopped()) return false; \
+	if (!this->is_send_allowed() || this->stopped()) return false; \
 	std::this_thread::sleep_for(std::chrono::milliseconds(50)); \
 }
 
@@ -402,13 +393,13 @@ TYPE FUNNAME(const std::string& str, bool can_overflow = false) {return FUNNAME(
 #define TCP_SEND_MSG(FUNNAME, NATIVE) \
 bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) \
 { \
-	std::unique_lock<std::shared_mutex> lock(ASCS_THIS send_msg_buffer_mutex); \
-	return (can_overflow || ASCS_THIS send_msg_buffer.size() < ASCS_MAX_MSG_NUM) ? ASCS_THIS do_direct_send_msg(ASCS_THIS packer_->pack_msg(pstr, len, num, NATIVE)) : false; \
+	std::unique_lock<std::shared_mutex> lock(this->send_msg_buffer_mutex); \
+	return (can_overflow || this->send_msg_buffer.size() < ASCS_MAX_MSG_NUM) ? this->do_direct_send_msg(this->packer_->pack_msg(pstr, len, num, NATIVE)) : false; \
 } \
 TCP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)
 
 #define TCP_POST_MSG(FUNNAME, NATIVE) \
-bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) {return ASCS_THIS direct_post_msg(ASCS_THIS packer_->pack_msg(pstr, len, num, NATIVE), can_overflow);} \
+bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) {return this->direct_post_msg(this->packer_->pack_msg(pstr, len, num, NATIVE), can_overflow);} \
 TCP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)
 
 //guarantee send msg successfully even if can_overflow equal to false, success at here just means putting the msg into tcp::socket's send buffer successfully
@@ -419,7 +410,7 @@ TCP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)
 
 #define TCP_BROADCAST_MSG(FUNNAME, SEND_FUNNAME) \
 void FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) \
-	{ASCS_THIS do_something_to_all([=](const auto& item) {item->SEND_FUNNAME(pstr, len, num, can_overflow);});} \
+	{this->do_something_to_all([=](const auto& item) {item->SEND_FUNNAME(pstr, len, num, can_overflow);});} \
 TCP_SEND_MSG_CALL_SWITCH(FUNNAME, void)
 //TCP msg sending interface
 ///////////////////////////////////////////////////
@@ -433,11 +424,11 @@ TYPE FUNNAME(const asio::ip::udp::endpoint& peer_addr, const std::string& str, b
 #define UDP_SEND_MSG(FUNNAME, NATIVE) \
 bool FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) \
 { \
-	std::unique_lock<std::shared_mutex> lock(ASCS_THIS send_msg_buffer_mutex); \
-	if (can_overflow || ASCS_THIS send_msg_buffer.size() < ASCS_MAX_MSG_NUM) \
+	std::unique_lock<std::shared_mutex> lock(this->send_msg_buffer_mutex); \
+	if (can_overflow || this->send_msg_buffer.size() < ASCS_MAX_MSG_NUM) \
 	{ \
-		in_msg_type msg(peer_addr, ASCS_THIS packer_->pack_msg(pstr, len, num, NATIVE)); \
-		return ASCS_THIS do_direct_send_msg(std::move(msg)); \
+		in_msg_type msg(peer_addr, this->packer_->pack_msg(pstr, len, num, NATIVE)); \
+		return this->do_direct_send_msg(std::move(msg)); \
 	} \
 	return false; \
 } \
@@ -446,8 +437,8 @@ UDP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)
 #define UDP_POST_MSG(FUNNAME, NATIVE) \
 bool FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) \
 { \
-	in_msg_type msg(peer_addr, ASCS_THIS packer_->pack_msg(pstr, len, num, NATIVE)); \
-	return ASCS_THIS direct_post_msg(std::move(msg), can_overflow); \
+	in_msg_type msg(peer_addr, this->packer_->pack_msg(pstr, len, num, NATIVE)); \
+	return this->direct_post_msg(std::move(msg), can_overflow); \
 } \
 UDP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)
 

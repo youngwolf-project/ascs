@@ -18,22 +18,22 @@
 #include "../ssl/ssl.h"
 
 #ifndef ASCS_DEFAULT_PACKER
-#define ASCS_DEFAULT_PACKER packer
+#define ASCS_DEFAULT_PACKER ascs::ext::packer
 #endif
 
 #ifndef ASCS_DEFAULT_UNPACKER
-#define ASCS_DEFAULT_UNPACKER unpacker
+#define ASCS_DEFAULT_UNPACKER ascs::ext::unpacker
 #endif
 
-namespace ascs { namespace ext {
+namespace ascs { namespace ext { namespace ssl {
 
-typedef ssl::server_socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UNPACKER> ssl_server_socket;
-typedef ssl::server_base<ssl_server_socket> ssl_server;
+typedef ascs::ssl::connector_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UNPACKER> connector;
+typedef ascs::single_socket_service<ascs::ext::ssl::connector> single_client;
+typedef ascs::tcp::client_base<ascs::ext::ssl::connector, ascs::ssl::object_pool<ascs::ext::ssl::connector>> client;
 
-typedef ssl::connector_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UNPACKER> ssl_connector;
-typedef single_socket_service<ssl_connector> ssl_sclient;
-typedef tcp::client_base<ssl_connector, ssl::object_pool<ssl_connector> > ssl_client;
+typedef ascs::ssl::server_socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UNPACKER> server_socket;
+typedef ascs::ssl::server_base<ascs::ext::ssl::server_socket> server;
 
-}} //namespace
+}}} //namespace
 
 #endif /* _ASCS_EXT_SSL_H_ */

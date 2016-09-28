@@ -29,9 +29,11 @@
 #endif
 //configuration
 
-#include <ascs/ext/server.h>
+#include <ascs/ext/tcp.h>
 using namespace ascs;
+using namespace ascs::tcp;
 using namespace ascs::ext;
+using namespace ascs::ext::tcp;
 
 #define QUIT_COMMAND	"quit"
 #define RESTART_COMMAND	"restart"
@@ -41,19 +43,19 @@ using namespace ascs::ext;
 #define RESUME_COMMAND	"resume"
 
 //demonstrate how to use custom packer
-//under the default behavior, each tcp::socket has their own packer, and cause memory waste
+//under the default behavior, each ascs::tcp::socket has their own packer, and cause memory waste
 //at here, we make each echo_socket use the same global packer for memory saving
 //notice: do not do this for unpacker, because unpacker has member variables and can't share each other
 auto global_packer(std::make_shared<ASCS_DEFAULT_PACKER>());
 
-//demonstrate how to control the type of tcp::server_socket_base::server from template parameter
+//demonstrate how to control the type of ascs::tcp::server_socket_base::server from template parameter
 class i_echo_server : public i_server
 {
 public:
 	virtual void test() = 0;
 };
 
-class echo_socket : public tcp::server_socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UNPACKER, i_echo_server>
+class echo_socket : public server_socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UNPACKER, i_echo_server>
 {
 public:
 	echo_socket(i_echo_server& server_) : server_socket_base(server_)
@@ -76,7 +78,7 @@ public:
 protected:
 	virtual void on_recv_error(const asio::error_code& ec)
 	{
-		//the type of tcp::server_socket_base::server now can be controlled by derived class(echo_socket),
+		//the type of ascs::tcp::server_socket_base::server now can be controlled by derived class(echo_socket),
 		//which is actually i_echo_server, so, we can invoke i_echo_server::test virtual function.
 		server.test();
 		server_socket_base::on_recv_error(ec);
@@ -105,12 +107,12 @@ protected:
 		return send_msg(msg.data(), msg.size());
 	#endif
 	}
-	//please remember that we have defined ASCS_FORCE_TO_USE_MSG_RECV_BUFFER, so, tcp::socket will directly
+	//please remember that we have defined ASCS_FORCE_TO_USE_MSG_RECV_BUFFER, so, ascs::tcp::socket will directly
 	//use msg recv buffer, and we need not rewrite on_msg(), which doesn't exists any more
 	//msg handling end
 };
 
-class echo_server : public tcp::server_base<echo_socket, object_pool<echo_socket>, i_echo_server>
+class echo_server : public server_base<echo_socket, object_pool<echo_socket>, i_echo_server>
 {
 public:
 	echo_server(service_pump& service_pump_) : server_base(service_pump_) {}
@@ -137,11 +139,11 @@ int main(int argc, const char* argv[])
 		puts("type " QUIT_COMMAND " to end.");
 
 	service_pump sp;
-	//only need a simple server? you can directly use server or tcp::server_base.
-	//because we use tcp::server_socket_base directly, so this server cannot support fixed_length_unpacker and prefix_suffix_packer/prefix_suffix_unpacker,
-	//the reason is these packer and unpacker need additional initializations that tcp::server_socket_base not implemented, see echo_socket's constructor for more details.
-	typedef tcp::server_socket_base<packer, unpacker> normal_server_socket;
-	tcp::server_base<normal_server_socket> server_(sp);
+	//only need a simple server? you can directly use server or ascs::tcp::server_base.
+	//because we use ascs::tcp::server_socket_base directly, so this server cannot support fixed_length_unpacker and prefix_suffix_packer/prefix_suffix_unpacker,
+	//the reason is these packer and unpacker need additional initializations that ascs::tcp::server_socket_base not implemented, see echo_socket's constructor for more details.
+	typedef server_socket_base<packer, unpacker> normal_server_socket;
+	server_base<normal_server_socket> server_(sp);
 	echo_server echo_server_(sp); //echo server
 
 	if (argc > 3)
