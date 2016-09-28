@@ -41,7 +41,7 @@ protected:
 
 	void start()
 	{
-#ifdef ASCS_REUSE_OBJECT
+#ifndef ASCS_REUSE_OBJECT
 		set_timer(TIMER_FREE_SOCKET, 1000 * ASCS_FREE_OBJECT_INTERVAL, [this](auto id)->bool {this->free_object(); return true;});
 #endif
 #ifdef ASCS_CLEAR_OBJECT_INTERVAL
