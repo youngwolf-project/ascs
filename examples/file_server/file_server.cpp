@@ -7,6 +7,7 @@
 #define ASCS_CLEAR_OBJECT_INTERVAL	60
 #define ASCS_ENHANCED_STABILITY
 #define ASCS_WANT_MSG_SEND_NOTIFY
+#define ASCS_USE_CONCURRENT_QUEUE
 #define ASCS_DEFAULT_PACKER	replaceable_packer
 //configuration
 
@@ -23,7 +24,7 @@ using namespace ascs::tcp;
 int main(int argc, const char* argv[])
 {
 	puts("this is a file transfer server.");
-	printf("usage: file_server [<port=%d> [ip=0.0.0.0]]\n", ASCS_SERVER_PORT);
+	printf("usage: %s [<port=%d> [ip=0.0.0.0]]\n", argv[0], ASCS_SERVER_PORT);
 	if (argc >= 2 && (0 == strcmp(argv[1], "--help") || 0 == strcmp(argv[1], "-h")))
 		return 0;
 	else
@@ -62,5 +63,6 @@ int main(int argc, const char* argv[])
 #undef ASCS_CLEAR_OBJECT_INTERVAL
 #undef ASCS_ENHANCED_STABILITY
 #undef ASCS_WANT_MSG_SEND_NOTIFY
+#undef ASCS_USE_CONCURRENT_QUEUE
 #undef ASCS_DEFAULT_PACKER
 //restore configuration

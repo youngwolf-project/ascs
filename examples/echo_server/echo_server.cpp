@@ -5,11 +5,12 @@
 #define ASCS_SERVER_PORT		9527
 #define ASCS_ASYNC_ACCEPT_NUM	5
 #define ASCS_REUSE_OBJECT //use objects pool
-//#define ST_ASIO_FREE_OBJECT_INTERVAL	60 //it's useless if ST_ASIO_REUSE_OBJECT macro been defined
+//#define ASCS_FREE_OBJECT_INTERVAL	60 //it's useless if ST_ASIO_REUSE_OBJECT macro been defined
 //#define ASCS_FORCE_TO_USE_MSG_RECV_BUFFER //force to use the msg recv buffer
 #define ASCS_ENHANCED_STABILITY
-//#define ASCS_FULL_STATISTIC //full statistic will slightly impact efficiency.
+//#define ASCS_FULL_STATISTIC //full statistic will slightly impact efficiency
 //#define ASCS_USE_STEADY_TIMER
+#define ASCS_USE_CONCURRENT_QUEUE
 
 //use the following macro to control the type of packer and unpacker
 #define PACKER_UNPACKER_TYPE	0
@@ -22,6 +23,7 @@
 #define ASCS_DEFAULT_PACKER replaceable_packer
 #define ASCS_DEFAULT_UNPACKER replaceable_unpacker
 #elif 2 == PACKER_UNPACKER_TYPE
+#define ASCS_DEFAULT_PACKER fixed_length_packer
 #define ASCS_DEFAULT_UNPACKER fixed_length_unpacker
 #elif 3 == PACKER_UNPACKER_TYPE
 #define ASCS_DEFAULT_PACKER prefix_suffix_packer
@@ -47,6 +49,22 @@ using namespace ascs::ext::tcp;
 //at here, we make each echo_socket use the same global packer for memory saving
 //notice: do not do this for unpacker, because unpacker has member variables and can't share each other
 auto global_packer(std::make_shared<ASCS_DEFAULT_PACKER>());
+
+//about congestion control
+//
+//in 1.3, congestion control has been removed (no post_msg nor post_native_msg anymore), this is because
+//without known the business (or logic), framework cannot always do congestion control properly.
+//now, users should take the responsibility to do congestion control, there're two ways:
+//
+//1. for receiver, if you cannot handle msgs timely, which means the bottleneck is in your business,
+//    you should open/close congestion control intermittently;
+//   for sender, send msgs in on_msg_send() or use sending buffer limitation (like safe_send_msg(..., false)),
+//    but must not in service threads, please note.
+//
+//2. for sender, if responses are available (like pingpong test), send msgs in on_msg()/on_msg_handle().
+//    this will reduce IO throughput, because SOCKET's sliding window is not fully used, pleae note.
+//
+//asio_server chose method #1
 
 //demonstrate how to control the type of ascs::tcp::server_socket_base::server from template parameter
 class i_echo_server : public i_server
@@ -85,30 +103,34 @@ protected:
 	}
 
 	//msg handling: send the original msg back(echo server)
+	//congestion control, method #1, the peer needs its own congestion control too.
 #ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
 	//this virtual function doesn't exists if ASCS_FORCE_TO_USE_MSG_RECV_BUFFER been defined
 	virtual bool on_msg(out_msg_type& msg)
 	{
-	#if 2 == PACKER_UNPACKER_TYPE
-		//we don't have fixed_length_packer, so use packer instead, but need to pack msgs with native manner.
-		return post_native_msg(msg.data(), msg.size());
-	#else
-		return post_msg(msg.data(), msg.size());
-	#endif
+		auto re = send_msg(msg.data(), msg.size());
+		if (!re)
+			congestion_control(true);
+			//cannot handle (send it back) this msg timely, begin congestion control
+			//'msg' will be put into receiving buffer, and be dispatched via on_msg_handle() in the future
+
+		return re;
 	}
-#endif
-	//we should handle msg in on_msg_handle for time-consuming task like this:
+
 	virtual bool on_msg_handle(out_msg_type& msg, bool link_down)
 	{
-	#if 2 == PACKER_UNPACKER_TYPE
-		//we don't have fixed_length_packer, so use packer instead, but need to pack msgs with native manner.
-		return send_native_msg(msg.data(), msg.size());
-	#else
-		return send_msg(msg.data(), msg.size());
-	#endif
+		auto re = send_msg(msg.data(), msg.size());
+		if (re)
+			congestion_control(false);
+			//successfully handled the only one msg in receiving buffer, end congestion control
+			//subsequent msgs will be dispatched via on_msg() again.
+
+		return re;
 	}
-	//please remember that we have defined ASCS_FORCE_TO_USE_MSG_RECV_BUFFER, so, ascs::tcp::socket will directly
-	//use msg recv buffer, and we need not rewrite on_msg(), which doesn't exists any more
+#else
+	//if we used receiving buffer, congestion control will become much simpler, like this:
+	virtual bool on_msg_handle(out_msg_type& msg, bool link_down) {return send_msg(msg.data(), msg.size());}
+#endif
 	//msg handling end
 };
 
@@ -131,7 +153,7 @@ public:
 
 int main(int argc, const char* argv[])
 {
-	printf("usage: asio_server [<service thread number=1> [<port=%d> [ip=0.0.0.0]]]\n", ASCS_SERVER_PORT);
+	printf("usage: %s [<service thread number=1> [<port=%d> [ip=0.0.0.0]]]\n", argv[0], ASCS_SERVER_PORT);
 	puts("normal server's port will be 100 larger.");
 	if (argc >= 2 && (0 == strcmp(argv[1], "--help") || 0 == strcmp(argv[1], "-h")))
 		return 0;
@@ -202,18 +224,18 @@ int main(int argc, const char* argv[])
 		{
 			//broadcast series functions call pack_msg for each client respectively, because clients may used different protocols(so different type of packers, of course)
 //			server_.broadcast_msg(str.data(), str.size() + 1);
-			//send \0 character too, because asio_client used basic_buffer as its msg type, it will not append \0 character automatically as std::string does,
+			//send \0 character too, because demo client used basic_buffer as its msg type, it will not append \0 character automatically as std::string does,
 			//so need \0 character when printing it.
 
 			//if all clients used the same protocol, we can pack msg one time, and send it repeatedly like this:
 			packer p;
 			auto msg = p.pack_msg(str.data(), str.size() + 1);
-			//send \0 character too, because asio_client used basic_buffer as its msg type, it will not append \0 character automatically as std::string does,
+			//send \0 character too, because demo client used basic_buffer as its msg type, it will not append \0 character automatically as std::string does,
 			//so need \0 character when printing it.
 			if (!msg.empty())
 				server_.do_something_to_all([&msg](const auto& item) {item->direct_send_msg(msg);});
 
-			//if asio_client is using stream_unpacker
+			//if demo client is using stream_unpacker
 //			if (!str.empty())
 //				server_.do_something_to_all([&str](const auto& item) {item->direct_send_msg(str);});
 		}
@@ -230,7 +252,8 @@ int main(int argc, const char* argv[])
 #undef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
 #undef ASCS_ENHANCED_STABILITY
 #undef ASCS_FULL_STATISTIC
+#undef ASCS_USE_STEADY_TIMER
+#undef ASCS_USE_CONCURRENT_QUEUE
 #undef ASCS_DEFAULT_PACKER
 #undef ASCS_DEFAULT_UNPACKER
-#undef ASCS_USE_STEADY_TIMER
 //restore configuration

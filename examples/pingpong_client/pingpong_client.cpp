@@ -7,6 +7,7 @@
 //#define ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
 //#define ASCS_WANT_MSG_SEND_NOTIFY
 #define ASCS_MSG_BUFFER_SIZE 65536
+#define ASCS_USE_CONCURRENT_QUEUE
 #define ASCS_DEFAULT_UNPACKER stream_unpacker //non-protocol
 //configuration
 
@@ -23,8 +24,27 @@ using namespace ascs::ext::tcp;
 #define QUIT_COMMAND	"quit"
 #define LIST_STATUS		"status"
 
-ascs_cpu_timer begin_time;
+cpu_timer begin_time;
 std::atomic_ushort completed_session_num;
+
+//about congestion control
+//
+//in 1.3, congestion control has been removed (no post_msg nor post_native_msg anymore), this is because
+//without known the business (or logic), framework cannot always do congestion control properly.
+//now, users should take the responsibility to do congestion control, there're two ways:
+//
+//1. for receiver, if you cannot handle msgs timely, which means the bottleneck is in your business,
+//    you should open/close congestion control intermittently;
+//   for sender, send msgs in on_msg_send() or use sending buffer limitation (like safe_send_msg(..., false)),
+//    but must not in service threads, please note.
+//
+//2. for sender, if responses are available (like pingpong test), send msgs in on_msg()/on_msg_handle().
+//    this will reduce IO throughput because, SOCKET's sliding window is not fully used, pleae note.
+//
+//pingpong_client will choose method #1 if defined ST_ASIO_WANT_MSG_SEND_NOTIFY, otherwise #2
+//BTW, if pingpong_client chose method #2, then pingpong_server can work properly without any congestion control,
+//which means pingpong_server can send msgs back with can_overflow parameter equal to true, and memory occupation
+//will be under control.
 
 class echo_socket : public connector
 {
@@ -50,16 +70,17 @@ protected:
 	virtual bool on_msg_handle(out_msg_type& msg, bool link_down) {handle_msg(msg); return true;}
 
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
+	//congestion control, method #1, the peer needs its own congestion control too.
 	virtual void on_msg_send(in_msg_type& msg)
 	{
 		send_bytes += msg.size();
 		if (send_bytes < total_bytes)
 			direct_send_msg(std::move(msg));
+			//this invocation has no chance to fail (by insufficient sending buffer), even can_overflow is false
+			//this is because here is the only place that will send msgs and here also means the receiving buffer at least can hold one more msg.
 	}
-#endif
 
 private:
-#ifdef ASCS_WANT_MSG_SEND_NOTIFY
 	void handle_msg(out_msg_ctype& msg)
 	{
 		recv_bytes += msg.size();
@@ -67,6 +88,8 @@ private:
 			begin_time.stop();
 	}
 #else
+private:
+	//congestion control, method #2, the peer totally doesn't have to consider congestion control.
 	void handle_msg(out_msg_type& msg)
 	{
 		if (0 == total_bytes)
@@ -81,6 +104,9 @@ private:
 		}
 		else
 			direct_send_msg(std::move(msg));
+			//this invocation has no chance to fail (by insufficient sending buffer), even can_overflow is false
+			//this is because pingpong_server never send msgs initiatively, and,
+			//here is the only place that will send msgs and here also means the receiving buffer at least can hold one more msg.
 	}
 #endif
 
@@ -106,7 +132,7 @@ public:
 
 int main(int argc, const char* argv[])
 {
-	printf("usage: pingpong_client [<service thread number=1> [<port=%d> [<ip=%s> [link num=16]]]]\n", ASCS_SERVER_PORT, ASCS_SERVER_IP);
+	printf("usage: %s [<service thread number=1> [<port=%d> [<ip=%s> [link num=16]]]]\n", argv[0], ASCS_SERVER_PORT, ASCS_SERVER_IP);
 	if (argc >= 2 && (0 == strcmp(argv[1], "--help") || 0 == strcmp(argv[1], "-h")))
 		return 0;
 	else
@@ -134,6 +160,9 @@ int main(int argc, const char* argv[])
 #ifdef ASCS_CLEAR_OBJECT_INTERVAL
 	if (1 == thread_num)
 		++thread_num;
+	//add one thread will seriously impact IO throughput when doing performance benchmark, this is because the business logic is very simple (send original messages back,
+	//or just add up total message size), under this scenario, just one service thread without receiving buffer will obtain the best IO throughput.
+	//the server has such behavior too.
 #endif
 
 	for (size_t i = 0; i < link_num; ++i)
@@ -192,7 +221,7 @@ int main(int argc, const char* argv[])
 #undef ASCS_REUSE_OBJECT
 #undef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
 #undef ASCS_WANT_MSG_SEND_NOTIFY
-#undef ASCS_DEFAULT_PACKER
-#undef ASCS_DEFAULT_UNPACKER
 #undef ASCS_MSG_BUFFER_SIZE
+#undef ASCS_USE_CONCURRENT_QUEUE
+#undef ASCS_DEFAULT_UNPACKER
 //restore configuration

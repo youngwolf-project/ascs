@@ -22,7 +22,7 @@
 #include "../tcp/server.h"
 
 #ifdef ASCS_REUSE_OBJECT
-	#error asio::ssl::stream not support reuse!
+	#error asio::ssl::stream not support reusing!
 #endif
 
 namespace ascs { namespace ssl {
@@ -46,7 +46,7 @@ public:
 	void force_shutdown(bool reconnect = false)
 	{
 		if (reconnect)
-			unified_out::error_out("asio::ssl::stream not support reuse!");
+			unified_out::error_out("asio::ssl::stream not support reconnecting!");
 
 		if (!shutdown_ssl())
 			super::force_shutdown(false);
@@ -55,7 +55,7 @@ public:
 	void graceful_shutdown(bool reconnect = false, bool sync = true)
 	{
 		if (reconnect)
-			unified_out::error_out("asio::ssl::stream not support reuse!");
+			unified_out::error_out("asio::ssl::stream not support reconnecting!");
 
 		if (!shutdown_ssl())
 			super::graceful_shutdown(false, sync);
@@ -96,7 +96,7 @@ protected:
 		if (!this->is_shutting_down() && authorized_)
 		{
 			this->show_info("ssl client link:", "been shut down.");
-			this->shutdown_state = 2;
+			this->shutdown_state = super::shutdown_states::GRACEFUL;
 			this->reconnecting = false;
 			authorized_ = false;
 

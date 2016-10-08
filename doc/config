@@ -1,8 +1,8 @@
 ﻿
 宏定义以及编译器版本，asio版本检查等。
 
-#define ASCS_VER		10000	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.0.0"
+#define ASCS_VER		10100	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.1.0"
 
 #if !defined(__clang__) && defined(__GNUC__) && __GNUC__ > 5
 #define ASCS_HAS_STD_SHARED_MUTEX
@@ -163,4 +163,13 @@ static_assert(ASCS_ASYNC_ACCEPT_NUM > 0, "async accept number must be bigger tha
 #ifndef ASCS_HAS_STD_SHARED_MUTEX
 namespace std {typedef shared_timed_mutex shared_mutex;}
 #endif
+
+//ConcurrentQueue is lock-free, please refer to https://github.com/cameron314/concurrentqueue
+#ifdef ASCS_USE_CUSTOM_QUEUE
+#elif defined(ASCS_USE_CONCURRENT_QUEUE) //if ASCS_USE_CONCURRENT_QUEUE macro not defined, ascs will use 'list' as the message queue, it's not thread safe, so need locks.
+#include <concurrentqueue.h>
+#endif
+定义ASCS_USE_CUSTOM_QUEUE宏以便采用自定义消息队列，至于如何实现自己的消息队列，请参看message_queue，只要实现相应的函数即可（如enqueue，dequeue等）。
+ascs默认提供了两种消息队列供你选择，一是concurrent queue，它是无锁的，具体请参看https://github.com/cameron314/concurrentqueue；一是普通的带锁的
+消息队列，基于ascs::list加上std::shared_mutex实现。定义ASCS_USE_CONCURRENT_QUEUE宏以启用concurrent queue，否则将采用普通的带锁消息队列。
 //configurations

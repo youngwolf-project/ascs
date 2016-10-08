@@ -2,6 +2,7 @@
 #include <iostream>
 
 //configuration
+#define ASCS_USE_CONCURRENT_QUEUE
 //#define ASCS_DEFAULT_PACKER replaceable_packer
 //#define ASCS_DEFAULT_UDP_UNPACKER replaceable_udp_unpacker
 //configuration
@@ -15,7 +16,7 @@ using namespace ascs::ext::udp;
 
 int main(int argc, const char* argv[])
 {
-	puts("usage: udp_test <my port> <peer port> [peer ip=127.0.0.1]");
+	printf("usage: %s <my port> <peer port> [peer ip=127.0.0.1]\n", argv[0]);
 	if (argc >= 2 && (0 == strcmp(argv[1], "--help") || 0 == strcmp(argv[1], "-h")))
 		return 0;
 	else if (argc < 3)
@@ -52,6 +53,7 @@ int main(int argc, const char* argv[])
 }
 
 //restore configuration
+#undef ASCS_USE_CONCURRENT_QUEUE
 #undef ASCS_DEFAULT_PACKER
 #undef ASCS_DEFAULT_UNPACKER
 //restore configuration

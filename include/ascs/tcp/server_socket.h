@@ -24,9 +24,9 @@ protected:
 	typedef socket_base<Socket, Packer, Unpacker> super;
 
 public:
-	static const unsigned char TIMER_BEGIN = super::TIMER_END;
-	static const unsigned char TIMER_ASYNC_SHUTDOWN = TIMER_BEGIN;
-	static const unsigned char TIMER_END = TIMER_BEGIN + 10;
+	static const timer::tid TIMER_BEGIN = super::TIMER_END;
+	static const timer::tid TIMER_ASYNC_SHUTDOWN = TIMER_BEGIN;
+	static const timer::tid TIMER_END = TIMER_BEGIN + 10;
 
 	server_socket_base(Server& server_) : super(server_.get_service_pump()), server(server_) {}
 	template<typename Arg>
@@ -40,7 +40,7 @@ public:
 	void disconnect() {force_shutdown();}
 	void force_shutdown()
 	{
-		if (1 != this->shutdown_state)
+		if (super::shutdown_states::FORCE != this->shutdown_state)
 			show_info("server link:", "been shut down.");
 
 		super::force_shutdown();
@@ -64,7 +64,7 @@ public:
 		asio::error_code ec;
 		auto ep = this->lowest_layer().remote_endpoint(ec);
 		if (!ec)
-			unified_out::info_out("%s %s:%hu %s", head, ep.address().to_string().c_str(), ep.port(), tail);
+			unified_out::info_out("%s %s:%hu %s", head, ep.address().to_string().data(), ep.port(), tail);
 	}
 
 	void show_info(const char* head, const char* tail, const asio::error_code& ec) const
@@ -72,7 +72,7 @@ public:
 		asio::error_code ec2;
 		auto ep = this->lowest_layer().remote_endpoint(ec2);
 		if (!ec2)
-			unified_out::info_out("%s %s:%hu %s (%d %s)", head, ep.address().to_string().c_str(), ep.port(), tail, ec.value(), ec.message().data());
+			unified_out::info_out("%s %s:%hu %s (%d %s)", head, ep.address().to_string().data(), ep.port(), tail, ec.value(), ec.message().data());
 	}
 
 protected:
@@ -98,16 +98,15 @@ protected:
 #else
 		server.del_client(std::dynamic_pointer_cast<timer>(this->shared_from_this()));
 #endif
-
-		this->shutdown_state = 0;
+		this->shutdown_state = super::shutdown_states::NONE;
 	}
 
 private:
-	bool async_shutdown_handler(unsigned char id, size_t loop_num)
+	bool async_shutdown_handler(timer::tid id, size_t loop_num)
 	{
 		assert(TIMER_ASYNC_SHUTDOWN == id);
 
-		if (2 == this->shutdown_state)
+		if (super::shutdown_states::GRACEFUL == this->shutdown_state)
 		{
 			--loop_num;
 			if (loop_num > 0)

@@ -7,6 +7,7 @@
 #define ASCS_REUSE_OBJECT //use objects pool
 //#define ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
 #define ASCS_MSG_BUFFER_SIZE 65536
+#define ASCS_USE_CONCURRENT_QUEUE
 #define ASCS_DEFAULT_UNPACKER stream_unpacker //non-protocol
 //configuration
 
@@ -22,16 +23,61 @@ using namespace ascs::ext::tcp;
 #define QUIT_COMMAND	"quit"
 #define LIST_STATUS		"status"
 
+//about congestion control
+//
+//in 1.3, congestion control has been removed (no post_msg nor post_native_msg anymore), this is because
+//without known the business (or logic), framework cannot always do congestion control properly.
+//now, users should take the responsibility to do congestion control, there're two ways:
+//
+//1. for receiver, if you cannot handle msgs timely, which means the bottleneck is in your business,
+//    you should open/close congestion control intermittently;
+//   for sender, send msgs in on_msg_send() or use sending buffer limitation (like safe_send_msg(..., false)),
+//    but must not in service threads, please note.
+//
+//2. for sender, if responses are available (like pingpong test), send msgs in on_msg()/on_msg_handle().
+//    this will reduce IO throughput, because SOCKET's sliding window is not fully used, pleae note.
+//
+//pingpong_server chose method #1
+//BTW, if pingpong_client chose method #2, then pingpong_server can work properly without any congestion control,
+//which means pingpong_server can send msgs back with can_overflow parameter equal to true, and memory occupation
+//will be under control.
+
 class echo_socket : public server_socket
 {
 public:
 	echo_socket(i_server& server_) : server_socket(server_) {}
 
 protected:
+	//msg handling: send the original msg back(echo server)
+	//congestion control, method #1, the peer needs its own congestion control too.
 #ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
-	virtual bool on_msg(out_msg_type& msg) {return direct_post_msg(std::move(msg));}
+	//this virtual function doesn't exists if ST_ASIO_FORCE_TO_USE_MSG_RECV_BUFFER been defined
+	virtual bool on_msg(out_msg_type& msg)
+	{
+		auto re = direct_send_msg(std::move(msg));
+		if (!re)
+			congestion_control(true);
+			//cannot handle (send it back) this msg timely, begin congestion control
+			//'msg' will be put into receiving buffer, and be dispatched via on_msg_handle() in the future
+
+		return re;
+	}
+
+	virtual bool on_msg_handle(out_msg_type& msg, bool link_down)
+	{
+		auto re = direct_send_msg(std::move(msg));
+		if (re)
+			congestion_control(false);
+			//successfully handled the only one msg in receiving buffer, end congestion control
+			//subsequent msgs will be dispatched via on_msg() again.
+
+		return re;
+	}
+#else
+	//if we used receiving buffer, congestion control will become much simpler, like this:
+	virtual bool on_msg_handle(out_msg_type& msg, bool link_down) {return direct_send_msg(std::move(msg));}
 #endif
-	virtual bool on_msg_handle(out_msg_type& msg, bool link_down) {return direct_post_msg(std::move(msg));}
+	//msg handling end
 };
 
 class echo_server : public server_base<echo_socket>
@@ -53,7 +99,7 @@ protected:
 
 int main(int argc, const char* argv[])
 {
-	printf("usage: pingpong_server [<service thread number=1> [<port=%d> [ip=0.0.0.0]]]\n", ASCS_SERVER_PORT);
+	printf("usage: %s [<service thread number=1> [<port=%d> [ip=0.0.0.0]]]\n", argv[0], ASCS_SERVER_PORT);
 	if (argc >= 2 && (0 == strcmp(argv[1], "--help") || 0 == strcmp(argv[1], "-h")))
 		return 0;
 	else
@@ -93,8 +139,8 @@ int main(int argc, const char* argv[])
 #undef ASCS_SERVER_PORT
 #undef ASCS_ASYNC_ACCEPT_NUM
 #undef ASCS_REUSE_OBJECT
-#undef ASCS_FREE_OBJECT_INTERVAL
-#undef ASCS_DEFAULT_PACKER
-#undef ASCS_DEFAULT_UNPACKER
+#undef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
 #undef ASCS_MSG_BUFFER_SIZE
+#undef ASCS_USE_CONCURRENT_QUEUE
+#undef ASCS_DEFAULT_UNPACKER
 //restore configuration

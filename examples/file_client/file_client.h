@@ -211,7 +211,7 @@ private:
 	}
 
 protected:
-	ascs_cpu_timer begin_time;
+	cpu_timer begin_time;
 };
 
 #endif //#ifndef FILE_CLIENT_H_

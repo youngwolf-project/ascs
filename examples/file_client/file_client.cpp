@@ -3,6 +3,7 @@
 
 //configuration
 #define ASCS_SERVER_PORT		5050
+#define ASCS_USE_CONCURRENT_QUEUE
 #define ASCS_DEFAULT_UNPACKER replaceable_unpacker
 //configuration
 
@@ -19,7 +20,7 @@ fl_type file_size;
 int main(int argc, const char* argv[])
 {
 	puts("this is a file transfer client.");
-	printf("usage: file_client [<port=%d> [<ip=%s> [link num=1]]]\n", ASCS_SERVER_PORT, ASCS_SERVER_IP);
+	printf("usage: %s [<port=%d> [<ip=%s> [link num=1]]]\n", argv[0], ASCS_SERVER_PORT, ASCS_SERVER_IP);
 	if (argc >= 2 && (0 == strcmp(argv[1], "--help") || 0 == strcmp(argv[1], "-h")))
 		return 0;
 	else
@@ -88,5 +89,6 @@ int main(int argc, const char* argv[])
 
 //restore configuration
 #undef ASCS_SERVER_PORT
+#undef ASCS_USE_CONCURRENT_QUEUE
 #undef ASCS_DEFAULT_UNPACKER
 //restore configuration

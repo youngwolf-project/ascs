@@ -6,6 +6,7 @@
 #define ASCS_ASYNC_ACCEPT_NUM	5
 //#define ASCS_FORCE_TO_USE_MSG_RECV_BUFFER //force to use the msg recv buffer
 #define ASCS_ENHANCED_STABILITY
+#define ASCS_USE_CONCURRENT_QUEUE
 //#define ASCS_DEFAULT_PACKER replaceable_packer
 //#define ASCS_DEFAULT_UNPACKER replaceable_unpacker
 //configuration
@@ -20,7 +21,7 @@ using namespace ascs::ext::ssl;
 
 int main(int argc, const char* argv[])
 {
-	puts("Directories certs and client_certs must be in the current directory.");
+	puts("Directories 'certs' and 'client_certs' must available in current directory.");
 	if (argc >= 2 && (0 == strcmp(argv[1], "--help") || 0 == strcmp(argv[1], "-h")))
 		return 0;
 	else
@@ -102,6 +103,7 @@ int main(int argc, const char* argv[])
 #undef ASCS_ASYNC_ACCEPT_NUM
 #undef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
 #undef ASCS_ENHANCED_STABILITY
+#undef ASCS_USE_CONCURRENT_QUEUE
 #undef ASCS_DEFAULT_PACKER
 #undef ASCS_DEFAULT_UNPACKER
 //restore configuration

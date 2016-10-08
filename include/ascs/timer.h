@@ -38,7 +38,7 @@ namespace ascs
 //different timer, on_timer is always called concurrently
 class timer : public object
 {
-protected:
+public:
 	typedef std::chrono::milliseconds milliseconds;
 #ifdef ASCS_USE_STEADY_TIMER
 	typedef asio::steady_timer timer_type;
@@ -46,28 +46,28 @@ protected:
 	typedef asio::system_timer timer_type;
 #endif
 
+	typedef unsigned char tid;
+	static const tid TIMER_END = 0; //user timer's id must begin from parent class' TIMER_END
+
 	struct timer_info
 	{
 		enum timer_status {TIMER_OK, TIMER_CANCELED};
 
-		unsigned char id;
+		tid id;
 		mutable timer_status status;
 		mutable size_t milliseconds;
-		mutable std::function<bool(unsigned char)> call_back;
+		mutable std::function<bool(tid)> call_back;
 		mutable std::shared_ptr<timer_type> timer;
 
 		bool operator <(const timer_info& other) const {return id < other.id;}
 	};
 
-	static const unsigned char TIMER_END = 0; //user timer's id must begin from parent class' TIMER_END
-
-	timer(asio::io_service& _io_service_) : object(_io_service_) {}
-
-public:
 	typedef const timer_info timer_cinfo;
 	typedef std::set<timer_info> container_type;
 
-	void update_timer_info(unsigned char id, size_t milliseconds, std::function<bool(unsigned char)>&& call_back, bool start = false)
+	timer(asio::io_service& _io_service_) : object(_io_service_) {}
+
+	void update_timer_info(tid id, size_t milliseconds, std::function<bool(tid)>&& call_back, bool start = false)
 	{
 		timer_info ti = {id};
 
@@ -88,13 +88,13 @@ public:
 		if (start)
 			start_timer(*iter);
 	}
-	void update_timer_info(unsigned char id, size_t milliseconds, const std::function<bool(unsigned char)>& call_back, bool start = false)
-		{update_timer_info(id, milliseconds, std::function<bool(unsigned char)>(call_back), start);}
+	void update_timer_info(tid id, size_t milliseconds, const std::function<bool(tid)>& call_back, bool start = false)
+		{update_timer_info(id, milliseconds, std::function<bool(tid)>(call_back), start);}
 
-	void set_timer(unsigned char id, size_t milliseconds, std::function<bool(unsigned char)>&& call_back) {update_timer_info(id, milliseconds, std::move(call_back), true);}
-	void set_timer(unsigned char id, size_t milliseconds, const std::function<bool(unsigned char)>& call_back) {update_timer_info(id, milliseconds, call_back, true);}
+	void set_timer(tid id, size_t milliseconds, std::function<bool(tid)>&& call_back) {update_timer_info(id, milliseconds, std::move(call_back), true);}
+	void set_timer(tid id, size_t milliseconds, const std::function<bool(tid)>& call_back) {update_timer_info(id, milliseconds, call_back, true);}
 
-	timer_info find_timer(unsigned char id)
+	timer_info find_timer(tid id)
 	{
 		timer_info ti = {id, timer_info::TIMER_CANCELED, 0};
 
@@ -106,7 +106,7 @@ public:
 			return ti;
 	}
 
-	bool start_timer(unsigned char id)
+	bool start_timer(tid id)
 	{
 		timer_info ti = {id};
 
@@ -120,7 +120,7 @@ public:
 		return true;
 	}
 
-	void stop_timer(unsigned char id)
+	void stop_timer(tid id)
 	{
 		timer_info ti = {id};
 
@@ -145,8 +145,7 @@ protected:
 	{
 		ti.timer->expires_from_now(milliseconds(ti.milliseconds));
 		//return true from call_back to continue the timer, or the timer will stop
-		ti.timer->async_wait(
-			make_handler_error([this, &ti](const auto& ec) {if (!ec && ti.call_back(ti.id) && timer::timer_info::TIMER_OK == ti.status) this->start_timer(ti);}));
+		ti.timer->async_wait(make_handler_error([this, &ti](const auto& ec) {if (!ec && ti.call_back(ti.id) && timer_info::TIMER_OK == ti.status) this->start_timer(ti);}));
 	}
 
 	void stop_timer(timer_cinfo& ti)

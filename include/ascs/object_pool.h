@@ -24,7 +24,7 @@ namespace ascs
 {
 
 template<typename Object>
-class object_pool : public service_pump::i_service, public timer
+class object_pool : public service_pump::i_service, protected timer
 {
 public:
 	typedef std::shared_ptr<Object> object_type;
@@ -32,10 +32,10 @@ public:
 	typedef std::unordered_map<uint_fast64_t, object_type> container_type;
 
 protected:
-	static const unsigned char TIMER_BEGIN = timer::TIMER_END;
-	static const unsigned char TIMER_FREE_SOCKET = TIMER_BEGIN;
-	static const unsigned char TIMER_CLEAR_SOCKET = TIMER_BEGIN + 1;
-	static const unsigned char TIMER_END = TIMER_BEGIN + 10;
+	static const tid TIMER_BEGIN = timer::TIMER_END;
+	static const tid TIMER_FREE_SOCKET = TIMER_BEGIN;
+	static const tid TIMER_CLEAR_SOCKET = TIMER_BEGIN + 1;
+	static const tid TIMER_END = TIMER_BEGIN + 10;
 
 	object_pool(service_pump& service_pump_) : i_service(service_pump_), timer(service_pump_), cur_id(-1), max_size_(ASCS_MAX_OBJECT_NUM) {}
 
