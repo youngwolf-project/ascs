@@ -31,7 +31,7 @@
  * Add enum shutdown_states.
  * Rename class ascs::std_list to ascs::list.
  * ascs::timer now can be used independently.
- * Add a new type ascs::st_timer::tid to represent timer ID.
+ * Add a new type ascs::timer::tid to represent timer ID.
  * Add a new packer--fixed_length_packer.
  * Add a new class--message_queue.
  *
