@@ -85,9 +85,9 @@ public:
 	//get or change the unpacker at runtime
 	//changing unpacker at runtime is not thread-safe, this operation can only be done in on_msg(), reset() or constructor, please pay special attention
 	//we can resolve this defect via mutex, but i think it's not worth, because this feature is not frequently used
-	std::shared_ptr<i_unpacker<typename Packer::msg_type>> inner_unpacker() {return unpacker_;}
-	std::shared_ptr<const i_unpacker<typename Packer::msg_type>> inner_unpacker() const {return unpacker_;}
-	void inner_unpacker(const std::shared_ptr<i_unpacker<typename Packer::msg_type>>& _unpacker_) {unpacker_ = _unpacker_;}
+	std::shared_ptr<i_unpacker<typename Unpacker::msg_type>> inner_unpacker() {return unpacker_;}
+	std::shared_ptr<const i_unpacker<typename Unpacker::msg_type>> inner_unpacker() const {return unpacker_;}
+	void inner_unpacker(const std::shared_ptr<i_unpacker<typename Unpacker::msg_type>>& _unpacker_) {unpacker_ = _unpacker_;}
 
 	using super::send_msg;
 	///////////////////////////////////////////////////
@@ -238,7 +238,7 @@ private:
 
 protected:
 	typename super::in_msg last_send_msg;
-	std::shared_ptr<i_unpacker<typename Packer::msg_type>> unpacker_;
+	std::shared_ptr<i_unpacker<typename Unpacker::msg_type>> unpacker_;
 	asio::ip::udp::endpoint peer_addr, local_addr;
 
 	std::shared_mutex shutdown_mutex;
