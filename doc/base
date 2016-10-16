@@ -31,21 +31,40 @@ udp解包器必须实现这个接口。
 dummy_packer:
 仅仅提供发送消息的类型以便通过编译，无法真正的打包，所以只能通过direct_send_msg等发送消息。
 
-std_list:
-封装自std::list，优化了其size()的复杂度，达到O(1)，只在gcc 5.1以下才生效。
-
 auto_buffer：
 如果想要运行时替换打包解包器，则打包解包器必须以auto_buffer或者shared_buffer作为消息类型（你写个类似的也可，但没有必要，如果需要更多的功能可以用继承）。
 这个类是不允许被复制的，用户只负责分配内存。
 
 shared_buffer：
-同auto_buffer，除了允许被复制。
+同auto_buffer，除了允许被复制（表面上的被复制，不是深度复制，我们要尽量避免深度复制，std::string就深度复制）。
 
 dummy_packer：
 这个类只提供消息类型的定义，不做真正的打包，所以用户必须以native方式发送消息，或者用direct_send_msg等发送消息。
 
 udp::udp_msg：
 udp消息，其实就是在tcp消息上加了一个对端地址。
+
+statistic：
+性能统计，如果定义了ASCS_FULL_STATISTIC，则统计数量和时间（对性能有些影响），否则只统计数量。
+
+消息发送相关的统计
+uint_fast64_t send_msg_sum; 成功发送到asio的消息条数
+uint_fast64_t send_byte_sum; 成功发送到asio的消息总字节数
+stat_duration send_delay_sum; 从消息发送（send_(native_)msg，不包括打包时间）到真正发送（asio::async_write）的延迟时间
+stat_duration send_time_sum; 从真正的消息发送（asio::async_write）到发送完成（发送到SOCKET缓存），这一项体现了你的网络吞吐率，注意吞吐率低不代表是你的问题，也有可能是接收方慢了。
+
+消息接收相关统计
+uint_fast64_t recv_msg_sum; 收到的消息条数
+uint_fast64_t recv_byte_sum; 收到的消息总字节数
+stat_duration dispatch_dealy_sum; 从消息解包完成之后，到on_msg_handle的时间延迟，如果这项偏大，可能是因为service线程总不够用
+stat_duration recv_idle_sum; 暂停消息接收的总时间，在接收缓存满，消息派发被暂停或者拥塞控制时，都将会暂停消息接收。
+#ifndef ST_ASIO_FORCE_TO_USE_MSG_RECV_BUFFER
+stat_duration handle_time_1_sum; 调用on_msg花费的总时间
+#endif
+stat_duration handle_time_2_sum; 调用on_msg_handle花费的总时间
+
+obj_with_begin_time：
+可包装任何对象，并且加上一个时间（用于时间统计）。
 
 log_formater：
 log打印函数，只是打印到屏幕，如果需要更详细的功能需要自己实现。
@@ -60,6 +79,3 @@ do_something_to_all：
 
 do_something_to_one：
 同do_something_to_all，如果对某一个对象执行的动作返回true，则跳过所有剩下的对象，如果全部对象都返回false，则等于do_something_to_all，但效率上稍慢。
-
-splice_helper：
-拼接两个list，并且将结果（list::size）限制在一个指定的大小之内。

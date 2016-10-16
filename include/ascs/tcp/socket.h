@@ -19,8 +19,10 @@
 
 namespace ascs { namespace tcp {
 
-template <typename Socket, typename Packer, typename Unpacker>
-class socket_base : public socket<Socket, Packer, Unpacker, typename Packer::msg_type, typename Unpacker::msg_type>
+template <typename Socket, typename Packer, typename Unpacker,
+	template<typename, typename> class InQueue, template<typename> class InContainer,
+	template<typename, typename> class OutQueue, template<typename> class OutContainer>
+class socket_base : public socket<Socket, Packer, Unpacker, typename Packer::msg_type, typename Unpacker::msg_type, InQueue, InContainer, OutQueue, OutContainer>
 {
 public:
 	typedef typename Packer::msg_type in_msg_type;
@@ -29,7 +31,7 @@ public:
 	typedef typename Unpacker::msg_ctype out_msg_ctype;
 
 protected:
-	typedef socket<Socket, Packer, Unpacker, typename Packer::msg_type, typename Unpacker::msg_type> super;
+	typedef socket<Socket, Packer, Unpacker, typename Packer::msg_type, typename Unpacker::msg_type, InQueue, InContainer, OutQueue, OutContainer> super;
 	using super::TIMER_BEGIN;
 	using super::TIMER_END;
 
@@ -118,7 +120,7 @@ protected:
 #endif
 				size_t size = 0;
 				typename super::in_msg msg;
-				auto end_time = super::statistic::now();
+				auto end_time = statistic::now();
 
 				typename super::in_container_type::lock_guard lock(this->send_msg_buffer);
 				while (this->send_msg_buffer.try_dequeue_(msg))
@@ -221,7 +223,7 @@ private:
 	{
 		if (!ec)
 		{
-			this->stat.send_time_sum += super::statistic::now() - last_send_msg.front().begin_time;
+			this->stat.send_time_sum += statistic::now() - last_send_msg.front().begin_time;
 			this->stat.send_byte_sum += bytes_transferred;
 			this->stat.send_msg_sum += last_send_msg.size();
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
@@ -236,10 +238,13 @@ private:
 			this->on_send_error(ec);
 		last_send_msg.clear();
 
-		if (ec || !do_send_msg()) //send msg sequentially, which means second sending only after first sending success
+		if (ec)
+			this->sending = false;
+		else if (!do_send_msg()) //send msg sequentially, which means second sending only after first sending success
 		{
 			this->sending = false;
-			this->send_msg(); //just make sure no pending msgs
+			if (!this->send_msg_buffer.empty())
+				this->send_msg(); //just make sure no pending msgs
 		}
 	}
 

@@ -13,138 +13,22 @@
 #ifndef _ASCS_SOCKET_H_
 #define _ASCS_SOCKET_H_
 
-#include <iomanip>
-
 #include "base.h"
 #include "timer.h"
 
 namespace ascs
 {
 
-template<typename Socket, typename Packer, typename Unpacker, typename InMsgType, typename OutMsgType>
+template<typename Socket, typename Packer, typename Unpacker, typename InMsgType, typename OutMsgType,
+	template<typename, typename> class InQueue, template<typename> class InContainer,
+	template<typename, typename> class OutQueue, template<typename> class OutContainer>
 class socket: public timer
 {
-public:
-	struct statistic
-	{
-#ifdef ASCS_FULL_STATISTIC
-		static bool enabled() {return true;}
-		typedef std::chrono::system_clock::time_point stat_time;
-		static stat_time now() {return std::chrono::system_clock::now();}
-		typedef std::chrono::system_clock::duration stat_duration;
-#else
-		struct dummy_duration {const dummy_duration& operator +=(const dummy_duration& other) {return *this;}}; //not a real duration, just satisfy compiler(d1 += d2)
-		struct dummy_time {dummy_duration operator -(const dummy_time& other) {return dummy_duration();}}; //not a real time, just satisfy compiler(t1 - t2)
-
-		static bool enabled() {return false;}
-		typedef dummy_time stat_time;
-		static stat_time now() {return stat_time();}
-		typedef dummy_duration stat_duration;
-#endif
-		statistic() {reset();}
-
-		void reset_number() {send_msg_sum = send_byte_sum = 0; recv_msg_sum = recv_byte_sum = 0;}
-#ifdef ASCS_FULL_STATISTIC
-		void reset() {reset_number(); reset_duration();}
-		void reset_duration()
-		{
-			send_delay_sum = send_time_sum = stat_duration(0);
-
-			dispatch_dealy_sum = recv_idle_sum = stat_duration(0);
-#ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
-			handle_time_1_sum = stat_duration(0);
-#endif
-			handle_time_2_sum = stat_duration(0);
-		}
-#else
-		void reset() {reset_number();}
-#endif
-
-		statistic& operator +=(const struct statistic& other)
-		{
-			send_msg_sum += other.send_msg_sum;
-			send_byte_sum += other.send_byte_sum;
-			send_delay_sum += other.send_delay_sum;
-			send_time_sum += other.send_time_sum;
-
-			recv_msg_sum += other.recv_msg_sum;
-			recv_byte_sum += other.recv_byte_sum;
-			dispatch_dealy_sum += other.dispatch_dealy_sum;
-			recv_idle_sum += other.recv_idle_sum;
-#ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
-			handle_time_1_sum += other.handle_time_1_sum;
-#endif
-			handle_time_2_sum += other.handle_time_2_sum;
-
-			return *this;
-		}
-
-		std::string to_string() const
-		{
-			std::ostringstream s;
-#ifdef ASCS_FULL_STATISTIC
-			s << "send corresponding statistic:\n"
-				<< "message sum: " << send_msg_sum << std::endl
-				<< "size in bytes: " << send_byte_sum << std::endl
-				<< "send delay: " << std::chrono::duration_cast<std::chrono::duration<float>>(send_delay_sum).count() << std::endl
-				<< "send duration: " << std::chrono::duration_cast<std::chrono::duration<float>>(send_time_sum).count() << std::endl
-				<< "\nrecv corresponding statistic:\n"
-				<< "message sum: " << recv_msg_sum << std::endl
-				<< "size in bytes: " << recv_byte_sum << std::endl
-				<< "dispatch delay: " << std::chrono::duration_cast<std::chrono::duration<float>>(dispatch_dealy_sum).count() << std::endl
-				<< "recv idle duration: " << std::chrono::duration_cast<std::chrono::duration<float>>(recv_idle_sum).count() << std::endl
-#ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
-				<< "on_msg duration: " << std::chrono::duration_cast<std::chrono::duration<float>>(handle_time_1_sum).count() << std::endl
-#endif
-				<< "on_msg_handle duration: " << std::chrono::duration_cast<std::chrono::duration<float>>(handle_time_2_sum).count();
-#else
-			s << std::setfill('0') << "send corresponding statistic:\n"
-				<< "message sum: " << send_msg_sum << std::endl
-				<< "size in bytes: " << send_byte_sum << std::endl
-				<< "\nrecv corresponding statistic:\n"
-				<< "message sum: " << recv_msg_sum << std::endl
-				<< "size in bytes: " << recv_byte_sum;
-#endif
-			return s.str();
-		}
-
-		//send corresponding statistic
-		uint_fast64_t send_msg_sum; //not counted msgs in sending buffer
-		uint_fast64_t send_byte_sum; //not counted msgs in sending buffer
-		stat_duration send_delay_sum; //from send_(native_)msg (exclude msg packing) to asio::async_write
-		stat_duration send_time_sum; //from asio::async_write to send_handler
-		//above two items indicate your network's speed or load
-
-		//recv corresponding statistic
-		uint_fast64_t recv_msg_sum; //include msgs in receiving buffer
-		uint_fast64_t recv_byte_sum; //include msgs in receiving buffer
-		stat_duration dispatch_dealy_sum; //from parse_msg(exclude msg unpacking) to on_msg_handle
-		stat_duration recv_idle_sum;
-		//during this duration, socket suspended msg reception (receiving buffer overflow, msg dispatching suspended or doing congestion control)
-#ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
-		stat_duration handle_time_1_sum; //on_msg consumed time, this indicate the efficiency of msg handling
-#endif
-		stat_duration handle_time_2_sum; //on_msg_handle consumed time, this indicate the efficiency of msg handling
-	};
-
 protected:
-	template<typename T>
-	struct obj_with_begin_time : public T
-	{
-		obj_with_begin_time() {restart();}
-		obj_with_begin_time(T&& msg) : T(std::move(msg)) {restart();}
-		void restart() {restart(statistic::now());}
-		void restart(const typename statistic::stat_time& begin_time_) {begin_time = begin_time_;}
-		using T::swap;
-		void swap(obj_with_begin_time& other) {T::swap(other); std::swap(begin_time, other.begin_time);}
-
-		typename statistic::stat_time begin_time;
-	};
-
 	typedef obj_with_begin_time<InMsgType> in_msg;
 	typedef obj_with_begin_time<OutMsgType> out_msg;
-	typedef message_queue<in_msg> in_container_type;
-	typedef message_queue<out_msg> out_container_type;
+	typedef InQueue<in_msg, InContainer<in_msg>> in_container_type;
+	typedef OutQueue<out_msg, OutContainer<out_msg>> out_container_type;
 
 	static const tid TIMER_BEGIN = timer::TIMER_END;
 	static const tid TIMER_HANDLE_MSG = TIMER_BEGIN;
@@ -353,11 +237,8 @@ protected:
 		auto temp_buffer(std::move(temp_msg_buffer));
 #endif
 
-		if (!temp_buffer.empty())
-		{
-			recv_msg_buffer.move_items_in(temp_buffer, -1);
+		if (move_items_in(recv_msg_buffer, temp_buffer, -1) > 0)
 			dispatch_msg();
-		}
 
 		if (temp_msg_buffer.empty() && recv_msg_buffer.size() < ASCS_MAX_MSG_NUM)
 			do_recv_msg(); //receive msg sequentially, which means second receiving only after first receiving success
@@ -480,7 +361,8 @@ private:
 			if (!do_dispatch_msg())
 			{
 				dispatching = false;
-				dispatch_msg(); //just make sure no pending msgs
+				if (!recv_msg_buffer.empty())
+					dispatch_msg(); //just make sure no pending msgs
 			}
 		}
 	}

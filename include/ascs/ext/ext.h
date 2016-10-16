@@ -29,7 +29,7 @@ static_assert(ASCS_MSG_BUFFER_SIZE > 0, "message buffer size must be bigger than
 
 namespace ascs { namespace ext {
 
-//buffers who implemented i_buffer interface can be wrapped by replaceable_buffer
+//implement i_buffer interface, then string_buffer can be wrapped by replaceable_buffer
 class string_buffer : public std::string, public i_buffer
 {
 public:

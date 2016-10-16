@@ -2,8 +2,10 @@
 namespace ascs { namespace tcp {
 
 tcp套接字类，实现tcp数据的收发
-template <typename Socket, typename Packer, typename Unpacker>
-class socket_base : public socket<Socket, Packer, Unpacker>
+template <typename Socket, typename Packer, typename Unpacker,
+	template<typename, typename> class InQueue, template<typename> class InContainer,
+	template<typename, typename> class OutQueue, template<typename> class OutContainer>
+class socket_base : public socket<Socket, Packer, Unpacker, typename Packer::msg_type, typename Unpacker::msg_type, InQueue, InContainer, OutQueue, OutContainer>
 {
 public:
 	typedef typename Packer::msg_type in_msg_type;
@@ -12,6 +14,8 @@ public:
 	typedef typename Unpacker::msg_ctype out_msg_ctype;
 
 protected:
+	enum shutdown_states {NONE, FORCE, GRACEFUL};
+
 	socket_base(asio::io_service& io_service_);
 
 	template<typename Arg>

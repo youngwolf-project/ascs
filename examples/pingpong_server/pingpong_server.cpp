@@ -7,7 +7,14 @@
 #define ASCS_REUSE_OBJECT //use objects pool
 //#define ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
 #define ASCS_MSG_BUFFER_SIZE 65536
-#define ASCS_USE_CONCURRENT_QUEUE
+#define ASCS_INPUT_QUEUE non_lock_queue
+#define ASCS_INPUT_CONTAINER list
+//if pingpong_client only send message in on_msg() or on_msg_handle(), which means a responsive system, a real pingpong test,
+//then, before pingpong_server send each message, the previous message has been sent to pingpong_client,
+//so sending buffer will always be empty, which means we will never operate sending buffer concurrently, so need no locks.
+//
+//if pingpong_client send message in on_msg_send(), then using non_lock_queue as input queue in pingpong_server will lead
+//undefined behavior, please note.
 #define ASCS_DEFAULT_UNPACKER stream_unpacker //non-protocol
 //configuration
 
@@ -51,7 +58,7 @@ protected:
 	//msg handling: send the original msg back(echo server)
 	//congestion control, method #1, the peer needs its own congestion control too.
 #ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
-	//this virtual function doesn't exists if ST_ASIO_FORCE_TO_USE_MSG_RECV_BUFFER been defined
+	//this virtual function doesn't exists if ASCS_FORCE_TO_USE_MSG_RECV_BUFFER been defined
 	virtual bool on_msg(out_msg_type& msg)
 	{
 		auto re = direct_send_msg(std::move(msg));
@@ -85,9 +92,9 @@ class echo_server : public server_base<echo_socket>
 public:
 	echo_server(service_pump& service_pump_) : server_base(service_pump_) {}
 
-	echo_socket::statistic get_statistic()
+	statistic get_statistic()
 	{
-		echo_socket::statistic stat;
+		statistic stat;
 		do_something_to_all([&stat](const auto& item) {stat += item->get_statistic();});
 
 		return stat;
@@ -134,13 +141,3 @@ int main(int argc, const char* argv[])
 
 	return 0;
 }
-
-//restore configuration
-#undef ASCS_SERVER_PORT
-#undef ASCS_ASYNC_ACCEPT_NUM
-#undef ASCS_REUSE_OBJECT
-#undef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
-#undef ASCS_MSG_BUFFER_SIZE
-#undef ASCS_USE_CONCURRENT_QUEUE
-#undef ASCS_DEFAULT_UNPACKER
-//restore configuration

@@ -17,11 +17,14 @@
 
 namespace ascs { namespace tcp {
 
-template<typename Packer, typename Unpacker, typename Server = i_server, typename Socket = asio::ip::tcp::socket>
-class server_socket_base : public socket_base<Socket, Packer, Unpacker>, public std::enable_shared_from_this<server_socket_base<Packer, Unpacker, Server, Socket>>
+template<typename Packer, typename Unpacker, typename Server = i_server, typename Socket = asio::ip::tcp::socket,
+	template<typename, typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
+	template<typename, typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
+class server_socket_base : public socket_base<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer>,
+	public std::enable_shared_from_this<server_socket_base<Packer, Unpacker, Server, Socket, InQueue, InContainer, OutQueue, OutContainer>>
 {
 protected:
-	typedef socket_base<Socket, Packer, Unpacker> super;
+	typedef socket_base<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer> super;
 
 public:
 	static const timer::tid TIMER_BEGIN = super::TIMER_END;

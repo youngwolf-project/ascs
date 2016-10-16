@@ -7,7 +7,8 @@
 //#define ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
 //#define ASCS_WANT_MSG_SEND_NOTIFY
 #define ASCS_MSG_BUFFER_SIZE 65536
-#define ASCS_USE_CONCURRENT_QUEUE
+#define ASCS_INPUT_QUEUE non_lock_queue //we will never operate sending buffer concurrently, so need no locks.
+#define ASCS_INPUT_CONTAINER list
 #define ASCS_DEFAULT_UNPACKER stream_unpacker //non-protocol
 //configuration
 
@@ -41,7 +42,7 @@ std::atomic_ushort completed_session_num;
 //2. for sender, if responses are available (like pingpong test), send msgs in on_msg()/on_msg_handle().
 //    this will reduce IO throughput because, SOCKET's sliding window is not fully used, pleae note.
 //
-//pingpong_client will choose method #1 if defined ST_ASIO_WANT_MSG_SEND_NOTIFY, otherwise #2
+//pingpong_client will choose method #1 if defined ASCS_WANT_MSG_SEND_NOTIFY, otherwise #2
 //BTW, if pingpong_client chose method #2, then pingpong_server can work properly without any congestion control,
 //which means pingpong_server can send msgs back with can_overflow parameter equal to true, and memory occupation
 //will be under control.
@@ -75,9 +76,7 @@ protected:
 	{
 		send_bytes += msg.size();
 		if (send_bytes < total_bytes)
-			direct_send_msg(std::move(msg));
-			//this invocation has no chance to fail (by insufficient sending buffer), even can_overflow is false
-			//this is because here is the only place that will send msgs and here also means the receiving buffer at least can hold one more msg.
+			direct_send_msg(std::move(msg), true);
 	}
 
 private:
@@ -103,10 +102,7 @@ private:
 				begin_time.stop();
 		}
 		else
-			direct_send_msg(std::move(msg));
-			//this invocation has no chance to fail (by insufficient sending buffer), even can_overflow is false
-			//this is because pingpong_server never send msgs initiatively, and,
-			//here is the only place that will send msgs and here also means the receiving buffer at least can hold one more msg.
+			direct_send_msg(std::move(msg), true);
 	}
 #endif
 
@@ -119,9 +115,9 @@ class echo_client : public client_base<echo_socket>
 public:
 	echo_client(service_pump& service_pump_) : client_base<echo_socket>(service_pump_) {}
 
-	echo_socket::statistic get_statistic()
+	statistic get_statistic()
 	{
-		echo_socket::statistic stat;
+		statistic stat;
 		do_something_to_all([&stat](const auto& item) {stat += item->get_statistic(); });
 
 		return stat;
@@ -215,13 +211,3 @@ int main(int argc, const char* argv[])
 
     return 0;
 }
-
-//restore configuration
-#undef ASCS_SERVER_PORT
-#undef ASCS_REUSE_OBJECT
-#undef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
-#undef ASCS_WANT_MSG_SEND_NOTIFY
-#undef ASCS_MSG_BUFFER_SIZE
-#undef ASCS_USE_CONCURRENT_QUEUE
-#undef ASCS_DEFAULT_UNPACKER
-//restore configuration

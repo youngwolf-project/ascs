@@ -5,7 +5,6 @@
 #define ASCS_SERVER_PORT		9527
 #define ASCS_FORCE_TO_USE_MSG_RECV_BUFFER //force to use the msg recv buffer
 #define ASCS_CUSTOM_LOG
-#define ASCS_USE_CONCURRENT_QUEUE
 #define ASCS_DEFAULT_UNPACKER	non_copy_unpacker
 //#define ASCS_DEFAULT_UNPACKER	stream_unpacker
 
@@ -94,15 +93,3 @@ int main(int argc, const char* argv[])
 
 	return 0;
 }
-
-//restore configuration
-#undef ASCS_SERVER_PORT
-#undef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
-#undef ASCS_CUSTOM_LOG
-#undef ASCS_USE_CONCURRENT_QUEUE
-#undef ASCS_DEFAULT_UNPACKER
-
-//#undef ASCS_HUGE_MSG
-//#undef ASCS_MAX_MSG_LEN
-//#undef ASCS_MAX_MSG_NUM
-//restore configuration

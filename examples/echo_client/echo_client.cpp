@@ -8,7 +8,10 @@
 //#define ASCS_CLEAR_OBJECT_INTERVAL	1
 //#define ASCS_WANT_MSG_SEND_NOTIFY
 #define ASCS_FULL_STATISTIC //full statistic will slightly impact efficiency
-#define ASCS_USE_CONCURRENT_QUEUE
+#ifdef ASCS_WANT_MSG_SEND_NOTIFY
+#define ASCS_INPUT_QUEUE non_lock_queue //we will never operate sending buffer concurrently, so need no locks.
+#define ASCS_INPUT_CONTAINER list
+#endif
 //configuration
 
 //use the following macro to control the type of packer and unpacker
@@ -19,8 +22,8 @@
 //3-prefix and suffix packer and unpacker
 
 #if 1 == PACKER_UNPACKER_TYPE
-#define ASCS_DEFAULT_PACKER replaceable_packer
-#define ASCS_DEFAULT_UNPACKER replaceable_unpacker
+#define ASCS_DEFAULT_PACKER replaceable_packer<>
+#define ASCS_DEFAULT_UNPACKER replaceable_unpacker<>
 #elif 2 == PACKER_UNPACKER_TYPE
 #define ASCS_DEFAULT_PACKER fixed_length_packer
 #define ASCS_DEFAULT_UNPACKER fixed_length_unpacker
@@ -130,9 +133,7 @@ protected:
 		++send_index;
 		memcpy(pstr, &send_index, sizeof(size_t)); //seq
 
-		send_msg(pstr, msg_len);
-		//this invocation has no chance to fail (by insufficient sending buffer), even can_overflow is false
-		//this is because here is the only place that will send msgs and here also means the receiving buffer at least can hold one more msg.
+		send_msg(pstr, msg_len, true);
 	}
 #endif
 
@@ -167,9 +168,9 @@ public:
 		return total_recv_bytes;
 	}
 
-	echo_socket::statistic get_statistic()
+	statistic get_statistic()
 	{
-		echo_socket::statistic stat;
+		statistic stat;
 		do_something_to_all([&stat](const auto& item) {stat += item->get_statistic();});
 
 		return stat;
@@ -439,15 +440,3 @@ int main(int argc, const char* argv[])
 
     return 0;
 }
-
-//restore configuration
-#undef ASCS_SERVER_PORT
-#undef ASCS_REUSE_OBJECT
-#undef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
-#undef ASCS_CLEAR_OBJECT_INTERVAL
-#undef ASCS_WANT_MSG_SEND_NOTIFY
-#undef ASCS_FULL_STATISTIC
-#undef ASCS_USE_CONCURRENT_QUEUE
-#undef ASCS_DEFAULT_PACKER
-#undef ASCS_DEFAULT_UNPACKER
-//restore configuration

@@ -1,5 +1,5 @@
 /*
- * sconnector.h
+ * connector.h
  *
  *  Created on: 2012-3-2
  *      Author: youngwolf
@@ -17,11 +17,13 @@
 
 namespace ascs { namespace tcp {
 
-template <typename Packer, typename Unpacker, typename Socket = asio::ip::tcp::socket>
-class connector_base : public socket_base<Socket, Packer, Unpacker>
+template <typename Packer, typename Unpacker, typename Socket = asio::ip::tcp::socket,
+	template<typename, typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
+	template<typename, typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
+class connector_base : public socket_base<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer>
 {
 protected:
-	typedef socket_base<Socket, Packer, Unpacker> super;
+	typedef socket_base<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer> super;
 
 public:
 	static const timer::tid TIMER_BEGIN = super::TIMER_END;

@@ -5,12 +5,11 @@
 #define ASCS_SERVER_PORT		9527
 #define ASCS_ASYNC_ACCEPT_NUM	5
 #define ASCS_REUSE_OBJECT //use objects pool
-//#define ASCS_FREE_OBJECT_INTERVAL	60 //it's useless if ST_ASIO_REUSE_OBJECT macro been defined
+//#define ASCS_FREE_OBJECT_INTERVAL	60 //it's useless if ASCS_REUSE_OBJECT macro been defined
 //#define ASCS_FORCE_TO_USE_MSG_RECV_BUFFER //force to use the msg recv buffer
 #define ASCS_ENHANCED_STABILITY
 //#define ASCS_FULL_STATISTIC //full statistic will slightly impact efficiency
 //#define ASCS_USE_STEADY_TIMER
-#define ASCS_USE_CONCURRENT_QUEUE
 
 //use the following macro to control the type of packer and unpacker
 #define PACKER_UNPACKER_TYPE	0
@@ -20,8 +19,8 @@
 //3-prefix and suffix packer and unpacker
 
 #if 1 == PACKER_UNPACKER_TYPE
-#define ASCS_DEFAULT_PACKER replaceable_packer
-#define ASCS_DEFAULT_UNPACKER replaceable_unpacker
+#define ASCS_DEFAULT_PACKER replaceable_packer<>
+#define ASCS_DEFAULT_UNPACKER replaceable_unpacker<>
 #elif 2 == PACKER_UNPACKER_TYPE
 #define ASCS_DEFAULT_PACKER fixed_length_packer
 #define ASCS_DEFAULT_UNPACKER fixed_length_unpacker
@@ -139,9 +138,9 @@ class echo_server : public server_base<echo_socket, object_pool<echo_socket>, i_
 public:
 	echo_server(service_pump& service_pump_) : server_base(service_pump_) {}
 
-	echo_socket::statistic get_statistic()
+	statistic get_statistic()
 	{
-		echo_socket::statistic stat;
+		statistic stat;
 		do_something_to_all([&stat](const auto& item) {stat += item->get_statistic();});
 
 		return stat;
@@ -243,17 +242,3 @@ int main(int argc, const char* argv[])
 
 	return 0;
 }
-
-//restore configuration
-#undef ASCS_SERVER_PORT
-#undef ASCS_ASYNC_ACCEPT_NUM
-#undef ASCS_REUSE_OBJECT
-#undef ASCS_FREE_OBJECT_INTERVAL
-#undef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
-#undef ASCS_ENHANCED_STABILITY
-#undef ASCS_FULL_STATISTIC
-#undef ASCS_USE_STEADY_TIMER
-#undef ASCS_USE_CONCURRENT_QUEUE
-#undef ASCS_DEFAULT_PACKER
-#undef ASCS_DEFAULT_UNPACKER
-//restore configuration

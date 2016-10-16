@@ -28,13 +28,14 @@ class packer : public i_packer<std::string>;
 
 当你想在运行时替换打包器的话，可以把这个打包器设置为默认打包器，这个打包器返回replaceable_buffer对象，由于replaceable_buffer对象
 保存了一个i_buffer指针，所以只要是实现了i_buffer接口的对象，都能赋予replaceable_buffer，具体请参看replaceable_buffer及i_buffer的定义。
-class replaceable_packer : public i_packer<replaceable_buffer>;
+template<typename T = replaceable_buffer>
+class replaceable_packer : public i_packer<T>;
+
+固定长度的打包器。
+class fixed_length_packer : public packer;
 
 带固定头和固定尾的打包器，头可以为空，尾不能为空。
 class prefix_suffix_packer : public i_packer<std::string>;
-
-注意，没有固定长度的打包器（固定长度的解包器有），固定长度的打包器实际意义不大，因为它实际并没有协议相关的东西在包里面，所以每次发送
-必须已经是一个完整的包，直接发送即可（ascs::socket::direct_send_msg，ascs::socket::direct_post_msg）。
 
 }} //namespace
 

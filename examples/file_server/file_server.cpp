@@ -7,8 +7,13 @@
 #define ASCS_CLEAR_OBJECT_INTERVAL	60
 #define ASCS_ENHANCED_STABILITY
 #define ASCS_WANT_MSG_SEND_NOTIFY
-#define ASCS_USE_CONCURRENT_QUEUE
-#define ASCS_DEFAULT_PACKER	replaceable_packer
+#define ASCS_INPUT_QUEUE non_lock_queue
+//file_server / file_client is a responsive system, before file_server send each message (except talking message,
+//but file_server only receive talking message, not send talking message proactively), the previous message has been
+//sent to file_client, so sending buffer will always be empty, which means we will never operate sending buffer concurrently,
+//so need no locks.
+#define ASCS_INPUT_CONTAINER list
+#define ASCS_DEFAULT_PACKER	replaceable_packer<>
 //configuration
 
 #include <ascs/tcp/server.h>
@@ -56,13 +61,3 @@ int main(int argc, const char* argv[])
 
 	return 0;
 }
-
-//restore configuration
-#undef ASCS_SERVER_PORT
-#undef ASCS_ASYNC_ACCEPT_NUM
-#undef ASCS_CLEAR_OBJECT_INTERVAL
-#undef ASCS_ENHANCED_STABILITY
-#undef ASCS_WANT_MSG_SEND_NOTIFY
-#undef ASCS_USE_CONCURRENT_QUEUE
-#undef ASCS_DEFAULT_PACKER
-//restore configuration

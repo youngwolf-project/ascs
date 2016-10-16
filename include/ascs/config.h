@@ -35,6 +35,18 @@
  * Add a new packer--fixed_length_packer.
  * Add a new class--message_queue.
  *
+ * 2016.10.16	version 1.3.1
+ * Support non-lock queue, it's totally not thread safe and lock-free, it can improve IO throughput with particular business.
+ * Demonstrate how and when to use non-lock queue as the input and output message buffer.
+ * Queues (and their internal containers) used as input and output message buffer are now configurable (by macros or template arguments).
+ * New macros--ASCS_INPUT_QUEUE, ASCS_INPUT_CONTAINER, ASCS_OUTPUT_QUEUE and ASCS_OUTPUT_CONTAINER.
+ * Drop macro ASCS_USE_CONCURRENT_QUEUE, rename macro ASCS_USE_CONCURRE to ASCS_HAS_CONCURRENT_QUEUE.
+ * In contrast to non_lock_queue, split message_queue into lock_queue and lock_free_queue.
+ * Move container related classes and functions from st_asio_wrapper_base.h to st_asio_wrapper_container.h.
+ * Improve efficiency in scenarios of low throughput like pingpong test.
+ * Replaceable packer/unpacker now support replaceable_buffer (an alias of auto_buffer) and shared_buffer to be their message type.
+ * Move class statistic and obj_with_begin_time out of ascs::socket to reduce template tiers.
+ *
  */
 
 #ifndef _ASCS_CONFIG_H_
@@ -44,26 +56,31 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#define ASCS_VER		10100	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.1.0"
+#define ASCS_VER		10101	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.1.1"
 
 //asio and compiler check
 #ifdef _MSC_VER
 	#define ASCS_SF "%Iu" //printing format for 'size_t'
 	static_assert(_MSC_VER >= 1900, "ascs need Visual C++ 14.0 or higher.");
+	#ifdef _HAS_SHARED_MUTEX
+	#define ASCS_HAS_STD_SHARED_MUTEX
+	#endif
 #elif defined(__GNUC__)
 	#define ASCS_SF "%zu" //printing format for 'size_t'
 	#ifdef __clang__
 		static_assert(__clang_major__ > 3 || (__clang_major__ == 3 && __clang_minor__ >= 4), "ascs need Clang 3.4 or higher.");
 	#else
 		static_assert(__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 9), "ascs need GCC 4.9 or higher.");
-		#if __GNUC__ > 5
-		#define ASCS_HAS_STD_SHARED_MUTEX
+		#if __GNUC__ > 5 && __cplusplus <= 201402L
+		#warning your compiler maybe support c++17, please open it (-std=c++17), then ascs will be able to use std::shared_mutex.
 		#endif
 	#endif
 
 	#if !defined(__cplusplus) || __cplusplus <= 201103L
 		#error ascs at least need c++14.
+	#elif __cplusplus > 201402L //TBD
+	#define ASCS_HAS_STD_SHARED_MUTEX
 	#endif
 #else
 	#error ascs only support Visual C++, GCC and Clang.
@@ -107,7 +124,7 @@ static_assert(ASCS_MAX_MSG_NUM > 0, "message capacity must be bigger than zero."
 
 //after this duration, this socket can be freed from the heap or reused,
 //you must define this macro as a value, not just define it, the value means the duration, unit is second.
-//if macro ST_ASIO_ENHANCED_STABILITY been defined, this macro will always be zero.
+//if macro ASCS_ENHANCED_STABILITY been defined, this macro will always be zero.
 #ifdef ASCS_ENHANCED_STABILITY
 #if defined(ASCS_DELAY_CLOSE) && ASCS_DELAY_CLOSE != 0
 #warning ASCS_DELAY_CLOSE will always be zero if ASCS_ENHANCED_STABILITY macro been defined.
@@ -151,7 +168,7 @@ static_assert(ASCS_MAX_OBJECT_NUM > 0, "object capacity must be bigger than zero
 #ifndef ASCS_REUSE_OBJECT
 	#ifndef ASCS_FREE_OBJECT_INTERVAL
 	#define ASCS_FREE_OBJECT_INTERVAL	60 //seconds
-	#elif ST_ASIO_FREE_OBJECT_INTERVAL <= 0
+	#elif ASCS_FREE_OBJECT_INTERVAL <= 0
 		#error free object interval must be bigger than zero.
 	#endif
 #endif
@@ -209,10 +226,38 @@ namespace std {typedef shared_timed_mutex shared_mutex;}
 #endif
 
 //ConcurrentQueue is lock-free, please refer to https://github.com/cameron314/concurrentqueue
-#ifdef ASCS_USE_CUSTOM_QUEUE
-#elif defined(ASCS_USE_CONCURRENT_QUEUE) //if ASCS_USE_CONCURRENT_QUEUE macro not defined, ascs will use 'list' as the message queue, it's not thread safe, so need locks.
+#ifdef ASCS_HAS_CONCURRENT_QUEUE
 #include <concurrentqueue.h>
+template<typename T> using concurrent_queue = moodycamel::ConcurrentQueue<T>;
+	#ifndef ASCS_INPUT_QUEUE
+	#define ASCS_INPUT_QUEUE lock_free_queue
+	#endif
+	#ifndef ASCS_INPUT_CONTAINER
+	#define ASCS_INPUT_CONTAINER concurrent_queue
+	#endif
+	#ifndef ASCS_OUTPUT_QUEUE
+	#define ASCS_OUTPUT_QUEUE lock_free_queue
+	#endif
+	#ifndef ASCS_OUTPUT_CONTAINER
+	#define ASCS_OUTPUT_CONTAINER concurrent_queue
+	#endif
+#else
+	#ifndef ASCS_INPUT_QUEUE
+	#define ASCS_INPUT_QUEUE lock_queue
+	#endif
+	#ifndef ASCS_INPUT_CONTAINER
+	#define ASCS_INPUT_CONTAINER list
+	#endif
+	#ifndef ASCS_OUTPUT_QUEUE
+	#define ASCS_OUTPUT_QUEUE lock_queue
+	#endif
+	#ifndef ASCS_OUTPUT_CONTAINER
+	#define ASCS_OUTPUT_CONTAINER list
+	#endif
 #endif
+//we also can control the queues (and their containers) via template parameters on calss 'connector_base'
+//'server_socket_base', 'ssl::connector_base' and 'ssl::server_socket_base'.
+//we even can let a socket to use different queue (and / or different container) for input and output via template parameters.
 //configurations
 
 #endif /* _ASCS_CONFIG_H_ */
