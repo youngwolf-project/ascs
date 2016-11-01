@@ -206,16 +206,19 @@ private:
 		if (!ec)
 		{
 			if (this->on_accept(client_ptr))
-				client_ptr->next_layer().async_handshake(asio::ssl::stream_base::server, [client_ptr, this](const auto& ec) {
-					this->on_handshake(ec, client_ptr);
-					if (!ec && this->add_client(client_ptr))
-						client_ptr->start();
-				});
+				client_ptr->next_layer().async_handshake(asio::ssl::stream_base::server, [client_ptr, this](const auto& ec) {this->handshake_handler(ec, client_ptr);});
 
 			start_next_accept();
 		}
 		else
 			this->stop_listen();
+	}
+
+	void handshake_handler(const asio::error_code& ec, typename server_base::object_ctype& client_ptr)
+	{
+		this->on_handshake(ec, client_ptr);
+		if (!ec && this->add_client(client_ptr))
+			client_ptr->start();
 	}
 };
 

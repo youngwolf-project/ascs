@@ -166,7 +166,6 @@ protected:
 		std::unique_lock<std::shared_mutex> lock(shutdown_mutex);
 
 		this->stop_all_timer();
-		this->close(); //must after stop_all_timer(), it's very important
 		this->started_ = false;
 //		reset_state();
 
@@ -176,6 +175,8 @@ protected:
 			this->lowest_layer().shutdown(asio::ip::udp::socket::shutdown_both, ec);
 			this->lowest_layer().close(ec);
 		}
+
+		this->close(); //call this at the end of 'shutdown', it's very important
 	}
 
 private:

@@ -45,6 +45,7 @@ public:
 	typedef typename _Mybase::const_reverse_iterator const_reverse_iterator;
 
 	list() : s(0) {}
+	list(list&& other) : s(0) {swap(other);}
 	void swap(list& other) {impl.swap(other.impl); std::swap(s, other.s);}
 
 	bool empty() const {return 0 == s;}
@@ -133,7 +134,7 @@ private:
 };
 
 //Container must at least has the following functions:
-// Container(size) and Container() constructor
+// Container() and Container(size_t) constructor
 // move constructor
 // swap
 // size_approx
@@ -156,7 +157,6 @@ public:
 
 	//not thread-safe
 	void clear() {super(std::move(*this));}
-	void swap(me& other) {super::swap(other);}
 
 	bool enqueue_(const T& item) {return this->enqueue(item);}
 	bool enqueue_(T&& item) {return this->enqueue(std::move(item));}
@@ -164,7 +164,7 @@ public:
 };
 
 //Container must at least has the following functions:
-// Container() constructor
+// Container() and Container(size_t) constructor
 // size
 // empty
 // clear
@@ -184,10 +184,6 @@ public:
 	queue() {}
 	queue(size_t size) : super(size) {}
 
-	//not thread-safe
-	void clear() {super::clear();}
-	void swap(me& other) {super::swap(other);}
-
 	bool enqueue(const T& item) {typename Lockable::lock_guard lock(*this); return enqueue_(item);}
 	bool enqueue(T&& item) {typename Lockable::lock_guard lock(*this); return enqueue_(std::move(item));}
 	bool try_dequeue(T& item) {typename Lockable::lock_guard lock(*this); return try_dequeue_(item);}
@@ -200,7 +196,7 @@ public:
 template<typename T, typename Container> using non_lock_queue = queue<T, Container, dummy_lockable>; //totally not thread safe
 template<typename T, typename Container> using lock_queue = queue<T, Container, lockable>;
 
-//it's not thread safe for 'other', please note. for this queue, depends on 'Q'
+//it's not thread safe for 'other', please note. for 'dest', depends on 'Q'
 template<typename Q>
 size_t move_items_in(Q& dest, Q& other, size_t max_size = ASCS_MAX_MSG_NUM)
 {
@@ -225,7 +221,7 @@ size_t move_items_in(Q& dest, Q& other, size_t max_size = ASCS_MAX_MSG_NUM)
 	return num;
 }
 
-//it's not thread safe for 'other', please note. for this queue, depends on 'Q'
+//it's not thread safe for 'other', please note. for 'dest', depends on 'Q'
 template<typename Q, typename Q2>
 size_t move_items_in(Q& dest, Q2& other, size_t max_size = ASCS_MAX_MSG_NUM)
 {
@@ -273,7 +269,7 @@ bool splice_helper(_Can& dest_can, _Can& src_can, size_t max_size = ASCS_MAX_MSG
 
 	return true;
 }
-	
+
 } //namespace
 
 #endif /* _ASCS_CONTAINER_H_ */

@@ -2,6 +2,9 @@
 #include <iostream>
 
 //configuration
+#define ASCS_DELAY_CLOSE 1 //this demo not used object pool and doesn't need life cycle management,
+						   //so, define this to avoid hooks for async call (and slightly improve efficiency),
+						   //any value which is bigger than zero is okay.
 //#define ASCS_DEFAULT_PACKER replaceable_packer<>
 //#define ASCS_DEFAULT_UDP_UNPACKER replaceable_udp_unpacker<>
 //configuration

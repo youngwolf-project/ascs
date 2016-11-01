@@ -176,7 +176,6 @@ protected:
 
 		shutdown_state = shutdown_states::FORCE;
 		this->stop_all_timer();
-		this->close(); //must after stop_all_timer(), it's very important
 		this->started_ = false;
 //		reset_state();
 
@@ -185,6 +184,8 @@ protected:
 			asio::error_code ec;
 			this->lowest_layer().shutdown(asio::ip::tcp::socket::shutdown_both, ec);
 		}
+
+		this->close(); //call this at the end of 'shutdown', it's very important
 	}
 
 private:

@@ -2,12 +2,13 @@
 #include <iostream>
 
 //configuration
-#define ASCS_SERVER_PORT		9527
+#define ASCS_SERVER_PORT	9527
 #define ASCS_REUSE_OBJECT //use objects pool
+#define ASCS_DELAY_CLOSE	5 //define this to avoid hooks for async call (and slightly improve efficiency)
 //#define ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
 //#define ASCS_WANT_MSG_SEND_NOTIFY
 #define ASCS_MSG_BUFFER_SIZE 65536
-#define ASCS_INPUT_QUEUE non_lock_queue //we will never operate sending buffer concurrently, so need no locks.
+#define ASCS_INPUT_QUEUE non_lock_queue //we will never operate sending buffer concurrently, so need no locks
 #define ASCS_INPUT_CONTAINER list
 #define ASCS_DEFAULT_UNPACKER stream_unpacker //non-protocol
 //configuration
