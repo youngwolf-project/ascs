@@ -19,6 +19,7 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <atomic>
 #include <sstream>
 #include <iomanip>
 
@@ -29,6 +30,23 @@
 
 namespace ascs
 {
+
+template<typename atomic_type = std::atomic_size_t>
+class scope_atomic_lock : public asio::detail::noncopyable
+{
+public:
+	scope_atomic_lock(atomic_type& atomic_) : added(false), atomic(atomic_) {lock();} //atomic_ must has been initialized to zero
+	~scope_atomic_lock() {unlock();}
+
+	void lock() {if (!added) _locked = 1 == ++atomic; added = true;}
+	void unlock() {if (added) --atomic; _locked = false, added = false;}
+	bool locked() const {return _locked;}
+
+private:
+	bool added;
+	bool _locked;
+	atomic_type& atomic;
+};
 
 class service_pump;
 class timer;

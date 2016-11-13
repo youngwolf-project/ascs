@@ -166,8 +166,6 @@ protected:
 		std::unique_lock<std::shared_mutex> lock(shutdown_mutex);
 
 		this->stop_all_timer();
-		this->started_ = false;
-//		reset_state();
 
 		if (this->lowest_layer().is_open())
 		{

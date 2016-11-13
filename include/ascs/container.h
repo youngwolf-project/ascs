@@ -116,7 +116,6 @@ public:
 	//lockable, dummy
 	void lock() const {}
 	void unlock() const {}
-	bool idle() const {return true;} //locked or not
 };
 
 class lockable
@@ -127,7 +126,6 @@ public:
 	//lockable
 	void lock() {mutex.lock();}
 	void unlock() {mutex.unlock();}
-	bool idle() {std::unique_lock<std::shared_mutex> lock(mutex, std::try_to_lock); return lock.owns_lock();} //locked or not
 
 private:
 	std::shared_mutex mutex;

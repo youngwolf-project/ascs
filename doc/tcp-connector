@@ -1,4 +1,4 @@
-
+﻿
 namespace ascs { namespace tcp {
 
 带连接功能的tcp::socket_base，算是一个真正的客户端了
@@ -69,7 +69,7 @@ virtual int prepare_reconnect(const asio::error_code& ec);
 如果允许（io_service仍然在运行且prepare_reconnect返回大于等于0），启动定时器以延时一小段时间之后重新连接服务器。
 
 private:
-	bool async_shutdown_handler(unsigned char id, ssize_t loop_num);
+	bool async_shutdown_handler(timer::tid id, ssize_t loop_num);
 异步优雅关闭（shutdown）超时定时器。
 
 	void connect_handler(const error_code& ec);

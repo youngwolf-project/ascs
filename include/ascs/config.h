@@ -11,6 +11,11 @@
  *
  * license: www.boost.org/LICENSE_1_0.txt
  *
+ * Known issues:
+ * 1. concurrentqueue is not a FIFO (it is by design), navigate to the following links for more deatils:
+ *  https://github.com/cameron314/concurrentqueue/issues/6
+ *  https://github.com/cameron314/concurrentqueue/issues/52
+ *
  * 2016.9.25	version 1.0.0
  * Based on st_asio_wrapper 1.2.0.
  * Directory structure refactoring.
@@ -47,7 +52,7 @@
  * Replaceable packer/unpacker now support replaceable_buffer (an alias of auto_buffer) and shared_buffer to be their message type.
  * Move class statistic and obj_with_begin_time out of ascs::socket to reduce template tiers.
  *
- * 2016.1.1		version 1.1.2
+ * 2016.11.1	version 1.1.2
  * Fix bug: ascs::list cannot be moved properly via moving constructor.
  * Use ASCS_DELAY_CLOSE instead of ASCS_ENHANCED_STABILITY macro to control delay close duration,
  *  0 is an equivalent of defining ASCS_ENHANCED_STABILITY, other values keep the same meanings as before.
@@ -56,6 +61,11 @@
  * Call close at the end of shutdown function, just for safety.
  * Add move capture in lambda.
  * Optimize lambda expressions.
+ *
+ * 2016.11.13	version 1.1.3
+ * Introduce lock-free mechanism for some appropriate logics (many requesters, only one can succeed, others will fail rather than wait).
+ * Remove all mutex (except mutex in object_pool, service_pump, lock_queue and udp::socket).
+ * Sharply simplified timer class.
  *
  */
 
@@ -66,8 +76,8 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#define ASCS_VER		10102	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.1.2"
+#define ASCS_VER		10103	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.1.3"
 
 //asio and compiler check
 #ifdef _MSC_VER

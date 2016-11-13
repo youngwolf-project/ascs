@@ -53,19 +53,13 @@ static_assert(ASCS_MAX_MSG_NUM > 0, "message capacity must be bigger than zero."
 
 //after this duration, this socket can be freed from the heap or reused,
 //you must define this macro as a value, not just define it, the value means the duration, unit is second.
-//if macro ST_ASIO_ENHANCED_STABILITY been defined, this macro will always be zero.
-#ifdef ASCS_ENHANCED_STABILITY
-#if defined(ASCS_DELAY_CLOSE) && ASCS_DELAY_CLOSE != 0
-#warning ASCS_DELAY_CLOSE will always be zero if ASCS_ENHANCED_STABILITY macro been defined.
-#endif
-#undef ASCS_DELAY_CLOSE
-#define ASCS_DELAY_CLOSE 0
-#else
+//a value equal to zero will cause ascs to use a mechanism to guarantee 100% safety when reusing or freeing this socket,
+//ascs will hook all async calls to avoid this socket to be reused or freed before all async calls finish
+//or been interrupted (of course, this mechanism will slightly impact efficiency).
 #ifndef ASCS_DELAY_CLOSE
-#define ASCS_DELAY_CLOSE	5 //seconds
+#define ASCS_DELAY_CLOSE	0 //seconds, guarantee 100% safety when reusing or freeing this socket
 #endif
-static_assert(ASCS_DELAY_CLOSE > 0, "ASCS_DELAY_CLOSE must be bigger than zero.");
-#endif
+static_assert(ASCS_DELAY_CLOSE >= 0, "delay close duration must be bigger than or equal to zero.");
 
 //full statistic include time consumption, or only numerable informations will be gathered
 //#define ASCS_FULL_STATISTIC
@@ -165,11 +159,40 @@ namespace std {typedef shared_timed_mutex shared_mutex;}
 #endif
 
 //ConcurrentQueue is lock-free, please refer to https://github.com/cameron314/concurrentqueue
-#ifdef ASCS_USE_CUSTOM_QUEUE
-#elif defined(ASCS_USE_CONCURRENT_QUEUE) //if ASCS_USE_CONCURRENT_QUEUE macro not defined, ascs will use 'list' as the message queue, it's not thread safe, so need locks.
+#ifdef ASCS_HAS_CONCURRENT_QUEUE
 #include <concurrentqueue.h>
+template<typename T> using concurrent_queue = moodycamel::ConcurrentQueue<T>;
+	#ifndef ASCS_INPUT_QUEUE
+	#define ASCS_INPUT_QUEUE lock_free_queue
+	#endif
+	#ifndef ASCS_INPUT_CONTAINER
+	#define ASCS_INPUT_CONTAINER concurrent_queue
+	#endif
+	#ifndef ASCS_OUTPUT_QUEUE
+	#define ASCS_OUTPUT_QUEUE lock_free_queue
+	#endif
+	#ifndef ASCS_OUTPUT_CONTAINER
+	#define ASCS_OUTPUT_CONTAINER concurrent_queue
+	#endif
+#else
+	#ifndef ASCS_INPUT_QUEUE
+	#define ASCS_INPUT_QUEUE lock_queue
+	#endif
+	#ifndef ASCS_INPUT_CONTAINER
+	#define ASCS_INPUT_CONTAINER list
+	#endif
+	#ifndef ASCS_OUTPUT_QUEUE
+	#define ASCS_OUTPUT_QUEUE lock_queue
+	#endif
+	#ifndef ASCS_OUTPUT_CONTAINER
+	#define ASCS_OUTPUT_CONTAINER list
+	#endif
 #endif
-定义ASCS_USE_CUSTOM_QUEUE宏以便采用自定义消息队列，至于如何实现自己的消息队列，请参看message_queue，只要实现相应的函数即可（如enqueue，dequeue等）。
-ascs默认提供了两种消息队列供你选择，一是concurrent queue，它是无锁的，具体请参看https://github.com/cameron314/concurrentqueue；一是普通的带锁的
-消息队列，基于ascs::list加上std::shared_mutex实现。定义ASCS_USE_CONCURRENT_QUEUE宏以启用concurrent queue，否则将采用普通的带锁消息队列。
+ascs默认提供了三种消息队列供你选择，一是concurrent queue，它是无锁线程安全的，具体请参看https://github.com/cameron314/concurrentqueue；
+二是普通的带锁消息队列，基于ascs::list加上std::shared_mutex实现；三是无锁线程不安全队列，也是基于ascs::list实现。
+使用无锁线程不安全队列时，一定要仔细审查你的业务，并不是所有业务都可以使用无锁线程不安全队列的，具有用法请看demo。
+队列及其内部所使用的容器都是可以通过宏或者模板参数来指定的，所以这就自然而然的支持了自定义队列（及容器），至于如何实现自定义队列（及容器），
+可以参看ascs::lock_free_queue，ascs::non_lock_queue及ascs::lock_queue，需要支持两个模板参数。
+容器需要实现一些特定的接口（队列需要调用），可以参看moodycamel::ConcurrentQueue以及ascs::list，需要支持一个模板参数，至于确切的需要实现哪些接口，
+因不同的队列而不同，最好的办法就是编译，让编译器告诉你缺少哪些接口，接口从名称上就可以看出其作用，非常清晰。
 //configurations

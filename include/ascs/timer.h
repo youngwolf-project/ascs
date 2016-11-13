@@ -13,14 +13,14 @@
 #ifndef _ASCS_TIMER_H_
 #define _ASCS_TIMER_H_
 
+#include <vector>
+#include <chrono>
+
 #ifdef ASCS_USE_STEADY_TIMER
 #include <asio/steady_timer.hpp>
 #else
 #include <asio/system_timer.hpp>
 #endif
-
-#include <set>
-#include <chrono>
 
 #include "object.h"
 
@@ -29,13 +29,13 @@ namespace ascs
 {
 
 //timers are identified by id.
-//for the same timer in the same timer, set_timer and stop_timer are not thread safe, please pay special attention.
+//for the same timer in the same timer, any manipulations are not thread safe, please pay special attention.
 //to resolve this defect, we must add a mutex member variable to timer_info, it's not worth
 //
 //suppose you have more than one service thread(see service_pump for service thread number control), then:
-//same timer, same timer, on_timer is called sequentially
-//same timer, different timer, on_timer is called concurrently
-//different timer, on_timer is always called concurrently
+//for same timer: same timer, on_timer is called sequentially
+//for same timer: distinct timer, on_timer is called concurrently
+//for distinct timer: on_timer is always called concurrently
 class timer : public object
 {
 public:
@@ -51,42 +51,34 @@ public:
 
 	struct timer_info
 	{
-		enum timer_status {TIMER_OK, TIMER_CANCELED};
+		enum timer_status {TIMER_FAKE, TIMER_OK, TIMER_CANCELED};
 
 		tid id;
-		mutable timer_status status;
-		mutable size_t milliseconds;
-		mutable std::function<bool(tid)> call_back;
-		mutable std::shared_ptr<timer_type> timer;
+		timer_status status;
+		size_t milliseconds;
+		std::function<bool(tid)> call_back;
+		std::shared_ptr<timer_type> timer;
 
-		bool operator <(const timer_info& other) const {return id < other.id;}
+		timer_info() : id(0), status(TIMER_FAKE), milliseconds(0) {}
 	};
 
 	typedef const timer_info timer_cinfo;
-	typedef std::set<timer_info> container_type;
+	typedef std::vector<timer_info> container_type;
 
-	timer(asio::io_service& _io_service_) : object(_io_service_) {}
+	timer(asio::io_service& _io_service_) : object(_io_service_), timer_can(256) {tid id = -1; do_something_to_all([&id](auto& item) {item.id = ++id;});}
 
 	void update_timer_info(tid id, size_t milliseconds, std::function<bool(tid)>&& call_back, bool start = false)
 	{
-		timer_info ti = {id};
+		timer_info& ti = timer_can[id];
 
-		std::unique_lock<std::shared_mutex> lock(timer_can_mutex);
-		auto iter = timer_can.find(ti);
-		if (iter == std::end(timer_can))
-		{
-			iter = timer_can.insert(ti).first;
-			iter->timer = std::make_shared<timer_type>(io_service_);
-		}
-		lock.unlock();
-
-		//items in timer_can not locked
-		iter->status = timer_info::TIMER_OK;
-		iter->milliseconds = milliseconds;
-		iter->call_back.swap(call_back);
+		if (timer_info::TIMER_FAKE == ti.status)
+			ti.timer = std::make_shared<timer_type>(io_service_);
+		ti.status = timer_info::TIMER_OK;
+		ti.milliseconds = milliseconds;
+		ti.call_back.swap(call_back);
 
 		if (start)
-			start_timer(*iter);
+			start_timer(ti);
 	}
 	void update_timer_info(tid id, size_t milliseconds, const std::function<bool(tid)>& call_back, bool start = false)
 		{update_timer_info(id, milliseconds, std::function<bool(tid)>(call_back), start);}
@@ -94,69 +86,50 @@ public:
 	void set_timer(tid id, size_t milliseconds, std::function<bool(tid)>&& call_back) {update_timer_info(id, milliseconds, std::move(call_back), true);}
 	void set_timer(tid id, size_t milliseconds, const std::function<bool(tid)>& call_back) {update_timer_info(id, milliseconds, call_back, true);}
 
-	timer_info find_timer(tid id)
-	{
-		timer_info ti = {id, timer_info::TIMER_CANCELED, 0};
-
-		std::shared_lock<std::shared_mutex> lock(timer_can_mutex);
-		auto iter = timer_can.find(ti);
-		if (iter == std::end(timer_can))
-			return *iter;
-		else
-			return ti;
-	}
+	timer_info find_timer(tid id) const {return timer_can[id];}
 
 	bool start_timer(tid id)
 	{
-		timer_info ti = {id};
+		timer_info& ti = timer_can[id];
 
-		std::shared_lock<std::shared_mutex> lock(timer_can_mutex);
-		auto iter = timer_can.find(ti);
-		if (iter == std::end(timer_can))
+		if (timer_info::TIMER_FAKE == ti.status)
 			return false;
-		lock.unlock();
 
-		start_timer(*iter);
+		ti.status = timer_info::TIMER_OK;
+		start_timer(ti); //if timer already started, this will cancel it first
+
 		return true;
 	}
 
-	void stop_timer(tid id)
-	{
-		timer_info ti = {id};
+	void stop_timer(tid id) {stop_timer(timer_can[id]);}
+	void stop_all_timer() {do_something_to_all([this](auto& item) {this->stop_timer(item);});}
 
-		std::shared_lock<std::shared_mutex> lock(timer_can_mutex);
-		auto iter = timer_can.find(ti);
-		if (iter != std::end(timer_can))
-		{
-			lock.unlock();
-			stop_timer(*iter);
-		}
-	}
-
-	DO_SOMETHING_TO_ALL_MUTEX(timer_can, timer_can_mutex)
-	DO_SOMETHING_TO_ONE_MUTEX(timer_can, timer_can_mutex)
-
-	void stop_all_timer() {do_something_to_all([this](const auto& item) {this->stop_timer(item);});}
+	DO_SOMETHING_TO_ALL(timer_can)
+	DO_SOMETHING_TO_ONE(timer_can)
 
 protected:
 	void reset() {object::reset();}
 
 	void start_timer(timer_cinfo& ti)
 	{
+		assert(timer_info::TIMER_OK == ti.status);
+
 		ti.timer->expires_from_now(milliseconds(ti.milliseconds));
 		//return true from call_back to continue the timer, or the timer will stop
 		ti.timer->async_wait(make_handler_error([this, &ti](const auto& ec) {if (!ec && ti.call_back(ti.id) && timer_info::TIMER_OK == ti.status) this->start_timer(ti);}));
 	}
 
-	void stop_timer(timer_cinfo& ti)
+	void stop_timer(timer_info& ti)
 	{
-		asio::error_code ec;
-		ti.timer->cancel(ec);
-		ti.status = timer_info::TIMER_CANCELED;
+		if (timer_info::TIMER_OK == ti.status) //enable stopping timers that has been stopped
+		{
+			asio::error_code ec;
+			ti.timer->cancel(ec);
+			ti.status = timer_info::TIMER_CANCELED;
+		}
 	}
 
 	container_type timer_can;
-	std::shared_mutex timer_can_mutex;
 
 private:
 	using object::io_service_;

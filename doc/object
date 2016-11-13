@@ -6,4 +6,4 @@ asio::async_write(socket, buffer, [this](const auto& ec, auto bytes_transferred)
 那么look之后应该是这样的：
 asio::async_write(socket, buffer, this->make_handler_error_size([this](const auto& ec, auto bytes_transferred) {this->send_handler(ec, bytes_transferred);}));
 
-如果定义了ASCS_ENHANCED_STABILITY宏，则ascs中所有用于异步调用的函数对象都将被自动的hook。
+如果定义了ASCS_DELAY_CLOSE宏且其值等于0，则ascs中所有用于异步调用的函数对象都将被自动的hook。

@@ -13,8 +13,6 @@
 #ifndef _ASCS_TCP_SOCKET_H_
 #define _ASCS_TCP_SOCKET_H_
 
-#include <vector>
-
 #include "../socket.h"
 
 namespace ascs { namespace tcp {
@@ -37,9 +35,10 @@ protected:
 
 	enum shutdown_states {NONE, FORCE, GRACEFUL};
 
-	socket_base(asio::io_service& io_service_) : super(io_service_), unpacker_(std::make_shared<Unpacker>()), shutdown_state(shutdown_states::NONE) {}
-	template<typename Arg>
-	socket_base(asio::io_service& io_service_, Arg& arg) : super(io_service_, arg), unpacker_(std::make_shared<Unpacker>()), shutdown_state(shutdown_states::NONE) {}
+	socket_base(asio::io_service& io_service_) : super(io_service_), unpacker_(std::make_shared<Unpacker>()),
+		shutdown_state(shutdown_states::NONE), shutdown_atomic(0) {}
+	template<typename Arg> socket_base(asio::io_service& io_service_, Arg& arg) : super(io_service_, arg), unpacker_(std::make_shared<Unpacker>()),
+		shutdown_state(shutdown_states::NONE), shutdown_atomic(0) {}
 
 public:
 	virtual bool obsoleted() {return !is_shutting_down() && super::obsoleted();}
@@ -172,12 +171,12 @@ protected:
 
 	void shutdown()
 	{
-		std::unique_lock<std::shared_mutex> lock(shutdown_mutex);
+		scope_atomic_lock<> lock(shutdown_atomic);
+		if (!lock.locked())
+			return;
 
 		shutdown_state = shutdown_states::FORCE;
 		this->stop_all_timer();
-		this->started_ = false;
-//		reset_state();
 
 		if (this->lowest_layer().is_open())
 		{
@@ -252,9 +251,9 @@ private:
 protected:
 	list<typename super::in_msg> last_send_msg;
 	std::shared_ptr<i_unpacker<out_msg_type>> unpacker_;
-	shutdown_states shutdown_state;
 
-	std::shared_mutex shutdown_mutex;
+	shutdown_states shutdown_state;
+	std::atomic_size_t shutdown_atomic;
 };
 
 }} //namespace

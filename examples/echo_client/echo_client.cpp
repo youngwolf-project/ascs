@@ -218,6 +218,138 @@ public:
 	///////////////////////////////////////////////////
 };
 
+void send_msg_one_by_one(echo_client& client, size_t msg_num, size_t msg_len, char msg_fill)
+{
+	check_msg = true;
+	uint64_t total_msg_bytes = msg_num * msg_len * client.size();
+
+	cpu_timer begin_time;
+	client.begin(msg_num, msg_len, msg_fill);
+	unsigned percent = 0;
+	do
+	{
+		std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+		auto new_percent = (unsigned) (100 * client.get_recv_bytes() / total_msg_bytes);
+		if (percent != new_percent)
+		{
+			percent = new_percent;
+			printf("\r%u%%", percent);
+			fflush(stdout);
+		}
+	} while (100 != percent);
+	begin_time.stop();
+
+	printf("\r100%%\ntime spent statistics: %f seconds.\n", begin_time.elapsed());
+	printf("speed: %.0f(*2)kB/s.\n", total_msg_bytes / begin_time.elapsed() / 1024);
+}
+
+void send_msg_randomly(echo_client& client, size_t msg_num, size_t msg_len, char msg_fill)
+{
+	check_msg = false;
+	uint64_t send_bytes = 0;
+	uint64_t total_msg_bytes = msg_num * msg_len;
+	auto buff = new char[msg_len];
+	memset(buff, msg_fill, msg_len);
+
+	cpu_timer begin_time;
+	unsigned percent = 0;
+	for (size_t i = 0; i < msg_num; ++i)
+	{
+		memcpy(buff, &i, sizeof(size_t)); //seq
+
+		//congestion control, method #1, the peer needs its own congestion control too.
+		client.safe_random_send_msg(buff, msg_len); //can_overflow is false, it's important
+		send_bytes += msg_len;
+
+		auto new_percent = (unsigned) (100 * send_bytes / total_msg_bytes);
+		if (percent != new_percent)
+		{
+			percent = new_percent;
+			printf("\r%u%%", percent);
+			fflush(stdout);
+		}
+	}
+
+	while(client.get_recv_bytes() != total_msg_bytes)
+		std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+	begin_time.stop();
+	delete[] buff;
+
+	printf("\r100%%\ntime spent statistics: %f seconds.\n", begin_time.elapsed());
+	printf("speed: %.0f(*2)kB/s.\n", total_msg_bytes / begin_time.elapsed() / 1024);
+}
+
+//use up to 16 (hard code) worker threads to send messages concurrently
+void send_msg_concurrently(echo_client& client, size_t msg_num, size_t msg_len, char msg_fill)
+{
+	check_msg = true;
+	auto link_num = client.size();
+	auto group_num = std::min((size_t) 16, link_num);
+	auto group_link_num = link_num / group_num;
+	auto left_link_num = link_num - group_num * group_link_num;
+	uint64_t total_msg_bytes = msg_num * msg_len * link_num;
+
+	auto group_index = (size_t) -1;
+	size_t this_group_link_num = 0;
+
+	std::vector<std::list<echo_client::object_type>> link_groups(group_num);
+	client.do_something_to_all([&](auto& item) {
+		if (0 == this_group_link_num)
+		{
+			this_group_link_num = group_link_num;
+			if (left_link_num > 0)
+			{
+				++this_group_link_num;
+				--left_link_num;
+			}
+
+			++group_index;
+		}
+
+		--this_group_link_num;
+		link_groups[group_index].push_back(item);
+	});
+
+	cpu_timer begin_time;
+	std::list<std::thread> threads;
+	do_something_to_all(link_groups, [&threads, msg_num, msg_len, msg_fill](const auto& item) {
+		threads.push_back(std::thread([&item, msg_num, msg_len, msg_fill]() {
+			auto buff = new char[msg_len];
+			memset(buff, msg_fill, msg_len);
+			for (size_t i = 0; i < msg_num; ++i)
+			{
+				memcpy(buff, &i, sizeof(size_t)); //seq
+
+				//congestion control, method #1, the peer needs its own congestion control too.
+				do_something_to_all(item, [buff, msg_len](const auto& item2) {item2->safe_send_msg(buff, msg_len);}); //can_overflow is false, it's important
+			}
+			delete[] buff;
+		}));
+	});
+
+	unsigned percent = 0;
+	do
+	{
+		std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+		auto new_percent = (unsigned) (100 * client.get_recv_bytes() / total_msg_bytes);
+		if (percent != new_percent)
+		{
+			percent = new_percent;
+			printf("\r%u%%", percent);
+			fflush(stdout);
+		}
+	} while (100 != percent);
+	begin_time.stop();
+
+	printf("\r100%%\ntime spent statistics: %f seconds.\n", begin_time.elapsed());
+	printf("speed: %.0f(*2)kB/s.\n", total_msg_bytes / begin_time.elapsed() / 1024);
+
+	do_something_to_all(threads, [](auto& t) {t.join();});
+}
+
 int main(int argc, const char* argv[])
 {
 	printf("usage: %s [<service thread number=1> [<port=%d> [<ip=%s> [link num=16]]]]\n", argv[0], ASCS_SERVER_PORT, ASCS_SERVER_IP);
@@ -335,7 +467,7 @@ int main(int argc, const char* argv[])
 			auto iter = std::begin(parameters);
 			if (iter != std::end(parameters)) msg_num = std::max((size_t) atoll(iter++->data()), (size_t) 1);
 
-#if 1 == PACKER_UNPACKER_TYPE
+#if 0 == PACKER_UNPACKER_TYPE || 1 == PACKER_UNPACKER_TYPE
 			if (iter != std::end(parameters)) msg_len = std::min(packer::get_max_msg_size(),
 				std::max((size_t) atoi(iter++->data()), sizeof(size_t))); //include seq
 #elif 2 == PACKER_UNPACKER_TYPE
@@ -343,99 +475,32 @@ int main(int argc, const char* argv[])
 			msg_len = 1024; //we hard code this because we fixedly initialized the length of fixed_length_unpacker to 1024
 #elif 3 == PACKER_UNPACKER_TYPE
 			if (iter != std::end(parameters)) msg_len = std::min((size_t) ASCS_MSG_BUFFER_SIZE,
-				std::max((size_t) atoi(iter++->data()), sizeof(size_t)));
+				std::max((size_t) atoi(iter++->data()), sizeof(size_t))); //include seq
 #endif
 			if (iter != std::end(parameters)) msg_fill = *iter++->data();
 			if (iter != std::end(parameters)) model = *iter++->data() - '0';
 
-			unsigned percent = 0;
-			uint64_t total_msg_bytes;
-			switch (model)
+			if (0 != model && 1 != model)
 			{
-			case 0:
-				check_msg = true;
-				total_msg_bytes = msg_num * link_num; break;
-			case 1:
-				check_msg = false;
-				srand(time(nullptr));
-				total_msg_bytes = msg_num; break;
-			default:
-				total_msg_bytes = 0; break;
+				puts("unrecognized model!");
+				continue;
 			}
 
-			if (total_msg_bytes > 0)
-			{
-				printf("test parameters after adjustment: " ASCS_SF " " ASCS_SF " %c %d\n", msg_num, msg_len, msg_fill, model);
-				puts("performance test begin, this application will have no response during the test!");
+			printf("test parameters after adjustment: " ASCS_SF " " ASCS_SF " %c %d\n", msg_num, msg_len, msg_fill, model);
+			puts("performance test begin, this application will have no response during the test!");
 
-				client.clear_status();
-				total_msg_bytes *= msg_len;
-				cpu_timer begin_time;
-
+			client.clear_status();
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
-				if (0 == model)
-				{
-					client.begin(msg_num, msg_len, msg_fill);
-
-					unsigned new_percent = 0;
-					do
-					{
-						std::this_thread::sleep_for(std::chrono::milliseconds(50));
-
-						new_percent = (unsigned) (100 * client.get_recv_bytes() / total_msg_bytes);
-						if (percent != new_percent)
-						{
-							percent = new_percent;
-							printf("\r%u%%", percent);
-							fflush(stdout);
-						}
-					} while (100 != new_percent);
-
-					printf("\r100%%\ntime spent statistics: %.1f seconds.\n", begin_time.elapsed());
-					printf("speed: %.0f(*2)kB/s.\n", total_msg_bytes / begin_time.elapsed() / 1024);
-				}
-				else
-					puts("if ASCS_WANT_MSG_SEND_NOTIFY defined, only support model 0!");
+			if (0 == model)
+				send_msg_one_by_one(client, msg_num, msg_len, msg_fill);
+			else
+				puts("if ASCS_WANT_MSG_SEND_NOTIFY defined, only support model 0!");
 #else
-				auto buff = new char[msg_len];
-				memset(buff, msg_fill, msg_len);
-				uint64_t send_bytes = 0;
-				for (size_t i = 0; i < msg_num; ++i)
-				{
-					memcpy(buff, &i, sizeof(size_t)); //seq
-
-					//congestion control, method #1, the peer needs its own congestion control too.
-					switch (model)
-					{
-					case 0:
-						client.safe_broadcast_msg(buff, msg_len); //can_overflow is false, it's important
-						send_bytes += link_num * msg_len;
-						break;
-					case 1:
-						client.safe_random_send_msg(buff, msg_len); //can_overflow is false, it's important
-						send_bytes += msg_len;
-						break;
-					default:
-						break;
-					}
-
-					auto new_percent = (unsigned) (100 * send_bytes / total_msg_bytes);
-					if (percent != new_percent)
-					{
-						percent = new_percent;
-						printf("\r%u%%", percent);
-						fflush(stdout);
-					}
-				}
-				delete[] buff;
-
-				while(client.get_recv_bytes() != total_msg_bytes)
-					std::this_thread::sleep_for(std::chrono::milliseconds(50));
-
-				printf("\r100%%\ntime spent statistics: %.1f seconds.\n", begin_time.elapsed());
-				printf("speed: %.0f(*2)kB/s.\n", total_msg_bytes / begin_time.elapsed() / 1024);
+			if (0 == model)
+				send_msg_concurrently(client, msg_num, msg_len, msg_fill);
+			else
+				send_msg_randomly(client, msg_num, msg_len, msg_fill);
 #endif
-			} // if (total_data_num > 0)
 		}
 	}
 
