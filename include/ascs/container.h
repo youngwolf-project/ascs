@@ -13,10 +13,7 @@
 #ifndef _ASCS_CONTAINER_H_
 #define _ASCS_CONTAINER_H_
 
-#include <list>
-#include <shared_mutex>
-
-#include "config.h"
+#include "base.h"
 
 namespace ascs
 {
@@ -34,6 +31,7 @@ public:
 	typedef list<_Ty> _Myt;
 	typedef std::list<_Ty> _Mybase;
 
+	typedef typename _Mybase::value_type value_type;
 	typedef typename _Mybase::size_type size_type;
 
 	typedef typename _Mybase::reference reference;
@@ -89,6 +87,17 @@ public:
 	const_reference back() const {return impl.back();}
 	const_iterator end() const {return impl.end();}
 	const_reverse_iterator rend() const {return impl.rend();}
+
+	void splice(const_iterator _Where, _Mybase& _Right) {s += _Right.size(); impl.splice(_Where, _Right);}
+	void splice(const_iterator _Where, _Mybase& _Right, const_iterator _First) {++s; impl.splice(_Where, _Right, _First);}
+	void splice(const_iterator _Where, _Mybase& _Right, const_iterator _First, const_iterator _Last)
+	{
+		auto size = std::distance(_First, _Last);
+		//this std::distance invocation is the penalty for making complexity of size() constant.
+		s += size;
+
+		impl.splice(_Where, _Right, _First, _Last);
+	}
 
 	void splice(const_iterator _Where, _Myt& _Right) {s += _Right.size(); _Right.s = 0; impl.splice(_Where, _Right.impl);}
 	void splice(const_iterator _Where, _Myt& _Right, const_iterator _First) {++s; --_Right.s; impl.splice(_Where, _Right.impl, _First);}
@@ -156,8 +165,11 @@ public:
 	//not thread-safe
 	void clear() {super(std::move(*this));}
 
+	void move_items_in(std::list<T>& can) {move_items_in_(can);}
+
 	bool enqueue_(const T& item) {return this->enqueue(item);}
 	bool enqueue_(T&& item) {return this->enqueue(std::move(item));}
+	void move_items_in_(std::list<T>& can) {do_something_to_all(can, [this](auto& item) {this->enqueue(std::move(item));}); can.clear();}
 	bool try_dequeue_(T& item) {return this->try_dequeue(item);}
 };
 
@@ -169,6 +181,7 @@ public:
 // swap
 // push_back(const T& item)
 // push_back(T&& item)
+// splice(Container::const_iterator, std::list<T>&), after this, std::list<T> must be empty
 // front
 // pop_front
 template<typename T, typename Container, typename Lockable>
@@ -184,89 +197,17 @@ public:
 
 	bool enqueue(const T& item) {typename Lockable::lock_guard lock(*this); return enqueue_(item);}
 	bool enqueue(T&& item) {typename Lockable::lock_guard lock(*this); return enqueue_(std::move(item));}
+	void move_items_in(std::list<T>& can) {typename Lockable::lock_guard lock(*this); move_items_in_(can);}
 	bool try_dequeue(T& item) {typename Lockable::lock_guard lock(*this); return try_dequeue_(item);}
 
 	bool enqueue_(const T& item) {this->push_back(item); return true;}
 	bool enqueue_(T&& item) {this->push_back(std::move(item)); return true;}
+	void move_items_in_(std::list<T>& can) {this->splice(std::end(*this), can);}
 	bool try_dequeue_(T& item) {if (this->empty()) return false; item.swap(this->front()); this->pop_front(); return true;}
 };
 
 template<typename T, typename Container> using non_lock_queue = queue<T, Container, dummy_lockable>; //totally not thread safe
 template<typename T, typename Container> using lock_queue = queue<T, Container, lockable>;
-
-//it's not thread safe for 'other', please note. for 'dest', depends on 'Q'
-template<typename Q>
-size_t move_items_in(Q& dest, Q& other, size_t max_size = ASCS_MAX_MSG_NUM)
-{
-	if (other.empty())
-		return 0;
-
-	auto cur_size = dest.size();
-	if (cur_size >= max_size)
-		return 0;
-
-	size_t num = 0;
-	typename Q::data_type item;
-
-	typename Q::lock_guard lock(dest);
-	while (cur_size < max_size && other.try_dequeue_(item)) //size not controlled accurately
-	{
-		dest.enqueue_(std::move(item));
-		++cur_size;
-		++num;
-	}
-
-	return num;
-}
-
-//it's not thread safe for 'other', please note. for 'dest', depends on 'Q'
-template<typename Q, typename Q2>
-size_t move_items_in(Q& dest, Q2& other, size_t max_size = ASCS_MAX_MSG_NUM)
-{
-	if (other.empty())
-		return 0;
-
-	auto cur_size = dest.size();
-	if (cur_size >= max_size)
-		return 0;
-
-	size_t num = 0;
-
-	typename Q::lock_guard lock(dest);
-	while (cur_size < max_size && !other.empty()) //size not controlled accurately
-	{
-		dest.enqueue_(std::move(other.front()));
-		other.pop_front();
-		++cur_size;
-		++num;
-	}
-
-	return num;
-}
-
-template<typename _Can>
-bool splice_helper(_Can& dest_can, _Can& src_can, size_t max_size = ASCS_MAX_MSG_NUM)
-{
-	if (src_can.empty())
-		return false;
-
-	auto size = dest_can.size();
-	if (size >= max_size) //dest_can can hold more items.
-		return false;
-
-	size = max_size - size; //maximum items this time can handle
-	if (src_can.size() > size) //some items left behind
-	{
-		auto begin_iter = std::begin(src_can);
-		auto left_size = src_can.size() - size;
-		auto end_iter = left_size > size ? std::next(begin_iter, size) : std::prev(std::end(src_can), left_size); //minimize iterator movement
-		dest_can.splice(std::end(dest_can), src_can, begin_iter, end_iter);
-	}
-	else
-		dest_can.splice(std::end(dest_can), src_can);
-
-	return true;
-}
 
 } //namespace
 

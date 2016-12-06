@@ -14,10 +14,10 @@
 #ifndef _ASCS_OBJECT_POOL_H_
 #define _ASCS_OBJECT_POOL_H_
 
-#include <atomic>
 #include <unordered_map>
 
 #include "timer.h"
+#include "container.h"
 #include "service_pump.h"
 
 namespace ascs
@@ -53,7 +53,7 @@ protected:
 
 	bool add_object(object_ctype& object_ptr)
 	{
-		assert(object_ptr);
+		assert(object_ptr && !object_ptr->is_equal_to(-1));
 
 		std::unique_lock<std::shared_mutex> lock(object_can_mutex);
 		return object_can.size() < max_size_ ? object_can.insert(std::make_pair(object_ptr->id(), object_ptr)).second : false;

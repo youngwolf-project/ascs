@@ -33,7 +33,6 @@ public:
 
 	connector_base(asio::io_service& io_service_) : super(io_service_), connected(false), reconnecting(true)
 		{set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
-
 	template<typename Arg>
 	connector_base(asio::io_service& io_service_, Arg& arg) : super(io_service_, arg), connected(false), reconnecting(true)
 		{set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}

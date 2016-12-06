@@ -14,7 +14,6 @@
 #define _ASCS_TIMER_H_
 
 #include <vector>
-#include <chrono>
 
 #ifdef ASCS_USE_STEADY_TIMER
 #include <asio/steady_timer.hpp>

@@ -16,6 +16,8 @@
 #include <stdio.h>
 #include <stdarg.h>
 
+#include <list>
+#include <chrono>
 #include <memory>
 #include <string>
 #include <thread>
@@ -24,9 +26,8 @@
 #include <iomanip>
 
 #include <asio.hpp>
-#include <asio/detail/noncopyable.hpp>
 
-#include "container.h"
+#include "config.h"
 
 namespace ascs
 {
@@ -49,13 +50,13 @@ private:
 };
 
 class service_pump;
-class timer;
+class object;
 class i_server
 {
 public:
 	virtual service_pump& get_service_pump() = 0;
 	virtual const service_pump& get_service_pump() const = 0;
-	virtual bool del_client(const std::shared_ptr<timer>& client_ptr) = 0;
+	virtual bool del_client(const std::shared_ptr<object>& client_ptr) = 0;
 };
 
 class i_buffer
@@ -179,7 +180,7 @@ namespace tcp
 	public:
 		typedef MsgType msg_type;
 		typedef const msg_type msg_ctype;
-		typedef list<msg_type> container_type;
+		typedef std::list<msg_type> container_type;
 
 	protected:
 		virtual ~i_unpacker() {}
@@ -201,8 +202,12 @@ namespace udp
 		asio::ip::udp::endpoint peer_addr;
 
 		udp_msg() {}
+		udp_msg(const asio::ip::udp::endpoint& _peer_addr) : peer_addr(_peer_addr) {}
+		udp_msg(const asio::ip::udp::endpoint& _peer_addr, const MsgType& msg) : MsgType(msg), peer_addr(_peer_addr) {}
 		udp_msg(const asio::ip::udp::endpoint& _peer_addr, MsgType&& msg) : MsgType(std::move(msg)), peer_addr(_peer_addr) {}
 
+		using MsgType::operator =;
+		using MsgType::swap;
 		void swap(udp_msg& other) {std::swap(peer_addr, other.peer_addr); MsgType::swap(other);}
 		void swap(asio::ip::udp::endpoint& addr, MsgType&& tmp_msg) {std::swap(peer_addr, addr); MsgType::swap(tmp_msg);}
 	};
@@ -213,7 +218,7 @@ namespace udp
 	public:
 		typedef MsgType msg_type;
 		typedef const msg_type msg_ctype;
-		typedef list<udp_msg<msg_type>> container_type;
+		typedef std::list<udp_msg<msg_type>> container_type;
 
 	protected:
 		virtual ~i_unpacker() {}
@@ -229,7 +234,6 @@ namespace udp
 struct statistic
 {
 #ifdef ASCS_FULL_STATISTIC
-	static bool enabled() {return true;}
 	typedef std::chrono::system_clock::time_point stat_time;
 	static stat_time now() {return std::chrono::system_clock::now();}
 	typedef std::chrono::system_clock::duration stat_duration;
@@ -237,7 +241,6 @@ struct statistic
 	struct dummy_duration {const dummy_duration& operator +=(const dummy_duration& other) {return *this;}}; //not a real duration, just satisfy compiler(d1 += d2)
 	struct dummy_time {dummy_duration operator -(const dummy_time& other) {return dummy_duration();}}; //not a real time, just satisfy compiler(t1 - t2)
 
-	static bool enabled() {return false;}
 	typedef dummy_time stat_time;
 	static stat_time now() {return stat_time();}
 	typedef dummy_duration stat_duration;
@@ -249,13 +252,14 @@ struct statistic
 	void reset() {reset_number(); reset_duration();}
 	void reset_duration()
 	{
-		send_delay_sum = send_time_sum = stat_duration(0);
+		send_delay_sum = send_time_sum = pack_time_sum = stat_duration(0);
 
 		dispatch_dealy_sum = recv_idle_sum = stat_duration(0);
 #ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
 		handle_time_1_sum = stat_duration(0);
 #endif
 		handle_time_2_sum = stat_duration(0);
+		unpack_time_sum = stat_duration(0);
 	}
 #else
 	void reset() {reset_number();}
@@ -267,6 +271,7 @@ struct statistic
 		send_byte_sum += other.send_byte_sum;
 		send_delay_sum += other.send_delay_sum;
 		send_time_sum += other.send_time_sum;
+		pack_time_sum += other.pack_time_sum;
 
 		recv_msg_sum += other.recv_msg_sum;
 		recv_byte_sum += other.recv_byte_sum;
@@ -276,6 +281,7 @@ struct statistic
 		handle_time_1_sum += other.handle_time_1_sum;
 #endif
 		handle_time_2_sum += other.handle_time_2_sum;
+		unpack_time_sum += other.unpack_time_sum;
 
 		return *this;
 	}
@@ -289,6 +295,7 @@ struct statistic
 			<< "size in bytes: " << send_byte_sum << std::endl
 			<< "send delay: " << std::chrono::duration_cast<std::chrono::duration<float>>(send_delay_sum).count() << std::endl
 			<< "send duration: " << std::chrono::duration_cast<std::chrono::duration<float>>(send_time_sum).count() << std::endl
+			<< "pack duration: " << std::chrono::duration_cast<std::chrono::duration<float>>(pack_time_sum).count() << std::endl
 			<< "\nrecv corresponding statistic:\n"
 			<< "message sum: " << recv_msg_sum << std::endl
 			<< "size in bytes: " << recv_byte_sum << std::endl
@@ -297,7 +304,8 @@ struct statistic
 #ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
 			<< "on_msg duration: " << std::chrono::duration_cast<std::chrono::duration<float>>(handle_time_1_sum).count() << std::endl
 #endif
-			<< "on_msg_handle duration: " << std::chrono::duration_cast<std::chrono::duration<float>>(handle_time_2_sum).count();
+			<< "on_msg_handle duration: " << std::chrono::duration_cast<std::chrono::duration<float>>(handle_time_2_sum).count() << std::endl
+			<< "unpack duration: " << std::chrono::duration_cast<std::chrono::duration<float>>(unpack_time_sum).count();
 #else
 		s << std::setfill('0') << "send corresponding statistic:\n"
 			<< "message sum: " << send_msg_sum << std::endl
@@ -315,6 +323,7 @@ struct statistic
 	stat_duration send_delay_sum; //from send_(native_)msg (exclude msg packing) to asio::async_write
 	stat_duration send_time_sum; //from asio::async_write to send_handler
 	//above two items indicate your network's speed or load
+	stat_duration pack_time_sum; //udp::socket will not gather this item
 
 	//recv corresponding statistic
 	uint_fast64_t recv_msg_sum; //include msgs in receiving buffer
@@ -326,6 +335,21 @@ struct statistic
 	stat_duration handle_time_1_sum; //on_msg consumed time, this indicate the efficiency of msg handling
 #endif
 	stat_duration handle_time_2_sum; //on_msg_handle consumed time, this indicate the efficiency of msg handling
+	stat_duration unpack_time_sum; //udp::socket will not gather this item
+};
+
+class auto_duration
+{
+public:
+	auto_duration(statistic::stat_duration& duration_) : started(true), begin_time(statistic::now()), duration(duration_) {}
+	~auto_duration() {end();}
+
+	void end() {if (started) duration += statistic::now() - begin_time; started = false;}
+
+private:
+	bool started;
+	statistic::stat_time begin_time;
+	statistic::stat_duration& duration;
 };
 
 template<typename T>
@@ -335,6 +359,7 @@ struct obj_with_begin_time : public T
 	obj_with_begin_time(T&& msg) : T(std::move(msg)) {restart();}
 	void restart() {restart(statistic::now());}
 	void restart(const typename statistic::stat_time& begin_time_) {begin_time = begin_time_;}
+	using T::operator =;
 	using T::swap;
 	void swap(obj_with_begin_time& other) {T::swap(other); std::swap(begin_time, other.begin_time);}
 
@@ -357,6 +382,31 @@ void do_something_to_one(_Can& __can, _Mutex& __mutex, const _Predicate& __pred)
 
 template<typename _Can, typename _Predicate>
 void do_something_to_one(_Can& __can, const _Predicate& __pred) {for (auto iter = std::begin(__can); iter != std::end(__can); ++iter) if (__pred(*iter)) break;}
+
+template<typename _Can>
+bool splice_helper(_Can& dest_can, _Can& src_can, size_t max_size = ASCS_MAX_MSG_NUM)
+{
+	if (src_can.empty())
+		return false;
+
+	auto size = dest_can.size();
+	if (size >= max_size) //dest_can cannot hold more items.
+		return false;
+
+	size = max_size - size; //maximum items can be handled this time
+	auto left_size = src_can.size();
+	if (left_size > size) //some items left behind
+	{
+		left_size -= size;
+		auto begin_iter = std::begin(src_can);
+		auto end_iter = left_size > size ? std::next(begin_iter, size) : std::prev(std::end(src_can), left_size); //minimize iterator movement
+		dest_can.splice(std::end(dest_can), src_can, begin_iter, end_iter);
+	}
+	else
+		dest_can.splice(std::end(dest_can), src_can);
+
+	return true;
+}
 
 //member functions, used to do something to any member container(except map and multimap) optionally with any member mutex
 #define DO_SOMETHING_TO_ALL_MUTEX(CAN, MUTEX) DO_SOMETHING_TO_ALL_MUTEX_NAME(do_something_to_all, CAN, MUTEX)
@@ -399,7 +449,14 @@ TYPE FUNNAME(const std::string& str, bool can_overflow = false) {return FUNNAME(
 
 #define TCP_SEND_MSG(FUNNAME, NATIVE) \
 bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) \
-	{return can_overflow || this->is_send_buffer_available() ? this->do_direct_send_msg(this->packer_->pack_msg(pstr, len, num, NATIVE)) : false;} \
+{ \
+	if (!can_overflow && !this->is_send_buffer_available()) \
+		return false; \
+	auto_duration dur(this->stat.pack_time_sum); \
+	auto msg = this->packer_->pack_msg(pstr, len, num, NATIVE); \
+	dur.end(); \
+	return this->do_direct_send_msg(std::move(msg)); \
+} \
 TCP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)
 
 //guarantee send msg successfully even if can_overflow equal to false, success at here just means putting the msg into tcp::socket's send buffer successfully
@@ -424,12 +481,10 @@ TYPE FUNNAME(const asio::ip::udp::endpoint& peer_addr, const std::string& str, b
 #define UDP_SEND_MSG(FUNNAME, NATIVE) \
 bool FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) \
 { \
-	if (can_overflow || this->is_send_buffer_available()) \
-	{ \
-		in_msg_type msg(peer_addr, this->packer_->pack_msg(pstr, len, num, NATIVE)); \
-		return this->do_direct_send_msg(std::move(msg)); \
-	} \
-	return false; \
+	if (!can_overflow && !this->is_send_buffer_available()) \
+		return false; \
+	in_msg_type msg(peer_addr, this->packer_->pack_msg(pstr, len, num, NATIVE)); \
+	return this->do_direct_send_msg(std::move(msg)); \
 } \
 UDP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)
 

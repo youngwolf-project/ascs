@@ -13,7 +13,10 @@
 #ifndef _ASCS_TCP_SOCKET_H_
 #define _ASCS_TCP_SOCKET_H_
 
+#include <vector>
+
 #include "../socket.h"
+#include "../container.h"
 
 namespace ascs { namespace tcp {
 
@@ -152,7 +155,7 @@ protected:
 		assert(asio::buffer_size(recv_buff) > 0);
 
 		asio::async_read(this->next_layer(), recv_buff,
-			[this](const auto& ec, auto bytes_transferred)->size_t {return this->unpacker_->completion_condition(ec, bytes_transferred);},
+			[this](const auto& ec, auto bytes_transferred)->size_t {auto_duration dur(this->stat.unpack_time_sum); return this->unpacker_->completion_condition(ec, bytes_transferred);},
 			this->make_handler_error_size([this](const auto& ec, auto bytes_transferred) {this->recv_handler(ec, bytes_transferred);}));
 	}
 
@@ -193,7 +196,9 @@ private:
 		if (!ec && bytes_transferred > 0)
 		{
 			typename Unpacker::container_type temp_msg_can;
+			auto_duration dur(this->stat.unpack_time_sum);
 			auto unpack_ok = unpacker_->parse_msg(bytes_transferred, temp_msg_can);
+			dur.end();
 			auto msg_num = temp_msg_can.size();
 			if (msg_num > 0)
 			{

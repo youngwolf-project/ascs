@@ -99,7 +99,7 @@ protected:
 #ifdef ASCS_CLEAR_OBJECT_INTERVAL
 		this->force_shutdown();
 #else
-		server.del_client(std::dynamic_pointer_cast<timer>(this->shared_from_this()));
+		server.del_client(this->shared_from_this());
 #endif
 		this->shutdown_state = super::shutdown_states::NONE;
 	}

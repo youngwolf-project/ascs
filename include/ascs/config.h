@@ -12,7 +12,7 @@
  * license: www.boost.org/LICENSE_1_0.txt
  *
  * Known issues:
- * 1. concurrentqueue is not a FIFO (it is by design), navigate to the following links for more deatils:
+ * 1. concurrentqueue is not a FIFO queue (it is by design), navigate to the following links for more deatils:
  *  https://github.com/cameron314/concurrentqueue/issues/6
  *  https://github.com/cameron314/concurrentqueue/issues/52
  *
@@ -67,6 +67,13 @@
  * Remove all mutex (except mutex in object_pool, service_pump, lock_queue and udp::socket).
  * Sharply simplified timer class.
  *
+ * 2016.12.6	version 1.1.4
+ * Drop unnecessary macro definition (ASIO_HAS_STD_CHRONO).
+ * Simplify header files' dependence.
+ * Add Visual C++ solution and project files (Visuall C++ 14.0).
+ * Monitor time consumptions for message packing and unpacking.
+ * Fix bug: pop_first_pending_send_msg and pop_first_pending_recv_msg cannot work.
+ *
  */
 
 #ifndef _ASCS_CONFIG_H_
@@ -76,13 +83,14 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#define ASCS_VER		10103	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.1.3"
+#define ASCS_VER		10104	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.1.4"
 
 //asio and compiler check
 #ifdef _MSC_VER
 	#define ASCS_SF "%Iu" //printing format for 'size_t'
 	static_assert(_MSC_VER >= 1900, "ascs need Visual C++ 14.0 or higher.");
+	#include <shared_mutex> //include this after compiler checking, this will gave user a more useful error message.
 	#ifdef _HAS_SHARED_MUTEX
 	#define ASCS_HAS_STD_SHARED_MUTEX
 	#endif
@@ -102,6 +110,7 @@
 	#elif __cplusplus > 201402L //TBD
 	#define ASCS_HAS_STD_SHARED_MUTEX
 	#endif
+	#include <shared_mutex> //include this after compiler checking, this will gave user a more useful error message.
 #else
 	#error ascs only support Visual C++, GCC and Clang.
 #endif

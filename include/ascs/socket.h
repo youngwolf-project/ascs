@@ -13,7 +13,6 @@
 #ifndef _ASCS_SOCKET_H_
 #define _ASCS_SOCKET_H_
 
-#include "base.h"
 #include "timer.h"
 
 namespace ascs
@@ -25,11 +24,6 @@ template<typename Socket, typename Packer, typename Unpacker, typename InMsgType
 class socket: public timer
 {
 protected:
-	typedef obj_with_begin_time<InMsgType> in_msg;
-	typedef obj_with_begin_time<OutMsgType> out_msg;
-	typedef InQueue<in_msg, InContainer<in_msg>> in_container_type;
-	typedef OutQueue<out_msg, OutContainer<out_msg>> out_container_type;
-
 	static const tid TIMER_BEGIN = timer::TIMER_END;
 	static const tid TIMER_HANDLE_MSG = TIMER_BEGIN;
 	static const tid TIMER_DISPATCH_MSG = TIMER_BEGIN + 1;
@@ -68,6 +62,11 @@ protected:
 	}
 
 public:
+	typedef obj_with_begin_time<InMsgType> in_msg;
+	typedef obj_with_begin_time<OutMsgType> out_msg;
+	typedef InQueue<in_msg, InContainer<in_msg>> in_container_type;
+	typedef OutQueue<out_msg, OutContainer<out_msg>> out_container_type;
+
 	uint_fast64_t id() const {return _id;}
 	bool is_equal_to(uint_fast64_t id) const {return _id == id;}
 
@@ -118,6 +117,11 @@ public:
 	void congestion_control(bool enable) {congestion_controlling = enable; unified_out::warning_out("%s congestion control.", enable ? "open" : "close");}
 	bool congestion_control() const {return congestion_controlling;}
 
+	//in ascs, it's thread safe to access stat without mutex, because for a specific member of stat, ascs will never access it concurrently.
+	//in other words, in a specific thread, ascs just access only one member of stat.
+	//but user can access stat out of ascs via get_statistic function, although user can only read it, there's still a potential risk,
+	//so whether it's thread safe or not depends on std::chrono::system_clock::duration.
+	//i can make it thread safe in ascs, but is it worth to do so? this is a problem.
 	const struct statistic& get_statistic() const {return stat;}
 
 	//get or change the packer at runtime
@@ -139,8 +143,8 @@ public:
 	GET_PENDING_MSG_NUM(get_pending_send_msg_num, send_msg_buffer)
 	GET_PENDING_MSG_NUM(get_pending_recv_msg_num, recv_msg_buffer)
 
-	POP_FIRST_PENDING_MSG(pop_first_pending_send_msg, send_msg_buffer, InMsgType)
-	POP_FIRST_PENDING_MSG(pop_first_pending_recv_msg, recv_msg_buffer, OutMsgType)
+	POP_FIRST_PENDING_MSG(pop_first_pending_send_msg, send_msg_buffer, in_msg)
+	POP_FIRST_PENDING_MSG(pop_first_pending_recv_msg, recv_msg_buffer, out_msg)
 
 	//clear all pending msgs
 	POP_ALL_PENDING_MSG(pop_all_pending_send_msg, send_msg_buffer, in_container_type)
@@ -195,7 +199,7 @@ protected:
 	virtual void on_all_msg_send(InMsgType& msg) {}
 #endif
 
-	//subclass notify socket the shutdown event, not thread safe
+	//subclass notify shutdown event, not thread safe
 	void close()
 	{
 		if (started_)
@@ -218,21 +222,22 @@ protected:
 		decltype(temp_msg_buffer) temp_buffer;
 		if (!temp_msg_buffer.empty() && !paused_dispatching && !congestion_controlling)
 		{
-			auto begin_time = statistic::now();
+			auto_duration(stat.handle_time_1_sum);
 			for (auto iter = std::begin(temp_msg_buffer); !paused_dispatching && !congestion_controlling && iter != std::end(temp_msg_buffer);)
 				if (on_msg(*iter))
 					temp_msg_buffer.erase(iter++);
 				else
 					temp_buffer.splice(std::end(temp_buffer), temp_msg_buffer, iter++);
-
-			stat.handle_time_1_sum += statistic::now() - begin_time;
 		}
 #else
 		auto temp_buffer(std::move(temp_msg_buffer));
 #endif
 
-		if (move_items_in(recv_msg_buffer, temp_buffer, -1) > 0)
+		if (!temp_buffer.empty())
+		{
+			recv_msg_buffer.move_items_in(temp_buffer);
 			dispatch_msg();
+		}
 
 		if (temp_msg_buffer.empty() && recv_msg_buffer.size() < ASCS_MAX_MSG_NUM)
 			do_recv_msg(); //receive msg sequentially, which means second receiving only after first receiving success
@@ -374,7 +379,7 @@ protected:
 
 	in_container_type send_msg_buffer;
 	out_container_type recv_msg_buffer;
-	list<out_msg> temp_msg_buffer;
+	std::list<out_msg> temp_msg_buffer; //the size of this list is always very small, so std::list is enough (std::list::size maybe has linear complexity)
 	//subclass will invoke handle_msg() when got some msgs. if these msgs can't be pushed into recv_msg_buffer because of:
 	// 1. msg dispatching suspended;
 	// 2. congestion control opened;
