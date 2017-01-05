@@ -14,14 +14,22 @@ else
 	dir = release
 endif
 cflag += -DASIO_STANDALONE
+
 # If your compiler detected duplicated 'shared_mutex' definition, please define ASCS_HAS_STD_SHARED_MUTEX macro:
 #cflag += -DASCS_HAS_STD_SHARED_MUTEX
 # If you used concurrent queue (https://github.com/cameron314/concurrentqueue), please define ASCS_HAS_CONCURRENT_QUEUE macro:
 #cflag += -DASCS_HAS_CONCURRENT_QUEUE
 # And guarantee header file concurrentqueue.h is reachable, for example, add its path to ext_location:
 #ext_location += -I/path of concurrent queue/
+
+kernel = ${shell uname -s}
+ifeq (${kernel}, SunOS)
+cflag += -pthreads ${ext_cflag} ${ext_location} -I../../include/
+lflag += -pthreads -lsocket -lnsl ${ext_libs}
+else
 cflag += -pthread ${ext_cflag} ${ext_location} -I../../include/
 lflag += -pthread ${ext_libs}
+endif
 
 target = ${dir}/${module}
 sources = ${shell ls *.cpp}

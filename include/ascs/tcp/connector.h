@@ -29,13 +29,12 @@ public:
 	static const timer::tid TIMER_BEGIN = super::TIMER_END;
 	static const timer::tid TIMER_CONNECT = TIMER_BEGIN;
 	static const timer::tid TIMER_ASYNC_SHUTDOWN = TIMER_BEGIN + 1;
+	static const timer::tid TIMER_HEARTBEAT_CHECK = TIMER_BEGIN + 2;
 	static const timer::tid TIMER_END = TIMER_BEGIN + 10;
 
-	connector_base(asio::io_service& io_service_) : super(io_service_), connected(false), reconnecting(true)
-		{set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
+	connector_base(asio::io_service& io_service_) : super(io_service_), connected(false), reconnecting(true) {set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
 	template<typename Arg>
-	connector_base(asio::io_service& io_service_, Arg& arg) : super(io_service_, arg), connected(false), reconnecting(true)
-		{set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
+	connector_base(asio::io_service& io_service_, Arg& arg) : super(io_service_, arg), connected(false), reconnecting(true) {set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
 
 	//reset all, be ensure that there's no any operations performed on this connector_base when invoke it
 	//notice, when reusing this connector_base, object_pool will invoke reset(), child must re-write this to initialize
@@ -162,6 +161,28 @@ protected:
 		return false;
 	}
 
+	//unit is second
+	//if macro ASCS_HEARTBEAT_INTERVAL is bigger than zero, connector_base will start a timer to call this automatically with interval equal to ASCS_HEARTBEAT_INTERVAL.
+	//otherwise, you can call check_heartbeat with you own logic, but you still need to define a valid ASCS_HEARTBEAT_MAX_ABSENCE macro, please note.
+	bool check_heartbeat(int interval)
+	{
+		assert(interval > 0);
+
+		auto now = time(nullptr);
+		if (now - this->last_interact_time >= interval) //client send heartbeat on its own initiative
+			this->send_heartbeat('c');
+
+		if (this->clean_heartbeat() > 0)
+			this->last_interact_time = now;
+		else if (now - this->last_interact_time >= interval * ASCS_HEARTBEAT_MAX_ABSENCE)
+		{
+			show_info("client link:", "broke unexpectedly.");
+			force_shutdown(this->is_shutting_down() ? reconnecting : prepare_reconnect(asio::error_code(asio::error::network_down)) >= 0);
+		}
+
+		return this->started(); //always keep this timer
+	}
+
 private:
 	bool async_shutdown_handler(timer::tid id, size_t loop_num)
 	{
@@ -192,6 +213,9 @@ private:
 			connected = reconnecting = true;
 			this->reset_state();
 			on_connect();
+			this->last_interact_time = time(nullptr);
+			if (ASCS_HEARTBEAT_INTERVAL > 0)
+				this->set_timer(TIMER_HEARTBEAT_CHECK, ASCS_HEARTBEAT_INTERVAL * 1000, [this](auto id)->bool {return this->check_heartbeat(ASCS_HEARTBEAT_INTERVAL);});
 			this->send_msg(); //send buffer may have msgs, send them
 			do_start();
 		}

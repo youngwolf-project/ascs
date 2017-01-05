@@ -148,7 +148,7 @@ public:
 
 	bool is_running() const {return !stopped();}
 	bool is_service_started() const {return started;}
-	void add_service_thread(int thread_num) {for (auto i = 0; i < thread_num; ++i) service_threads.push_back(std::thread([this]() {asio::error_code ec; this->run(ec);}));}
+	void add_service_thread(int thread_num) {for (auto i = 0; i < thread_num; ++i) service_threads.emplace_back([this]() {asio::error_code ec; this->run(ec);});}
 
 protected:
 	void do_service(int thread_num)
@@ -197,7 +197,7 @@ private:
 		assert(nullptr != i_service_);
 
 		std::unique_lock<std::shared_mutex> lock(service_can_mutex);
-		service_can.push_back(i_service_);
+		service_can.emplace_back(i_service_);
 	}
 
 protected:

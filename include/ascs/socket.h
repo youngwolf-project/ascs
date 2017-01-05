@@ -21,7 +21,7 @@ namespace ascs
 template<typename Socket, typename Packer, typename Unpacker, typename InMsgType, typename OutMsgType,
 	template<typename, typename> class InQueue, template<typename> class InContainer,
 	template<typename, typename> class OutQueue, template<typename> class OutContainer>
-class socket: public timer
+class socket : public timer
 {
 protected:
 	static const tid TIMER_BEGIN = timer::TIMER_END;
@@ -30,10 +30,22 @@ protected:
 	static const tid TIMER_DELAY_CLOSE = TIMER_BEGIN + 2;
 	static const tid TIMER_END = TIMER_BEGIN + 10;
 
-	socket(asio::io_service& io_service_) : timer(io_service_), _id(-1), next_layer_(io_service_), packer_(std::make_shared<Packer>()),
-		send_atomic(0), dispatch_atomic(0), started_(false), start_atomic(0) {reset_state();}
-	template<typename Arg> socket(asio::io_service& io_service_, Arg& arg) : timer(io_service_), _id(-1), next_layer_(io_service_, arg), packer_(std::make_shared<Packer>()),
-		send_atomic(0), dispatch_atomic(0), started_(false), start_atomic(0) {reset_state();}
+	socket(asio::io_service& io_service_) : timer(io_service_), next_layer_(io_service_) {first_init();}
+	template<typename Arg> socket(asio::io_service& io_service_, Arg& arg) : timer(io_service_), next_layer_(io_service_, arg) {first_init();}
+
+	//helper function, just call it in constructor
+	void first_init()
+	{
+		_id = -1;
+		packer_ = std::make_shared<Packer>();
+		sending = paused_sending = false;
+		dispatching = paused_dispatching = false;
+		congestion_controlling = false;
+		started_ = false;
+		send_atomic.clear(std::memory_order_relaxed);
+		dispatch_atomic.clear(std::memory_order_relaxed);
+		start_atomic.clear(std::memory_order_relaxed);
+	}
 
 	void reset()
 	{
@@ -82,18 +94,18 @@ public:
 	{
 		if (!started_)
 		{
-			scope_atomic_lock<> lock(start_atomic);
+			scope_atomic_lock lock(start_atomic);
 			if (!started_ && lock.locked())
 				started_ = do_start();
 		}
 	}
 
-	//return false if send buffer is empty or sending not allowed or io_service stopped
+	//return false if send buffer is empty or sending not allowed
 	bool send_msg()
 	{
 		if (!sending)
 		{
-			scope_atomic_lock<> lock(send_atomic);
+			scope_atomic_lock lock(send_atomic);
 			if (!sending && lock.locked())
 			{
 				sending = true;
@@ -109,12 +121,14 @@ public:
 
 	void suspend_send_msg(bool suspend) {if (!(paused_sending = suspend)) send_msg();}
 	bool suspend_send_msg() const {return paused_sending;}
+	bool is_sending_msg() const {return sending;}
 
 	//for a socket that has been shut down, resuming message dispatching will not take effect for left messages.
-	void suspend_dispatch_msg(bool suspend) {if (!(paused_dispatching = suspend) && started()) dispatch_msg();}
+	void suspend_dispatch_msg(bool suspend) {if (!(paused_dispatching = suspend)) dispatch_msg();}
 	bool suspend_dispatch_msg() const {return paused_dispatching;}
+	bool is_dispatching_msg() const {return dispatching;}
 
-	void congestion_control(bool enable) {congestion_controlling = enable; unified_out::warning_out("%s congestion control.", enable ? "open" : "close");}
+	void congestion_control(bool enable) {congestion_controlling = enable;}
 	bool congestion_control() const {return congestion_controlling;}
 
 	//in ascs, it's thread safe to access stat without mutex, because for a specific member of stat, ascs will never access it concurrently.
@@ -156,7 +170,7 @@ protected:
 	virtual void do_recv_msg() = 0;
 
 	virtual bool is_closable() {return true;}
-	virtual bool is_send_allowed() {return !paused_sending;} //can send msg or not(just put into send buffer)
+	virtual bool is_send_allowed() {return !paused_sending && !stopped();} //can send msg or not(just put into send buffer)
 
 	//generally, you don't have to rewrite this to maintain the status of connections(TCP)
 	virtual void on_send_error(const asio::error_code& ec) {unified_out::error_out("send msg error (%d %s)", ec.value(), ec.message().data());}
@@ -248,12 +262,12 @@ protected:
 		}
 	}
 
-	//return false if receiving buffer is empty or dispatching not allowed or io_service stopped
+	//return false if receiving buffer is empty or dispatching not allowed (include io_service stopped)
 	bool dispatch_msg()
 	{
 		if (!dispatching)
 		{
-			scope_atomic_lock<> lock(dispatch_atomic);
+			scope_atomic_lock lock(dispatch_atomic);
 			if (!dispatching && lock.locked())
 			{
 				dispatching = true;
@@ -267,7 +281,7 @@ protected:
 		return dispatching;
 	}
 
-	//return false if receiving buffer is empty or dispatching not allowed or io_service stopped
+	//return false if receiving buffer is empty or dispatching not allowed (include io_service stopped)
 	bool do_dispatch_msg()
 	{
 		if (paused_dispatching)
@@ -276,16 +290,15 @@ protected:
 		{
 #ifndef ASCS_DISCARD_MSG_WHEN_LINK_DOWN
 			if (!last_dispatch_msg.empty())
-			{
 				on_msg_handle(last_dispatch_msg, true);
-				last_dispatch_msg.clear();
-			}
-
-			out_msg msg;
-			typename out_container_type::lock_guard lock(recv_msg_buffer);
-			while (recv_msg_buffer.try_dequeue_(msg))
-				on_msg_handle(msg, true);
 #endif
+			typename out_container_type::lock_guard lock(recv_msg_buffer);
+#ifndef ST_ASIO_DISCARD_MSG_WHEN_LINK_DOWN
+			while (recv_msg_buffer.try_dequeue_(last_dispatch_msg))
+				on_msg_handle(last_dispatch_msg, true);
+#endif
+			recv_msg_buffer.clear();
+			last_dispatch_msg.clear();
 		}
 		else if (!last_dispatch_msg.empty() || recv_msg_buffer.try_dequeue(last_dispatch_msg))
 		{
@@ -298,12 +311,17 @@ protected:
 
 	bool do_direct_send_msg(InMsgType&& msg)
 	{
-		if (!msg.empty())
+		if (msg.empty())
+			unified_out::error_out("found an empty message, please check your packer.");
+		else
 		{
 			send_msg_buffer.enqueue(in_msg(std::move(msg)));
 			send_msg();
 		}
 
+		//even if we meet an empty message (most likely, this is because message length is too long, or insufficient memory), we still return true, why?
+		//please think about the function safe_send_(native_)msg, if we keep returning false, it will enter a dead loop.
+		//the packer provider has the responsibility to write detailed reasons down when packing message failed.
 		return true;
 	}
 
@@ -325,8 +343,13 @@ private:
 			dispatch_msg();
 			break;
 		case TIMER_DELAY_CLOSE:
-			if (!this->is_last_async_call())
+			if (!is_last_async_call())
+			{
+				stop_all_timer();
+				revive_timer(TIMER_DELAY_CLOSE);
+
 				return true;
+			}
 			else if (lowest_layer().is_open())
 			{
 				asio::error_code ec;
@@ -385,13 +408,18 @@ protected:
 	// 2. congestion control opened;
 	//ascs::socket will delay 50 milliseconds(non-blocking) to invoke handle_msg() again, and now, as you known, temp_msg_buffer is used to hold these msgs temporarily.
 
-	bool sending, paused_sending;
-	std::atomic_size_t send_atomic;
-	bool dispatching, paused_dispatching, congestion_controlling;
-	std::atomic_size_t dispatch_atomic;
+	volatile bool sending;
+	bool paused_sending;
+	std::atomic_flag send_atomic;
 
-	bool started_; //has started or not
-	std::atomic_size_t start_atomic;
+	volatile bool dispatching;
+	bool paused_dispatching;
+	std::atomic_flag dispatch_atomic;
+
+	volatile bool congestion_controlling;
+
+	volatile bool started_; //has started or not
+	std::atomic_flag start_atomic;
 
 	struct statistic stat;
 	typename statistic::stat_time recv_idle_begin_time;

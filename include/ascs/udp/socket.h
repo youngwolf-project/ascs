@@ -122,7 +122,7 @@ protected:
 	//return false if send buffer is empty or sending not allowed or io_service stopped
 	virtual bool do_send_msg()
 	{
-		if (is_send_allowed() && !this->stopped() && !this->send_msg_buffer.empty() && this->send_msg_buffer.try_dequeue(last_send_msg))
+		if (!this->send_msg_buffer.empty() && is_send_allowed() && this->send_msg_buffer.try_dequeue(last_send_msg))
 		{
 			this->stat.send_delay_sum += statistic::now() - last_send_msg.begin_time;
 
@@ -167,6 +167,7 @@ protected:
 		std::unique_lock<std::shared_mutex> lock(shutdown_mutex);
 
 		this->stop_all_timer();
+		this->close();
 
 		if (this->lowest_layer().is_open())
 		{
@@ -174,8 +175,6 @@ protected:
 			this->lowest_layer().shutdown(asio::ip::udp::socket::shutdown_both, ec);
 			this->lowest_layer().close(ec);
 		}
-
-		this->close(); //call this at the end of 'shutdown', it's very important
 	}
 
 private:
@@ -185,7 +184,7 @@ private:
 		{
 			++this->stat.recv_msg_sum;
 			this->stat.recv_byte_sum += bytes_transferred;
-			this->temp_msg_buffer.resize(this->temp_msg_buffer.size() + 1);
+			this->temp_msg_buffer.emplace_back();
 			this->temp_msg_buffer.back().swap(peer_addr, unpacker_->parse_msg(bytes_transferred));
 			this->handle_msg();
 		}

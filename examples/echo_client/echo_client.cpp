@@ -13,7 +13,11 @@
 #define ASCS_INPUT_QUEUE non_lock_queue //we will never operate sending buffer concurrently, so need no locks
 #define ASCS_INPUT_CONTAINER list
 #endif
-//configuration
+#define ASCS_HEARTBEAT_INTERVAL	0 //disable heartbeat when doing performance test
+//#define ASCS_MAX_MSG_NUM	16
+//if there's a huge number of links, please reduce messge buffer via ASCS_MAX_MSG_NUM macro.
+//please think about if we have 512 links, how much memory we can accupy at most with default ASCS_MAX_MSG_NUM?
+//it's 2 * 1024 * 1024 * 512 = 1G
 
 //use the following macro to control the type of packer and unpacker
 #define PACKER_UNPACKER_TYPE	0
@@ -32,6 +36,7 @@
 #define ASCS_DEFAULT_PACKER prefix_suffix_packer
 #define ASCS_DEFAULT_UNPACKER prefix_suffix_unpacker
 #endif
+//configuration
 
 #include <ascs/ext/tcp.h>
 using namespace ascs;
@@ -63,8 +68,8 @@ static bool check_msg;
 //   for sender, send msgs in on_msg_send() or use sending buffer limitation (like safe_send_msg(..., false)),
 //    but must not in service threads, please note.
 //
-//2. for sender, if responses are available (like pingpong test), send msgs in on_msg()/on_msg_handle().
-//    this will reduce IO throughput, because SOCKET's sliding window is not fully used, pleae note.
+//2. for sender, if responses are available (like pingpong test), send msgs in on_msg()/on_msg_handle(),
+//    but this will reduce IO throughput because SOCKET's sliding window is not fully used, pleae note.
 //
 //test_client chose method #1
 
@@ -281,15 +286,16 @@ void send_msg_randomly(echo_client& client, size_t msg_num, size_t msg_len, char
 	printf("speed: %.0f(*2)kB/s.\n", total_msg_bytes / begin_time.elapsed() / 1024);
 }
 
-//use up to 16 (hard code) worker threads to send messages concurrently
-void send_msg_concurrently(echo_client& client, size_t msg_num, size_t msg_len, char msg_fill)
+//use up to a specific worker threads to send messages concurrently
+void send_msg_concurrently(echo_client& client, size_t send_thread_num, size_t msg_num, size_t msg_len, char msg_fill)
 {
 	check_msg = true;
 	auto link_num = client.size();
-	auto group_num = std::min((size_t) 16, link_num);
+	auto group_num = std::min(send_thread_num, link_num);
 	auto group_link_num = link_num / group_num;
 	auto left_link_num = link_num - group_num * group_link_num;
-	uint64_t total_msg_bytes = msg_num * msg_len * link_num;
+	uint64_t total_msg_bytes = link_num * msg_len;
+	total_msg_bytes *= msg_num;
 
 	auto group_index = (size_t) -1;
 	size_t this_group_link_num = 0;
@@ -309,13 +315,13 @@ void send_msg_concurrently(echo_client& client, size_t msg_num, size_t msg_len, 
 		}
 
 		--this_group_link_num;
-		link_groups[group_index].push_back(item);
+		link_groups[group_index].emplace_back(item);
 	});
 
 	cpu_timer begin_time;
 	std::list<std::thread> threads;
 	do_something_to_all(link_groups, [&threads, msg_num, msg_len, msg_fill](const auto& item) {
-		threads.push_back(std::thread([&item, msg_num, msg_len, msg_fill]() {
+		threads.emplace_back([&item, msg_num, msg_len, msg_fill]() {
 			auto buff = new char[msg_len];
 			memset(buff, msg_fill, msg_len);
 			for (size_t i = 0; i < msg_num; ++i)
@@ -326,7 +332,7 @@ void send_msg_concurrently(echo_client& client, size_t msg_num, size_t msg_len, 
 				do_something_to_all(item, [buff, msg_len](const auto& item2) {item2->safe_send_msg(buff, msg_len);}); //can_overflow is false, it's important
 			}
 			delete[] buff;
-		}));
+		});
 	});
 
 	unsigned percent = 0;
@@ -342,17 +348,16 @@ void send_msg_concurrently(echo_client& client, size_t msg_num, size_t msg_len, 
 			fflush(stdout);
 		}
 	} while (100 != percent);
+	do_something_to_all(threads, [](auto& t) {t.join();});
 	begin_time.stop();
 
 	printf("\r100%%\ntime spent statistics: %f seconds.\n", begin_time.elapsed());
 	printf("speed: %.0f(*2)kB/s.\n", total_msg_bytes / begin_time.elapsed() / 1024);
-
-	do_something_to_all(threads, [](auto& t) {t.join();});
 }
 
 int main(int argc, const char* argv[])
 {
-	printf("usage: %s [<service thread number=1> [<port=%d> [<ip=%s> [link num=16]]]]\n", argv[0], ASCS_SERVER_PORT, ASCS_SERVER_IP);
+	printf("usage: %s [<service thread number=1> [<send thread number=8> [<port=%d> [<ip=%s> [link num=16]]]]]\n", argv[0], ASCS_SERVER_PORT, ASCS_SERVER_IP);
 	if (argc >= 2 && (0 == strcmp(argv[1], "--help") || 0 == strcmp(argv[1], "-h")))
 		return 0;
 	else
@@ -360,8 +365,8 @@ int main(int argc, const char* argv[])
 
 	///////////////////////////////////////////////////////////
 	size_t link_num = 16;
-	if (argc > 4)
-		link_num = std::min(ASCS_MAX_OBJECT_NUM, std::max(atoi(argv[4]), 1));
+	if (argc > 5)
+		link_num = std::min(ASCS_MAX_OBJECT_NUM, std::max(atoi(argv[5]), 1));
 
 	printf("exec: %s with " ASCS_SF " links\n", argv[0], link_num);
 	///////////////////////////////////////////////////////////
@@ -371,10 +376,10 @@ int main(int argc, const char* argv[])
 	//echo client means to cooperate with echo server while doing performance test, it will not send msgs back as echo server does,
 	//otherwise, dead loop will occur, network resource will be exhausted.
 
-//	argv[2] = "::1" //ipv6
-//	argv[2] = "127.0.0.1" //ipv4
-	unsigned short port = argc > 2 ? atoi(argv[2]) : ASCS_SERVER_PORT;
-	std::string ip = argc > 3 ? argv[3] : ASCS_SERVER_IP;
+//	argv[4] = "::1" //ipv6
+//	argv[4] = "127.0.0.1" //ipv4
+	std::string ip = argc > 4 ? argv[4] : ASCS_SERVER_IP;
+	unsigned short port = argc > 3 ? atoi(argv[3]) : ASCS_SERVER_PORT;
 
 	//method #1, create and add clients manually.
 	auto client_ptr = client.create_object();
@@ -386,11 +391,15 @@ int main(int argc, const char* argv[])
 	//method #2, add clients first without any arguments, then set the server address.
 	for (size_t i = 1; i < link_num / 2; ++i)
 		client.add_client();
-	client.do_something_to_all([argv, port, &ip](const auto& item) {item->set_server_addr(port, ip);});
+	client.do_something_to_all([port, &ip](const auto& item) {item->set_server_addr(port, ip);});
 
 	//method #3, add clients and set server address in one invocation.
 	for (auto i = std::max((size_t) 1, link_num / 2); i < link_num; ++i)
 		client.add_client(port, ip);
+
+	size_t send_thread_num = 8;
+	if (argc > 2)
+		send_thread_num = (size_t) std::max(1, std::min(16, atoi(argv[2])));
 
 	auto thread_num = 1;
 	if (argc > 1)
@@ -462,6 +471,7 @@ int main(int argc, const char* argv[])
 			size_t msg_len = 1024; //must greater than or equal to sizeof(size_t)
 			auto msg_fill = '0';
 			char model = 0; //0 broadcast, 1 randomly pick one link per msg
+			auto repeat_times = 1;
 
 			auto parameters = split_string(str);
 			auto iter = std::begin(parameters);
@@ -479,6 +489,7 @@ int main(int argc, const char* argv[])
 #endif
 			if (iter != std::end(parameters)) msg_fill = *iter++->data();
 			if (iter != std::end(parameters)) model = *iter++->data() - '0';
+			if (iter != std::end(parameters)) repeat_times = std::max(atoi(iter++->data()), 1);
 
 			if (0 != model && 1 != model)
 			{
@@ -488,19 +499,22 @@ int main(int argc, const char* argv[])
 
 			printf("test parameters after adjustment: " ASCS_SF " " ASCS_SF " %c %d\n", msg_num, msg_len, msg_fill, model);
 			puts("performance test begin, this application will have no response during the test!");
-
-			client.clear_status();
+			for (int i = 0; i < repeat_times; ++i)
+			{
+				printf("thie is the %d / %d test.\n", i + 1, repeat_times);
+				client.clear_status();
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
-			if (0 == model)
-				send_msg_one_by_one(client, msg_num, msg_len, msg_fill);
-			else
-				puts("if ASCS_WANT_MSG_SEND_NOTIFY defined, only support model 0!");
+				if (0 == model)
+					send_msg_one_by_one(client, msg_num, msg_len, msg_fill);
+				else
+					puts("if ASCS_WANT_MSG_SEND_NOTIFY defined, only support model 0!");
 #else
-			if (0 == model)
-				send_msg_concurrently(client, msg_num, msg_len, msg_fill);
-			else
-				send_msg_randomly(client, msg_num, msg_len, msg_fill);
+				if (0 == model)
+					send_msg_concurrently(client, send_thread_num, msg_num, msg_len, msg_fill);
+				else
+					send_msg_randomly(client, msg_num, msg_len, msg_fill);
 #endif
+			}
 		}
 	}
 

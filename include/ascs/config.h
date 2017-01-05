@@ -70,9 +70,23 @@
  * 2016.12.6	version 1.1.4
  * Drop unnecessary macro definition (ASIO_HAS_STD_CHRONO).
  * Simplify header files' dependence.
- * Add Visual C++ solution and project files (Visuall C++ 14.0).
+ * Add Visual C++ solution and project files (Visual C++ 14.0).
  * Monitor time consumptions for message packing and unpacking.
  * Fix bug: pop_first_pending_send_msg and pop_first_pending_recv_msg cannot work.
+ *
+ * 2017.1.1		version 1.1.5
+ * Support heartbeat (via OOB data), see ASCS_HEARTBEAT_INTERVAL macro for more details.
+ * Support scatter-gather buffers when receiving messages, this feature needs modification of i_unpacker, you must explicitly define
+ *  ASCS_SCATTERED_RECV_BUFFER macro to open it, this is just for compatibility.
+ * Simplify lock-free mechanism and use std::atomic_flag instead of std::atomic_size_t.
+ * Optimize container insertion (use series of emplace functions instead).
+ * Demo echo_client support alterable number of sending thread (before, it's a hard code 16).
+ * Fix bug: In extreme cases, messages may get starved in receive buffer and will not be dispatched until arrival of next message.
+ * Fix bug: In extreme cases, messages may get starved in send buffer and will not be sent until arrival of next message.
+ * Fix bug: Sometimes, connector_base cannot reconnect to the server after link broken.
+ *
+ * known issues:
+ * 1. heartbeat mechanism cannot work properly between windows (at least win-10) and Ubuntu (at least Ubuntu-16.04).
  *
  */
 
@@ -83,8 +97,8 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#define ASCS_VER		10104	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.1.4"
+#define ASCS_VER		10105	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.1.5"
 
 //asio and compiler check
 #ifdef _MSC_VER
@@ -227,7 +241,7 @@ static_assert(ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION > 0, "graceful shutdown durati
 
 //how many async_accept delivery concurrently
 #ifndef ASCS_ASYNC_ACCEPT_NUM
-#define ASCS_ASYNC_ACCEPT_NUM	1
+#define ASCS_ASYNC_ACCEPT_NUM	16
 #endif
 static_assert(ASCS_ASYNC_ACCEPT_NUM > 0, "async accept number must be bigger than zero.");
 
@@ -281,6 +295,24 @@ template<typename T> using concurrent_queue = moodycamel::ConcurrentQueue<T>;
 //we also can control the queues (and their containers) via template parameters on calss 'connector_base'
 //'server_socket_base', 'ssl::connector_base' and 'ssl::server_socket_base'.
 //we even can let a socket to use different queue (and / or different container) for input and output via template parameters.
+
+//#define ASCS_SCATTERED_RECV_BUFFER
+//define this macro will let ascs to support scatter-gather buffers when doing async read,
+//it's very useful under certain situations (for example, you're using ring buffer in unpacker).
+
+#ifndef ASCS_HEARTBEAT_INTERVAL
+#define ASCS_HEARTBEAT_INTERVAL	5 //second(s)
+#endif
+//at every ASCS_HEARTBEAT_INTERVAL second(s), send an OOB data (heartbeat) if no normal messages been sent,
+//less than or equal to zero means disable heartbeat, then you can send and check heartbeat with you own logic by calling connector_base::check_heartbeat
+// or server_socket_base::check_heartbeat, and you still need to define a valid ASCS_HEARTBEAT_MAX_ABSENCE macro, please note.
+
+
+#ifndef ASCS_HEARTBEAT_MAX_ABSENCE
+#define ASCS_HEARTBEAT_MAX_ABSENCE	3 //times of ASCS_HEARTBEAT_INTERVAL
+#endif
+static_assert(ASCS_HEARTBEAT_MAX_ABSENCE > 0, "heartbeat absence must be bigger than zero.");
+//if no any data (include heartbeats) been received within ASCS_HEARTBEAT_INTERVAL * ASCS_HEARTBEAT_MAX_ABSENCE second(s), shut down the link.
 //configurations
 
 #endif /* _ASCS_CONFIG_H_ */

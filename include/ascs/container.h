@@ -70,6 +70,8 @@ public:
 
 	void push_front(const _Ty& _Val) {++s; impl.push_front(_Val);}
 	void push_front(_Ty&& _Val) {++s; impl.push_front(std::move(_Val));}
+	template<class... _Valty>
+	void emplace_front(_Valty&&... _Val) {++s; impl.emplace_front(std::forward<_Valty>(_Val)...);}
 	void pop_front() {--s; impl.pop_front();}
 	reference front() {return impl.front();}
 	iterator begin() {return impl.begin();}
@@ -80,6 +82,8 @@ public:
 
 	void push_back(const _Ty& _Val) {++s; impl.push_back(_Val);}
 	void push_back(_Ty&& _Val) {++s; impl.push_back(std::move(_Val));}
+	template<class... _Valty>
+	void emplace_back(_Valty&&... _Val) {++s; impl.emplace_back(std::forward<_Valty>(_Val)...);}
 	void pop_back() {--s; impl.pop_back();}
 	reference back() {return impl.back();}
 	iterator end() {return impl.end();}
@@ -143,8 +147,8 @@ private:
 //Container must at least has the following functions:
 // Container() and Container(size_t) constructor
 // move constructor
+// size_approx (must be thread safe, but doesn't have to be coherent)
 // swap
-// size_approx
 // enqueue(const T& item)
 // enqueue(T&& item)
 // try_dequeue(T& item)
@@ -161,9 +165,8 @@ public:
 
 	size_t size() const {return this->size_approx();}
 	bool empty() const {return 0 == size();}
-
-	//not thread-safe
-	void clear() {super(std::move(*this));}
+	void clear() {super(std::move(*this));} //not thread-safe
+	using Container::swap;
 
 	void move_items_in(std::list<T>& can) {move_items_in_(can);}
 
@@ -175,12 +178,12 @@ public:
 
 //Container must at least has the following functions:
 // Container() and Container(size_t) constructor
-// size
-// empty
+// size (must be thread safe, but doesn't have to be coherent, std::list before gcc 5 doesn't meet this requirement, ascs::list does)
+// empty (must be thread safe, but doesn't have to be coherent)
 // clear
 // swap
-// push_back(const T& item)
-// push_back(T&& item)
+// emplace_back(const T& item)
+// emplace_back(T&& item)
 // splice(Container::const_iterator, std::list<T>&), after this, std::list<T> must be empty
 // front
 // pop_front
@@ -195,13 +198,19 @@ public:
 	queue() {}
 	queue(size_t size) : super(size) {}
 
+	using Container::size;
+	using Container::clear;
+	using Container::swap;
+
+	//thread safe
 	bool enqueue(const T& item) {typename Lockable::lock_guard lock(*this); return enqueue_(item);}
 	bool enqueue(T&& item) {typename Lockable::lock_guard lock(*this); return enqueue_(std::move(item));}
 	void move_items_in(std::list<T>& can) {typename Lockable::lock_guard lock(*this); move_items_in_(can);}
 	bool try_dequeue(T& item) {typename Lockable::lock_guard lock(*this); return try_dequeue_(item);}
 
-	bool enqueue_(const T& item) {this->push_back(item); return true;}
-	bool enqueue_(T&& item) {this->push_back(std::move(item)); return true;}
+	//not thread safe
+	bool enqueue_(const T& item) {this->emplace_back(item); return true;}
+	bool enqueue_(T&& item) {this->emplace_back(std::move(item)); return true;}
 	void move_items_in_(std::list<T>& can) {this->splice(std::end(*this), can);}
 	bool try_dequeue_(T& item) {if (this->empty()) return false; item.swap(this->front()); this->pop_front(); return true;}
 };

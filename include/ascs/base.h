@@ -17,6 +17,7 @@
 #include <stdarg.h>
 
 #include <list>
+#include <vector>
 #include <chrono>
 #include <memory>
 #include <string>
@@ -32,21 +33,19 @@
 namespace ascs
 {
 
-template<typename atomic_type = std::atomic_size_t>
 class scope_atomic_lock : public asio::detail::noncopyable
 {
 public:
-	scope_atomic_lock(atomic_type& atomic_) : added(false), atomic(atomic_) {lock();} //atomic_ must has been initialized to zero
+	scope_atomic_lock(std::atomic_flag& atomic_) : _locked(false), atomic(atomic_) {lock();} //atomic_ must has been initialized with false
 	~scope_atomic_lock() {unlock();}
 
-	void lock() {if (!added) _locked = 1 == ++atomic; added = true;}
-	void unlock() {if (added) --atomic; _locked = false, added = false;}
+	void lock() {if (!_locked) _locked = !atomic.test_and_set(std::memory_order_acq_rel);}
+	void unlock() {if (_locked) atomic.clear(std::memory_order_release); _locked = false;}
 	bool locked() const {return _locked;}
 
 private:
-	bool added;
 	bool _locked;
-	atomic_type& atomic;
+	std::atomic_flag& atomic;
 };
 
 class service_pump;
@@ -180,6 +179,11 @@ namespace tcp
 	public:
 		typedef MsgType msg_type;
 		typedef const msg_type msg_ctype;
+#ifdef ASCS_SCATTERED_RECV_BUFFER
+		typedef std::vector<asio::mutable_buffers_1> buffer_type;
+#else
+		typedef asio::mutable_buffers_1 buffer_type;
+#endif
 		typedef std::list<msg_type> container_type;
 
 	protected:
@@ -189,7 +193,7 @@ namespace tcp
 		virtual void reset_state() = 0;
 		virtual bool parse_msg(size_t bytes_transferred, container_type& msg_can) = 0;
 		virtual size_t completion_condition(const asio::error_code& ec, size_t bytes_transferred) = 0;
-		virtual asio::mutable_buffers_1 prepare_next_recv() = 0;
+		virtual buffer_type prepare_next_recv() = 0;
 	};
 } //namespace
 
@@ -218,6 +222,7 @@ namespace udp
 	public:
 		typedef MsgType msg_type;
 		typedef const msg_type msg_ctype;
+		typedef asio::mutable_buffers_1 buffer_type;
 		typedef std::list<udp_msg<msg_type>> container_type;
 
 	protected:
@@ -226,7 +231,7 @@ namespace udp
 	public:
 		virtual void reset_state() {}
 		virtual msg_type parse_msg(size_t bytes_transferred) = 0;
-		virtual asio::mutable_buffers_1 prepare_next_recv() = 0;
+		virtual buffer_type prepare_next_recv() = 0;
 	};
 } //namespace
 //unpacker concept
@@ -433,7 +438,7 @@ template<typename _Predicate> void NAME(const _Predicate& __pred) const {for (au
 //used by both TCP and UDP
 #define SAFE_SEND_MSG_CHECK \
 { \
-	if (!this->is_send_allowed() || this->stopped()) return false; \
+	if (!this->is_send_allowed()) return false; \
 	std::this_thread::sleep_for(std::chrono::milliseconds(50)); \
 }
 

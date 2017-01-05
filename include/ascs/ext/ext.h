@@ -100,7 +100,7 @@ inline std::list<std::string> split_string(const std::string& str) //delimiters 
 		{
 			if (std::string::npos != start_pos)
 			{
-				re.push_back(str.substr(start_pos, pos - start_pos));
+				re.emplace_back(std::next(str.data(), start_pos), pos - start_pos);
 				start_pos = std::string::npos;
 			}
 		}
@@ -109,7 +109,7 @@ inline std::list<std::string> split_string(const std::string& str) //delimiters 
 	}
 
 	if (std::string::npos != start_pos)
-		re.push_back(str.substr(start_pos));
+		re.emplace_back(std::next(str.data(), start_pos), str.size() - start_pos);
 
 	return re;
 }

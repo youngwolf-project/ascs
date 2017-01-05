@@ -3,7 +3,6 @@
 
 //configuration
 #define ASCS_SERVER_PORT		9527
-#define ASCS_ASYNC_ACCEPT_NUM	5
 //#define ASCS_FORCE_TO_USE_MSG_RECV_BUFFER //force to use the msg recv buffer
 #define ASCS_ENHANCED_STABILITY
 //#define ASCS_DEFAULT_PACKER replaceable_packer<>

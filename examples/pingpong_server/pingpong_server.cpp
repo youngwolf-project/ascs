@@ -3,7 +3,6 @@
 
 //configuration
 #define ASCS_SERVER_PORT		9527
-#define ASCS_ASYNC_ACCEPT_NUM	5
 #define ASCS_REUSE_OBJECT //use objects pool
 #define ASCS_DELAY_CLOSE		5 //define this to avoid hooks for async call (and slightly improve efficiency)
 //#define ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
@@ -16,6 +15,7 @@
 //
 //if pingpong_client send message in on_msg_send(), then using non_lock_queue as input queue in pingpong_server will lead
 //undefined behavior, please note.
+#define ASCS_HEARTBEAT_INTERVAL	0 //disable heartbeat when doing performance test
 #define ASCS_DEFAULT_UNPACKER stream_unpacker //non-protocol
 //configuration
 
@@ -42,8 +42,8 @@ using namespace ascs::ext::tcp;
 //   for sender, send msgs in on_msg_send() or use sending buffer limitation (like safe_send_msg(..., false)),
 //    but must not in service threads, please note.
 //
-//2. for sender, if responses are available (like pingpong test), send msgs in on_msg()/on_msg_handle().
-//    this will reduce IO throughput, because SOCKET's sliding window is not fully used, pleae note.
+//2. for sender, if responses are available (like pingpong test), send msgs in on_msg()/on_msg_handle(),
+//    but this will reduce IO throughput because SOCKET's sliding window is not fully used, pleae note.
 //
 //pingpong_server chose method #1
 //BTW, if pingpong_client chose method #2, then pingpong_server can work properly without any congestion control,
@@ -64,9 +64,12 @@ protected:
 	{
 		auto re = direct_send_msg(std::move(msg));
 		if (!re)
-			congestion_control(true);
+		{
 			//cannot handle (send it back) this msg timely, begin congestion control
 			//'msg' will be put into receiving buffer, and be dispatched via on_msg_handle() in the future
+			congestion_control(true);
+			//unified_out::warning_out("open congestion control."); //too many prompts will affect efficiency
+		}
 
 		return re;
 	}
@@ -75,9 +78,12 @@ protected:
 	{
 		auto re = direct_send_msg(std::move(msg));
 		if (re)
-			congestion_control(false);
+		{
 			//successfully handled the only one msg in receiving buffer, end congestion control
 			//subsequent msgs will be dispatched via on_msg() again.
+			congestion_control(false);
+			//unified_out::warning_out("close congestion control."); //too many prompts will affect efficiency
+		}
 
 		return re;
 	}
