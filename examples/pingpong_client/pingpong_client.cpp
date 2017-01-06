@@ -10,7 +10,6 @@
 #define ASCS_MSG_BUFFER_SIZE 65536
 #define ASCS_INPUT_QUEUE non_lock_queue //we will never operate sending buffer concurrently, so need no locks
 #define ASCS_INPUT_CONTAINER list
-#define ASCS_HEARTBEAT_INTERVAL	0 //disable heartbeat when doing performance test
 #define ASCS_DEFAULT_UNPACKER stream_unpacker //non-protocol
 //configuration
 

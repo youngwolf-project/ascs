@@ -12,6 +12,7 @@
 //sent to file_client, so sending buffer will always be empty, which means we will never operate sending buffer concurrently,
 //so need no locks.
 #define ASCS_INPUT_CONTAINER list
+#define ASCS_HEARTBEAT_INTERVAL	5
 #define ASCS_DEFAULT_PACKER	replaceable_packer<>
 //configuration
 

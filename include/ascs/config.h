@@ -87,6 +87,8 @@
  *
  * known issues:
  * 1. heartbeat mechanism cannot work properly between windows (at least win-10) and Ubuntu (at least Ubuntu-16.04).
+ * 2. UDP doesn't support heartbeat because UDP doesn't support OOB data.
+ * 3. SSL doesn't support heartbeat (maybe I missed an option, I'm not familiar with SSL).
  *
  */
 
@@ -301,18 +303,21 @@ template<typename T> using concurrent_queue = moodycamel::ConcurrentQueue<T>;
 //it's very useful under certain situations (for example, you're using ring buffer in unpacker).
 
 #ifndef ASCS_HEARTBEAT_INTERVAL
-#define ASCS_HEARTBEAT_INTERVAL	5 //second(s)
+#define ASCS_HEARTBEAT_INTERVAL	0 //second(s), disable heartbeat by default, just for compatibility
 #endif
-//at every ASCS_HEARTBEAT_INTERVAL second(s), send an OOB data (heartbeat) if no normal messages been sent,
-//less than or equal to zero means disable heartbeat, then you can send and check heartbeat with you own logic by calling connector_base::check_heartbeat
-// or server_socket_base::check_heartbeat, and you still need to define a valid ASCS_HEARTBEAT_MAX_ABSENCE macro, please note.
-
+//at every ASCS_HEARTBEAT_INTERVAL second(s):
+// 1. connector_base will send an OOB data (heartbeat) if no normal messages been sent not received within this interval,
+// 2. server_socket_base will try to recieve all OOB data (heartbeat) which has been recieved by system.
+// 3. both endpoints will check the link's connectedness, see ASCS_HEARTBEAT_MAX_ABSENCE macro for more details.
+//less than or equal to zero means disable heartbeat, then you can send and check heartbeat with you own logic by calling
+//connector_base::check_heartbeat or server_socket_base::check_heartbeat, and you still need a valid ASCS_HEARTBEAT_MAX_ABSENCE, please note.
 
 #ifndef ASCS_HEARTBEAT_MAX_ABSENCE
 #define ASCS_HEARTBEAT_MAX_ABSENCE	3 //times of ASCS_HEARTBEAT_INTERVAL
 #endif
 static_assert(ASCS_HEARTBEAT_MAX_ABSENCE > 0, "heartbeat absence must be bigger than zero.");
-//if no any data (include heartbeats) been received within ASCS_HEARTBEAT_INTERVAL * ASCS_HEARTBEAT_MAX_ABSENCE second(s), shut down the link.
+//if no any messages been sent or received, nor any heartbeats been received within
+//ASCS_HEARTBEAT_INTERVAL * ASCS_HEARTBEAT_MAX_ABSENCE second(s), shut down the link.
 //configurations
 
 #endif /* _ASCS_CONFIG_H_ */

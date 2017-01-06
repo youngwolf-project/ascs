@@ -29,7 +29,7 @@ udp解包器必须实现这个接口。
 
 2. 类
 scope_atomic_lock：
-功能与std::scope_lock一致，只是它执行atomic的++和--操作，而不是调用mutex的lock和unlock。
+功能与std::scope_lock一致，只是它是lock-free的，用原子操作代替了mutex操作。
 
 dummy_packer:
 仅仅提供发送消息的类型以便通过编译，无法真正的打包，所以只能通过direct_send_msg等发送消息。

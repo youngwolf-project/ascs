@@ -8,7 +8,6 @@
 							  //any value which is bigger than zero is okay.
 #define ASCS_FORCE_TO_USE_MSG_RECV_BUFFER //force to use the msg recv buffer
 #define ASCS_CUSTOM_LOG
-#define ASCS_HEARTBEAT_INTERVAL	0 //disable heartbeat just because echo_server disabled heartbeat.
 #define ASCS_DEFAULT_UNPACKER	non_copy_unpacker
 //#define ASCS_DEFAULT_UNPACKER	stream_unpacker
 

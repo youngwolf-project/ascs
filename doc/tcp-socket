@@ -17,10 +17,12 @@ protected:
 	enum shutdown_states {NONE, FORCE, GRACEFUL};
 
 	socket_base(asio::io_service& io_service_);
-
 	template<typename Arg>
 	socket_base(asio::io_service& io_service_, Arg& arg);
 ssl使用。
+
+	void first_init();
+构造时调用，仅仅是为了节省代码量而已，因为我们有两个构造函数都将调用它。
 
 public:
 	virtual bool obsoleted();
@@ -32,8 +34,8 @@ public:
 	void reset_state();
 重载父类同名函数，重置自己的状态之后，调用父类同名函数。
 
-	bool is_closing() const;
-是否正在优雅关闭套接字，此时不再发送消息（如果发送会出错，因为已经关闭了自己的数据发送），但继续接收消息。
+	bool is_shutting_down() const {return shutdown_states::NONE != shutdown_state;}
+是否正在优雅关闭套接字，此时不再发送消息（如果发送则会出错，因为已经关闭了自己的数据发送），但继续接收消息。
 
 	std::shared_ptr<i_unpacker<out_msg_type>> inner_unpacker();
 	std::shared_ptr<const i_unpacker<out_msg_type>> inner_unpacker() const;
@@ -63,19 +65,6 @@ safe系列函数，在on_msg和om_msg_handle里面调用时需要特别谨慎，
 	bool safe_send_native_msg(const char* pstr, size_t len, bool can_overflow = false);
 	bool safe_send_native_msg(const std::string& str, bool can_overflow = false);
 	bool safe_send_native_msg(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false);
-同上，只是以native为true调用i_packer::pack_msg接口。
-
-	bool post_msg(const char* pstr, size_t len, bool can_overflow = false);
-	bool post_msg(const std::string& str, bool can_overflow = false);
-	bool post_msg(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false);
-同send_msg，只是它永远能马上成功。
-注意：如果消息发送缓存溢出了（当然can_overflow得为false，否则不检测缓存是否溢出），则暂停消息派发（进而也会停止消息接收，
-因为不派发只接收消息，迟早会让消息接收缓存满而暂停消息接收，如果不使用消息接收缓存，则马上暂停消息接收）。
-post_msg和send_msg的区别请看st_socket里面的post_msg_buffer和send_msg_buffer。
-
-	bool post_native_msg(const char* pstr, size_t len, bool can_overflow = false);
-	bool post_native_msg(const std::string& str, bool can_overflow = false);
-	bool post_native_msg(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false);
 同上，只是以native为true调用i_packer::pack_msg接口。
 
 protected:
@@ -109,6 +98,10 @@ protected:
 关闭套接字，停止所有定时器，直接派发所有剩余消息，最后启动一个定时器，如果定义了ASCS_ENHANCED_STABILITY宏，则这个将周期性的检测
 当前套接字是否可以安全地被重用或释放，如果未定义，则简单的在ASCS_DELAY_CLOSE秒后认为当前大量接字可被安全地重用或释放。
 
+	int clean_heartbeat();
+读取所有OOB数据，返回读到的OOB数据长度。
+
+private:
 	void recv_handler(const error_code& ec, size_t bytes_transferred);
 收到数据时后asio回调。
 
@@ -116,12 +109,15 @@ protected:
 成功发送消息（写入底层套接字）后由asio回调。
 
 protected:
-	typename super::in_container_type last_send_msg;
+	list<typename super::in_msg> last_send_msg;
 	std::shared_ptr<i_unpacker<out_msg_type>> unpacker_;
 
-	shutdown_states shutdown_state;
-	std::atomic_size_t shutdown_atomic;
+	volatile shutdown_states shutdown_state;
+	std::atomic_flag shutdown_atomic;
 让shutdown函数线程安全。
+
+	time_t last_interact_time;
+上次交互时间，包括成功发送数据，成功接收数据和OOB数据，用于断线检测。
 };
 
 }} //namespace

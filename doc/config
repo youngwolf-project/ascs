@@ -135,7 +135,7 @@ static_assert(ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION > 0, "graceful shutdown durati
 
 //how many async_accept delivery concurrently
 #ifndef ASCS_ASYNC_ACCEPT_NUM
-#define ASCS_ASYNC_ACCEPT_NUM	1
+#define ASCS_ASYNC_ACCEPT_NUM	16
 #endif
 static_assert(ASCS_ASYNC_ACCEPT_NUM > 0, "async accept number must be bigger than zero.");
 同时投递多少个async_accept。
@@ -195,4 +195,22 @@ ascs默认提供了三种消息队列供你选择，一是concurrent queue，它
 可以参看ascs::lock_free_queue，ascs::non_lock_queue及ascs::lock_queue，需要支持两个模板参数。
 容器需要实现一些特定的接口（队列需要调用），可以参看moodycamel::ConcurrentQueue以及ascs::list，需要支持一个模板参数，至于确切的需要实现哪些接口，
 因不同的队列而不同，最好的办法就是编译，让编译器告诉你缺少哪些接口，接口从名称上就可以看出其作用，非常清晰。
+
+//#define ASCS_SCATTERED_RECV_BUFFER
+是否支持scatter-gather缓存，即一次提供多个不连续的缓存用于接收消息，如果你使用了ring buffer，相信你知道我在说什么。
+
+#ifndef ASCS_HEARTBEAT_INTERVAL
+#define ASCS_HEARTBEAT_INTERVAL	5 //second(s)
+#endif
+发送心跳包间隔，在此间隔中，如果有消息被接收或者被成功发送，将不会发送心跳包，直到下一个间隔再发。
+心跳包通过OOB通道实现。注意，从linux发送心跳包到windows，接收方会把心跳包当成普通的数据而造成解包失败，原因未知。
+如果想关闭心跳包，定义这个宏为0即可，此时你仍然可以以自己的逻辑来发送接收心跳包，并判断连接的有效性，只需要你调用connector_base::check_heartbeat或者
+server_socket_base::check_heartbeat即可，非常简单。
+
+#ifndef ASCS_HEARTBEAT_MAX_ABSENCE
+#define ASCS_HEARTBEAT_MAX_ABSENCE	3 //times of ASCS_HEARTBEAT_INTERVAL
+#endif
+static_assert(ASCS_HEARTBEAT_MAX_ABSENCE > 0, "heartbeat absence must be bigger than zero.");
+在ASCS_HEARTBEAT_INTERVAL * ASCS_HEARTBEAT_MAX_ABSENCE秒之内，如果没有任何数据收发，也没有收到心跳包，连接被认为是意外中断。注意，即便你自己调用
+connector_base::check_heartbeat或者server_socket_base::check_heartbeat，这个宏仍然需要，所以它必须大于0。
 //configurations

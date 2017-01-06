@@ -15,7 +15,6 @@
 //
 //if pingpong_client send message in on_msg_send(), then using non_lock_queue as input queue in pingpong_server will lead
 //undefined behavior, please note.
-#define ASCS_HEARTBEAT_INTERVAL	0 //disable heartbeat when doing performance test
 #define ASCS_DEFAULT_UNPACKER stream_unpacker //non-protocol
 //configuration
 
