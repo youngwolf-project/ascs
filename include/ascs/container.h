@@ -116,7 +116,7 @@ public:
 	}
 
 private:
-	size_type s;
+	volatile size_type s;
 	_Mybase impl;
 };
 #endif

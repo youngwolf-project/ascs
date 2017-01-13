@@ -241,11 +241,11 @@ void send_msg_one_by_one(echo_client& client, size_t msg_num, size_t msg_len, ch
 			printf("\r%u%%", percent);
 			fflush(stdout);
 		}
-	} while (100 != percent);
+	} while (percent < 100);
 	begin_time.stop();
 
-	printf("\r100%%\ntime spent statistics: %f seconds.\n", begin_time.elapsed());
-	printf("speed: %.0f(*2)kB/s.\n", total_msg_bytes / begin_time.elapsed() / 1024);
+	printf("\ntime spent statistics: %f seconds.\n", begin_time.elapsed());
+	printf("speed: %f(*2) MBps.\n", total_msg_bytes / begin_time.elapsed() / 1024 / 1024);
 }
 
 void send_msg_randomly(echo_client& client, size_t msg_num, size_t msg_len, char msg_fill)
@@ -275,14 +275,14 @@ void send_msg_randomly(echo_client& client, size_t msg_num, size_t msg_len, char
 		}
 	}
 
-	while(client.get_recv_bytes() != total_msg_bytes)
+	while(client.get_recv_bytes() < total_msg_bytes)
 		std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
 	begin_time.stop();
 	delete[] buff;
 
-	printf("\r100%%\ntime spent statistics: %f seconds.\n", begin_time.elapsed());
-	printf("speed: %.0f(*2)kB/s.\n", total_msg_bytes / begin_time.elapsed() / 1024);
+	printf("\ntime spent statistics: %f seconds.\n", begin_time.elapsed());
+	printf("speed: %f(*2) MBps.\n", total_msg_bytes / begin_time.elapsed() / 1024 / 1024);
 }
 
 //use up to a specific worker threads to send messages concurrently
@@ -346,12 +346,12 @@ void send_msg_concurrently(echo_client& client, size_t send_thread_num, size_t m
 			printf("\r%u%%", percent);
 			fflush(stdout);
 		}
-	} while (100 != percent);
+	} while (percent < 100);
 	do_something_to_all(threads, [](auto& t) {t.join();});
 	begin_time.stop();
 
-	printf("\r100%%\ntime spent statistics: %f seconds.\n", begin_time.elapsed());
-	printf("speed: %.0f(*2)kB/s.\n", total_msg_bytes / begin_time.elapsed() / 1024);
+	printf("\ntime spent statistics: %f seconds.\n", begin_time.elapsed());
+	printf("speed: %f(*2) MBps.\n", total_msg_bytes / begin_time.elapsed() / 1024 / 1024);
 }
 
 int main(int argc, const char* argv[])
@@ -403,13 +403,9 @@ int main(int argc, const char* argv[])
 	auto thread_num = 1;
 	if (argc > 1)
 		thread_num = std::min(16, std::max(thread_num, atoi(argv[1])));
-#ifdef ASCS_CLEAR_OBJECT_INTERVAL
-	if (1 == thread_num)
-		++thread_num;
 	//add one thread will seriously impact IO throughput when doing performance benchmark, this is because the business logic is very simple (send original messages back,
 	//or just add up total message size), under this scenario, just one service thread without receiving buffer will obtain the best IO throughput.
 	//the server has such behavior too.
-#endif
 
 	sp.start_service(thread_num);
 	while(sp.is_running())
@@ -500,7 +496,7 @@ int main(int argc, const char* argv[])
 			puts("performance test begin, this application will have no response during the test!");
 			for (int i = 0; i < repeat_times; ++i)
 			{
-				printf("thie is the %d / %d test.\n", i + 1, repeat_times);
+				printf("this is the %d / %d test.\n", i + 1, repeat_times);
 				client.clear_status();
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
 				if (0 == model)
