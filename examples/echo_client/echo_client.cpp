@@ -354,6 +354,29 @@ void send_msg_concurrently(echo_client& client, size_t send_thread_num, size_t m
 	printf("speed: %f(*2) MBps.\n", total_msg_bytes / begin_time.elapsed() / 1024 / 1024);
 }
 
+static bool is_testing;
+void start_test(int repeat_times, char model, echo_client& client, size_t send_thread_num, size_t msg_num, size_t msg_len, char msg_fill)
+{
+	for (int i = 0; i < repeat_times; ++i)
+	{
+		printf("this is the %d / %d test.\n", i + 1, repeat_times);
+		client.clear_status();
+#ifdef ASCS_WANT_MSG_SEND_NOTIFY
+		if (0 == model)
+			send_msg_one_by_one(client, msg_num, msg_len, msg_fill);
+		else
+			puts("if ASCS_WANT_MSG_SEND_NOTIFY defined, only support model 0!");
+#else
+		if (0 == model)
+			send_msg_concurrently(client, send_thread_num, msg_num, msg_len, msg_fill);
+		else
+			send_msg_randomly(client, msg_num, msg_len, msg_fill);
+#endif
+	}
+
+	is_testing = false;
+}
+
 int main(int argc, const char* argv[])
 {
 	printf("usage: %s [<service thread number=1> [<send thread number=8> [<port=%d> [<ip=%s> [link num=16]]]]]\n", argv[0], ASCS_SERVER_PORT, ASCS_SERVER_IP);
@@ -487,28 +510,16 @@ int main(int argc, const char* argv[])
 			if (iter != std::end(parameters)) repeat_times = std::max(atoi(iter++->data()), 1);
 
 			if (0 != model && 1 != model)
-			{
 				puts("unrecognized model!");
-				continue;
-			}
-
-			printf("test parameters after adjustment: " ASCS_SF " " ASCS_SF " %c %d\n", msg_num, msg_len, msg_fill, model);
-			puts("performance test begin, this application will have no response during the test!");
-			for (int i = 0; i < repeat_times; ++i)
+			else if (is_testing)
+				puts("testing has not finished yet!");
+			else
 			{
-				printf("this is the %d / %d test.\n", i + 1, repeat_times);
-				client.clear_status();
-#ifdef ASCS_WANT_MSG_SEND_NOTIFY
-				if (0 == model)
-					send_msg_one_by_one(client, msg_num, msg_len, msg_fill);
-				else
-					puts("if ASCS_WANT_MSG_SEND_NOTIFY defined, only support model 0!");
-#else
-				if (0 == model)
-					send_msg_concurrently(client, send_thread_num, msg_num, msg_len, msg_fill);
-				else
-					send_msg_randomly(client, msg_num, msg_len, msg_fill);
-#endif
+				printf("test parameters after adjustment: " ASCS_SF " " ASCS_SF " %c %d\n", msg_num, msg_len, msg_fill, model);
+				puts("performance test begin, this application will have no response during the test!");
+
+				is_testing = true;
+				std::thread([=, &client]() {start_test(repeat_times, model, client, send_thread_num, msg_num, msg_len, msg_fill);}).detach();
 			}
 		}
 	}
