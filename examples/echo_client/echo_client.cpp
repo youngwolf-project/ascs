@@ -435,7 +435,14 @@ int main(int argc, const char* argv[])
 	{
 		std::string str;
 		std::getline(std::cin, str);
-		if (QUIT_COMMAND == str)
+		if (str.empty())
+			continue;
+		else if (is_testing)
+		{
+			puts("testing has not finished yet!");
+			continue;
+		}
+		else if (QUIT_COMMAND == str)
 			sp.stop_service();
 		else if (RESTART_COMMAND == str)
 		{
@@ -455,7 +462,7 @@ int main(int argc, const char* argv[])
 			client.do_something_to_all([](const auto& item) {item->suspend_dispatch_msg(false);});
 		else if (LIST_ALL_CLIENT == str)
 			client.list_all_object();
-		else if (!str.empty())
+		else
 		{
 			if ('+' == str[0] || '-' == str[0])
 			{
@@ -511,8 +518,6 @@ int main(int argc, const char* argv[])
 
 			if (0 != model && 1 != model)
 				puts("unrecognized model!");
-			else if (is_testing)
-				puts("testing has not finished yet!");
 			else
 			{
 				printf("test parameters after adjustment: " ASCS_SF " " ASCS_SF " %c %d\n", msg_num, msg_len, msg_fill, model);
