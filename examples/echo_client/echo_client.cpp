@@ -365,7 +365,10 @@ void start_test(int repeat_times, char model, echo_client& client, size_t send_t
 		if (0 == model)
 			send_msg_one_by_one(client, msg_num, msg_len, msg_fill);
 		else
+		{
 			puts("if ASCS_WANT_MSG_SEND_NOTIFY defined, only support model 0!");
+			break;
+		}
 #else
 		if (0 == model)
 			send_msg_concurrently(client, send_thread_num, msg_num, msg_len, msg_fill);
@@ -436,19 +439,7 @@ int main(int argc, const char* argv[])
 		std::string str;
 		std::getline(std::cin, str);
 		if (str.empty())
-			continue;
-		else if (is_testing)
-		{
-			puts("testing has not finished yet!");
-			continue;
-		}
-		else if (QUIT_COMMAND == str)
-			sp.stop_service();
-		else if (RESTART_COMMAND == str)
-		{
-			sp.stop_service();
-			sp.start_service(thread_num);
-		}
+			;
 		else if (LIST_STATUS == str)
 		{
 			printf("link #: " ASCS_SF ", valid links: " ASCS_SF ", invalid links: " ASCS_SF "\n", client.size(), client.valid_size(), client.invalid_object_size());
@@ -462,6 +453,15 @@ int main(int argc, const char* argv[])
 			client.do_something_to_all([](const auto& item) {item->suspend_dispatch_msg(false);});
 		else if (LIST_ALL_CLIENT == str)
 			client.list_all_object();
+		else if (is_testing)
+			puts("testing has not finished yet!");
+		else if (QUIT_COMMAND == str)
+			sp.stop_service();
+		else if (RESTART_COMMAND == str)
+		{
+			sp.stop_service();
+			sp.start_service(thread_num);
+		}
 		else
 		{
 			if ('+' == str[0] || '-' == str[0])
