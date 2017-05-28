@@ -4,7 +4,7 @@
 类：
 
 list：
-一个size()复杂为O(1)的链表类，如果std::list：：size（）已经是复杂度为O(1)了，则它就是std::list的别名，只是省略了第二个参数，
+一个size()复杂为O(1)的链表类，如果std::list::size()已经是复杂度为O(1)了，则它就是std::list的别名，只是省略了第二个参数，
 否则将基于std::list实现一个链表，保证size()有O(1)复杂度。
 
 dummy_lockable：
@@ -29,15 +29,3 @@ template<typename T, typename Container> using non_lock_queue = queue<T, Contain
 
 template<typename T, typename Container> using lock_queue = queue<T, Container, lockable>;
 有锁安全队列。
-
-方法：
-template<typename Q>
-size_t move_items_in(Q& dest, Q& other, size_t max_size = ASCS_MAX_MSG_NUM)
-移动队列里项，不会拷贝。
-
-template<typename Q, typename Q2>
-size_t move_items_in(Q& dest, Q2& other, size_t max_size = ASCS_MAX_MSG_NUM)
-移动队列里项，不会拷贝。
-
-splice_helper：
-拼接两个list，并且将结果（size()）限制在一个指定的大小之内。

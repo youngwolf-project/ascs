@@ -20,7 +20,11 @@ namespace ascs
 
 //ascs requires that container must take one and only one template argument.
 #if defined(_MSC_VER) || defined(__clang__) || __GNUC__ >= 5
-template<typename T> using list = std::list<T>;
+	#ifdef ASCS_HAS_TEMPLATE_USING
+	template<typename T> using list = std::list<T>;
+	#else
+	template<typename T> class list : public std::list<T> {};
+	#endif
 #else
 //a substitute of std::list (before gcc 5), it's size() function has O(1) complexity
 //BTW, the naming rule is not mine, I copied them from std::list in Visual C++ 14.0
@@ -66,6 +70,7 @@ public:
 		}
 	}
 	void clear() {s = 0; impl.clear();}
+	iterator erase(iterator _Where) {--s; return impl.erase(_Where);} //just satisfy old compilers (for example gcc 4.7)
 	iterator erase(const_iterator _Where) {--s; return impl.erase(_Where);}
 
 	void push_front(const _Ty& _Val) {++s; impl.push_front(_Val);}
@@ -92,7 +97,10 @@ public:
 	const_iterator end() const {return impl.end();}
 	const_reverse_iterator rend() const {return impl.rend();}
 
+	void splice(iterator _Where, _Mybase& _Right) {s += _Right.size(); impl.splice(_Where, _Right);} //just satisfy old compilers (for example gcc 4.7)
 	void splice(const_iterator _Where, _Mybase& _Right) {s += _Right.size(); impl.splice(_Where, _Right);}
+	//please add corresponding overloads which take non-const iterators for following 5 functions,
+	//i didn't provide them because ascs doesn't use them and it violated the standard, just some old compilers need them.
 	void splice(const_iterator _Where, _Mybase& _Right, const_iterator _First) {++s; impl.splice(_Where, _Right, _First);}
 	void splice(const_iterator _Where, _Mybase& _Right, const_iterator _First, const_iterator _Last)
 	{
@@ -141,7 +149,7 @@ public:
 	void unlock() {mutex.unlock();}
 
 private:
-	std::shared_mutex mutex;
+	std::mutex mutex; //std::mutex is more efficient than std::shared_(timed_)mutex
 };
 
 //Container must at least has the following functions:
@@ -157,22 +165,20 @@ class lock_free_queue : public Container, public dummy_lockable
 {
 public:
 	typedef T data_type;
-	typedef Container super;
-	typedef lock_free_queue<T, Container> me;
 
 	lock_free_queue() {}
-	lock_free_queue(size_t size) : super(size) {}
+	lock_free_queue(size_t capacity) : Container(capacity) {}
 
 	size_t size() const {return this->size_approx();}
 	bool empty() const {return 0 == size();}
-	void clear() {super(std::move(*this));} //not thread-safe
+	void clear() {Container(std::move(*this));} //not thread-safe
 	using Container::swap;
 
 	void move_items_in(std::list<T>& can) {move_items_in_(can);}
 
 	bool enqueue_(const T& item) {return this->enqueue(item);}
 	bool enqueue_(T&& item) {return this->enqueue(std::move(item));}
-	void move_items_in_(std::list<T>& can) {do_something_to_all(can, [this](auto& item) {this->enqueue(std::move(item));}); can.clear();}
+	void move_items_in_(std::list<T>& can) {do_something_to_all(can, [this](T& item) {this->enqueue(std::move(item));}); can.clear();}
 	bool try_dequeue_(T& item) {return this->try_dequeue(item);}
 };
 
@@ -192,11 +198,9 @@ class queue : public Container, public Lockable
 {
 public:
 	typedef T data_type;
-	typedef Container super;
-	typedef queue<T, Container, Lockable> me;
 
 	queue() {}
-	queue(size_t size) : super(size) {}
+	queue(size_t capacity) : Container(capacity) {}
 
 	using Container::size;
 	using Container::clear;
@@ -215,8 +219,23 @@ public:
 	bool try_dequeue_(T& item) {if (this->empty()) return false; item.swap(this->front()); this->pop_front(); return true;}
 };
 
+#ifdef ASCS_HAS_TEMPLATE_USING
 template<typename T, typename Container> using non_lock_queue = queue<T, Container, dummy_lockable>; //totally not thread safe
 template<typename T, typename Container> using lock_queue = queue<T, Container, lockable>;
+#else
+template<typename T, typename Container> class non_lock_queue : public queue<T, Container, dummy_lockable> //totally not thread safe
+{
+public:
+	non_lock_queue() {}
+	non_lock_queue(size_t capacity) : queue<T, Container, dummy_lockable>(capacity) {}
+};
+template<typename T, typename Container> class lock_queue : public queue<T, Container, lockable>
+{
+public:
+	lock_queue() {}
+	lock_queue(size_t capacity) : queue<T, Container, lockable>(capacity) {}
+};
+#endif
 
 } //namespace
 

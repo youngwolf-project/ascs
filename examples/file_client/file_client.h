@@ -2,12 +2,13 @@
 #ifndef FILE_CLIENT_H_
 #define FILE_CLIENT_H_
 
-#include "../file_server/packer_unpacker.h"
 #include <ascs/ext/tcp.h>
 using namespace ascs;
 using namespace ascs::tcp;
 using namespace ascs::ext;
 using namespace ascs::ext::tcp;
+
+#include "unpacker.h"
 
 extern std::atomic_ushort completed_client_num;
 extern int link_num;
@@ -25,8 +26,8 @@ public:
 	void set_index(int index_) {index = index_;}
 	fl_type get_rest_size() const
 	{
-		auto unpacker = std::dynamic_pointer_cast<const data_unpacker>(inner_unpacker());
-		return nullptr == unpacker ? 0 : unpacker->get_rest_size();
+		auto unpacker = std::dynamic_pointer_cast<const data_unpacker>(this->unpacker());
+		return unpacker ? unpacker->get_rest_size() : 0;
 	}
 	operator fl_type() const {return get_rest_size();}
 
@@ -75,8 +76,20 @@ protected:
 #endif
 	//we will change unpacker at runtime, this operation can only be done in on_msg(), reset() or constructor,
 	//so we must guarantee all messages to be handled in on_msg()
-	//virtual bool on_msg_handle(out_msg_type& msg, bool link_down) {handle_msg(msg); return true;}
+	//virtual bool on_msg_handle(out_msg_type& msg) {handle_msg(msg); return true;}
 	//msg handling end
+
+	virtual void on_connect()
+	{
+		uint_fast64_t id = index;
+		char buffer[ORDER_LEN + sizeof(uint_fast64_t)];
+
+		*buffer = 3; //head
+		memcpy(std::next(buffer, ORDER_LEN), &id, sizeof(uint_fast64_t));
+		send_msg(buffer, sizeof(buffer), true);
+
+		connector::on_connect();
+	}
 
 private:
 	void clear()
@@ -88,7 +101,7 @@ private:
 			file = nullptr;
 		}
 
-		inner_unpacker(std::make_shared<ASCS_DEFAULT_UNPACKER>());
+		unpacker(std::make_shared<ASCS_DEFAULT_UNPACKER>());
 	}
 	void trans_end() {clear(); ++completed_client_num;}
 
@@ -140,7 +153,7 @@ private:
 						send_msg(buffer, sizeof(buffer), true);
 
 						fseeko(file, offset, SEEK_SET);
-						inner_unpacker(std::make_shared<data_unpacker>(file, my_length));
+						unpacker(std::make_shared<data_unpacker>(file, my_length));
 					}
 					else
 						trans_end();
@@ -172,20 +185,21 @@ public:
 	void start()
 	{
 		begin_time.restart();
-		set_timer(UPDATE_PROGRESS, 50, [this](auto id)->bool {return this->update_progress_handler(id, -1);});
+		set_timer(UPDATE_PROGRESS, 50, [this](tid id)->bool {return this->update_progress_handler(id, -1);});
 	}
 
 	void stop(const std::string& file_name)
 	{
 		stop_timer(UPDATE_PROGRESS);
+		update_progress_handler(UPDATE_PROGRESS, 0);
 		printf("\ntransfer %s end, speed: %f MBps.\n", file_name.data(), file_size / begin_time.elapsed() / 1024 / 1024);
 	}
 
 	fl_type get_total_rest_size()
 	{
 		fl_type total_rest_size = 0;
-		do_something_to_all([&total_rest_size](const auto& item) {total_rest_size += *item;});
-//		do_something_to_all([&total_rest_size](const auto& item) {total_rest_size += item->get_rest_size();});
+		do_something_to_all([&total_rest_size](object_ctype& item) {total_rest_size += *item;});
+//		do_something_to_all([&total_rest_size](object_ctype& item) {total_rest_size += item->get_rest_size();});
 
 		return total_rest_size;
 	}
@@ -196,19 +210,16 @@ private:
 		assert(UPDATE_PROGRESS == id);
 
 		auto total_rest_size = get_total_rest_size();
-		if (total_rest_size > 0)
+		auto new_percent = (unsigned) ((file_size - total_rest_size) * 100 / file_size);
+		if (last_percent != new_percent)
 		{
-			auto new_percent = (unsigned) ((file_size - total_rest_size) * 100 / file_size);
-			if (last_percent != new_percent)
-			{
-				printf("\r%u%%", new_percent);
-				fflush(stdout);
+			printf("\r%u%%", new_percent);
+			fflush(stdout);
 
-				this->update_timer_info(id, 50, [new_percent, this](auto id)->bool {return this->update_progress_handler(id, new_percent);});
-			}
+			this->update_timer_info(id, 50, [new_percent, this](tid id)->bool {return this->update_progress_handler(id, new_percent);});
 		}
 
-		return true;
+		return total_rest_size > 0;
 	}
 
 protected:

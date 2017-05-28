@@ -26,13 +26,13 @@ namespace ascs
 {
 
 //timers are identified by id.
-//for the same timer in the same timer, any manipulations are not thread safe, please pay special attention.
-//to resolve this defect, we must add a mutex member variable to timer_info, it's not worth
+//for the same timer in the same timer object, any manipulations are not thread safe, please pay special attention.
+//to resolve this defect, we must add a mutex member variable to timer_info, it's not worth. otherwise, they are thread safe.
 //
-//suppose you have more than one service thread(see service_pump for service thread number control), then:
-//for same timer: same timer, on_timer is called sequentially
-//for same timer: distinct timer, on_timer is called concurrently
-//for distinct timer: on_timer is always called concurrently
+//suppose you have more than one service thread(see service_pump for service thread number controlling), then:
+//for same timer object: same timer, on_timer is called in sequence
+//for same timer object: distinct timer, on_timer is called concurrently
+//for distinct timer object: on_timer is always called concurrently
 class timer : public object
 {
 public:
@@ -53,7 +53,7 @@ public:
 		tid id;
 		timer_status status;
 		size_t interval_ms;
-		std::function<bool(tid)> call_back;
+		std::function<bool(tid)> call_back; //return true from call_back to continue the timer, or the timer will stop
 		std::shared_ptr<timer_type> timer;
 
 		timer_info() : id(0), status(TIMER_FAKE), interval_ms(0) {}
@@ -62,7 +62,7 @@ public:
 	typedef const timer_info timer_cinfo;
 	typedef std::vector<timer_info> container_type;
 
-	timer(asio::io_service& _io_service_) : object(_io_service_), timer_can(256) {tid id = -1; do_something_to_all([&id](auto& item) {item.id = ++id;});}
+	timer(asio::io_service& _io_service_) : object(_io_service_), timer_can(256) {tid id = -1; do_something_to_all([&id](timer_info& item) {item.id = ++id;});}
 
 	void update_timer_info(tid id, size_t interval, std::function<bool(tid)>&& call_back, bool start = false)
 	{
@@ -108,22 +108,26 @@ public:
 	}
 
 	timer_info find_timer(tid id) const {return timer_can[id];}
+	bool is_timer(tid id) const {return timer_info::TIMER_OK == timer_can[id].status;}
 	void stop_timer(tid id) {stop_timer(timer_can[id]);}
-	void stop_all_timer() {do_something_to_all([this](auto& item) {this->stop_timer(item);});}
+	void stop_all_timer() {do_something_to_all([this](timer_info& item) {this->stop_timer(item);});}
+	void stop_all_timer(tid excepted_id) {do_something_to_all([=](timer_info& item) {if (excepted_id != item.id) this->stop_timer(item);});}
 
 	DO_SOMETHING_TO_ALL(timer_can)
 	DO_SOMETHING_TO_ONE(timer_can)
 
 protected:
-	void reset() {object::reset();}
-
-	void start_timer(timer_cinfo& ti)
+	void start_timer(timer_info& ti)
 	{
 		assert(timer_info::TIMER_OK == ti.status);
 
 		ti.timer->expires_from_now(milliseconds(ti.interval_ms));
-		//return true from call_back to continue the timer, or the timer will stop
-		ti.timer->async_wait(make_handler_error([this, &ti](const auto& ec) {if (!ec && ti.call_back(ti.id) && timer_info::TIMER_OK == ti.status) this->start_timer(ti);}));
+		ti.timer->async_wait(make_handler_error([this, &ti](const asio::error_code& ec) {
+			if (!ec && ti.call_back(ti.id) && timer_info::TIMER_OK == ti.status)
+				this->start_timer(ti);
+			else
+				ti.status = timer_info::TIMER_CANCELED;
+		}));
 	}
 
 	void stop_timer(timer_info& ti)
@@ -136,6 +140,7 @@ protected:
 		}
 	}
 
+protected:
 	container_type timer_can;
 
 private:

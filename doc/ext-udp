@@ -1,3 +1,3 @@
 ﻿
 提供了对ASCS_DEFAULT_PACKER和ASCS_DEFAULT_UDP_UNPACKER宏的支持。
-提供了不带模板参数的udp_socket, udp_sservice和udp_service。
+提供了不带模板参数的ext::udp::socket, ext::udp::service和ext::udp::service。

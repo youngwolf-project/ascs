@@ -23,9 +23,6 @@ template<typename Socket>
 class single_socket_service : public service_pump::i_service, public Socket
 {
 public:
-	using Socket::TIMER_BEGIN;
-	using Socket::TIMER_END;
-
 	single_socket_service(service_pump& service_pump_) : i_service(service_pump_), Socket(service_pump_) {}
 	template<typename Arg>
 	single_socket_service(service_pump& service_pump_, Arg& arg) : i_service(service_pump_), Socket(service_pump_, arg) {}
@@ -39,16 +36,13 @@ template<typename Socket, typename Pool>
 class multi_socket_service : public Pool
 {
 protected:
-	using Pool::TIMER_BEGIN;
-	using Pool::TIMER_END;
-
 	multi_socket_service(service_pump& service_pump_) : Pool(service_pump_) {}
 	template<typename Arg>
 	multi_socket_service(service_pump& service_pump_, const Arg& arg) : Pool(service_pump_, arg) {}
 
 	virtual bool init()
 	{
-		this->do_something_to_all([](const auto& item) {item->reset(); item->start();});
+		this->do_something_to_all([](typename Pool::object_ctype& item) {item->reset(); item->start();});
 		this->start();
 		return true;
 	}

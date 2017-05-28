@@ -73,7 +73,7 @@ protected:
 		return re;
 	}
 
-	virtual bool on_msg_handle(out_msg_type& msg, bool link_down)
+	virtual bool on_msg_handle(out_msg_type& msg)
 	{
 		auto re = direct_send_msg(std::move(msg));
 		if (re)
@@ -88,7 +88,7 @@ protected:
 	}
 #else
 	//if we used receiving buffer, congestion control will become much simpler, like this:
-	virtual bool on_msg_handle(out_msg_type& msg, bool link_down) {return direct_send_msg(std::move(msg));}
+	virtual bool on_msg_handle(out_msg_type& msg) {return direct_send_msg(std::move(msg));}
 #endif
 	//msg handling end
 };
@@ -101,13 +101,13 @@ public:
 	statistic get_statistic()
 	{
 		statistic stat;
-		do_something_to_all([&stat](const auto& item) {stat += item->get_statistic();});
+		do_something_to_all([&stat](object_ctype& item) {stat += item->get_statistic();});
 
 		return stat;
 	}
 
 protected:
-	virtual bool on_accept(object_ctype& client_ptr) {asio::ip::tcp::no_delay option(true); client_ptr->lowest_layer().set_option(option); return true;}
+	virtual bool on_accept(object_ctype& socket_ptr) {asio::ip::tcp::no_delay option(true); socket_ptr->lowest_layer().set_option(option); return true;}
 };
 
 int main(int argc, const char* argv[])

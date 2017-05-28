@@ -69,7 +69,7 @@ protected:
 #ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
 	virtual bool on_msg(out_msg_type& msg) {handle_msg(msg); return true;}
 #endif
-	virtual bool on_msg_handle(out_msg_type& msg, bool link_down) {handle_msg(msg); return true;}
+	virtual bool on_msg_handle(out_msg_type& msg) {handle_msg(msg); return true;}
 
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
 	//congestion control, method #1, the peer needs its own congestion control too.
@@ -119,12 +119,12 @@ public:
 	statistic get_statistic()
 	{
 		statistic stat;
-		do_something_to_all([&stat](const auto& item) {stat += item->get_statistic();});
+		do_something_to_all([&stat](object_ctype& item) {stat += item->get_statistic();});
 
 		return stat;
 	}
 
-	void begin(size_t msg_num, const char* msg, size_t msg_len) {do_something_to_all([=](const auto& item) {item->begin(msg_num, msg, msg_len);});}
+	void begin(size_t msg_num, const char* msg, size_t msg_len) {do_something_to_all([=](object_ctype& item) {item->begin(msg_num, msg, msg_len);});}
 };
 
 int main(int argc, const char* argv[])
@@ -159,7 +159,7 @@ int main(int argc, const char* argv[])
 	//the server has such behavior too.
 
 	for (size_t i = 0; i < link_num; ++i)
-		client.add_client(port, ip);
+		client.add_socket(port, ip);
 
 	sp.start_service(thread_num);
 	while(sp.is_running())
@@ -199,8 +199,7 @@ int main(int argc, const char* argv[])
 				std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
 			uint64_t total_msg_bytes = link_num; total_msg_bytes *= msg_len; total_msg_bytes *= msg_num;
-			printf("time spent statistics: %f seconds.\n", begin_time.elapsed());
-			printf("speed: %f(*2) MBps.\n", total_msg_bytes / begin_time.elapsed() / 1024 / 1024);
+			printf("finished in %f seconds, speed: %f(*2) MBps.\n", begin_time.elapsed(), total_msg_bytes / begin_time.elapsed() / 1024 / 1024);
 
 			delete[] init_msg;
 		}

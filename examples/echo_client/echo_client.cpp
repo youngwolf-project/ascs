@@ -9,10 +9,6 @@
 //#define ASCS_CLEAR_OBJECT_INTERVAL 1
 //#define ASCS_WANT_MSG_SEND_NOTIFY
 #define ASCS_FULL_STATISTIC //full statistic will slightly impact efficiency
-#ifdef ASCS_WANT_MSG_SEND_NOTIFY
-#define ASCS_INPUT_QUEUE non_lock_queue //we will never operate sending buffer concurrently, so need no locks
-#define ASCS_INPUT_CONTAINER list
-#endif
 //#define ASCS_MAX_MSG_NUM	16
 //if there's a huge number of links, please reduce messge buffer via ASCS_MAX_MSG_NUM macro.
 //please think about if we have 512 links, how much memory we can accupy at most with default ASCS_MAX_MSG_NUM?
@@ -29,11 +25,20 @@
 #define ASCS_DEFAULT_PACKER replaceable_packer<>
 #define ASCS_DEFAULT_UNPACKER replaceable_unpacker<>
 #elif 2 == PACKER_UNPACKER_TYPE
+#undef ASCS_HEARTBEAT_INTERVAL
+#define ASCS_HEARTBEAT_INTERVAL	0 //not support heartbeat
 #define ASCS_DEFAULT_PACKER fixed_length_packer
 #define ASCS_DEFAULT_UNPACKER fixed_length_unpacker
 #elif 3 == PACKER_UNPACKER_TYPE
+#undef ASCS_HEARTBEAT_INTERVAL
+#define ASCS_HEARTBEAT_INTERVAL	0 //not support heartbeat
 #define ASCS_DEFAULT_PACKER prefix_suffix_packer
 #define ASCS_DEFAULT_UNPACKER prefix_suffix_unpacker
+#endif
+
+#if defined(ASCS_WANT_MSG_SEND_NOTIFY) && (!defined(ASCS_HEARTBEAT_INTERVAL) || ASCS_HEARTBEAT_INTERVAL <= 0)
+#define ASCS_INPUT_QUEUE non_lock_queue //we will never operate sending buffer concurrently, so need no locks
+#define ASCS_INPUT_CONTAINER list
 #endif
 //configuration
 
@@ -51,8 +56,6 @@ using namespace ascs::ext::tcp;
 #define RESTART_COMMAND	"restart"
 #define LIST_ALL_CLIENT	"list_all_client"
 #define LIST_STATUS		"status"
-#define SUSPEND_COMMAND	"suspend"
-#define RESUME_COMMAND	"resume"
 
 static bool check_msg;
 
@@ -90,10 +93,10 @@ public:
 	echo_socket(asio::io_service& io_service_) : connector(io_service_), recv_bytes(0), recv_index(0)
 	{
 #if 2 == PACKER_UNPACKER_TYPE
-		std::dynamic_pointer_cast<ASCS_DEFAULT_UNPACKER>(inner_unpacker())->fixed_length(1024);
+		std::dynamic_pointer_cast<ASCS_DEFAULT_UNPACKER>(unpacker())->fixed_length(1024);
 #elif 3 == PACKER_UNPACKER_TYPE
-		std::dynamic_pointer_cast<ASCS_DEFAULT_PACKER>(inner_packer())->prefix_suffix("begin", "end");
-		std::dynamic_pointer_cast<ASCS_DEFAULT_UNPACKER>(inner_unpacker())->prefix_suffix("begin", "end");
+		std::dynamic_pointer_cast<ASCS_DEFAULT_PACKER>(packer())->prefix_suffix("begin", "end");
+		std::dynamic_pointer_cast<ASCS_DEFAULT_UNPACKER>(unpacker())->prefix_suffix("begin", "end");
 #endif
 	}
 
@@ -120,7 +123,7 @@ protected:
 	//this virtual function doesn't exists if ASCS_FORCE_TO_USE_MSG_RECV_BUFFER been defined
 	virtual bool on_msg(out_msg_type& msg) {handle_msg(msg); return true;}
 #endif
-	virtual bool on_msg_handle(out_msg_type& msg, bool link_down) {handle_msg(msg); return true;}
+	virtual bool on_msg_handle(out_msg_type& msg) {handle_msg(msg); return true;}
 	//msg handling end
 
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
@@ -130,8 +133,8 @@ protected:
 		if (0 == --msg_num)
 			return;
 
-		auto pstr = inner_packer()->raw_data(msg);
-		auto msg_len = inner_packer()->raw_data_len(msg);
+		auto pstr = packer()->raw_data(msg);
+		auto msg_len = packer()->raw_data_len(msg);
 
 		size_t send_index;
 		memcpy(&send_index, pstr, sizeof(size_t));
@@ -167,8 +170,8 @@ public:
 	uint64_t get_recv_bytes()
 	{
 		uint64_t total_recv_bytes = 0;
-		do_something_to_all([&total_recv_bytes](const auto& item) {total_recv_bytes += *item;});
-//		do_something_to_all([&total_recv_bytes](const auto& item) {total_recv_bytes += item->get_recv_bytes();});
+		do_something_to_all([&total_recv_bytes](object_ctype& item) {total_recv_bytes += *item;});
+//		do_something_to_all([&total_recv_bytes](object_ctype& item) {total_recv_bytes += item->get_recv_bytes();});
 
 		return total_recv_bytes;
 	}
@@ -176,13 +179,13 @@ public:
 	statistic get_statistic()
 	{
 		statistic stat;
-		do_something_to_all([&stat](const auto& item) {stat += item->get_statistic();});
+		do_something_to_all([&stat](object_ctype& item) {stat += item->get_statistic();});
 
 		return stat;
 	}
 
-	void clear_status() {do_something_to_all([](const auto& item) {item->clear_status();});}
-	void begin(size_t msg_num, size_t msg_len, char msg_fill) {do_something_to_all([=](const auto& item) {item->begin(msg_num, msg_len, msg_fill);});}
+	void clear_status() {do_something_to_all([](object_ctype& item) {item->clear_status();});}
+	void begin(size_t msg_num, size_t msg_len, char msg_fill) {do_something_to_all([=](object_ctype& item) {item->begin(msg_num, msg_len, msg_fill);});}
 
 	void shutdown_some_client(size_t n)
 	{
@@ -196,20 +199,20 @@ public:
 			//notice: these methods need to define ASCS_CLEAR_OBJECT_INTERVAL macro, because it just shut down the socket,
 			//not really remove them from object pool, this will cause echo_client still send data via them, and wait responses from them.
 			//for this scenario, the smaller ASCS_CLEAR_OBJECT_INTERVAL macro is, the better experience you will get, so set it to 1 second.
-		case 0: do_something_to_one([&n](const auto& item) {return n-- > 0 ? item->graceful_shutdown(), false : true;});				break;
-		case 1: do_something_to_one([&n](const auto& item) {return n-- > 0 ? item->graceful_shutdown(false, false), false : true;});	break;
-		case 2: do_something_to_one([&n](const auto& item) {return n-- > 0 ? item->force_shutdown(), false : true;});					break;
+		case 0: do_something_to_one([&n](object_ctype& item) {return n-- > 0 ? item->graceful_shutdown(), false : true;});				break;
+		case 1: do_something_to_one([&n](object_ctype& item) {return n-- > 0 ? item->graceful_shutdown(false, false), false : true;});	break;
+		case 2: do_something_to_one([&n](object_ctype& item) {return n-- > 0 ? item->force_shutdown(), false : true;});					break;
 #else
 			//method #2
-			//this is a equivalence of calling i_server::del_client in server_socket_base::on_recv_error(see server_socket_base for more details).
+			//this is a equivalence of calling i_server::del_socket in server_socket_base::on_recv_error(see server_socket_base for more details).
 		case 0: while (n-- > 0) graceful_shutdown(at(0));			break;
 		case 1: while (n-- > 0) graceful_shutdown(at(0), false);	break;
 		case 2: while (n-- > 0) force_shutdown(at(0));				break;
 #endif
 			//if you just want to reconnect to the server, you should do it like this:
-		case 3: do_something_to_one([&n](const auto& item) {return n-- > 0 ? item->graceful_shutdown(true), false : true;});			break;
-		case 4: do_something_to_one([&n](const auto& item) {return n-- > 0 ? item->graceful_shutdown(true, false), false : true;});	break;
-		case 5: do_something_to_one([&n](const auto& item) {return n-- > 0 ? item->force_shutdown(true), false : true;});				break;
+		case 3: do_something_to_one([&n](object_ctype& item) {return n-- > 0 ? item->graceful_shutdown(true), false : true;});			break;
+		case 4: do_something_to_one([&n](object_ctype& item) {return n-- > 0 ? item->graceful_shutdown(true, false), false : true;});	break;
+		case 5: do_something_to_one([&n](object_ctype& item) {return n-- > 0 ? item->force_shutdown(true), false : true;});				break;
 		}
 	}
 
@@ -244,8 +247,7 @@ void send_msg_one_by_one(echo_client& client, size_t msg_num, size_t msg_len, ch
 	} while (percent < 100);
 	begin_time.stop();
 
-	printf("\ntime spent statistics: %f seconds.\n", begin_time.elapsed());
-	printf("speed: %f(*2) MBps.\n", total_msg_bytes / begin_time.elapsed() / 1024 / 1024);
+	printf(" finished in %f seconds, speed: %f(*2) MBps.\n", begin_time.elapsed(), total_msg_bytes / begin_time.elapsed() / 1024 / 1024);
 }
 
 void send_msg_randomly(echo_client& client, size_t msg_num, size_t msg_len, char msg_fill)
@@ -281,8 +283,7 @@ void send_msg_randomly(echo_client& client, size_t msg_num, size_t msg_len, char
 	begin_time.stop();
 	delete[] buff;
 
-	printf("\ntime spent statistics: %f seconds.\n", begin_time.elapsed());
-	printf("speed: %f(*2) MBps.\n", total_msg_bytes / begin_time.elapsed() / 1024 / 1024);
+	printf(" finished in %f seconds, speed: %f(*2) MBps.\n", begin_time.elapsed(), total_msg_bytes / begin_time.elapsed() / 1024 / 1024);
 }
 
 //use up to a specific worker threads to send messages concurrently
@@ -300,7 +301,7 @@ void send_msg_concurrently(echo_client& client, size_t send_thread_num, size_t m
 	size_t this_group_link_num = 0;
 
 	std::vector<std::list<echo_client::object_type>> link_groups(group_num);
-	client.do_something_to_all([&](auto& item) {
+	client.do_something_to_all([&](echo_client::object_ctype& item) {
 		if (0 == this_group_link_num)
 		{
 			this_group_link_num = group_link_num;
@@ -319,7 +320,7 @@ void send_msg_concurrently(echo_client& client, size_t send_thread_num, size_t m
 
 	cpu_timer begin_time;
 	std::list<std::thread> threads;
-	do_something_to_all(link_groups, [&threads, msg_num, msg_len, msg_fill](const auto& item) {
+	do_something_to_all(link_groups, [&threads, msg_num, msg_len, msg_fill](const std::list<echo_client::object_type>& item) {
 		threads.emplace_back([&item, msg_num, msg_len, msg_fill]() {
 			auto buff = new char[msg_len];
 			memset(buff, msg_fill, msg_len);
@@ -328,7 +329,7 @@ void send_msg_concurrently(echo_client& client, size_t send_thread_num, size_t m
 				memcpy(buff, &i, sizeof(size_t)); //seq
 
 				//congestion control, method #1, the peer needs its own congestion control too.
-				do_something_to_all(item, [buff, msg_len](const auto& item2) {item2->safe_send_msg(buff, msg_len);}); //can_overflow is false, it's important
+				do_something_to_all(item, [buff, msg_len](echo_client::object_ctype& item2) {item2->safe_send_msg(buff, msg_len);}); //can_overflow is false, it's important
 			}
 			delete[] buff;
 		});
@@ -347,30 +348,29 @@ void send_msg_concurrently(echo_client& client, size_t send_thread_num, size_t m
 			fflush(stdout);
 		}
 	} while (percent < 100);
-	do_something_to_all(threads, [](auto& t) {t.join();});
+	do_something_to_all(threads, [](std::thread& t) {t.join();});
 	begin_time.stop();
 
-	printf("\ntime spent statistics: %f seconds.\n", begin_time.elapsed());
-	printf("speed: %f(*2) MBps.\n", total_msg_bytes / begin_time.elapsed() / 1024 / 1024);
+	printf(" finished in %f seconds, speed: %f(*2) MBps.\n", begin_time.elapsed(), total_msg_bytes / begin_time.elapsed() / 1024 / 1024);
 }
 
 static bool is_testing;
-void start_test(int repeat_times, char model, echo_client& client, size_t send_thread_num, size_t msg_num, size_t msg_len, char msg_fill)
+void start_test(int repeat_times, char mode, echo_client& client, size_t send_thread_num, size_t msg_num, size_t msg_len, char msg_fill)
 {
 	for (int i = 0; i < repeat_times; ++i)
 	{
-		printf("this is the %d / %d test.\n", i + 1, repeat_times);
+		printf("this is the %d / %d test...\n", i + 1, repeat_times);
 		client.clear_status();
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
-		if (0 == model)
+		if (0 == mode)
 			send_msg_one_by_one(client, msg_num, msg_len, msg_fill);
 		else
 		{
-			puts("if ASCS_WANT_MSG_SEND_NOTIFY defined, only support model 0!");
+			puts("if ASCS_WANT_MSG_SEND_NOTIFY defined, only support mode 0!");
 			break;
 		}
 #else
-		if (0 == model)
+		if (0 == mode)
 			send_msg_concurrently(client, send_thread_num, msg_num, msg_len, msg_fill);
 		else
 			send_msg_randomly(client, msg_num, msg_len, msg_fill);
@@ -407,20 +407,20 @@ int main(int argc, const char* argv[])
 	unsigned short port = argc > 3 ? atoi(argv[3]) : ASCS_SERVER_PORT;
 
 	//method #1, create and add clients manually.
-	auto client_ptr = client.create_object();
-	//client_ptr->set_server_addr(port, ip); //we don't have to set server address at here, the following do_something_to_all will do it for us
+	auto socket_ptr = client.create_object();
+	//socket_ptr->set_server_addr(port, ip); //we don't have to set server address at here, the following do_something_to_all will do it for us
 	//some other initializations according to your business
-	client.add_socket(client_ptr, false);
-	client_ptr.reset(); //important, otherwise, st_object_pool will not be able to free or reuse this object.
+	client.add_socket(socket_ptr, false);
+	socket_ptr.reset(); //important, otherwise, st_object_pool will not be able to free or reuse this object.
 
 	//method #2, add clients first without any arguments, then set the server address.
 	for (size_t i = 1; i < link_num / 2; ++i)
-		client.add_client();
-	client.do_something_to_all([port, &ip](const auto& item) {item->set_server_addr(port, ip);});
+		client.add_socket();
+	client.do_something_to_all([port, &ip](echo_client::object_ctype& item) {item->set_server_addr(port, ip);});
 
 	//method #3, add clients and set server address in one invocation.
 	for (auto i = std::max((size_t) 1, link_num / 2); i < link_num; ++i)
-		client.add_client(port, ip);
+		client.add_socket(port, ip);
 
 	size_t send_thread_num = 8;
 	if (argc > 2)
@@ -446,11 +446,6 @@ int main(int argc, const char* argv[])
 			puts("");
 			puts(client.get_statistic().to_string().data());
 		}
-		//the following two commands demonstrate how to suspend msg dispatching, no matter recv buffer been used or not
-		else if (SUSPEND_COMMAND == str)
-			client.do_something_to_all([](const auto& item) {item->suspend_dispatch_msg(true);});
-		else if (RESUME_COMMAND == str)
-			client.do_something_to_all([](const auto& item) {item->suspend_dispatch_msg(false);});
 		else if (LIST_ALL_CLIENT == str)
 			client.list_all_object();
 		else if (is_testing)
@@ -471,7 +466,7 @@ int main(int argc, const char* argv[])
 					n = 1;
 
 				if ('+' == str[0])
-					for (; n > 0 && client.add_client(port, ip); --n);
+					for (; n > 0 && client.add_socket(port, ip); --n);
 				else
 				{
 					if (n > client.size())
@@ -495,7 +490,7 @@ int main(int argc, const char* argv[])
 			size_t msg_num = 1024;
 			size_t msg_len = 1024; //must greater than or equal to sizeof(size_t)
 			auto msg_fill = '0';
-			char model = 0; //0 broadcast, 1 randomly pick one link per msg
+			char mode = 0; //0 broadcast, 1 randomly pick one link per msg
 			auto repeat_times = 1;
 
 			auto parameters = split_string(str);
@@ -513,18 +508,18 @@ int main(int argc, const char* argv[])
 				std::max((size_t) atoi(iter++->data()), sizeof(size_t))); //include seq
 #endif
 			if (iter != std::end(parameters)) msg_fill = *iter++->data();
-			if (iter != std::end(parameters)) model = *iter++->data() - '0';
+			if (iter != std::end(parameters)) mode = *iter++->data() - '0';
 			if (iter != std::end(parameters)) repeat_times = std::max(atoi(iter++->data()), 1);
 
-			if (0 != model && 1 != model)
-				puts("unrecognized model!");
+			if (0 != mode && 1 != mode)
+				puts("unrecognized mode!");
 			else
 			{
-				printf("test parameters after adjustment: " ASCS_SF " " ASCS_SF " %c %d\n", msg_num, msg_len, msg_fill, model);
+				printf("test parameters after adjustment: " ASCS_SF " " ASCS_SF " %c %d\n", msg_num, msg_len, msg_fill, mode);
 				puts("performance test begin, this application will have no response during the test!");
 
 				is_testing = true;
-				std::thread([=, &client]() {start_test(repeat_times, model, client, send_thread_num, msg_num, msg_len, msg_fill);}).detach();
+				std::thread([=, &client]() {start_test(repeat_times, mode, client, send_thread_num, msg_num, msg_len, msg_fill);}).detach();
 			}
 		}
 	}

@@ -3,7 +3,7 @@
 
 //configuration
 #define ASCS_SERVER_PORT		5050
-#define ASCS_CLEAR_OBJECT_INTERVAL 60
+#define ASCS_RESTORE_OBJECT
 #define ASCS_ENHANCED_STABILITY
 #define ASCS_WANT_MSG_SEND_NOTIFY
 #define ASCS_INPUT_QUEUE non_lock_queue
@@ -12,15 +12,13 @@
 //sent to file_client, so sending buffer will always be empty, which means we will never operate sending buffer concurrently,
 //so need no locks.
 #define ASCS_INPUT_CONTAINER list
-#define ASCS_HEARTBEAT_INTERVAL	5
 #define ASCS_DEFAULT_PACKER	replaceable_packer<>
+#define ASCS_RECV_BUFFER_TYPE std::vector<asio::mutable_buffer> //scatter-gather buffer, it's very useful under certain situations (for example, ring buffer).
+#define ASCS_SCATTERED_RECV_BUFFER //used by unpackers, not belongs to ascs
 //configuration
 
-#include <ascs/tcp/server.h>
-using namespace ascs;
-using namespace ascs::tcp;
-
 #include "file_socket.h"
+using namespace ascs::tcp;
 
 #define QUIT_COMMAND	"quit"
 #define RESTART_COMMAND	"restart"

@@ -31,11 +31,11 @@
 namespace ascs { namespace ext { namespace tcp {
 
 typedef ascs::tcp::connector_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UNPACKER> connector;
-typedef ascs::single_socket_service<ascs::ext::tcp::connector> single_client;
-typedef ascs::tcp::client_base<ascs::ext::tcp::connector> client;
+typedef ascs::tcp::single_client_base<connector> single_client;
+typedef ascs::tcp::client_base<connector> client;
 
 typedef ascs::tcp::server_socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UNPACKER> server_socket;
-typedef ascs::tcp::server_base<ascs::ext::tcp::server_socket> server;
+typedef ascs::tcp::server_base<server_socket> server;
 
 }}} //namespace
 

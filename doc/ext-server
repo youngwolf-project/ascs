@@ -1,3 +1,0 @@
-﻿
-提供了对ASCS_DEFAULT_PACKER和ASCS_DEFAULT_UDP_UNPACKER宏的支持。
-提供了不带模板参数的server_socket和server。

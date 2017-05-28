@@ -23,6 +23,7 @@
 #include <string>
 #include <thread>
 #include <atomic>
+#include <mutex>
 #include <sstream>
 #include <iomanip>
 
@@ -55,7 +56,8 @@ class i_server
 public:
 	virtual service_pump& get_service_pump() = 0;
 	virtual const service_pump& get_service_pump() const = 0;
-	virtual bool del_client(const std::shared_ptr<object>& client_ptr) = 0;
+	virtual bool del_socket(const std::shared_ptr<object>& socket_ptr) = 0;
+	virtual bool restore_socket(const std::shared_ptr<object>& socket_ptr, uint_fast64_t id) = 0;
 };
 
 class i_buffer
@@ -97,9 +99,6 @@ public:
 protected:
 	buffer_type buffer;
 };
-typedef auto_buffer<i_buffer> replaceable_buffer;
-//replaceable_packer and replaceable_unpacker used replaceable_buffer as their msg type, so they're replaceable,
-//shared_buffer<i_buffer> is available too.
 
 //convert '->' operation to '.' operation
 //user need to allocate object, and shared_buffer will free it
@@ -136,6 +135,13 @@ protected:
 };
 //not like auto_buffer, shared_buffer is copyable, but auto_buffer is a bit more efficient.
 
+#if !defined(_MSC_VER) || _MSC_VER >= 1900 //for naughty VC++, it violate the standard and even itself usually.
+typedef auto_buffer<i_buffer> replaceable_buffer;
+#else
+typedef shared_buffer<i_buffer> replaceable_buffer; //before VC++ 14.0, auto_buffer will lead compilation error
+#endif
+//packer or/and unpacker used replaceable_buffer as their msg type will be replaceable.
+
 //packer concept
 template<typename MsgType>
 class i_packer
@@ -148,8 +154,9 @@ protected:
 	virtual ~i_packer() {}
 
 public:
-	virtual void reset_state() {}
+	virtual void reset() {}
 	virtual msg_type pack_msg(const char* const pstr[], const size_t len[], size_t num, bool native = false) = 0;
+	virtual msg_type pack_heartbeat() {return msg_type();}
 	virtual char* raw_data(msg_type& msg) const {return nullptr;}
 	virtual const char* raw_data(msg_ctype& msg) const {return nullptr;}
 	virtual size_t raw_data_len(msg_ctype& msg) const {return 0;}
@@ -179,18 +186,15 @@ namespace tcp
 	public:
 		typedef MsgType msg_type;
 		typedef const msg_type msg_ctype;
-#ifdef ASCS_SCATTERED_RECV_BUFFER
-		typedef std::vector<asio::mutable_buffers_1> buffer_type;
-#else
-		typedef asio::mutable_buffers_1 buffer_type;
-#endif
 		typedef std::list<msg_type> container_type;
+		typedef ASCS_RECV_BUFFER_TYPE buffer_type;
 
 	protected:
 		virtual ~i_unpacker() {}
 
 	public:
-		virtual void reset_state() = 0;
+		virtual void reset() = 0;
+		//heartbeat must not be included in msg_can, otherwise you must handle heartbeat at where you handle normal messges.
 		virtual bool parse_msg(size_t bytes_transferred, container_type& msg_can) = 0;
 		virtual size_t completion_condition(const asio::error_code& ec, size_t bytes_transferred) = 0;
 		virtual buffer_type prepare_next_recv() = 0;
@@ -222,14 +226,15 @@ namespace udp
 	public:
 		typedef MsgType msg_type;
 		typedef const msg_type msg_ctype;
-		typedef asio::mutable_buffers_1 buffer_type;
 		typedef std::list<udp_msg<msg_type>> container_type;
+		typedef ASCS_RECV_BUFFER_TYPE buffer_type;
 
 	protected:
 		virtual ~i_unpacker() {}
 
 	public:
-		virtual void reset_state() {}
+		virtual void reset() {}
+		//heartbeat must not be returned (use empty message instead), otherwise you must handle heartbeat at where you handle normal messges.
 		virtual msg_type parse_msg(size_t bytes_transferred) = 0;
 		virtual buffer_type prepare_next_recv() = 0;
 	};
@@ -324,15 +329,15 @@ struct statistic
 
 	//send corresponding statistic
 	uint_fast64_t send_msg_sum; //not counted msgs in sending buffer
-	uint_fast64_t send_byte_sum; //not counted msgs in sending buffer
+	uint_fast64_t send_byte_sum; //include data added by packer, not counted msgs in sending buffer
 	stat_duration send_delay_sum; //from send_(native_)msg (exclude msg packing) to asio::async_write
 	stat_duration send_time_sum; //from asio::async_write to send_handler
 	//above two items indicate your network's speed or load
 	stat_duration pack_time_sum; //udp::socket will not gather this item
 
 	//recv corresponding statistic
-	uint_fast64_t recv_msg_sum; //include msgs in receiving buffer
-	uint_fast64_t recv_byte_sum; //include msgs in receiving buffer
+	uint_fast64_t recv_msg_sum; //msgs returned by i_unpacker::parse_msg
+	uint_fast64_t recv_byte_sum; //msgs (in bytes) returned by i_unpacker::parse_msg
 	stat_duration dispatch_dealy_sum; //from parse_msg(exclude msg unpacking) to on_msg_handle
 	stat_duration recv_idle_sum;
 	//during this duration, socket suspended msg reception (receiving buffer overflow, msg dispatching suspended or doing congestion control)
@@ -373,7 +378,7 @@ struct obj_with_begin_time : public T
 
 //free functions, used to do something to any container(except map and multimap) optionally with any mutex
 template<typename _Can, typename _Mutex, typename _Predicate>
-void do_something_to_all(_Can& __can, _Mutex& __mutex, const _Predicate& __pred) {std::shared_lock<std::shared_mutex> lock(__mutex); for (auto& item : __can) __pred(item);}
+void do_something_to_all(_Can& __can, _Mutex& __mutex, const _Predicate& __pred) {std::lock_guard<std::mutex> lock(__mutex); for (auto& item : __can) __pred(item);}
 
 template<typename _Can, typename _Predicate>
 void do_something_to_all(_Can& __can, const _Predicate& __pred) {for (auto& item : __can) __pred(item);}
@@ -381,7 +386,7 @@ void do_something_to_all(_Can& __can, const _Predicate& __pred) {for (auto& item
 template<typename _Can, typename _Mutex, typename _Predicate>
 void do_something_to_one(_Can& __can, _Mutex& __mutex, const _Predicate& __pred)
 {
-	std::shared_lock<std::shared_mutex> lock(__mutex);
+	std::lock_guard<std::mutex> lock(__mutex);
 	for (auto iter = std::begin(__can); iter != std::end(__can); ++iter) if (__pred(*iter)) break;
 }
 
@@ -418,7 +423,7 @@ bool splice_helper(_Can& dest_can, _Can& src_can, size_t max_size = ASCS_MAX_MSG
 #define DO_SOMETHING_TO_ALL(CAN) DO_SOMETHING_TO_ALL_NAME(do_something_to_all, CAN)
 
 #define DO_SOMETHING_TO_ALL_MUTEX_NAME(NAME, CAN, MUTEX) \
-template<typename _Predicate> void NAME(const _Predicate& __pred) {std::shared_lock<std::shared_mutex> lock(MUTEX); for (auto& item : CAN) __pred(item);}
+template<typename _Predicate> void NAME(const _Predicate& __pred) {std::lock_guard<std::mutex> lock(MUTEX); for (auto& item : CAN) __pred(item);}
 
 #define DO_SOMETHING_TO_ALL_NAME(NAME, CAN) \
 template<typename _Predicate> void NAME(const _Predicate& __pred) {for (auto& item : CAN) __pred(item);} \
@@ -429,7 +434,7 @@ template<typename _Predicate> void NAME(const _Predicate& __pred) const {for (au
 
 #define DO_SOMETHING_TO_ONE_MUTEX_NAME(NAME, CAN, MUTEX) \
 template<typename _Predicate> void NAME(const _Predicate& __pred) \
-	{std::shared_lock<std::shared_mutex> lock(MUTEX); for (auto iter = std::begin(CAN); iter != std::end(CAN); ++iter) if (__pred(*iter)) break;}
+	{std::lock_guard<std::mutex> lock(MUTEX); for (auto iter = std::begin(CAN); iter != std::end(CAN); ++iter) if (__pred(*iter)) break;}
 
 #define DO_SOMETHING_TO_ONE_NAME(NAME, CAN) \
 template<typename _Predicate> void NAME(const _Predicate& __pred) {for (auto iter = std::begin(CAN); iter != std::end(CAN); ++iter) if (__pred(*iter)) break;} \
@@ -438,7 +443,7 @@ template<typename _Predicate> void NAME(const _Predicate& __pred) const {for (au
 //used by both TCP and UDP
 #define SAFE_SEND_MSG_CHECK \
 { \
-	if (!this->is_send_allowed()) return false; \
+	if (this->stopped() || !this->is_ready()) return false; \
 	std::this_thread::sleep_for(std::chrono::milliseconds(50)); \
 }
 
@@ -464,6 +469,28 @@ bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_
 } \
 TCP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)
 
+#define TCP_SYNC_SEND_MSG(FUNNAME, NATIVE) \
+size_t FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) \
+{ \
+	if (!this->sending && !this->stopped() && this->is_ready()) \
+	{ \
+		scope_atomic_lock lock(this->send_atomic); \
+		if (!this->sending && lock.locked()) \
+		{ \
+			this->sending = true; \
+			lock.unlock(); \
+			auto_duration dur(this->stat.pack_time_sum); \
+			auto msg = this->packer_->pack_msg(pstr, len, num, NATIVE); \
+			dur.end(); \
+			if (msg.empty()) \
+				unified_out::error_out("found an empty message, please check your packer."); \
+			return do_sync_send_msg(msg); /*always send message even it's empty, this is very important*/ \
+		} \
+	} \
+	return 0; \
+} \
+TCP_SEND_MSG_CALL_SWITCH(FUNNAME, size_t)
+
 //guarantee send msg successfully even if can_overflow equal to false, success at here just means putting the msg into tcp::socket's send buffer successfully
 //if can_overflow equal to false and the buffer is not available, will wait until it becomes available
 #define TCP_SAFE_SEND_MSG(FUNNAME, SEND_FUNNAME) \
@@ -472,7 +499,7 @@ TCP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)
 
 #define TCP_BROADCAST_MSG(FUNNAME, SEND_FUNNAME) \
 void FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) \
-	{this->do_something_to_all([=](const auto& item) {item->SEND_FUNNAME(pstr, len, num, can_overflow);});} \
+	{this->do_something_to_all([=](typename Pool::object_ctype& item) {item->SEND_FUNNAME(pstr, len, num, can_overflow);});} \
 TCP_SEND_MSG_CALL_SWITCH(FUNNAME, void)
 //TCP msg sending interface
 ///////////////////////////////////////////////////
@@ -480,10 +507,13 @@ TCP_SEND_MSG_CALL_SWITCH(FUNNAME, void)
 ///////////////////////////////////////////////////
 //UDP msg sending interface
 #define UDP_SEND_MSG_CALL_SWITCH(FUNNAME, TYPE) \
+TYPE FUNNAME(const char* pstr, size_t len, bool can_overflow = false) {return FUNNAME(peer_addr, pstr, len, can_overflow);} \
 TYPE FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* pstr, size_t len, bool can_overflow = false) {return FUNNAME(peer_addr, &pstr, &len, 1, can_overflow);} \
+TYPE FUNNAME(const std::string& str, bool can_overflow = false) {return FUNNAME(peer_addr, str, can_overflow);} \
 TYPE FUNNAME(const asio::ip::udp::endpoint& peer_addr, const std::string& str, bool can_overflow = false) {return FUNNAME(peer_addr, str.data(), str.size(), can_overflow);}
 
 #define UDP_SEND_MSG(FUNNAME, NATIVE) \
+bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) {return FUNNAME(peer_addr, pstr, len, num, can_overflow);} \
 bool FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) \
 { \
 	if (!can_overflow && !this->is_send_buffer_available()) \
@@ -493,9 +523,31 @@ bool FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* const pstr[],
 } \
 UDP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)
 
+#define UDP_SYNC_SEND_MSG(FUNNAME, NATIVE) \
+size_t FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) {return FUNNAME(peer_addr, pstr, len, num, can_overflow);} \
+size_t FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) \
+{ \
+	if (!this->sending && !this->stopped() && this->is_ready()) \
+	{ \
+		scope_atomic_lock lock(this->send_atomic); \
+		if (!this->sending && lock.locked()) \
+		{ \
+			this->sending = true; \
+			lock.unlock(); \
+			auto msg = this->packer_->pack_msg(pstr, len, num, NATIVE); \
+			if (msg.empty()) \
+				unified_out::error_out("found an empty message, please check your packer."); \
+			return do_sync_send_msg(peer_addr, msg); /*always send message even it's empty, this is very important*/ \
+		} \
+	} \
+	return 0; \
+} \
+UDP_SEND_MSG_CALL_SWITCH(FUNNAME, size_t)
+
 //guarantee send msg successfully even if can_overflow equal to false, success at here just means putting the msg into udp::socket's send buffer successfully
 //if can_overflow equal to false and the buffer is not available, will wait until it becomes available
 #define UDP_SAFE_SEND_MSG(FUNNAME, SEND_FUNNAME) \
+bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false)  {return FUNNAME(peer_addr, pstr, len, num, can_overflow);} \
 bool FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) \
 	{while (!SEND_FUNNAME(peer_addr, pstr, len, num, can_overflow)) SAFE_SEND_MSG_CHECK return true;} \
 UDP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)

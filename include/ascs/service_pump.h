@@ -61,10 +61,11 @@ public:
 	typedef std::list<object_type> container_type;
 
 	service_pump() : started(false) {}
+	virtual ~service_pump() {stop_service();}
 
 	object_type find(int id)
 	{
-		std::shared_lock<std::shared_mutex> lock(service_can_mutex);
+		std::lock_guard<std::mutex> lock(service_can_mutex);
 		auto iter = std::find_if(std::begin(service_can), std::end(service_can), [id](object_ctype& item) {return id == item->id();});
 		return iter == std::end(service_can) ? nullptr : *iter;
 	}
@@ -73,7 +74,7 @@ public:
 	{
 		assert(nullptr != i_service_);
 
-		std::unique_lock<std::shared_mutex> lock(service_can_mutex);
+		std::unique_lock<std::mutex> lock(service_can_mutex);
 		service_can.remove(i_service_);
 		lock.unlock();
 
@@ -82,7 +83,7 @@ public:
 
 	void remove(int id)
 	{
-		std::unique_lock<std::shared_mutex> lock(service_can_mutex);
+		std::unique_lock<std::mutex> lock(service_can_mutex);
 		auto iter = std::find_if(std::begin(service_can), std::end(service_can), [id](object_ctype& item) {return id == item->id();});
 		if (iter != std::end(service_can))
 		{
@@ -98,11 +99,11 @@ public:
 	{
 		container_type temp_service_can;
 
-		std::unique_lock<std::shared_mutex> lock(service_can_mutex);
+		std::unique_lock<std::mutex> lock(service_can_mutex);
 		temp_service_can.splice(std::end(temp_service_can), service_can);
 		lock.unlock();
 
-		ascs::do_something_to_all(temp_service_can, [this](auto& item) {this->stop_and_free(item);});
+		ascs::do_something_to_all(temp_service_can, [this](object_type& item) {this->stop_and_free(item);});
 	}
 
 	void start_service(int thread_num = ASCS_SERVICE_THREAD_NUM) {if (!is_service_started()) do_service(thread_num);}
@@ -144,7 +145,7 @@ public:
 	//stop the service, must be invoked explicitly when the service need to stop, for example, close the application
 	//only for service pump started by 'run_service', this function will return immediately,
 	//only the return from 'run_service' means service pump ended.
-	void end_service() {if (is_service_started()) do_something_to_all([](auto& item) {item->stop_service();});}
+	void end_service() {if (is_service_started()) do_something_to_all([](object_type& item) {item->stop_service();});}
 
 	bool is_running() const {return !stopped();}
 	bool is_service_started() const {return started;}
@@ -157,10 +158,10 @@ protected:
 		unified_out::info_out("service pump started.");
 
 		reset(); //this is needed when restart service
-		do_something_to_all([](auto& item) {item->start_service();});
+		do_something_to_all([](object_type& item) {item->start_service();});
 		add_service_thread(thread_num);
 	}
-	void wait_service() {ascs::do_something_to_all(service_threads, [](auto& t) {t.join();}); service_threads.clear(); unified_out::info_out("service pump end."); started = false;}
+	void wait_service() {ascs::do_something_to_all(service_threads, [](std::thread& t) {t.join();}); service_threads.clear(); unified_out::info_out("service pump end."); started = false;}
 
 	void stop_and_free(object_type i_service_)
 	{
@@ -196,13 +197,13 @@ private:
 	{
 		assert(nullptr != i_service_);
 
-		std::unique_lock<std::shared_mutex> lock(service_can_mutex);
+		std::lock_guard<std::mutex> lock(service_can_mutex);
 		service_can.emplace_back(i_service_);
 	}
 
 protected:
 	container_type service_can;
-	std::shared_mutex service_can_mutex;
+	std::mutex service_can_mutex;
 	std::list<std::thread> service_threads;
 	bool started;
 };

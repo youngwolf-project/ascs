@@ -15,7 +15,7 @@
 
 #include "packer.h"
 #include "unpacker.h"
-#include "../ssl/ssl.h"
+#include "../tcp/ssl/ssl.h"
 
 #ifndef ASCS_DEFAULT_PACKER
 #define ASCS_DEFAULT_PACKER ascs::ext::packer
@@ -28,11 +28,11 @@
 namespace ascs { namespace ext { namespace ssl {
 
 typedef ascs::ssl::connector_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UNPACKER> connector;
-typedef ascs::single_socket_service<ascs::ext::ssl::connector> single_client;
-typedef ascs::tcp::client_base<ascs::ext::ssl::connector, ascs::ssl::object_pool<ascs::ext::ssl::connector>> client;
+typedef ascs::ssl::single_client_base<connector> single_client;
+typedef ascs::ssl::client_base<connector> client;
 
 typedef ascs::ssl::server_socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UNPACKER> server_socket;
-typedef ascs::ssl::server_base<ascs::ext::ssl::server_socket> server;
+typedef ascs::ssl::server_base<server_socket> server;
 
 }}} //namespace
 

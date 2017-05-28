@@ -28,18 +28,25 @@ public:
 	virtual bool obsoleted();
 在调用父类同名函数的基础上，增加了对是否正在关闭连接的判断，如果是，则返回假。
 
+	virtual bool is_ready();
+是否可以数据收发。
+
+	virtual void send_heartbeat();
+发送一个心跳包。
+
 	void reset();
 重置所有（reset_state加clear_buffer，后者由父类实现）。
 
-	void reset_state();
-重载父类同名函数，重置自己的状态之后，调用父类同名函数。
-
-	bool is_shutting_down() const {return shutdown_states::NONE != shutdown_state;}
+	bool is_broken() const;
+连接是否已经断开。
+	bool is_connected() const;
+连接是否已经建立。
+	bool is_shutting_down() const;
 是否正在优雅关闭套接字，此时不再发送消息（如果发送则会出错，因为已经关闭了自己的数据发送），但继续接收消息。
 
-	std::shared_ptr<i_unpacker<out_msg_type>> inner_unpacker();
-	std::shared_ptr<const i_unpacker<out_msg_type>> inner_unpacker() const;
-	void inner_unpacker(const std::shared_ptr<i_unpacker<out_msg_type>>& _unpacker_);
+	std::shared_ptr<i_unpacker<out_msg_type>> unpacker();
+	std::shared_ptr<const i_unpacker<out_msg_type>> unpacker() const;
+	void unpacker(const std::shared_ptr<i_unpacker<out_msg_type>>& _unpacker_);
 获取／修改解包器。
 注意，运行时修改解包器是非线程安全的，而且只能在构造函数、子类的reset函数（虚的那个）和on_msg里面修改。不支持多线程一是为了
 效率，二是支持了也必须要在前面说的那三个地方修改，而这三个地方不会有多线程问题，三是这个功能用得很少。
@@ -51,21 +58,35 @@ public:
 	bool send_msg(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false);
 发送消息，前两个是helper函数，最后一个才是真正的发送消息（放入消息发送缓存）；第一个调用第二个，第二个调用第三个。
 
-	bool send_native_msg(const char* pstr, size_t len, bool can_overflow = false);
 	bool send_native_msg(const std::string& str, bool can_overflow = false);
+	bool send_native_msg(const char* pstr, size_t len, bool can_overflow = false);
 	bool send_native_msg(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false);
 同上，只是以native为true调用i_packer::pack_msg接口。
 
-	bool safe_send_msg(const char* pstr, size_t len, bool can_overflow = false);
 	bool safe_send_msg(const std::string& str, bool can_overflow = false);
+	bool safe_send_msg(const char* pstr, size_t len, bool can_overflow = false);
 	bool safe_send_msg(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false);
 同send_msg，只是在消息发送缓存溢出的时候会等待直到缓存可用；如果is_send_allowed返回false或者io_service已经停止，则马上放弃等待返回失败。
 safe系列函数，在on_msg和om_msg_handle里面调用时需要特别谨慎，因为它会阻塞service线程。
 
-	bool safe_send_native_msg(const char* pstr, size_t len, bool can_overflow = false);
 	bool safe_send_native_msg(const std::string& str, bool can_overflow = false);
+	bool safe_send_native_msg(const char* pstr, size_t len, bool can_overflow = false);
 	bool safe_send_native_msg(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false);
 同上，只是以native为true调用i_packer::pack_msg接口。
+
+	bool sync_send_msg(const std::string& str, bool can_overflow = false);
+	bool sync_send_msg(const char* pstr, size_t len, bool can_overflow = false);
+	bool sync_send_msg(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false);
+同步发送消息，前两个是helper函数，最后一个才是真正的发送消息（调用do_direct_sync_send_msg）；第一个调用第二个，第二个调用第三个。
+注意，只要在当前没有任何消息正在被发送时，才能同步发送消息。
+
+	bool sync_send_native_msg(const std::string& str, bool can_overflow = false);
+	bool sync_send_native_msg(const char* pstr, size_t len, bool can_overflow = false);
+	bool sync_send_native_msg(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false);
+同上，只是以native为true调用i_packer::pack_msg接口。
+
+	size_t direct_sync_send_msg(in_msg_ctype& msg);
+直接同步发送消息。注意，只要在当前没有任何消息正在被发送时，才能同步发送消息。
 
 protected:
 	void force_shutdown();
@@ -74,17 +95,20 @@ protected:
 第二个函数优雅关闭套接字，所谓优雅关闭，就是先关闭自己的数据发送，然后接收完遗留数据之后，才完全关闭套接字。当sync为假时，graceful_shutdown马上返回，
 优雅关闭将在后台继承进行，当回调到on_recv_error的时候，关闭结束（有可能优雅关闭成功，有可能超时被强制关闭，超时由ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION宏决定）。
 
+	size_t do_sync_send_msg(in_msg_ctype& msg);
+直接同步发送消息。不可直接调用，必须从sync_send_msg或者direct_sync_send_msg调用。
+
 	virtual bool do_send_msg();
 马上开始消息发送，重写自ascs::socket的do_send_msg，由ascs::socket调用。
 
 	void do_recv_msg();
-马上开始接收数据，由子类调用，因为socket_base不知道什么时候可以接收数据（比如是否连接成功等）。
-
-	virtual bool is_send_allowed() const;
-重写ascs::socket的is_send_allowed，记住，自己的判断（is_closing）加上ascs::socket的判断，才是最终结果。
+马上开始接收数据，由子类调用，因为socket不知道什么时候可以接收数据（比如是否连接成功等）。
 
 	virtual void on_unpack_error() = 0;
 解包出错时回调。
+
+	virtual void on_async_shutdown_error() = 0;
+异步关闭连接失败时架设。
 
 #ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
 	virtual bool on_msg(out_msg_type& msg);
@@ -94,30 +118,28 @@ protected:
 	virtual bool on_msg_handle(msg_type& msg, bool link_down);
 重写ascs::socket的on_msg_handle，功能是打印消息到控制台，使用者重写这个函数以处理消息。
 
+private:
 	void shutdown();
 关闭套接字，停止所有定时器，直接派发所有剩余消息，最后启动一个定时器，如果定义了ASCS_ENHANCED_STABILITY宏，则这个将周期性的检测
 当前套接字是否可以安全地被重用或释放，如果未定义，则简单的在ASCS_DELAY_CLOSE秒后认为当前大量接字可被安全地重用或释放。
 
-	int clean_heartbeat();
-读取所有OOB数据，返回读到的OOB数据长度。
+	size_t completion_checker(const boost::system::error_code& ec, size_t bytes_transferred);
+统计解包时间。
 
-private:
 	void recv_handler(const error_code& ec, size_t bytes_transferred);
 收到数据时后asio回调。
 
 	void send_handler(const error_code& ec, size_t bytes_transferred);
 成功发送消息（写入底层套接字）后由asio回调。
 
+	bool async_shutdown_handler(st_timer::tid id, size_t loop_num);
+异步关闭连接的回调函数。
+
 protected:
 	list<typename super::in_msg> last_send_msg;
 	std::shared_ptr<i_unpacker<out_msg_type>> unpacker_;
 
-	volatile shutdown_states shutdown_state;
-	std::atomic_flag shutdown_atomic;
-让shutdown函数线程安全。
-
-	time_t last_interact_time;
-上次交互时间，包括成功发送数据，成功接收数据和OOB数据，用于断线检测。
+	volatile link_status status;
 };
 
 }} //namespace

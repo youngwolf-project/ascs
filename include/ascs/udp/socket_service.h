@@ -17,16 +17,23 @@
 
 namespace ascs { namespace udp {
 
+#ifdef ASCS_HAS_TEMPLATE_USING
+template<typename Socket> using single_service_base = single_socket_service<Socket>;
+#else
+template<typename Socket> class single_service_base : public single_socket_service<Socket>
+{
+public:
+	single_service_base(service_pump& service_pump_) : single_socket_service<Socket>(service_pump_) {}
+};
+#endif
+
 template<typename Socket, typename Pool = object_pool<Socket>>
 class service_base : public multi_socket_service<Socket, Pool>
 {
-protected:
+private:
 	typedef multi_socket_service<Socket, Pool> super;
 
 public:
-	using super::TIMER_BEGIN;
-	using super::TIMER_END;
-
 	service_base(service_pump& service_pump_) : super(service_pump_) {}
 
 	using super::add_socket;
@@ -39,11 +46,11 @@ public:
 
 	//functions with a socket_ptr parameter will remove the link from object pool first, then call corresponding function
 	void disconnect(typename Pool::object_ctype& socket_ptr) {this->del_object(socket_ptr); socket_ptr->disconnect();}
-	void disconnect() {this->do_something_to_all([](const auto& item) {item->disconnect();});}
+	void disconnect() {this->do_something_to_all([](typename Pool::object_ctype& item) {item->disconnect();});}
 	void force_shutdown(typename Pool::object_ctype& socket_ptr) {this->del_object(socket_ptr); socket_ptr->force_shutdown();}
-	void force_shutdown() {this->do_something_to_all([](const auto& item) {item->force_shutdown();});}
+	void force_shutdown() {this->do_something_to_all([](typename Pool::object_ctype& item) {item->force_shutdown();});}
 	void graceful_shutdown(typename Pool::object_ctype& socket_ptr) {this->del_object(socket_ptr); socket_ptr->graceful_shutdown();}
-	void graceful_shutdown() {this->do_something_to_all([](const auto& item) {item->graceful_shutdown();});}
+	void graceful_shutdown() {this->do_something_to_all([](typename Pool::object_ctype& item) {item->graceful_shutdown();});}
 
 protected:
 	virtual void uninit() {this->stop(); graceful_shutdown();}

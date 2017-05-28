@@ -1,7 +1,7 @@
 
 //configuration
 #define ASCS_SERVER_PORT		5050
-#define ASCS_CLEAR_OBJECT_INTERVAL 60
+#define ASCS_RESTORE_OBJECT
 #define ASCS_ENHANCED_STABILITY
 #define ASCS_WANT_MSG_SEND_NOTIFY
 #define ASCS_INPUT_QUEUE non_lock_queue
@@ -10,8 +10,9 @@
 //sent to file_client, so sending buffer will always be empty, which means we will never operate sending buffer concurrently,
 //so need no locks.
 #define ASCS_INPUT_CONTAINER list
-#define ASCS_HEARTBEAT_INTERVAL	5
 #define ASCS_DEFAULT_PACKER	replaceable_packer<>
+#define ASCS_RECV_BUFFER_TYPE std::vector<asio::mutable_buffer> //scatter-gather buffer, it's very useful under certain situations (for example, ring buffer).
+#define ASCS_SCATTERED_RECV_BUFFER //used by unpackers, not belongs to ascs
 //configuration
 
 #include "file_socket.h"
@@ -20,19 +21,26 @@ file_socket::file_socket(i_server& server_) : server_socket(server_) {}
 file_socket::~file_socket() {trans_end();}
 
 void file_socket::reset() {trans_end(); server_socket::reset();}
+void file_socket::take_over(std::shared_ptr<server_socket> socket_ptr)
+{
+	auto raw_socket_ptr(std::dynamic_pointer_cast<file_socket>(socket_ptr)); //socket_ptr actually is a pointer of file_socket
+	printf("restore user data from invalid object (" ASCS_LLF ").\n", raw_socket_ptr->id());
+}
+//this works too, but brings warnings with -Woverloaded-virtual option.
+//void file_socket::take_over(std::shared_ptr<file_socket> socket_ptr) {printf("restore user data from invalid object (" ASCS_LLF ").\n", socket_ptr->id());}
 
 //msg handling
 #ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
 //we can handle msg very fast, so we don't use recv buffer
 bool file_socket::on_msg(out_msg_type& msg) {handle_msg(msg); return true;}
 #endif
-bool file_socket::on_msg_handle(out_msg_type& msg, bool link_down) {handle_msg(msg); return true;}
+bool file_socket::on_msg_handle(out_msg_type& msg) {handle_msg(msg); return true;}
 //msg handling end
 
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
 void file_socket::on_msg_send(in_msg_type& msg)
 {
-	auto buffer = dynamic_cast<file_buffer*>(msg.raw_buffer());
+	auto buffer = dynamic_cast<file_buffer*>(&*msg.raw_buffer());
 	if (nullptr != buffer)
 	{
 		buffer->read();
@@ -107,6 +115,13 @@ void file_socket::handle_msg(out_msg_ctype& msg)
 	case 2:
 		printf("client says: %s\n", std::next(msg.data(), ORDER_LEN));
 		break;
+	case 3:
+		if (ORDER_LEN + sizeof(uint_fast64_t) == msg.size())
+		{
+			uint_fast64_t id;
+			memcpy(&id, std::next(msg.data(), ORDER_LEN), sizeof(uint_fast64_t));
+			server.restore_socket(this->shared_from_this(), id);
+		}
 	default:
 		break;
 	}

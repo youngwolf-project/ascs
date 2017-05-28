@@ -23,13 +23,15 @@ template<typename Socket, typename Packer, typename Unpacker, typename InMsgType
 	template<typename, typename> class OutQueue, template<typename> class OutContainer>
 class socket : public timer
 {
-protected:
+public:
 	static const tid TIMER_BEGIN = timer::TIMER_END;
 	static const tid TIMER_HANDLE_MSG = TIMER_BEGIN;
 	static const tid TIMER_DISPATCH_MSG = TIMER_BEGIN + 1;
 	static const tid TIMER_DELAY_CLOSE = TIMER_BEGIN + 2;
+	static const tid TIMER_HEARTBEAT_CHECK = TIMER_BEGIN + 3;
 	static const tid TIMER_END = TIMER_BEGIN + 10;
 
+protected:
 	socket(asio::io_service& io_service_) : timer(io_service_), next_layer_(io_service_) {first_init();}
 	template<typename Arg> socket(asio::io_service& io_service_, Arg& arg) : timer(io_service_), next_layer_(io_service_, arg) {first_init();}
 
@@ -38,10 +40,12 @@ protected:
 	{
 		_id = -1;
 		packer_ = std::make_shared<Packer>();
-		sending = paused_sending = false;
-		dispatching = paused_dispatching = false;
+		sending = false;
+		dispatching = false;
 		congestion_controlling = false;
 		started_ = false;
+		last_send_time = 0;
+		last_recv_time = 0;
 		send_atomic.clear(std::memory_order_relaxed);
 		dispatch_atomic.clear(std::memory_order_relaxed);
 		start_atomic.clear(std::memory_order_relaxed);
@@ -49,28 +53,21 @@ protected:
 
 	void reset()
 	{
-		reset_state();
+		packer_->reset();
 		clear_buffer();
+		sending = false;
+		dispatching = false;
+		congestion_controlling = false;
+		last_recv_time = 0;
 		stat.reset();
-
-		timer::reset();
-	}
-
-	void reset_state()
-	{
-		packer_->reset_state();
-
-		sending = paused_sending = false;
-		dispatching = paused_dispatching = congestion_controlling = false;
 	}
 
 	void clear_buffer()
 	{
+		last_dispatch_msg.clear();
 		send_msg_buffer.clear();
 		recv_msg_buffer.clear();
 		temp_msg_buffer.clear();
-
-		last_dispatch_msg.clear();
 	}
 
 public:
@@ -87,12 +84,14 @@ public:
 	typename Socket::lowest_layer_type& lowest_layer() {return next_layer().lowest_layer();}
 	const typename Socket::lowest_layer_type& lowest_layer() const {return next_layer().lowest_layer();}
 
-	virtual bool obsoleted() {return !dispatching && !started() && !is_async_calling();}
+	virtual bool obsoleted() {return !started_ && !is_async_calling();}
+	virtual bool is_ready() = 0; //is ready for sending and receiving messages
+	virtual void send_heartbeat() = 0;
 
 	bool started() const {return started_;}
 	void start()
 	{
-		if (!started_)
+		if (!started_ && !stopped() && !is_timer(TIMER_DELAY_CLOSE))
 		{
 			scope_atomic_lock lock(start_atomic);
 			if (!started_ && lock.locked())
@@ -103,7 +102,7 @@ public:
 	//return false if send buffer is empty or sending not allowed
 	bool send_msg()
 	{
-		if (!sending)
+		if (!sending && !stopped() && is_ready())
 		{
 			scope_atomic_lock lock(send_atomic);
 			if (!sending && lock.locked())
@@ -119,13 +118,36 @@ public:
 		return sending;
 	}
 
-	void suspend_send_msg(bool suspend) {if (!(paused_sending = suspend)) send_msg();}
-	bool suspend_send_msg() const {return paused_sending;}
-	bool is_sending_msg() const {return sending;}
+	void start_heartbeat(int interval, int max_absence = ASCS_HEARTBEAT_MAX_ABSENCE)
+	{
+		assert(interval > 0 && max_absence > 0);
 
-	//for a socket that has been shut down, resuming message dispatching will not take effect for left messages.
-	void suspend_dispatch_msg(bool suspend) {if (!(paused_dispatching = suspend)) dispatch_msg();}
-	bool suspend_dispatch_msg() const {return paused_dispatching;}
+		if (!is_timer(TIMER_HEARTBEAT_CHECK))
+			set_timer(TIMER_HEARTBEAT_CHECK, interval * 1000, [=](tid id)->bool {return this->check_heartbeat(interval, max_absence);});
+	}
+
+	//interval's unit is second
+	//if macro ST_ASIO_HEARTBEAT_INTERVAL is bigger than zero, subclass will call start_heartbeat automatically with interval equal to ST_ASIO_HEARTBEAT_INTERVAL,
+	//and max_absence equal to ST_ASIO_HEARTBEAT_MAX_ABSENCE (so check_heartbeat will be called regularly). otherwise, you can call check_heartbeat with you own logic.
+	//return false for timeout (timeout check will only be performed on valid links), otherwise true (even the link has not established yet).
+	bool check_heartbeat(int interval, int max_absence = ASCS_HEARTBEAT_MAX_ABSENCE)
+	{
+		assert(interval > 0 && max_absence > 0);
+
+		if (is_ready() && last_recv_time > 0) //check of last_recv_time is essential, because user may call check_heartbeat before do_start
+		{
+			auto now = time(nullptr);
+			if (now - last_recv_time >= interval * max_absence)
+				return on_heartbeat_error();
+
+			if (!is_sending_msg() && now - last_send_time >= interval) //don't need to send heartbeat if we're sending messages
+				send_heartbeat();
+		}
+
+		return true;
+	}
+
+	bool is_sending_msg() const {return sending;}
 	bool is_dispatching_msg() const {return dispatching;}
 
 	void congestion_control(bool enable) {congestion_controlling = enable;}
@@ -141,9 +163,9 @@ public:
 	//get or change the packer at runtime
 	//changing packer at runtime is not thread-safe, please pay special attention
 	//we can resolve this defect via mutex, but i think it's not worth, because this feature is not frequently used
-	std::shared_ptr<i_packer<typename Packer::msg_type>> inner_packer() {return packer_;}
-	std::shared_ptr<const i_packer<typename Packer::msg_type>> inner_packer() const {return packer_;}
-	void inner_packer(const std::shared_ptr<i_packer<typename Packer::msg_type>>& _packer_) {packer_ = _packer_;}
+	std::shared_ptr<i_packer<typename Packer::msg_type>> packer() {return packer_;}
+	std::shared_ptr<const i_packer<typename Packer::msg_type>> packer() const {return packer_;}
+	void packer(const std::shared_ptr<i_packer<typename Packer::msg_type>>& _packer_) {packer_ = _packer_;}
 
 	//if you use can_overflow = true to invoke send_msg or send_native_msg, it will always succeed no matter the sending buffer is available or not,
 	//this can exhaust all virtual memory, please pay special attentions.
@@ -166,16 +188,18 @@ public:
 
 protected:
 	virtual bool do_start() = 0;
-	virtual bool do_send_msg() = 0; //ascs::socket will guarantee not call this function in more than one thread concurrently.
+	virtual bool do_send_msg() = 0;
 	virtual void do_recv_msg() = 0;
+	//ascs::socket will guarantee not call these 3 functions in more than one thread concurrently.
 
 	virtual bool is_closable() {return true;}
-	virtual bool is_send_allowed() {return !paused_sending && !stopped();} //can send msg or not(just put into send buffer)
 
 	//generally, you don't have to rewrite this to maintain the status of connections(TCP)
 	virtual void on_send_error(const asio::error_code& ec) {unified_out::error_out("send msg error (%d %s)", ec.value(), ec.message().data());}
 	//receiving error or peer endpoint quit(false ec means ok)
 	virtual void on_recv_error(const asio::error_code& ec) = 0;
+	virtual bool on_heartbeat_error() = 0; //heartbeat timed out, return true to continue heartbeat function (useful for UDP)
+
 	//if ASCS_DELAY_CLOSE is equal to zero, in this callback, socket guarantee that there's no any other async call associated it,
 	// include user timers(created by set_timer()) and user async calls(started via post()), this means you can clean up any resource
 	// in this socket except this socket itself, because this socket maybe is being maintained by object_pool.
@@ -197,10 +221,9 @@ protected:
 
 	//handling msg in om_msg_handle() will not block msg receiving on the same socket
 	//return true means msg been handled, false means msg cannot be handled right now, and socket will re-dispatch it asynchronously
-	//if link_down is true, no matter return true or false, socket will not maintain this msg anymore, and continue dispatch the next msg continuously
 	//
 	//notice: the msg is unpacked, using inconstant is for the convenience of swapping
-	virtual bool on_msg_handle(OutMsgType& msg, bool link_down) = 0;
+	virtual bool on_msg_handle(OutMsgType& msg) = 0;
 
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
 	//one msg has sent to the kernel buffer, msg is the right msg
@@ -213,19 +236,32 @@ protected:
 	virtual void on_all_msg_send(InMsgType& msg) {}
 #endif
 
-	//subclass notify shutdown event, not thread safe
-	void close()
+	//subclass notify shutdown event
+	bool close()
 	{
-		if (started_)
-		{
-			started_ = false;
+		if (!started_)
+			return false;
 
-			if (is_closable())
-			{
-				set_async_calling(true);
-				set_timer(TIMER_DELAY_CLOSE, ASCS_DELAY_CLOSE * 1000 + 50, [this](auto id)->bool {return this->timer_handler(id);});
-			}
+		scope_atomic_lock lock(start_atomic);
+		if (!started_ || !lock.locked())
+			return false;
+
+		started_ = false;
+		stop_all_timer();
+
+		if (lowest_layer().is_open())
+		{
+			asio::error_code ec;
+			lowest_layer().shutdown(asio::ip::tcp::socket::shutdown_both, ec);
 		}
+
+		if (is_closable())
+		{
+			set_async_calling(true);
+			set_timer(TIMER_DELAY_CLOSE, ASCS_DELAY_CLOSE * 1000 + 50, [this](tid id)->bool {return this->timer_handler(id);});
+		}
+
+		return true;
 	}
 
 	//call this in subclasses' recv_handler only
@@ -234,10 +270,10 @@ protected:
 	{
 #ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
 		decltype(temp_msg_buffer) temp_buffer;
-		if (!temp_msg_buffer.empty() && !paused_dispatching && !congestion_controlling)
+		if (!temp_msg_buffer.empty() && !congestion_controlling)
 		{
 			auto_duration(stat.handle_time_1_sum);
-			for (auto iter = std::begin(temp_msg_buffer); !paused_dispatching && !congestion_controlling && iter != std::end(temp_msg_buffer);)
+			for (auto iter = std::begin(temp_msg_buffer); !congestion_controlling && iter != std::end(temp_msg_buffer);)
 				if (on_msg(*iter))
 					temp_msg_buffer.erase(iter++);
 				else
@@ -254,15 +290,15 @@ protected:
 		}
 
 		if (temp_msg_buffer.empty() && recv_msg_buffer.size() < ASCS_MAX_MSG_NUM)
-			do_recv_msg(); //receive msg sequentially, which means second receiving only after first receiving success
+			do_recv_msg(); //receive msg in sequence
 		else
 		{
 			recv_idle_begin_time = statistic::now();
-			set_timer(TIMER_HANDLE_MSG, 50, [this](auto id)->bool {return this->timer_handler(id);});
+			set_timer(TIMER_HANDLE_MSG, 50, [this](tid id)->bool {return this->timer_handler(id);});
 		}
 	}
 
-	//return false if receiving buffer is empty or dispatching not allowed (include io_service stopped)
+	//return false if receiving buffer is empty
 	bool dispatch_msg()
 	{
 		if (!dispatching)
@@ -281,26 +317,10 @@ protected:
 		return dispatching;
 	}
 
-	//return false if receiving buffer is empty or dispatching not allowed (include io_service stopped)
+	//return false if receiving buffer is empty
 	bool do_dispatch_msg()
 	{
-		if (paused_dispatching)
-			;
-		else if (stopped())
-		{
-#ifndef ASCS_DISCARD_MSG_WHEN_LINK_DOWN
-			if (!last_dispatch_msg.empty())
-				on_msg_handle(last_dispatch_msg, true);
-#endif
-			typename out_container_type::lock_guard lock(recv_msg_buffer);
-#ifndef ST_ASIO_DISCARD_MSG_WHEN_LINK_DOWN
-			while (recv_msg_buffer.try_dequeue_(last_dispatch_msg))
-				on_msg_handle(last_dispatch_msg, true);
-#endif
-			recv_msg_buffer.clear();
-			last_dispatch_msg.clear();
-		}
-		else if (!last_dispatch_msg.empty() || recv_msg_buffer.try_dequeue(last_dispatch_msg))
+		if (!last_dispatch_msg.empty() || recv_msg_buffer.try_dequeue(last_dispatch_msg))
 		{
 			post([this]() {this->msg_handler();});
 			return true;
@@ -345,9 +365,7 @@ private:
 		case TIMER_DELAY_CLOSE:
 			if (!is_last_async_call())
 			{
-				stop_all_timer();
-				revive_timer(TIMER_DELAY_CLOSE);
-
+				stop_all_timer(TIMER_DELAY_CLOSE);
 				return true;
 			}
 			else if (lowest_layer().is_open())
@@ -357,7 +375,6 @@ private:
 			}
 			on_close();
 			set_async_calling(false);
-
 			break;
 		default:
 			assert(false);
@@ -371,7 +388,7 @@ private:
 	{
 		auto begin_time = statistic::now();
 		stat.dispatch_dealy_sum += begin_time - last_dispatch_msg.begin_time;
-		bool re = on_msg_handle(last_dispatch_msg, false); //must before next msg dispatching to keep sequence
+		bool re = on_msg_handle(last_dispatch_msg); //must before next msg dispatching to keep sequence
 		auto end_time = statistic::now();
 		stat.handle_time_2_sum += end_time - begin_time;
 
@@ -379,9 +396,9 @@ private:
 		{
 			last_dispatch_msg.restart(end_time);
 			dispatching = false;
-			set_timer(TIMER_DISPATCH_MSG, 50, [this](auto id)->bool {return this->timer_handler(id);});
+			set_timer(TIMER_DISPATCH_MSG, 50, [this](tid id)->bool {return this->timer_handler(id);});
 		}
-		else //dispatch msg sequentially, which means second dispatching only after first dispatching success
+		else //dispatch msg in sequence
 		{
 			last_dispatch_msg.clear();
 			if (!do_dispatch_msg())
@@ -403,17 +420,13 @@ protected:
 	in_container_type send_msg_buffer;
 	out_container_type recv_msg_buffer;
 	std::list<out_msg> temp_msg_buffer; //the size of this list is always very small, so std::list is enough (std::list::size maybe has linear complexity)
-	//subclass will invoke handle_msg() when got some msgs. if these msgs can't be pushed into recv_msg_buffer because of:
-	// 1. msg dispatching suspended;
-	// 2. congestion control opened;
-	//ascs::socket will delay 50 milliseconds(non-blocking) to invoke handle_msg() again, and now, as you known, temp_msg_buffer is used to hold these msgs temporarily.
+	//subclass will invoke handle_msg() when got some msgs. if these msgs can't be dispatched via on_msg() because of congestion control opened,
+	//ascs::socket will delay 50 milliseconds(non-blocking) to invoke handle_msg() again, temp_msg_buffer is used to hold these msgs temporarily.
 
 	volatile bool sending;
-	bool paused_sending;
 	std::atomic_flag send_atomic;
 
 	volatile bool dispatching;
-	bool paused_dispatching;
 	std::atomic_flag dispatch_atomic;
 
 	volatile bool congestion_controlling;
@@ -423,6 +436,9 @@ protected:
 
 	struct statistic stat;
 	typename statistic::stat_time recv_idle_begin_time;
+
+	//used by heartbeat function, subclass need to refresh them
+	time_t last_send_time, last_recv_time;
 };
 
 } //namespace

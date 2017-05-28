@@ -6,8 +6,9 @@
 #define ASCS_DELAY_CLOSE	5 //define this to avoid hooks for async call (and slightly improve efficiency)
 //#define ASCS_INPUT_QUEUE non_lock_queue
 //we cannot use non_lock_queue, because we also send messages (talking messages) out of ascs::socket::on_msg_send().
-#define ASCS_HEARTBEAT_INTERVAL	5
 #define ASCS_DEFAULT_UNPACKER replaceable_unpacker<>
+#define ASCS_RECV_BUFFER_TYPE std::vector<asio::mutable_buffer> //scatter-gather buffer, it's very useful under certain situations (for example, ring buffer).
+#define ASCS_SCATTERED_RECV_BUFFER //used by unpackers, not belongs to ascs
 //configuration
 
 #include "file_client.h"
@@ -40,11 +41,11 @@ int main(int argc, const char* argv[])
 //		argv[2] = "::1" //ipv6
 //		argv[2] = "127.0.0.1" //ipv4
 		if (argc > 2)
-			client.add_client(atoi(argv[1]), argv[2])->set_index(i);
+			client.add_socket(atoi(argv[1]), argv[2])->set_index(i);
 		else if (argc > 1)
-			client.add_client(atoi(argv[1]))->set_index(i);
+			client.add_socket(atoi(argv[1]))->set_index(i);
 		else
-			client.add_client()->set_index(i);
+			client.add_socket()->set_index(i);
 	}
 
 	sp.start_service();
@@ -63,15 +64,16 @@ int main(int argc, const char* argv[])
 		{
 			str.erase(0, sizeof(REQUEST_FILE));
 			auto files = split_string(str);
-			do_something_to_all(files, [&](const auto& item) {
+			do_something_to_all(files, [&](const std::string& item) {
 				completed_client_num = 0;
 				file_size = 0;
 
 				printf("transfer %s begin.\n", item.data());
 				if (client.find(0)->get_file(item))
 				{
+					//client.do_something_to_all([&item](file_client::object_ctype& item2) {if (0 != item2->id()) item2->get_file(item);});
 					//if you always return false, do_something_to_one will be equal to do_something_to_all.
-					client.do_something_to_one([&item](auto& item2)->bool {if (0 != item2->id()) item2->get_file(item); return false;});
+					client.do_something_to_one([&item](file_client::object_ctype& item2)->bool {if (0 != item2->id()) item2->get_file(item); return false;});
 					client.start();
 
 					while (completed_client_num != (unsigned short) link_num)

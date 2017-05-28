@@ -200,17 +200,18 @@ ascs默认提供了三种消息队列供你选择，一是concurrent queue，它
 是否支持scatter-gather缓存，即一次提供多个不连续的缓存用于接收消息，如果你使用了ring buffer，相信你知道我在说什么。
 
 #ifndef ASCS_HEARTBEAT_INTERVAL
-#define ASCS_HEARTBEAT_INTERVAL	5 //second(s)
+#define ASCS_HEARTBEAT_INTERVAL	0 //second(s)
 #endif
-发送心跳包间隔，在此间隔中，如果有消息被接收或者被成功发送，将不会发送心跳包，直到下一个间隔再发。
-心跳包通过OOB通道实现。注意，从linux发送心跳包到windows，接收方会把心跳包当成普通的数据而造成解包失败，原因未知。
-如果想关闭心跳包，定义这个宏为0即可，此时你仍然可以以自己的逻辑来发送接收心跳包，并判断连接的有效性，只需要你调用connector_base::check_heartbeat或者
-server_socket_base::check_heartbeat即可，非常简单。
+发送心跳包间隔，在此间隔中，如果有消息被发送，将不会发送心跳包，直到下一个间隔再发。心跳包通过调用打包器的pack_heartbeat函数得到。
+如果想关闭心跳包，定义这个宏为0即可，此时你仍然可以以自己的逻辑来发送接收心跳包，并判断连接的有效性，只需要你调用check_heartbeat或者
+start_heartbeat即可，前者检测（然后如果未超时的话，将发送一个心跳包）一次，后者定时检查。
 
 #ifndef ASCS_HEARTBEAT_MAX_ABSENCE
 #define ASCS_HEARTBEAT_MAX_ABSENCE	3 //times of ASCS_HEARTBEAT_INTERVAL
 #endif
 static_assert(ASCS_HEARTBEAT_MAX_ABSENCE > 0, "heartbeat absence must be bigger than zero.");
-在ASCS_HEARTBEAT_INTERVAL * ASCS_HEARTBEAT_MAX_ABSENCE秒之内，如果没有任何数据收发，也没有收到心跳包，连接被认为是意外中断。注意，即便你自己调用
-connector_base::check_heartbeat或者server_socket_base::check_heartbeat，这个宏仍然需要，所以它必须大于0。
+在ASCS_HEARTBEAT_INTERVAL * ASCS_HEARTBEAT_MAX_ABSENCE秒之内，如果没有收到任何数据，连接被认为是意外中断。
+
+//#define ASCS_REUSE_SSL_STREAM
+定义这个宏，ssl::server_socket_base和ssl::connector_base将支持重用。
 //configurations

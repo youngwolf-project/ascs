@@ -9,12 +9,16 @@
  *
  * ascs top header file.
  *
- * license: www.boost.org/LICENSE_1_0.txt
+ * license: http://think-async.com/ (the current is www.boost.org/LICENSE_1_0.txt)
  *
  * Known issues:
- * 1. concurrentqueue is not a FIFO queue (it is by design), navigate to the following links for more deatils:
+ * 1. since 1.1.0, concurrentqueue is not a FIFO queue (it is by design), navigate to the following links for more deatils:
  *  https://github.com/cameron314/concurrentqueue/issues/6
  *  https://github.com/cameron314/concurrentqueue/issues/52
+ *  if you're using concurrentqueue, please play attention, this is by design.
+ * 2. since 1.1.5 until 1.2, heartbeat function cannot work properly between windows (at least win-10) and Ubuntu (at least Ubuntu-16.04).
+ * 3. since 1.1.5 until 1.2, UDP doesn't support heartbeat because UDP doesn't support OOB data.
+ * 4. since 1.1.5 until 1.2, SSL doesn't support heartbeat because SSL doesn't support OOB data.
  *
  * 2016.9.25	version 1.0.0
  * Based on st_asio_wrapper 1.2.0.
@@ -85,10 +89,59 @@
  * Fix bug: In extreme cases, messages may get starved in send buffer and will not be sent until arrival of next message.
  * Fix bug: Sometimes, connector_base cannot reconnect to the server after link broken.
  *
- * known issues:
- * 1. heartbeat mechanism cannot work properly between windows (at least win-10) and Ubuntu (at least Ubuntu-16.04).
- * 2. UDP doesn't support heartbeat because UDP doesn't support OOB data.
- * 3. SSL doesn't support heartbeat (maybe I missed an option, I'm not familiar with SSL).
+ * ===============================================================
+ * 2017.5.30		version 1.2.0
+ *
+ * SPECIAL ATTENTION (incompatible with old editions):
+ * Virtual function reset_state in i_packer and i_unpacker have been renamed to reset.
+ * Virtual function is_send_allowed has been renamed to is_ready, it also means ready to receive messages
+ *  since message sending is not suspendable any more.
+ * Virtual function on_msg_handle has been changed, the link_down variable will not be presented any more.
+ * Interface i_server::del_client has been renamed to i_server::del_socket.
+ * Function inner_packer and inner_unpacker have been renamed to packer and unpacker.
+ * All add_client functions have been renamed to add_socket.
+ *
+ * HIGHLIGHT:
+ * Support object restoration (on server side), see macro ASCS_RESTORE_OBJECT for more details.
+ * Re-implement heartbeat function, use user data (so need packer and unpacker's support) instead of OOB, now there will be no any
+ *  limitations for using heartbeat.
+ * Refactor and optimize ssl objects, now ssl::connector_base and ssl::server_socket_base are reusable,
+ *  just need you to define macro ASCS_REUSE_SSL_STREAM.
+ *
+ * FIX:
+ * Before on_close() to be called, socket::start becomes available (so user can call it falsely).
+ * If a timer failed or stopped by callback, its status not set properly (should be set to TIMER_CANCELED).
+ * Make ssl shutting down thread safe.
+ *
+ * ENHANCEMENTS:
+ * Virtual function i_packer::pack_heartbeat been introduced to support heartbeat function.
+ * Interface i_server::restore_socket been added, see macro ASCS_RESTORE_OBJECT for more details.
+ * Be able to manually start heartbeat function without defining macro ASCS_HEARTBEAT_INTERVAL, see demo echo_server for more details.
+ * Support sync mode when sending messages, it's also a type of congestion control like safe_send_msg.
+ * Expand enum tcp::socket::shutdown_states, now it's able to represent all SOCKET status (connected, shutting down and broken),
+ *  so rename it to link_status.
+ * Enhance class timer (function is_timer and another stop_all_timer been added).
+ * Support all buffer types that asio supported when receiving messages, use macro ASCS_RECV_BUFFER_TYPE (it's the only way) to define the buffer type,
+ *  it's effective for both TCP and UDP.
+ *
+ * DELETION:
+ * Drop ASCS_HAS_STD_SHARED_MUTEX macro.
+ * Drop ASCS_DISCARD_MSG_WHEN_LINK_DOWN macro and related logic, because it brings complexity and race condition,
+ *  and are not very useful.
+ * Not support pausing message sending and dispatching any more, because they bring complexity and race condition,
+ *  and are not very useful.
+ *
+ * REFACTORING:
+ * Move heartbeat function from connector_base and server_socket_base to socket, so introduce new virtual function
+ *  virtual void on_heartbeat_error() to socket, subclass need to implement it.
+ * Move async shutdown function from connector_base and server_socket_base to socket, so introduce new virtual function
+ *  virtual void on_async_shutdown_error() to socket, subclass need to implement it.
+ * Move handshake from ssl::server_base to ssl::server_socket_base.
+ *
+ * REPLACEMENTS:
+ * Use std::mutex instead of std::shared_mutex (the former is more efficient in ascs' usage scenario), thus c++11 is enough for ascs.
+ * Move macro ASCS_SCATTERED_RECV_BUFFER from ascs to ascs::ext, because it doesn't belong to ascs any more after introduced macro ASCS_RECV_BUFFER_TYPE.
+ * Move directory include/ascs/ssl into directory include/ascs/tcp/, because ssl is based on ascs::tcp.
  *
  */
 
@@ -99,39 +152,42 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#define ASCS_VER		10105	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.1.5"
+#define ASCS_VER		10200	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.2.0"
 
 //asio and compiler check
 #ifdef _MSC_VER
-	#define ASCS_SF "%Iu" //printing format for 'size_t'
-	static_assert(_MSC_VER >= 1900, "ascs need Visual C++ 14.0 or higher.");
-	#include <shared_mutex> //include this after compiler checking, this will gave user a more useful error message.
-	#ifdef _HAS_SHARED_MUTEX
-	#define ASCS_HAS_STD_SHARED_MUTEX
+	#define ASCS_SF "%Iu" //format used to print 'size_t'
+	static_assert(_MSC_VER >= 1700, "ascs needs Visual C++ 11.0 or higher.");
+
+	#if _MSC_VER >= 1800
+		#define ASCS_HAS_TEMPLATE_USING
 	#endif
 #elif defined(__GNUC__)
-	#define ASCS_SF "%zu" //printing format for 'size_t'
+	#define ASCS_SF "%zu" //format used to print 'size_t'
+	#ifdef __x86_64__
+	#define ASCS_LLF "%lu" //format used to print 'uint_fast64_t'
+	#endif
 	#ifdef __clang__
-		static_assert(__clang_major__ > 3 || (__clang_major__ == 3 && __clang_minor__ >= 4), "ascs need Clang 3.4 or higher.");
+		static_assert(__clang_major__ > 3 || (__clang_major__ == 3 && __clang_minor__ >= 1), "ascs needs Clang 3.1 or higher.");
 	#else
-		static_assert(__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 9), "ascs need GCC 4.9 or higher.");
-		#if __GNUC__ > 5 && __cplusplus <= 201402L
-		#warning your compiler maybe support c++17, please open it (-std=c++17), then ascs will be able to use std::shared_mutex.
-		#endif
+		static_assert(__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6), "ascs needs GCC 4.6 or higher.");
 	#endif
 
-	#if !defined(__cplusplus) || __cplusplus <= 201103L
-		#error ascs at least need c++14.
-	#elif __cplusplus > 201402L //TBD
-	#define ASCS_HAS_STD_SHARED_MUTEX
+	#if !defined(__GXX_EXPERIMENTAL_CXX0X__) && (!defined(__cplusplus) || __cplusplus < 201103L)
+		#error ascs needs c++11 or higher.
 	#endif
-	#include <shared_mutex> //include this after compiler checking, this will gave user a more useful error message.
+
+	#define ASCS_HAS_TEMPLATE_USING
 #else
 	#error ascs only support Visual C++, GCC and Clang.
 #endif
 
-static_assert(ASIO_VERSION >= 101001, "ascs need asio 1.10.1 or higher.");
+#ifndef ASCS_LLF
+#define ASCS_LLF "%llu" //format used to print 'uint_fast64_t'
+#endif
+
+static_assert(ASIO_VERSION >= 101001, "ascs needs asio 1.10.1 or higher.");
 //asio and compiler check
 
 //configurations
@@ -189,9 +245,6 @@ static_assert(ASCS_DELAY_CLOSE >= 0, "delay close duration must be bigger than o
 //after sending buffer became empty, call ascs::socket::on_all_msg_send()
 //#define ASCS_WANT_ALL_MSG_SEND_NOTIFY
 
-//when link down, msgs in receiving buffer (already unpacked) will be discarded.
-//#define ASCS_DISCARD_MSG_WHEN_LINK_DOWN
-
 //max number of objects object_pool can hold.
 #ifndef ASCS_MAX_OBJECT_NUM
 #define ASCS_MAX_OBJECT_NUM	4096
@@ -201,10 +254,25 @@ static_assert(ASCS_MAX_OBJECT_NUM > 0, "object capacity must be bigger than zero
 //if defined, objects will never be freed, but remain in object_pool waiting for reuse.
 //#define ASCS_REUSE_OBJECT
 
-//define ASCS_REUSE_OBJECT macro will enable object pool, all objects in invalid_object_can will never be freed, but kept for reuse,
-//otherwise, object_pool will free objects in invalid_object_can automatically and periodically, ASCS_FREE_OBJECT_INTERVAL means the interval, unit is second,
-//see invalid_object_can at the end of object_pool class for more details.
-#ifndef ASCS_REUSE_OBJECT
+//this macro has the same effects as macro ASCS_REUSE_OBJECT (it will overwrite the latter), except:
+//reuse will not happen when create new connections, but just happen when invoke i_server::restore_socket.
+//you may ask, for what purpose we introduced this feature?
+//consider following situation:
+//if a specific link is down, and the client has reconnected to the server, on the server side, how does the new server_socket_base
+//restore all user data (because you don't want to nor need to reestablish them) and keep its id?
+//before this feature been introduced, it's almost impossible.
+//according to above explanation, we know that:
+//1. like object pool, only objects in invalid_object_can can be restored;
+//2. client need to inform server_socket_base the former id (or something else which can be used to calculate the former id
+//   on the server side) after reconnected to the server;
+//3. this feature needs user's support (send former id to server side on client side, invoke i_server::restore_socket in server_socket_base);
+//4. do not define this macro on client side nor for UDP.
+//#define ASCS_RESTORE_OBJECT
+
+//define ASCS_REUSE_OBJECT or ASCS_RESTORE_OBJECT macro will enable object pool, all objects in invalid_object_can will
+// never be freed, but kept for reuse, otherwise, object_pool will free objects in invalid_object_can automatically and periodically,
+//ASCS_FREE_OBJECT_INTERVAL means the interval, unit is second, see invalid_object_can in object_pool class for more details.
+#if !defined(ASCS_REUSE_OBJECT) && !defined(ASCS_RESTORE_OBJECT)
 	#ifndef ASCS_FREE_OBJECT_INTERVAL
 	#define ASCS_FREE_OBJECT_INTERVAL	60 //seconds
 	#elif ASCS_FREE_OBJECT_INTERVAL <= 0
@@ -259,15 +327,21 @@ static_assert(ASCS_ASYNC_ACCEPT_NUM > 0, "async accept number must be bigger tha
 //close port reuse
 //#define ASCS_NOT_REUSE_ADDRESS
 
-//If your compiler detected duplicated 'shared_mutex' definition, please define this macro.
-#ifndef ASCS_HAS_STD_SHARED_MUTEX
-namespace std {typedef shared_timed_mutex shared_mutex;}
-#endif
-
 //ConcurrentQueue is lock-free, please refer to https://github.com/cameron314/concurrentqueue
 #ifdef ASCS_HAS_CONCURRENT_QUEUE
-#include <concurrentqueue.h>
-template<typename T> using concurrent_queue = moodycamel::ConcurrentQueue<T>;
+	#include <concurrentqueue.h>
+
+	#ifdef ASCS_HAS_TEMPLATE_USING
+	template<typename T> using concurrent_queue = moodycamel::ConcurrentQueue<T>;
+	#else
+	template<typename T> class concurrent_queue : public moodycamel::ConcurrentQueue<T>
+	{
+	public:
+		concurrent_queue() {}
+		explicit concurrent_queue(size_t capacity) : moodycamel::ConcurrentQueue<T>(capacity) {}
+	};
+	#endif
+
 	#ifndef ASCS_INPUT_QUEUE
 	#define ASCS_INPUT_QUEUE lock_free_queue
 	#endif
@@ -298,26 +372,31 @@ template<typename T> using concurrent_queue = moodycamel::ConcurrentQueue<T>;
 //'server_socket_base', 'ssl::connector_base' and 'ssl::server_socket_base'.
 //we even can let a socket to use different queue (and / or different container) for input and output via template parameters.
 
-//#define ASCS_SCATTERED_RECV_BUFFER
-//define this macro will let ascs to support scatter-gather buffers when doing async read,
-//it's very useful under certain situations (for example, you're using ring buffer in unpacker).
+//buffer type used when receiving messages (unpacker's prepare_next_recv() need to return this type)
+#ifndef ASCS_RECV_BUFFER_TYPE
+#define ASCS_RECV_BUFFER_TYPE asio::mutable_buffers_1
+#endif
 
 #ifndef ASCS_HEARTBEAT_INTERVAL
 #define ASCS_HEARTBEAT_INTERVAL	0 //second(s), disable heartbeat by default, just for compatibility
 #endif
 //at every ASCS_HEARTBEAT_INTERVAL second(s):
-// 1. connector_base will send an OOB data (heartbeat) if no normal messages been sent not received within this interval,
-// 2. server_socket_base will try to recieve all OOB data (heartbeat) which has been recieved by system.
-// 3. both endpoints will check the link's connectedness, see ASCS_HEARTBEAT_MAX_ABSENCE macro for more details.
+// 1. tcp::socket_base will send an heartbeat if no messages been sent within this interval,
+// 2. tcp::socket_base will check the link's connectedness, see ASCS_HEARTBEAT_MAX_ABSENCE macro for more details.
 //less than or equal to zero means disable heartbeat, then you can send and check heartbeat with you own logic by calling
-//connector_base::check_heartbeat or server_socket_base::check_heartbeat, and you still need a valid ASCS_HEARTBEAT_MAX_ABSENCE, please note.
+//tcp::socket_base::check_heartbeat (do above steps one time) or tcp::socket_base::start_heartbeat (do above steps regularly).
 
 #ifndef ASCS_HEARTBEAT_MAX_ABSENCE
 #define ASCS_HEARTBEAT_MAX_ABSENCE	3 //times of ASCS_HEARTBEAT_INTERVAL
 #endif
 static_assert(ASCS_HEARTBEAT_MAX_ABSENCE > 0, "heartbeat absence must be bigger than zero.");
-//if no any messages been sent or received, nor any heartbeats been received within
-//ASCS_HEARTBEAT_INTERVAL * ASCS_HEARTBEAT_MAX_ABSENCE second(s), shut down the link.
+//if no any messages (include heartbeat) been received within ASCS_HEARTBEAT_INTERVAL * ASCS_HEARTBEAT_MAX_ABSENCE second(s), shut down the link.
+
+//#define ASCS_REUSE_SSL_STREAM
+//if you need ssl::connector_base to be able to reconnect the server, or to open object pool in ssl::object_pool, you must define this macro.
+//i tried many ways, onle one way can make asio::ssl::stream reusable, which is:
+// don't call any shutdown functions of asio::ssl::stream, just call asio::ip::tcp::socket's shutdown function,
+// this seems not a normal procedure, but it works, i believe that asio's defect caused this problem.
 //configurations
 
 #endif /* _ASCS_CONFIG_H_ */

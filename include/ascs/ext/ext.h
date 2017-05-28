@@ -27,6 +27,21 @@
 #endif
 static_assert(ASCS_MSG_BUFFER_SIZE > 0, "message buffer size must be bigger than zero.");
 
+//#define ASCS_SCATTERED_RECV_BUFFER
+//define this macro will introduce scatter-gather buffers when doing async read, it's very useful under certain situations (for example, ring buffer).
+//this macro is used by unpackers only, it doesn't belong to ascs.
+
+#ifdef ASCS_HUGE_MSG
+#define ASCS_HEAD_TYPE	uint32_t
+#define ASCS_HEAD_H2N	htonl
+#define ASCS_HEAD_N2H	ntohl
+#else
+#define ASCS_HEAD_TYPE	uint16_t
+#define ASCS_HEAD_H2N	htons
+#define ASCS_HEAD_N2H	ntohs
+#endif
+#define ASCS_HEAD_LEN	(sizeof(ASCS_HEAD_TYPE))
+
 namespace ascs { namespace ext {
 
 //implement i_buffer interface, then string_buffer can be wrapped by replaceable_buffer
@@ -38,14 +53,23 @@ public:
 	virtual const char* data() const {return std::string::data();}
 };
 
-class basic_buffer : public asio::detail::noncopyable
+class basic_buffer
+#if !defined(_MSC_VER) || _MSC_VER >= 1800 //for naughty VC++, it violate the standard and even itself usually.
+	: public asio::detail::noncopyable //seems asio's noncopyable is not as good as boost's.
+#endif
 {
 public:
 	basic_buffer() {do_detach();}
 	basic_buffer(size_t len) {do_detach(); assign(len);}
+#if defined(_MSC_VER) && _MSC_VER <= 1700 //for naughty VC++, it violate the standard and even itself usually.
+	basic_buffer(const basic_buffer& other) {do_detach(); *this = other;}
+#endif
 	basic_buffer(basic_buffer&& other) {do_attach(other.buff, other.len, other.buff_len); other.do_detach();}
 	~basic_buffer() {clear();}
 
+#if defined(_MSC_VER) && _MSC_VER <= 1700 //for naughty VC++, it violate the standard and even itself usually.
+	basic_buffer& operator=(const basic_buffer& other) {if (other.empty()) clear(); else {assign(other.size()); memcpy(buff, other.buff, other.size());} return *this;}
+#endif
 	basic_buffer& operator=(basic_buffer&& other) {clear(); swap(other); return *this;}
 	void assign(size_t len) {clear(); do_attach(new char[len], len, len);}
 
