@@ -112,6 +112,7 @@
  * Before on_close() to be called, socket::start becomes available (so user can call it falsely).
  * If a timer failed or stopped by callback, its status not set properly (should be set to TIMER_CANCELED).
  * Make ssl shutting down thread safe.
+ * Make reconnecting after all async invocations (like object reusing or restoration).
  *
  * ENHANCEMENTS:
  * Virtual function i_packer::pack_heartbeat been introduced to support heartbeat function.
@@ -128,6 +129,7 @@
  * Drop ASCS_HAS_STD_SHARED_MUTEX macro.
  * Drop ASCS_DISCARD_MSG_WHEN_LINK_DOWN macro and related logic, because it brings complexity and race condition,
  *  and are not very useful.
+ * Drop socket::is_closable, tcp::connector_base will overwrite socket::on_close to implement reconnecting mechanism.
  * Not support pausing message sending and dispatching any more, because they bring complexity and race condition,
  *  and are not very useful.
  *

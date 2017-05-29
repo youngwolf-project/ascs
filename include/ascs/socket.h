@@ -192,8 +192,6 @@ protected:
 	virtual void do_recv_msg() = 0;
 	//ascs::socket will guarantee not call these 3 functions in more than one thread concurrently.
 
-	virtual bool is_closable() {return true;}
-
 	//generally, you don't have to rewrite this to maintain the status of connections(TCP)
 	virtual void on_send_error(const asio::error_code& ec) {unified_out::error_out("send msg error (%d %s)", ec.value(), ec.message().data());}
 	//receiving error or peer endpoint quit(false ec means ok)
@@ -255,11 +253,8 @@ protected:
 			lowest_layer().shutdown(asio::ip::tcp::socket::shutdown_both, ec);
 		}
 
-		if (is_closable())
-		{
-			set_async_calling(true);
-			set_timer(TIMER_DELAY_CLOSE, ASCS_DELAY_CLOSE * 1000 + 50, [this](tid id)->bool {return this->timer_handler(id);});
-		}
+		set_async_calling(true);
+		set_timer(TIMER_DELAY_CLOSE, ASCS_DELAY_CLOSE * 1000 + 50, [this](tid id)->bool {return this->timer_handler(id);});
 
 		return true;
 	}
