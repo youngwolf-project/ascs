@@ -48,10 +48,10 @@ std::atomic_ushort completed_session_num;
 //which means pingpong_server can send msgs back with can_overflow parameter equal to true, and memory occupation
 //will be under control.
 
-class echo_socket : public connector
+class echo_socket : public client_socket
 {
 public:
-	echo_socket(asio::io_service& io_service_) : connector(io_service_) {}
+	echo_socket(asio::io_service& io_service_) : client_socket(io_service_) {}
 
 	void begin(size_t msg_num, const char* msg, size_t msg_len)
 	{
@@ -63,7 +63,7 @@ public:
 	}
 
 protected:
-	virtual void on_connect() {asio::ip::tcp::no_delay option(true); lowest_layer().set_option(option); connector::on_connect();}
+	virtual void on_connect() {asio::ip::tcp::no_delay option(true); lowest_layer().set_option(option); client_socket::on_connect();}
 
 	//msg handling
 #ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER

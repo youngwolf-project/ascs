@@ -134,7 +134,7 @@ public:
 	{
 		assert(interval > 0 && max_absence > 0);
 
-		if (is_ready() && last_recv_time > 0) //check of last_recv_time is essential, because user may call check_heartbeat before do_start
+		if (last_recv_time > 0 && is_ready()) //check of last_recv_time is essential, because user may call check_heartbeat before do_start
 		{
 			auto now = time(nullptr);
 			if (now - last_recv_time >= interval * max_absence)
@@ -194,8 +194,7 @@ protected:
 
 	//generally, you don't have to rewrite this to maintain the status of connections(TCP)
 	virtual void on_send_error(const asio::error_code& ec) {unified_out::error_out("send msg error (%d %s)", ec.value(), ec.message().data());}
-	//receiving error or peer endpoint quit(false ec means ok)
-	virtual void on_recv_error(const asio::error_code& ec) = 0;
+	virtual void on_recv_error(const asio::error_code& ec) = 0; //receiving error or peer endpoint quit(false ec means ok)
 	virtual bool on_heartbeat_error() = 0; //heartbeat timed out, return true to continue heartbeat function (useful for UDP)
 
 	//if ASCS_DELAY_CLOSE is equal to zero, in this callback, socket guarantee that there's no any other async call associated it,
@@ -254,7 +253,7 @@ protected:
 		}
 
 		set_async_calling(true);
-		set_timer(TIMER_DELAY_CLOSE, ASCS_DELAY_CLOSE * 1000 + 50, [this](tid id)->bool {return this->timer_handler(id);});
+		set_timer(TIMER_DELAY_CLOSE, ASCS_DELAY_CLOSE * 1000 + 50, [this](tid id)->bool {return this->timer_handler(TIMER_DELAY_CLOSE);});
 
 		return true;
 	}
@@ -289,7 +288,7 @@ protected:
 		else
 		{
 			recv_idle_begin_time = statistic::now();
-			set_timer(TIMER_HANDLE_MSG, 50, [this](tid id)->bool {return this->timer_handler(id);});
+			set_timer(TIMER_HANDLE_MSG, 50, [this](tid id)->bool {return this->timer_handler(TIMER_HANDLE_MSG);});
 		}
 	}
 
@@ -368,6 +367,7 @@ private:
 				asio::error_code ec;
 				lowest_layer().close(ec);
 			}
+			change_timer_status(TIMER_DELAY_CLOSE, timer_info::TIMER_CANCELED);
 			on_close();
 			set_async_calling(false);
 			break;
@@ -391,7 +391,7 @@ private:
 		{
 			last_dispatch_msg.restart(end_time);
 			dispatching = false;
-			set_timer(TIMER_DISPATCH_MSG, 50, [this](tid id)->bool {return this->timer_handler(id);});
+			set_timer(TIMER_DISPATCH_MSG, 50, [this](tid id)->bool {return this->timer_handler(TIMER_DISPATCH_MSG);});
 		}
 		else //dispatch msg in sequence
 		{

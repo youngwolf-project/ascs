@@ -80,16 +80,11 @@ public:
 	void update_timer_info(tid id, size_t interval, const std::function<bool(tid)>& call_back, bool start = false)
 		{update_timer_info(id, interval, std::function<bool(tid)>(call_back), start);}
 
+	void change_timer_status(tid id, timer_info::timer_status status) {timer_can[id].status = status;}
 	void change_timer_interval(tid id, size_t interval) {timer_can[id].interval_ms = interval;}
 
-	bool revive_timer(tid id)
-	{
-		if (timer_info::TIMER_FAKE == timer_can[id].status)
-			return false;
-
-		timer_can[id].status = timer_info::TIMER_OK;
-		return true;
-	}
+	void change_timer_call_back(tid id, std::function<bool(tid)>&& call_back) {timer_can[id].call_back.swap(call_back);}
+	void change_timer_call_back(tid id, const std::function<bool(tid)>& call_back) {change_timer_call_back(id, std::function<bool(tid)>(call_back));}
 
 	void set_timer(tid id, size_t interval, std::function<bool(tid)>&& call_back) {update_timer_info(id, interval, std::move(call_back), true);}
 	void set_timer(tid id, size_t interval, const std::function<bool(tid)>& call_back) {update_timer_info(id, interval, call_back, true);}

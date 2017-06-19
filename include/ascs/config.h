@@ -145,6 +145,27 @@
  * Move macro ASCS_SCATTERED_RECV_BUFFER from ascs to ascs::ext, because it doesn't belong to ascs any more after introduced macro ASCS_RECV_BUFFER_TYPE.
  * Move directory include/ascs/ssl into directory include/ascs/tcp/, because ssl is based on ascs::tcp.
  *
+ * ===============================================================
+ * 2017.6.19		version 1.2.1
+ *
+ * SPECIAL ATTENTION (incompatible with old editions):
+ *
+ * HIGHLIGHT:
+ *
+ * FIX:
+ * Fix race condition on member variable last_send_msg in tcp::socket_base.
+ *
+ * ENHANCEMENTS:
+ * Optimize reconnecting mechanism.
+ * Enhance class timer.
+ *
+ * DELETION:
+ *
+ * REFACTORING:
+ *
+ * REPLACEMENTS:
+ * Rename connector_base and ssl::connector_base to client_socket_base and ssl::client_socket_base, the former is still available, but is just an alias.
+ *
  */
 
 #ifndef _ASCS_CONFIG_H_
@@ -154,8 +175,8 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#define ASCS_VER		10200	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.2.0"
+#define ASCS_VER		10201	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.2.1"
 
 //asio and compiler check
 #ifdef _MSC_VER
@@ -306,7 +327,7 @@ static_assert(ASCS_SERVICE_THREAD_NUM > 0, "service thread number be bigger than
 static_assert(ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION > 0, "graceful shutdown duration must be bigger than zero.");
 
 //if connecting (or reconnecting) failed, delay how much milliseconds before reconnecting, negative value means stop reconnecting,
-//you can also rewrite ascs::tcp::connector_base::prepare_reconnect(), and return a negative value.
+//you can also rewrite ascs::tcp::client_socket_base::prepare_reconnect(), and return a negative value.
 #ifndef ASCS_RECONNECT_INTERVAL
 #define ASCS_RECONNECT_INTERVAL	500 //millisecond(s)
 #endif
@@ -370,8 +391,8 @@ static_assert(ASCS_ASYNC_ACCEPT_NUM > 0, "async accept number must be bigger tha
 	#define ASCS_OUTPUT_CONTAINER list
 	#endif
 #endif
-//we also can control the queues (and their containers) via template parameters on calss 'connector_base'
-//'server_socket_base', 'ssl::connector_base' and 'ssl::server_socket_base'.
+//we also can control the queues (and their containers) via template parameters on calss 'client_socket_base'
+//'server_socket_base', 'ssl::client_socket_base' and 'ssl::server_socket_base'.
 //we even can let a socket to use different queue (and / or different container) for input and output via template parameters.
 
 //buffer type used when receiving messages (unpacker's prepare_next_recv() need to return this type)
@@ -395,7 +416,7 @@ static_assert(ASCS_HEARTBEAT_MAX_ABSENCE > 0, "heartbeat absence must be bigger 
 //if no any messages (include heartbeat) been received within ASCS_HEARTBEAT_INTERVAL * ASCS_HEARTBEAT_MAX_ABSENCE second(s), shut down the link.
 
 //#define ASCS_REUSE_SSL_STREAM
-//if you need ssl::connector_base to be able to reconnect the server, or to open object pool in ssl::object_pool, you must define this macro.
+//if you need ssl::client_socket_base to be able to reconnect the server, or to open object pool in ssl::object_pool, you must define this macro.
 //i tried many ways, onle one way can make asio::ssl::stream reusable, which is:
 // don't call any shutdown functions of asio::ssl::stream, just call asio::ip::tcp::socket's shutdown function,
 // this seems not a normal procedure, but it works, i believe that asio's defect caused this problem.

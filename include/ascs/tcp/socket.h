@@ -121,7 +121,7 @@ protected:
 			if (ec) //graceful shutdown is impossible
 				shutdown();
 			else if (!sync)
-				this->set_timer(TIMER_ASYNC_SHUTDOWN, 10, [this](timer::tid id)->bool {return this->async_shutdown_handler(id, ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION * 100);});
+				this->set_timer(TIMER_ASYNC_SHUTDOWN, 10, [this](timer::tid id)->bool {return this->async_shutdown_handler(ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION * 100);});
 			else
 			{
 				auto loop_num = ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION * 100; //seconds to 10 milliseconds
@@ -283,22 +283,21 @@ private:
 		}
 		else
 		{
-			this->sending = false;
 			this->on_send_error(ec);
 			last_send_msg.clear(); //clear sending messages after on_send_error, then user can decide how to deal with them in on_send_error
+
+			this->sending = false; //must after the erasure of last_send_msg to avoid race condition
 		}
 	}
 
-	bool async_shutdown_handler(timer::tid id, size_t loop_num)
+	bool async_shutdown_handler(size_t loop_num)
 	{
-		assert(TIMER_ASYNC_SHUTDOWN == id);
-
 		if (link_status::GRACEFUL_SHUTTING_DOWN == this->status)
 		{
 			--loop_num;
 			if (loop_num > 0)
 			{
-				this->update_timer_info(id, 10, [loop_num, this](timer::tid id)->bool {return this->async_shutdown_handler(id, loop_num);});
+				this->update_timer_info(TIMER_ASYNC_SHUTDOWN, 10, [loop_num, this](timer::tid id)->bool {return this->async_shutdown_handler(loop_num);});
 				return true;
 			}
 			else

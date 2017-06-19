@@ -16,7 +16,7 @@
 #include <asio/ssl.hpp>
 
 #include "../../object_pool.h"
-#include "../connector.h"
+#include "../client_socket.h"
 #include "../client.h"
 #include "../server_socket.h"
 #include "../server.h"
@@ -105,13 +105,13 @@ protected:
 template <typename Packer, typename Unpacker, typename Socket = asio::ssl::stream<asio::ip::tcp::socket>,
 	template<typename, typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename, typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
-class connector_base : public socket<tcp::connector_base<Packer, Unpacker, Socket, InQueue, InContainer, OutQueue, OutContainer>>
+class client_socket_base : public socket<tcp::client_socket_base<Packer, Unpacker, Socket, InQueue, InContainer, OutQueue, OutContainer>>
 {
 private:
-	typedef socket<tcp::connector_base<Packer, Unpacker, Socket, InQueue, InContainer, OutQueue, OutContainer>> super;
+	typedef socket<tcp::client_socket_base<Packer, Unpacker, Socket, InQueue, InContainer, OutQueue, OutContainer>> super;
 
 public:
-	connector_base(asio::io_service& io_service_, asio::ssl::context& ctx) : super(io_service_, ctx) {}
+	client_socket_base(asio::io_service& io_service_, asio::ssl::context& ctx) : super(io_service_, ctx) {}
 
 	void disconnect(bool reconnect = false) {force_shutdown(reconnect);}
 	void force_shutdown(bool reconnect = false)
@@ -215,13 +215,26 @@ private:
 };
 
 #ifdef ASCS_HAS_TEMPLATE_USING
-template<typename Socket, typename Pool = object_pool<Socket>, typename Server = i_server>
-using server_base = tcp::server_base<Socket, Pool, Server>;
+template <typename Packer, typename Unpacker, typename Socket = asio::ssl::stream<asio::ip::tcp::socket>,
+	template<typename, typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
+	template<typename, typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
+using connector_base = client_socket_base<Packer, Unpacker, Socket, InQueue, InContainer, OutQueue, OutContainer>;
+template<typename Socket, typename Pool = object_pool<Socket>, typename Server = i_server> using server_base = tcp::server_base<Socket, Pool, Server>;
 template<typename Socket> using single_client_base = tcp::single_client_base<Socket>;
 template<typename Socket, typename Pool = object_pool<Socket>> using client_base = tcp::client_base<Socket, Pool>;
 #else
-template<typename Socket, typename Pool = object_pool<Socket>, typename Server = i_server>
-class server_base : public tcp::server_base<Socket, Pool, Server>
+template <typename Packer, typename Unpacker, typename Socket = asio::ssl::stream<asio::ip::tcp::socket>,
+	template<typename, typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
+	template<typename, typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
+class connector_base : public client_socket_base<Packer, Unpacker, Socket, InQueue, InContainer, OutQueue, OutContainer>
+{
+private:
+	typedef client_socket_base<Packer, Unpacker, Socket, InQueue, InContainer, OutQueue, OutContainer> super;
+
+public:
+	connector_base(asio::io_service& io_service_, asio::ssl::context& ctx) : super(io_service_, ctx) {}
+};
+template<typename Socket, typename Pool = object_pool<Socket>, typename Server = i_server> class server_base : public tcp::server_base<Socket, Pool, Server>
 {
 public:
 	server_base(st_service_pump& service_pump_, asio::ssl::context::method m) : tcp::server_base<Socket, Pool, Server>(service_pump_, m) {}

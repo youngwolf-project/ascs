@@ -14,14 +14,14 @@ extern std::atomic_ushort completed_client_num;
 extern int link_num;
 extern fl_type file_size;
 
-class file_socket : public base_socket, public connector
+class file_socket : public base_socket, public client_socket
 {
 public:
-	file_socket(asio::io_service& io_service_) : connector(io_service_), index(-1) {}
+	file_socket(asio::io_service& io_service_) : client_socket(io_service_), index(-1) {}
 	virtual ~file_socket() {clear();}
 
 	//reset all, be ensure that there's no any operations performed on this file_socket when invoke it
-	virtual void reset() {clear(); connector::reset();}
+	virtual void reset() {clear(); client_socket::reset();}
 
 	void set_index(int index_) {index = index_;}
 	fl_type get_rest_size() const
@@ -88,7 +88,7 @@ protected:
 		memcpy(std::next(buffer, ORDER_LEN), &id, sizeof(uint_fast64_t));
 		send_msg(buffer, sizeof(buffer), true);
 
-		connector::on_connect();
+		client_socket::on_connect();
 	}
 
 private:
