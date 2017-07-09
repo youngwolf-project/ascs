@@ -124,17 +124,13 @@ on_msg_handle来派发，在on_msg_handle里面，如果你发现仍然处理不
 
 protected:
 	virtual bool do_start() = 0;
-子类重写，请看tcp:server_socket、tcp::connector、udp::socket和ssl::connector的实现。
+子类重写，请看tcp:server_socket_base、tcp::client_socket_base、udp::socket_base、ssl::server_socket_base和ssl::client_socket_base的实现。
 
 	virtual bool do_send_msg() = 0;
 真正的消息发送（调用asio函数），具体怎么发请看tcp::socket和udp::socket的实现。
 
 	virtual void do_recv_msg() = 0;
 真正的消息接收（调用asio函数），具体怎么发请看tcp::socket和udp::socket的实现。
-
-	virtual bool is_send_allowed() const;
-是否允许发送消息，对于socket来说，只要未暂停消息发送，就是允许消息发送，子类重写这个函数实现自己的判断逻辑，然后加上
-socket的判断结果，最终确认是否可发送数据。请看tcp::socket、tcp::connector和udp::socket的实现。
 
 	virtual void on_send_error(const error_code& ec);
 	virtual void on_recv_error(const asio::error_code& ec) = 0;

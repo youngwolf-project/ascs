@@ -18,7 +18,6 @@
 //configuration
 
 #include "file_socket.h"
-using namespace ascs::tcp;
 
 #define QUIT_COMMAND	"quit"
 #define RESTART_COMMAND	"restart"

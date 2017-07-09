@@ -49,7 +49,7 @@ using namespace ascs::ext::tcp;
 #define LIST_STATUS		"status"
 
 //demonstrate how to use custom packer
-//under the default behavior, each ascs::tcp::socket has their own packer, and cause memory waste
+//under the default behavior, each tcp::socket has their own packer, and cause memory waste
 //at here, we make each echo_socket use the same global packer for memory saving
 //notice: do not do this for unpacker, because unpacker has member variables and can't share each other
 auto global_packer(std::make_shared<ASCS_DEFAULT_PACKER>());
@@ -70,7 +70,7 @@ auto global_packer(std::make_shared<ASCS_DEFAULT_PACKER>());
 //
 //asio_server chose method #1
 
-//demonstrate how to control the type of ascs::tcp::server_socket_base::server from template parameter
+//demonstrate how to control the type of tcp::server_socket_base::server from template parameter
 class i_echo_server : public i_server
 {
 public:
@@ -100,7 +100,7 @@ public:
 protected:
 	virtual void on_recv_error(const asio::error_code& ec)
 	{
-		//the type of ascs::tcp::server_socket_base::server now can be controlled by derived class(echo_socket),
+		//the type of tcp::server_socket_base::server now can be controlled by derived class(echo_socket),
 		//which is actually i_echo_server, so, we can invoke i_echo_server::test virtual function.
 		server.test();
 		server_socket_base::on_recv_error(ec);
@@ -192,7 +192,7 @@ int main(int argc, const char* argv[])
 		puts("type " QUIT_COMMAND " to end.");
 
 	service_pump sp;
-	//only need a simple server? you can directly use server or ascs::tcp::server_base, because of normal_socket, 
+	//only need a simple server? you can directly use server or tcp::server_base, because of normal_socket,
 	//this server cannot support fixed_length_packer/fixed_length_unpacker and prefix_suffix_packer/prefix_suffix_unpacker,
 	//the reason is these packer and unpacker need additional initializations that normal_socket not implemented,
 	//see echo_socket's constructor for more details.

@@ -32,7 +32,11 @@ public:
 		else
 		{
 			asio::error_code ec;
+#if ASIO_VERSION >= 101100
+			auto addr = asio::ip::make_address(ip, ec);
+#else
 			auto addr = asio::ip::address::from_string(ip, ec);
+#endif
 			if (ec)
 				return false;
 
@@ -114,7 +118,11 @@ protected:
 #endif
 		acceptor.bind(server_addr, ec); assert(!ec);
 		if (ec) {get_service_pump().stop(); unified_out::error_out("bind failed."); return false;}
+#if ASIO_VERSION >= 101100
+		acceptor.listen(asio::ip::tcp::acceptor::max_listen_connections, ec); assert(!ec);
+#else
 		acceptor.listen(asio::ip::tcp::acceptor::max_connections, ec); assert(!ec);
+#endif
 		if (ec) {get_service_pump().stop(); unified_out::error_out("listen failed."); return false;}
 
 		this->start();
@@ -124,7 +132,7 @@ protected:
 
 		return true;
 	}
-	virtual void uninit() {this->stop(); stop_listen(); force_shutdown();}
+	virtual void uninit() {this->stop(); stop_listen(); force_shutdown();} //if you wanna graceful shutdown, call graceful_shutdown before service_pump::stop_service invocation.
 	virtual bool on_accept(typename Pool::object_ctype& socket_ptr) {return true;}
 
 	//if you want to ignore this error and continue to accept new connections immediately, return true in this virtual function;
@@ -133,7 +141,7 @@ protected:
 	//otherwise, don't rewrite this virtual function or call server_base::on_accept_error() directly after your code.
 	virtual bool on_accept_error(const asio::error_code& ec, typename Pool::object_ctype& socket_ptr)
 	{
-		if (asio::error::operation_aborted != ec.value())
+		if (asio::error::operation_aborted != ec)
 		{
 			unified_out::error_out("failed to accept new connection because of %s, will stop listening.", ec.message().data());
 			stop_listen();

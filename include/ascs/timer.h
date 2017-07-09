@@ -116,7 +116,11 @@ protected:
 	{
 		assert(timer_info::TIMER_OK == ti.status);
 
+#if ASIO_VERSION >= 101100
+		ti.timer->expires_after(milliseconds(ti.interval_ms));
+#else
 		ti.timer->expires_from_now(milliseconds(ti.interval_ms));
+#endif
 		ti.timer->async_wait(make_handler_error([this, &ti](const asio::error_code& ec) {
 			if (!ec && ti.call_back(ti.id) && timer_info::TIMER_OK == ti.status)
 				this->start_timer(ti);
@@ -129,8 +133,7 @@ protected:
 	{
 		if (timer_info::TIMER_OK == ti.status) //enable stopping timers that has been stopped
 		{
-			asio::error_code ec;
-			ti.timer->cancel(ec);
+			try {ti.timer->cancel();} catch (const asio::system_error& e) {}
 			ti.status = timer_info::TIMER_CANCELED;
 		}
 	}

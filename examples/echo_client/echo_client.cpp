@@ -73,7 +73,7 @@ static bool check_msg;
 //2. for sender, if responses are available (like pingpong test), send msgs in on_msg()/on_msg_handle(),
 //    but this will reduce IO throughput because SOCKET's sliding window is not fully used, pleae note.
 //
-//test_client chose method #1
+//echo_client chose method #1
 
 ///////////////////////////////////////////////////
 //msg sending interface
@@ -204,7 +204,7 @@ public:
 		case 2: do_something_to_one([&n](object_ctype& item) {return n-- > 0 ? item->force_shutdown(), false : true;});					break;
 #else
 			//method #2
-			//this is a equivalence of calling i_server::del_socket in server_socket_base::on_recv_error(see server_socket_base for more details).
+			//this is a equivalence of calling i_server::del_socket in server_socket_base::on_recv_error (see server_socket_base for more details).
 		case 0: while (n-- > 0) graceful_shutdown(at(0));			break;
 		case 1: while (n-- > 0) graceful_shutdown(at(0), false);	break;
 		case 2: while (n-- > 0) force_shutdown(at(0));				break;
@@ -411,7 +411,7 @@ int main(int argc, const char* argv[])
 	//socket_ptr->set_server_addr(port, ip); //we don't have to set server address at here, the following do_something_to_all will do it for us
 	//some other initializations according to your business
 	client.add_socket(socket_ptr, false);
-	socket_ptr.reset(); //important, otherwise, st_object_pool will not be able to free or reuse this object.
+	socket_ptr.reset(); //important, otherwise, object_pool will not be able to free or reuse this object.
 
 	//method #2, add clients first without any arguments, then set the server address.
 	for (size_t i = 1; i < link_num / 2; ++i)
@@ -483,7 +483,7 @@ int main(int argc, const char* argv[])
 			link_num = client.size();
 			if (link_num != client.valid_size())
 			{
-				puts("please wait for a while, because st_object_pool has not cleaned up invalid links.");
+				puts("please wait for a while, because object_pool has not cleaned up invalid links.");
 				continue;
 			}
 #endif

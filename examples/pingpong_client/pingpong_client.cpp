@@ -146,8 +146,8 @@ int main(int argc, const char* argv[])
 	service_pump sp;
 	echo_client client(sp);
 
-//	argv[2] = "::1" //ipv6
-//	argv[2] = "127.0.0.1" //ipv4
+//	argv[3] = "::1" //ipv6
+//	argv[3] = "127.0.0.1" //ipv4
 	std::string ip = argc > 3 ? argv[3] : ASCS_SERVER_IP;
 	unsigned short port = argc > 2 ? atoi(argv[2]) : ASCS_SERVER_PORT;
 

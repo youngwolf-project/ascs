@@ -20,9 +20,9 @@ class udp_unpacker : public i_udp_unpacker<std::string>;
 
 作用参看replaceable_packer。
 template<typename T = replaceable_buffer>
-class replaceable_unpacker : public ascs::tcp::i_unpacker<T>;
+class replaceable_unpacker : public tcp::i_unpacker<T>;
 template<typename T = replaceable_buffer>
-class replaceable_udp_unpacker : public ascs::udp::i_unpacker<T>;
+class replaceable_udp_unpacker : public udp::i_unpacker<T>;
 
 这个解包器与unpacker的不同之处在于，它不需要一个固定大小的缓存，而是先接收包头，再根据包头得到消息的长度信息，
 然后分配（new）适当的缓存，这样当缓存写满了之后，一个完整的消息就接收完毕了，所以省掉了消息的拷贝；但也有一个坏处，

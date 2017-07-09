@@ -12,7 +12,7 @@ else
 	lflag = -s
 	dir = release
 endif
-cflag += -DASIO_STANDALONE
+cflag += -DASIO_STANDALONE -DASIO_NO_DEPRECATED
 
 # If you used concurrent queue (https://github.com/cameron314/concurrentqueue), please define ASCS_HAS_CONCURRENT_QUEUE macro:
 #cflag += -DASCS_HAS_CONCURRENT_QUEUE

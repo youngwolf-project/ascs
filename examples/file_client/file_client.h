@@ -26,8 +26,8 @@ public:
 	void set_index(int index_) {index = index_;}
 	fl_type get_rest_size() const
 	{
-		auto unpacker = std::dynamic_pointer_cast<const data_unpacker>(this->unpacker());
-		return unpacker ? unpacker->get_rest_size() : 0;
+		auto up = std::dynamic_pointer_cast<const data_unpacker>(unpacker());
+		return up ? up->get_rest_size() : 0;
 	}
 	operator fl_type() const {return get_rest_size();}
 

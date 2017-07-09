@@ -19,7 +19,7 @@
 
 //the size of the buffer used when receiving msg, must equal to or larger than the biggest msg size,
 //the bigger this buffer is, the more msgs can be received in one time if there are enough msgs buffered in the SOCKET.
-//for unpackers use fixed buffer, every unpacker has a fixed buffer with this size, every tcp::socket has an unpacker,
+//for unpackers who use fixed buffer, every unpacker has a fixed buffer with this size, every tcp::socket_base has an unpacker,
 //so this size is not the bigger the better, bigger buffers may waste more memory.
 //if you customized the packer and unpacker, the above principle maybe not right anymore, it should depends on your implementations.
 #ifndef ASCS_MSG_BUFFER_SIZE
@@ -54,20 +54,20 @@ public:
 };
 
 class basic_buffer
-#if !defined(_MSC_VER) || _MSC_VER >= 1800 //for naughty VC++, it violate the standard and even itself usually.
+#if !defined(_MSC_VER) || _MSC_VER >= 1900 //for naughty VC++, it violate the standard and even itself usually.
 	: public asio::detail::noncopyable //seems asio's noncopyable is not as good as boost's.
 #endif
 {
 public:
 	basic_buffer() {do_detach();}
 	basic_buffer(size_t len) {do_detach(); assign(len);}
-#if defined(_MSC_VER) && _MSC_VER <= 1700 //for naughty VC++, it violate the standard and even itself usually.
+#if defined(_MSC_VER) && _MSC_VER <= 1800 //for naughty VC++, it violate the standard and even itself usually.
 	basic_buffer(const basic_buffer& other) {do_detach(); *this = other;}
 #endif
 	basic_buffer(basic_buffer&& other) {do_attach(other.buff, other.len, other.buff_len); other.do_detach();}
 	~basic_buffer() {clear();}
 
-#if defined(_MSC_VER) && _MSC_VER <= 1700 //for naughty VC++, it violate the standard and even itself usually.
+#if defined(_MSC_VER) && _MSC_VER <= 1800 //for naughty VC++, it violate the standard and even itself usually.
 	basic_buffer& operator=(const basic_buffer& other) {if (other.empty()) clear(); else {assign(other.size()); memcpy(buff, other.buff, other.size());} return *this;}
 #endif
 	basic_buffer& operator=(basic_buffer&& other) {clear(); swap(other); return *this;}

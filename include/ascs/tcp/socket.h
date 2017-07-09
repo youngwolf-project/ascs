@@ -142,7 +142,7 @@ protected:
 	{
 		asio::error_code ec;
 		auto_duration dur(this->stat.send_time_sum);
-		auto send_size = asio::write(this->next_layer(), asio::buffer(msg.data(), msg.size()), ec);
+		auto send_size = asio::write(this->next_layer(), ASCS_SEND_BUFFER_TYPE(msg.data(), msg.size()), ec);
 		dur.end();
 
 		send_handler(ec, send_size);

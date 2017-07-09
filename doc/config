@@ -127,7 +127,7 @@ static_assert(ASCS_SERVICE_THREAD_NUM > 0, "service thread number be bigger than
 static_assert(ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION > 0, "graceful shutdown duration must be bigger than zero.");
 
 //if connecting (or reconnecting) failed, delay how much milliseconds before reconnecting, negative value means stop reconnecting,
-//you can also rewrite ascs::tcp::connector_base::prepare_reconnect(), and return a negative value.
+//you can also rewrite ascs::tcp::client_socket_base::prepare_reconnect(), and return a negative value.
 #ifndef ASCS_RECONNECT_INTERVAL
 #define ASCS_RECONNECT_INTERVAL	500 //millisecond(s)
 #endif
@@ -213,5 +213,5 @@ static_assert(ASCS_HEARTBEAT_MAX_ABSENCE > 0, "heartbeat absence must be bigger 
 在ASCS_HEARTBEAT_INTERVAL * ASCS_HEARTBEAT_MAX_ABSENCE秒之内，如果没有收到任何数据，连接被认为是意外中断。
 
 //#define ASCS_REUSE_SSL_STREAM
-定义这个宏，ssl::server_socket_base和ssl::connector_base将支持重用。
+定义这个宏，ssl::server_socket_base和ssl::client_socket_base将支持重用。
 //configurations

@@ -19,6 +19,10 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "pingpong_server", "pingpong
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ssl_test", "ssl_test\ssl_test.vcxproj", "{40B0C856-4E2E-4F88-97F2-14B7598F1059}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "concurrent_client", "concurrent_client\concurrent_client.vcxproj", "{73FC699C-3E7C-4FE6-8E03-06A730035955}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "concurrent_server", "concurrent_server\concurrent_server.vcxproj", "{827343A9-D15E-4070-909D-2DFCC7CA8574}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -99,6 +103,22 @@ Global
 		{40B0C856-4E2E-4F88-97F2-14B7598F1059}.Release|Win32.Build.0 = Release|Win32
 		{40B0C856-4E2E-4F88-97F2-14B7598F1059}.Release|x64.ActiveCfg = Release|x64
 		{40B0C856-4E2E-4F88-97F2-14B7598F1059}.Release|x64.Build.0 = Release|x64
+		{73FC699C-3E7C-4FE6-8E03-06A730035955}.Debug|Win32.ActiveCfg = Debug|Win32
+		{73FC699C-3E7C-4FE6-8E03-06A730035955}.Debug|Win32.Build.0 = Debug|Win32
+		{73FC699C-3E7C-4FE6-8E03-06A730035955}.Debug|x64.ActiveCfg = Debug|x64
+		{73FC699C-3E7C-4FE6-8E03-06A730035955}.Debug|x64.Build.0 = Debug|x64
+		{73FC699C-3E7C-4FE6-8E03-06A730035955}.Release|Win32.ActiveCfg = Release|Win32
+		{73FC699C-3E7C-4FE6-8E03-06A730035955}.Release|Win32.Build.0 = Release|Win32
+		{73FC699C-3E7C-4FE6-8E03-06A730035955}.Release|x64.ActiveCfg = Release|x64
+		{73FC699C-3E7C-4FE6-8E03-06A730035955}.Release|x64.Build.0 = Release|x64
+		{827343A9-D15E-4070-909D-2DFCC7CA8574}.Debug|Win32.ActiveCfg = Debug|Win32
+		{827343A9-D15E-4070-909D-2DFCC7CA8574}.Debug|Win32.Build.0 = Debug|Win32
+		{827343A9-D15E-4070-909D-2DFCC7CA8574}.Debug|x64.ActiveCfg = Debug|x64
+		{827343A9-D15E-4070-909D-2DFCC7CA8574}.Debug|x64.Build.0 = Debug|x64
+		{827343A9-D15E-4070-909D-2DFCC7CA8574}.Release|Win32.ActiveCfg = Release|Win32
+		{827343A9-D15E-4070-909D-2DFCC7CA8574}.Release|Win32.Build.0 = Release|Win32
+		{827343A9-D15E-4070-909D-2DFCC7CA8574}.Release|x64.ActiveCfg = Release|x64
+		{827343A9-D15E-4070-909D-2DFCC7CA8574}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

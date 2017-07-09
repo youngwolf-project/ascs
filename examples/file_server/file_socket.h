@@ -3,6 +3,7 @@
 #define FILE_SOCKET_H_
 
 #include <ascs/ext/tcp.h>
+using namespace ascs::tcp;
 using namespace ascs::ext::tcp;
 
 #include "file_buffer.h"

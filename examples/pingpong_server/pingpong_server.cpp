@@ -23,10 +23,6 @@ using namespace ascs;
 using namespace ascs::tcp;
 using namespace ascs::ext::tcp;
 
-#ifdef _MSC_VER
-#define atoll _atoi64
-#endif
-
 #define QUIT_COMMAND	"quit"
 #define LIST_STATUS		"status"
 
@@ -57,8 +53,7 @@ public:
 protected:
 	//msg handling: send the original msg back(echo server)
 	//congestion control, method #1, the peer needs its own congestion control too.
-#ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
-	//this virtual function doesn't exists if ASCS_FORCE_TO_USE_MSG_RECV_BUFFER been defined
+#ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER //this virtual function doesn't exist if ASCS_FORCE_TO_USE_MSG_RECV_BUFFER been defined
 	virtual bool on_msg(out_msg_type& msg)
 	{
 		auto re = direct_send_msg(std::move(msg));
@@ -96,7 +91,7 @@ protected:
 class echo_server : public server_base<echo_socket>
 {
 public:
-	echo_server(service_pump& service_pump_) : server_base(service_pump_) {}
+	echo_server(service_pump& service_pump_) : server_base<echo_socket>(service_pump_) {}
 
 	statistic get_statistic()
 	{

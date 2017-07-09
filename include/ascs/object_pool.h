@@ -8,7 +8,7 @@
  *		Community on QQ: 198941541
  *
  * this class used at both client and server endpoint, and in both TCP and UDP socket
- * this class can only manage objects that inherit from socket
+ * this class can only manage objects that inherit from ascs::socket
  */
 
 #ifndef _ASCS_OBJECT_POOL_H_

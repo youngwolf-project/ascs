@@ -20,7 +20,7 @@
 namespace ascs { namespace ext {
 
 //protocol: length + body
-class unpacker : public ascs::tcp::i_unpacker<std::string>
+class unpacker : public tcp::i_unpacker<std::string>
 {
 public:
 	unpacker() {reset();}
@@ -41,7 +41,10 @@ public:
 					unpack_ok = false;
 				else if (remain_len >= cur_msg_len) //one msg received
 				{
-					msg_can.emplace_back(std::next(pnext, ASCS_HEAD_LEN), cur_msg_len - ASCS_HEAD_LEN);
+					if (stripped())
+						msg_can.emplace_back(std::next(pnext, ASCS_HEAD_LEN), cur_msg_len - ASCS_HEAD_LEN);
+					else
+						msg_can.emplace_back(pnext, cur_msg_len);
 					remain_len -= cur_msg_len;
 					std::advance(pnext, cur_msg_len);
 					cur_msg_len = -1;
@@ -124,7 +127,7 @@ protected:
 };
 
 //protocol: UDP has message boundary, so we don't need a specific protocol to unpack it.
-class udp_unpacker : public ascs::udp::i_unpacker<std::string>
+class udp_unpacker : public udp::i_unpacker<std::string>
 {
 public:
 	virtual msg_type parse_msg(size_t bytes_transferred) {assert(bytes_transferred <= ASCS_MSG_BUFFER_SIZE); return msg_type(raw_buff.data(), bytes_transferred);}
@@ -204,7 +207,8 @@ protected:
 
 //protocol: length + body
 //this unpacker demonstrate how to forbid memory replication while parsing msgs (let asio write msg directly).
-class non_copy_unpacker : public ascs::tcp::i_unpacker<basic_buffer>
+//not support unstripped messages, please note (you can fix this defect if you like).
+class non_copy_unpacker : public tcp::i_unpacker<basic_buffer>
 {
 public:
 	non_copy_unpacker() {reset();}
@@ -282,7 +286,7 @@ private:
 
 //protocol: fixed length
 //non-copy
-class fixed_length_unpacker : public ascs::tcp::i_unpacker<basic_buffer>
+class fixed_length_unpacker : public tcp::i_unpacker<basic_buffer>
 {
 public:
 	fixed_length_unpacker() : _fixed_length(1024) {}
@@ -320,7 +324,7 @@ private:
 };
 
 //protocol: [prefix] + body + suffix
-class prefix_suffix_unpacker : public ascs::tcp::i_unpacker<std::string>
+class prefix_suffix_unpacker : public tcp::i_unpacker<std::string>
 {
 public:
 	prefix_suffix_unpacker() {reset();}
@@ -389,9 +393,10 @@ public:
 		while (0 == peek_msg(remain_len, pnext) && (size_t) -1 != cur_msg_len && 0 != cur_msg_len)
 		{
 			assert(cur_msg_len > min_len);
-			auto msg_len = cur_msg_len - min_len;
-
-			msg_can.emplace_back(std::next(pnext, _prefix.size()), msg_len);
+			if (stripped())
+				msg_can.emplace_back(std::next(pnext, _prefix.size()), cur_msg_len - min_len);
+			else
+				msg_can.emplace_back(pnext, cur_msg_len);
 			remain_len -= cur_msg_len;
 			std::advance(pnext, cur_msg_len);
 			cur_msg_len = -1;
@@ -435,7 +440,7 @@ private:
 };
 
 //protocol: stream (non-protocol)
-class stream_unpacker : public ascs::tcp::i_unpacker<std::string>
+class stream_unpacker : public tcp::i_unpacker<std::string>
 {
 public:
 	virtual void reset() {}

@@ -190,9 +190,9 @@ protected:
 	virtual bool do_start() = 0;
 	virtual bool do_send_msg() = 0;
 	virtual void do_recv_msg() = 0;
-	//ascs::socket will guarantee not call these 3 functions in more than one thread concurrently.
+	//socket will guarantee not call these 3 functions in more than one thread concurrently.
 
-	//generally, you don't have to rewrite this to maintain the status of connections(TCP)
+	//generally, you don't have to rewrite this to maintain the status of connections (TCP)
 	virtual void on_send_error(const asio::error_code& ec) {unified_out::error_out("send msg error (%d %s)", ec.value(), ec.message().data());}
 	virtual void on_recv_error(const asio::error_code& ec) = 0; //receiving error or peer endpoint quit(false ec means ok)
 	virtual bool on_heartbeat_error() = 0; //heartbeat timed out, return true to continue heartbeat function (useful for UDP)
@@ -416,7 +416,7 @@ protected:
 	out_container_type recv_msg_buffer;
 	std::list<out_msg> temp_msg_buffer; //the size of this list is always very small, so std::list is enough (std::list::size maybe has linear complexity)
 	//subclass will invoke handle_msg() when got some msgs. if these msgs can't be dispatched via on_msg() because of congestion control opened,
-	//ascs::socket will delay 50 milliseconds(non-blocking) to invoke handle_msg() again, temp_msg_buffer is used to hold these msgs temporarily.
+	//socket will delay 50 milliseconds(non-blocking) to invoke handle_msg() again, temp_msg_buffer is used to hold these msgs temporarily.
 
 	volatile bool sending;
 	std::atomic_flag send_atomic;

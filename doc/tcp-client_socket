@@ -5,18 +5,18 @@ namespace ascs { namespace tcp {
 template <typename Packer, typename Unpacker, typename Socket = asio::ip::tcp::socket,
 	template<typename, typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename, typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
-class connector_base : public socket_base<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer>
+class client_socket_base : public socket_base<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer>
 {
 public:
-	connector_base(asio::io_service& io_service_);
+	client_socket_base(asio::io_service& io_service_);
 
 	template<typename Arg>
-	connector_base(asio::io_service& io_service_, Arg& arg);
+	client_socket_base(asio::io_service& io_service_, Arg& arg);
 ssl使用。
 
 public:
 	virtual void reset();
-重置所有，object_pool在重用时会调用。connector_base的子类可重写它以重置自己的状态，记得最后需要调用本类的reset。
+重置所有，object_pool在重用时会调用。client_socket_base的子类可重写它以重置自己的状态，记得最后需要调用本类的reset。
 
 	virtual bool obsoleted();
 在调用父类同名函数的基础上，增加了对是否重连接的判断，如果需要重连接则返回假。
@@ -64,7 +64,7 @@ virtual int prepare_reconnect(const asio::error_code& ec);
 心跳检测超时时回调。
 
 	virtual void on_close();
-如果需要重连接，则执行重连接，所以用户在重写它的时候，如果需要重连接逻辑，还得调用connector_base::on_close，
+如果需要重连接，则执行重连接，所以用户在重写它的时候，如果需要重连接逻辑，还得调用client_socket_base::on_close，
 要么就得自己实现。
 
 	bool prepare_next_reconnect(const asio::error_code& ec);

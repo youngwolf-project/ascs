@@ -134,7 +134,7 @@ protected:
 	{
 		asio::error_code ec;
 		auto_duration dur(this->stat.send_time_sum);
-		auto send_size = this->next_layer().send_to(asio::buffer(msg.data(), msg.size()), peer_addr, 0, ec);
+		auto send_size = this->next_layer().send_to(ASCS_SEND_BUFFER_TYPE(msg.data(), msg.size()), peer_addr, 0, ec);
 		dur.end();
 
 		send_handler(ec, send_size);
@@ -150,7 +150,7 @@ protected:
 
 			last_send_msg.restart();
 			std::lock_guard<std::mutex> lock(shutdown_mutex);
-			this->next_layer().async_send_to(asio::buffer(last_send_msg.data(), last_send_msg.size()), last_send_msg.peer_addr,
+			this->next_layer().async_send_to(ASCS_SEND_BUFFER_TYPE(last_send_msg.data(), last_send_msg.size()), last_send_msg.peer_addr,
 				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);}));
 
 			return true;
@@ -171,7 +171,7 @@ protected:
 
 	virtual void on_recv_error(const asio::error_code& ec)
 	{
-		if (asio::error::operation_aborted != ec.value())
+		if (asio::error::operation_aborted != ec)
 			unified_out::error_out("recv msg error (%d %s)", ec.value(), ec.message().data());
 	}
 
@@ -221,7 +221,7 @@ private:
 			this->handle_msg();
 		}
 #ifdef _MSC_VER
-		else if (asio::error::connection_refused == ec.value() || asio::error::connection_reset == ec.value())
+		else if (asio::error::connection_refused == ec || asio::error::connection_reset == ec)
 			do_start();
 #endif
 		else
@@ -272,7 +272,11 @@ private:
 		else
 		{
 			asio::error_code ec;
+#if ASIO_VERSION >= 101100
+			auto addr = asio::ip::make_address(ip, ec);
+#else
 			auto addr = asio::ip::address::from_string(ip, ec);
+#endif
 			if (ec)
 				return false;
 

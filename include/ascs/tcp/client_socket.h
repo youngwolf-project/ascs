@@ -43,7 +43,11 @@ public:
 	bool set_server_addr(unsigned short port, const std::string& ip = ASCS_SERVER_IP)
 	{
 		asio::error_code ec;
+#if ASIO_VERSION >= 101100
+		auto addr = asio::ip::make_address(ip, ec);
+#else
 		auto addr = asio::ip::address::from_string(ip, ec);
+#endif
 		if (ec)
 			return false;
 
@@ -137,10 +141,10 @@ protected:
 
 	bool prepare_next_reconnect(const asio::error_code& ec)
 	{
-		if ((asio::error::operation_aborted != ec.value() || need_reconnect) && !this->stopped())
+		if ((asio::error::operation_aborted != ec || need_reconnect) && !this->stopped())
 		{
 #ifdef _WIN32
-			if (asio::error::connection_refused != ec.value() && asio::error::network_unreachable != ec.value() && asio::error::timed_out != ec.value())
+			if (asio::error::connection_refused != ec && asio::error::network_unreachable != ec && asio::error::timed_out != ec)
 #endif
 			{
 				asio::error_code ec;

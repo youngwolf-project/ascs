@@ -50,7 +50,7 @@ protected:
 			asio::error_code ec;
 			this->next_layer().shutdown(ec);
 
-			if (ec && asio::error::eof != ec.value()) //the endpoint who initiated a shutdown will get error eof.
+			if (ec && asio::error::eof != ec) //the endpoint who initiated a shutdown will get error eof.
 				unified_out::info_out("shutdown ssl link failed (maybe intentionally because of reusing)");
 #endif
 		}
@@ -83,7 +83,7 @@ protected:
 		{
 			this->show_info("ssl link:", "been shutting down.");
 			this->next_layer().async_shutdown(this->make_handler_error([this](const asio::error_code& ec) {
-				if (ec && asio::error::eof != ec.value()) //the endpoint who initiated a shutdown will get error eof.
+				if (ec && asio::error::eof != ec) //the endpoint who initiated a shutdown will get error eof.
 					unified_out::info_out("async shutdown ssl link failed (maybe intentionally because of reusing)");
 			}));
 		}
@@ -93,7 +93,7 @@ protected:
 			asio::error_code ec;
 			this->next_layer().shutdown(ec);
 
-			if (ec && asio::error::eof != ec.value()) //the endpoint who initiated a shutdown will get error eof.
+			if (ec && asio::error::eof != ec) //the endpoint who initiated a shutdown will get error eof.
 				unified_out::info_out("shutdown ssl link failed (maybe intentionally because of reusing)");
 		}
 	}
@@ -169,10 +169,9 @@ public:
 	object_pool(service_pump& service_pump_, const asio::ssl::context::method& m) : super(service_pump_), ctx(m) {}
 	asio::ssl::context& context() {return ctx;}
 
-	using super::create_object;
-	typename object_pool::object_type create_object() {return create_object(this->sp, ctx);}
+	typename object_pool::object_type create_object() {return create_object(this->sp);}
 	template<typename Arg>
-	typename object_pool::object_type create_object(Arg& arg) {return create_object(arg, ctx);}
+	typename object_pool::object_type create_object(Arg& arg) {return super::create_object(arg, ctx);}
 
 protected:
 	asio::ssl::context ctx;
@@ -218,7 +217,7 @@ private:
 template <typename Packer, typename Unpacker, typename Socket = asio::ssl::stream<asio::ip::tcp::socket>,
 	template<typename, typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename, typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
-using connector_base = client_socket_base<Packer, Unpacker, Socket, InQueue, InContainer, OutQueue, OutContainer>;
+using connector_base = tcp::client_socket_base<Packer, Unpacker, Socket, InQueue, InContainer, OutQueue, OutContainer>;
 template<typename Socket, typename Pool = object_pool<Socket>, typename Server = i_server> using server_base = tcp::server_base<Socket, Pool, Server>;
 template<typename Socket> using single_client_base = tcp::single_client_base<Socket>;
 template<typename Socket, typename Pool = object_pool<Socket>> using client_base = tcp::client_base<Socket, Pool>;
@@ -226,7 +225,7 @@ template<typename Socket, typename Pool = object_pool<Socket>> using client_base
 template <typename Packer, typename Unpacker, typename Socket = asio::ssl::stream<asio::ip::tcp::socket>,
 	template<typename, typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename, typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
-class connector_base : public client_socket_base<Packer, Unpacker, Socket, InQueue, InContainer, OutQueue, OutContainer>
+class connector_base : public tcp::client_socket_base<Packer, Unpacker, Socket, InQueue, InContainer, OutQueue, OutContainer>
 {
 private:
 	typedef client_socket_base<Packer, Unpacker, Socket, InQueue, InContainer, OutQueue, OutContainer> super;
@@ -237,7 +236,7 @@ public:
 template<typename Socket, typename Pool = object_pool<Socket>, typename Server = i_server> class server_base : public tcp::server_base<Socket, Pool, Server>
 {
 public:
-	server_base(st_service_pump& service_pump_, asio::ssl::context::method m) : tcp::server_base<Socket, Pool, Server>(service_pump_, m) {}
+	server_base(service_pump& service_pump_, asio::ssl::context::method m) : tcp::server_base<Socket, Pool, Server>(service_pump_, m) {}
 };
 template<typename Socket> class single_client_base : public tcp::single_client_base<Socket>
 {
@@ -247,7 +246,7 @@ public:
 template<typename Socket, typename Pool = object_pool<Socket>> class client_base : public tcp::client_base<Socket, Pool>
 {
 public:
-	client_base(service_pump& service_pump_, asio::ssl::context::method m) : tcp::client_base(service_pump_, m) {}
+	client_base(service_pump& service_pump_, asio::ssl::context::method m) : tcp::client_base<Socket, Pool>(service_pump_, m) {}
 };
 #endif
 

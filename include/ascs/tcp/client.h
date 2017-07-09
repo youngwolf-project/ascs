@@ -40,7 +40,7 @@ public:
 	template<typename Arg>
 	client_base(service_pump& service_pump_, const Arg& arg) : super(service_pump_, arg) {}
 
-	//connected link size, may smaller than total object size(object_pool::size)
+	//connected link size, may smaller than total object size (object_pool::size)
 	size_t valid_size()
 	{
 		size_t size = 0;
@@ -85,7 +85,7 @@ public:
 	void graceful_shutdown(bool reconnect = false, bool sync = true) {this->do_something_to_all([=](typename Pool::object_ctype& item) {item->graceful_shutdown(reconnect, sync);});}
 
 protected:
-	virtual void uninit() {this->stop(); graceful_shutdown();}
+	virtual void uninit() {this->stop(); force_shutdown();} //if you wanna graceful shutdown, call graceful_shutdown before service_pump::stop_service invocation.
 };
 
 }} //namespace

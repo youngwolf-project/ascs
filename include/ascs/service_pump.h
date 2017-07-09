@@ -135,10 +135,7 @@ public:
 		if (!is_service_started())
 		{
 			do_service(thread_num - 1);
-
-			asio::error_code ec;
-			run(ec);
-
+			run();
 			wait_service();
 		}
 	}
@@ -149,7 +146,7 @@ public:
 
 	bool is_running() const {return !stopped();}
 	bool is_service_started() const {return started;}
-	void add_service_thread(int thread_num) {for (auto i = 0; i < thread_num; ++i) service_threads.emplace_back([this]() {asio::error_code ec; this->run(ec);});}
+	void add_service_thread(int thread_num) {for (auto i = 0; i < thread_num; ++i) service_threads.emplace_back([this]() {this->run();});}
 
 protected:
 	void do_service(int thread_num)
@@ -157,7 +154,11 @@ protected:
 		started = true;
 		unified_out::info_out("service pump started.");
 
+#if ASIO_VERSION >= 101100
+		restart(); //this is needed when restart service
+#else
 		reset(); //this is needed when restart service
+#endif
 		do_something_to_all([](object_type& item) {item->start_service();});
 		add_service_thread(thread_num);
 	}
@@ -173,20 +174,12 @@ protected:
 	virtual void free(object_type i_service_) {} //if needed, rewrite this to free the service
 
 #ifdef ASCS_ENHANCED_STABILITY
-	virtual bool on_exception(const std::exception& e)
+	virtual bool on_exception(const asio::system_error& e)
 	{
 		unified_out::error_out("service pump exception: %s.", e.what());
-		return true; //continue this asio::io_service::run, if needed, rewrite this to decide whether to continue or not
+		return true; //continue, if needed, rewrite this to decide whether to continue or not
 	}
-
-	size_t run(asio::error_code& ec)
-	{
-		while (true)
-		{
-			try {return asio::io_service::run(ec);}
-			catch (const std::exception& e) {if (!on_exception(e)) return 0;}
-		}
-	}
+	size_t run() {while (true) {try {return asio::io_service::run();} catch (const asio::system_error& e) {if (!on_exception(e)) return 0;}}}
 #endif
 
 	DO_SOMETHING_TO_ALL_MUTEX(service_can, service_can_mutex)

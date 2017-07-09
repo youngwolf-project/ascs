@@ -17,6 +17,8 @@ release debug clean :
 	cd file_client && ${ST_MAKE}
 	cd pingpong_server && ${ST_MAKE}
 	cd pingpong_client && ${ST_MAKE}
+	cd concurrent_server && ${ST_MAKE}
+	cd concurrent_client && ${ST_MAKE}
 	cd udp_test && ${ST_MAKE}
 	cd ssl_test && ${ST_MAKE}
 
