@@ -60,7 +60,7 @@ public:
 	typedef const object_type object_ctype;
 	typedef std::list<object_type> container_type;
 
-	service_pump() : started(false) {}
+	service_pump() : started(false), real_thread_num(0), del_thread_num(0), del_thread_req(false) {}
 	virtual ~service_pump() {stop_service();}
 
 	object_type find(int id)
@@ -139,18 +139,40 @@ public:
 			wait_service();
 		}
 	}
+
 	//stop the service, must be invoked explicitly when the service need to stop, for example, close the application
 	//only for service pump started by 'run_service', this function will return immediately,
 	//only the return from 'run_service' means service pump ended.
-	void end_service() {if (is_service_started()) do_something_to_all([](object_type& item) {item->stop_service();});}
+	void end_service()
+	{
+		if (is_service_started())
+		{
+#ifdef ASCS_AVOID_AUTO_STOP_SERVICE
+			work.reset();
+#endif
+			do_something_to_all([](object_type& item) {item->stop_service();});
+		}
+	}
 
 	bool is_running() const {return !stopped();}
 	bool is_service_started() const {return started;}
+
 	void add_service_thread(int thread_num) {for (auto i = 0; i < thread_num; ++i) service_threads.emplace_back([this]() {this->run();});}
+#ifdef ASCS_DECREASE_THREAD_AT_RUNTIME
+	void del_service_thread(int thread_num) {if (thread_num > 0) {del_thread_num.fetch_add(thread_num, std::memory_order_relaxed); del_thread_req = true;}}
+	int service_thread_num() const {return real_thread_num.load(std::memory_order_relaxed);}
+#endif
 
 protected:
 	void do_service(int thread_num)
 	{
+#ifdef ASCS_AVOID_AUTO_STOP_SERVICE
+#if ASIO_VERSION >= 101100
+		work = std::make_shared<asio::executor_work_guard<executor_type>>(get_executor());
+#else
+		work = std::make_shared<asio::io_service::work>(*this);
+#endif
+#endif
 		started = true;
 		unified_out::info_out("service pump started.");
 
@@ -162,7 +184,17 @@ protected:
 		do_something_to_all([](object_type& item) {item->start_service();});
 		add_service_thread(thread_num);
 	}
-	void wait_service() {ascs::do_something_to_all(service_threads, [](std::thread& t) {t.join();}); service_threads.clear(); unified_out::info_out("service pump end."); started = false;}
+
+	void wait_service()
+	{
+		ascs::do_something_to_all(service_threads, [](std::thread& t) {t.join();});
+		service_threads.clear();
+
+		started = false;
+		del_thread_num.store(0, std::memory_order_relaxed);
+
+		unified_out::info_out("service pump end.");
+	}
 
 	void stop_and_free(object_type i_service_)
 	{
@@ -179,7 +211,52 @@ protected:
 		unified_out::error_out("service pump exception: %s.", e.what());
 		return true; //continue, if needed, rewrite this to decide whether to continue or not
 	}
+#endif
+
+#ifdef ASCS_DECREASE_THREAD_AT_RUNTIME
+	size_t run()
+	{
+		size_t n = 0;
+		std::stringstream os;
+
+		os << "service thread[" << std::this_thread::get_id() << "] begin.";
+		unified_out::info_out(os.str().data());
+		++real_thread_num;
+		while (true)
+		{
+			if (del_thread_req)
+			{
+				if (del_thread_num.fetch_sub(1, std::memory_order_relaxed) > 0)
+					break;
+				else
+				{
+					del_thread_req = false;
+					del_thread_num.fetch_add(1, std::memory_order_relaxed);
+				}
+			}
+
+			//we cannot always decrease service thread timely (because run_one can block).
+			size_t this_n = 0;
+#ifdef ASCS_ENHANCED_STABILITY
+			try {this_n = asio::io_service::run_one();} catch (const asio::system_error& e) {if (!on_exception(e)) break;}
+#else
+			this_n = asio::io_service::run_one();
+#endif
+			if (this_n > 0)
+				n += this_n; //n can overflow, please note.
+			else
+				break;
+		}
+		--real_thread_num;
+		os.str(""); os << "service thread[" << std::this_thread::get_id() << "] end.";
+		unified_out::info_out(os.str().data());
+
+		return n;
+	}
+#else
+#ifdef ASCS_ENHANCED_STABILITY
 	size_t run() {while (true) {try {return asio::io_service::run();} catch (const asio::system_error& e) {if (!on_exception(e)) return 0;}}}
+#endif
 #endif
 
 	DO_SOMETHING_TO_ALL_MUTEX(service_can, service_can_mutex)
@@ -195,10 +272,23 @@ private:
 	}
 
 protected:
+	bool started;
+
 	container_type service_can;
 	std::mutex service_can_mutex;
+
 	std::list<std::thread> service_threads;
-	bool started;
+	std::atomic_int_fast32_t real_thread_num;
+	std::atomic_int_fast32_t del_thread_num;
+	bool del_thread_req;
+
+#ifdef ASCS_AVOID_AUTO_STOP_SERVICE
+#if ASIO_VERSION >= 101100
+	std::shared_ptr<asio::executor_work_guard<executor_type>> work;
+#else
+	std::shared_ptr<asio::io_service::work> work;
+#endif
+#endif
 };
 
 } //namespace

@@ -9,6 +9,8 @@
 #define ASCS_ENHANCED_STABILITY
 //#define ASCS_FULL_STATISTIC //full statistic will slightly impact efficiency
 //#define ASCS_USE_STEADY_TIMER
+#define ASCS_AVOID_AUTO_STOP_SERVICE
+#define ASCS_DECREASE_THREAD_AT_RUNTIME
 //#define ASCS_MAX_MSG_NUM		16
 //if there's a huge number of links, please reduce messge buffer via ASCS_MAX_MSG_NUM macro.
 //please think about if we have 512 links, how much memory we can accupy at most with default ASCS_MAX_MSG_NUM?
@@ -22,7 +24,11 @@
 //3-prefix and/or suffix packer and unpacker
 
 #if 1 == PACKER_UNPACKER_TYPE
+#if defined(_MSC_VER) && _MSC_VER <= 1800
+#define ASCS_DEFAULT_PACKER replaceable_packer<shared_buffer<i_buffer>>
+#else
 #define ASCS_DEFAULT_PACKER replaceable_packer<>
+#endif
 #define ASCS_DEFAULT_UNPACKER replaceable_unpacker<>
 #elif 2 == PACKER_UNPACKER_TYPE
 #undef ASCS_HEARTBEAT_INTERVAL
@@ -47,6 +53,8 @@ using namespace ascs::ext::tcp;
 #define RESTART_COMMAND	"restart"
 #define LIST_ALL_CLIENT	"list_all_client"
 #define LIST_STATUS		"status"
+#define INCREASE_THREAD	"increase_thread"
+#define DECREASE_THREAD	"decrease_thread"
 
 //demonstrate how to use custom packer
 //under the default behavior, each tcp::socket has their own packer, and cause memory waste
@@ -246,6 +254,10 @@ int main(int argc, const char* argv[])
 			puts("clients from echo server:");
 			echo_server_.list_all_object();
 		}
+		else if (INCREASE_THREAD == str)
+			sp.add_service_thread(1);
+		else if (DECREASE_THREAD == str)
+			sp.del_service_thread(1);
 		else
 		{
 //			/*

@@ -10,6 +10,7 @@
 #define ASCS_MSG_BUFFER_SIZE	1024
 #define ASCS_INPUT_QUEUE		non_lock_queue //we will never operate sending buffer concurrently, so need no locks
 #define ASCS_INPUT_CONTAINER	list
+#define ASCS_DECREASE_THREAD_AT_RUNTIME
 //configuration
 
 #include <ascs/ext/tcp.h>
@@ -19,6 +20,8 @@ using namespace ascs::ext::tcp;
 
 #define QUIT_COMMAND	"quit"
 #define LIST_STATUS		"status"
+#define INCREASE_THREAD	"increase_thread"
+#define DECREASE_THREAD	"decrease_thread"
 
 class echo_socket : public server_socket
 {
@@ -84,6 +87,10 @@ int main(int argc, const char* argv[])
 			puts("");
 			puts(echo_server_.get_statistic().to_string().data());
 		}
+		else if (INCREASE_THREAD == str)
+			sp.add_service_thread(1);
+		else if (DECREASE_THREAD == str)
+			sp.del_service_thread(1);
 	}
 
 	return 0;

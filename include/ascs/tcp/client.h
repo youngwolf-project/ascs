@@ -17,28 +17,18 @@
 
 namespace ascs { namespace tcp {
 
-#ifdef ASCS_HAS_TEMPLATE_USING
 template<typename Socket> using single_client_base = single_socket_service<Socket>;
-#else
-template<typename Socket> class single_client_base : public single_socket_service<Socket>
-{
-public:
-	single_client_base(service_pump& service_pump_) : single_socket_service<Socket>(service_pump_) {}
-	template<typename Arg>
-	single_client_base(service_pump& service_pump_, Arg& arg) : single_socket_service<Socket>(service_pump_, arg) {}
-};
-#endif
 
 template<typename Socket, typename Pool = object_pool<Socket>>
-class client_base : public multi_socket_service<Socket, Pool>
+class multi_client_base : public multi_socket_service<Socket, Pool>
 {
 private:
 	typedef multi_socket_service<Socket, Pool> super;
 
 public:
-	client_base(service_pump& service_pump_) : super(service_pump_) {}
+	multi_client_base(service_pump& service_pump_) : super(service_pump_) {}
 	template<typename Arg>
-	client_base(service_pump& service_pump_, const Arg& arg) : super(service_pump_, arg) {}
+	multi_client_base(service_pump& service_pump_, const Arg& arg) : super(service_pump_, arg) {}
 
 	//connected link size, may smaller than total object size (object_pool::size)
 	size_t valid_size()

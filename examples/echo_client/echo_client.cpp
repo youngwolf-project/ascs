@@ -9,6 +9,8 @@
 //#define ASCS_CLEAR_OBJECT_INTERVAL 1
 //#define ASCS_WANT_MSG_SEND_NOTIFY
 #define ASCS_FULL_STATISTIC //full statistic will slightly impact efficiency
+#define ASCS_AVOID_AUTO_STOP_SERVICE
+#define ASCS_DECREASE_THREAD_AT_RUNTIME
 //#define ASCS_MAX_MSG_NUM	16
 //if there's a huge number of links, please reduce messge buffer via ASCS_MAX_MSG_NUM macro.
 //please think about if we have 512 links, how much memory we can accupy at most with default ASCS_MAX_MSG_NUM?
@@ -22,7 +24,11 @@
 //3-prefix and/or suffix packer and unpacker
 
 #if 1 == PACKER_UNPACKER_TYPE
+#if defined(_MSC_VER) && _MSC_VER <= 1800
+#define ASCS_DEFAULT_PACKER replaceable_packer<shared_buffer<i_buffer>>
+#else
 #define ASCS_DEFAULT_PACKER replaceable_packer<>
+#endif
 #define ASCS_DEFAULT_UNPACKER replaceable_unpacker<>
 #elif 2 == PACKER_UNPACKER_TYPE
 #undef ASCS_HEARTBEAT_INTERVAL
@@ -56,6 +62,8 @@ using namespace ascs::ext::tcp;
 #define RESTART_COMMAND	"restart"
 #define LIST_ALL_CLIENT	"list_all_client"
 #define LIST_STATUS		"status"
+#define INCREASE_THREAD	"increase_thread"
+#define DECREASE_THREAD	"decrease_thread"
 
 static bool check_msg;
 
@@ -162,10 +170,10 @@ private:
 	size_t recv_index, msg_num;
 };
 
-class echo_client : public client_base<echo_socket>
+class echo_client : public multi_client_base<echo_socket>
 {
 public:
-	echo_client(service_pump& service_pump_) : client_base<echo_socket>(service_pump_) {}
+	echo_client(service_pump& service_pump_) : multi_client_base<echo_socket>(service_pump_) {}
 
 	uint64_t get_recv_bytes()
 	{
@@ -457,6 +465,10 @@ int main(int argc, const char* argv[])
 			sp.stop_service();
 			sp.start_service(thread_num);
 		}
+		else if (INCREASE_THREAD == str)
+			sp.add_service_thread(1);
+		else if (DECREASE_THREAD == str)
+			sp.del_service_thread(1);
 		else
 		{
 			if ('+' == str[0] || '-' == str[0])

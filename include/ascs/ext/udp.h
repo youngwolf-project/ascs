@@ -30,7 +30,8 @@ namespace ascs { namespace ext { namespace udp {
 
 typedef ascs::udp::socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UDP_UNPACKER> socket;
 typedef ascs::udp::single_service_base<socket> single_service;
-typedef ascs::udp::service_base<socket> service;
+typedef ascs::udp::multi_service_base<socket> multi_service;
+typedef multi_service service;
 
 }}} //namespace
 

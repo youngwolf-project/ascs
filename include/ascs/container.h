@@ -20,11 +20,7 @@ namespace ascs
 
 //ascs requires that container must take one and only one template argument.
 #if defined(_MSC_VER) || defined(__clang__) || __GNUC__ >= 5
-	#ifdef ASCS_HAS_TEMPLATE_USING
-	template<typename T> using list = std::list<T>;
-	#else
-	template<typename T> class list : public std::list<T> {};
-	#endif
+template<typename T> using list = std::list<T>;
 #else
 //a substitute of std::list (before gcc 5), it's size() function has O(1) complexity
 //BTW, the naming rule is not mine, I copied them from std::list in Visual C++ 14.0
@@ -48,6 +44,8 @@ public:
 
 	list() : s(0) {}
 	list(list&& other) : s(0) {swap(other);}
+
+	list& operator=(list&& other) {clear(); swap(other); return *this;}
 	void swap(list& other) {impl.swap(other.impl); std::swap(s, other.s);}
 
 	bool empty() const {return 0 == s;}
@@ -135,6 +133,7 @@ public:
 	typedef std::lock_guard<dummy_lockable> lock_guard;
 
 	//lockable, dummy
+	bool is_lockable() const {return false;}
 	void lock() const {}
 	void unlock() const {}
 };
@@ -145,6 +144,7 @@ public:
 	typedef std::lock_guard<lockable> lock_guard;
 
 	//lockable
+	bool is_lockable() const {return true;}
 	void lock() {mutex.lock();}
 	void unlock() {mutex.unlock();}
 
@@ -152,7 +152,7 @@ private:
 	std::mutex mutex; //std::mutex is more efficient than std::shared_(timed_)mutex
 };
 
-//Container must at least has the following functions:
+//Container must at least has the following functions (like concurrent_queue):
 // Container() and Container(size_t) constructor
 // move constructor
 // size_approx (must be thread safe, but doesn't have to be coherent)
@@ -161,7 +161,7 @@ private:
 // enqueue(T&& item)
 // try_dequeue(T& item)
 template<typename T, typename Container>
-class lock_free_queue : public Container, public dummy_lockable
+class lock_free_queue : public Container, public dummy_lockable //thread safety depends on Container
 {
 public:
 	typedef T data_type;
@@ -169,9 +169,10 @@ public:
 	lock_free_queue() {}
 	lock_free_queue(size_t capacity) : Container(capacity) {}
 
+	bool is_thread_safe() const {return true;}
 	size_t size() const {return this->size_approx();}
 	bool empty() const {return 0 == size();}
-	void clear() {Container(std::move(*this));} //not thread-safe
+	void clear() {Container(std::move(*this));}
 	using Container::swap;
 
 	void move_items_in(std::list<T>& can) {move_items_in_(can);}
@@ -182,7 +183,7 @@ public:
 	bool try_dequeue_(T& item) {return this->try_dequeue(item);}
 };
 
-//Container must at least has the following functions:
+//Container must at least has the following functions (like list):
 // Container() and Container(size_t) constructor
 // size (must be thread safe, but doesn't have to be coherent, std::list before gcc 5 doesn't meet this requirement, ascs::list does)
 // empty (must be thread safe, but doesn't have to be coherent)
@@ -193,7 +194,7 @@ public:
 // splice(Container::const_iterator, std::list<T>&), after this, std::list<T> must be empty
 // front
 // pop_front
-template<typename T, typename Container, typename Lockable>
+template<typename T, typename Container, typename Lockable> //thread safety depends on Container or Lockable
 class queue : public Container, public Lockable
 {
 public:
@@ -202,9 +203,11 @@ public:
 	queue() {}
 	queue(size_t capacity) : Container(capacity) {}
 
+	bool is_thread_safe() const {return Lockable::is_lockable();}
 	using Container::size;
-	using Container::clear;
-	using Container::swap;
+	using Container::empty;
+	void clear() {typename Lockable::lock_guard lock(*this); Container::clear();}
+	void swap(Container& other) {typename Lockable::lock_guard lock(*this); Container::swap(other);}
 
 	//thread safe
 	bool enqueue(const T& item) {typename Lockable::lock_guard lock(*this); return enqueue_(item);}
@@ -219,23 +222,8 @@ public:
 	bool try_dequeue_(T& item) {if (this->empty()) return false; item.swap(this->front()); this->pop_front(); return true;}
 };
 
-#ifdef ASCS_HAS_TEMPLATE_USING
-template<typename T, typename Container> using non_lock_queue = queue<T, Container, dummy_lockable>; //totally not thread safe
+template<typename T, typename Container> using non_lock_queue = queue<T, Container, dummy_lockable>; //thread safety depends on Container
 template<typename T, typename Container> using lock_queue = queue<T, Container, lockable>;
-#else
-template<typename T, typename Container> class non_lock_queue : public queue<T, Container, dummy_lockable> //totally not thread safe
-{
-public:
-	non_lock_queue() {}
-	non_lock_queue(size_t capacity) : queue<T, Container, dummy_lockable>(capacity) {}
-};
-template<typename T, typename Container> class lock_queue : public queue<T, Container, lockable>
-{
-public:
-	lock_queue() {}
-	lock_queue(size_t capacity) : queue<T, Container, lockable>(capacity) {}
-};
-#endif
 
 } //namespace
 

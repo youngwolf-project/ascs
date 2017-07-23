@@ -141,7 +141,7 @@ protected:
 
 	bool prepare_next_reconnect(const asio::error_code& ec)
 	{
-		if ((asio::error::operation_aborted != ec || need_reconnect) && !this->stopped())
+		if (this->started() && (asio::error::operation_aborted != ec || need_reconnect) && !this->stopped())
 		{
 #ifdef _WIN32
 			if (asio::error::connection_refused != ec && asio::error::network_unreachable != ec && asio::error::timed_out != ec)

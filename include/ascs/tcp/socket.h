@@ -89,17 +89,8 @@ public:
 	{
 		if (msg.empty())
 			unified_out::error_out("empty message, will not send it.");
-		else if (!this->sending && !this->stopped() && is_ready())
-		{
-			scope_atomic_lock lock(this->send_atomic);
-			if (!this->sending && lock.locked())
-			{
-				this->sending = true;
-				lock.unlock();
-
-				return do_sync_send_msg(msg);
-			}
-		}
+		else if (this->lock_sending_flag())
+			return do_sync_send_msg(msg);
 
 		return 0;
 	}
@@ -180,6 +171,15 @@ protected:
 
 		last_send_msg.front().restart();
 		asio::async_write(this->next_layer(), bufs,
+			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);}));
+		return true;
+	}
+
+	virtual bool do_send_msg(in_msg_type&& msg)
+	{
+		auto buf = ASCS_SEND_BUFFER_TYPE(msg.data(), msg.size());
+		last_send_msg.emplace_back(std::move(msg));
+		asio::async_write(this->next_layer(), buf,
 			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);}));
 		return true;
 	}

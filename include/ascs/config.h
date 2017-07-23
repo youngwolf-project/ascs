@@ -19,6 +19,8 @@
  * 2. since 1.1.5 until 1.2, heartbeat function cannot work properly between windows (at least win-10) and Ubuntu (at least Ubuntu-16.04).
  * 3. since 1.1.5 until 1.2, UDP doesn't support heartbeat because UDP doesn't support OOB data.
  * 4. since 1.1.5 until 1.2, SSL doesn't support heartbeat because SSL doesn't support OOB data.
+ * 5. with old openssl (at least 0.9.7), ssl::client_socket_base and ssl_server_socket_base are not reuable, i'm not sure in which version,
+ *    they became available, seems it's 1.0.0.
  *
  * 2016.9.25	version 1.0.0
  * Based on st_asio_wrapper 1.2.0.
@@ -192,6 +194,39 @@
  * Use mutable_buffer and const_buffer instead of mutable_buffers_1 and const_buffers_1 if possible, this can gain some performance improvement.
  * Call force_shutdown instead of graceful_shutdown in tcp::client_base::uninit().
  *
+ * ===============================================================
+ * 2017.7.23	version 1.2.3
+ *
+ * SPECIAL ATTENTION (incompatible with old editions):
+ * i_server has been moved from ascs to ascs::tcp.
+ *
+ * HIGHLIGHT:
+ * Support decreasing (increasing already supported) the number of service thread at runtime by defining ASCS_DECREASE_THREAD_AT_RUNTIME macro,
+ *  suggest to define ASCS_AVOID_AUTO_STOP_SERVICE macro too.
+ *
+ * FIX:
+ * Always directly shutdown ssl::client_socket_base if macro ASCS_REUSE_SSL_STREAM been defined.
+ * Make queue::clear and swap thread-safe if possible.
+ *
+ * ENHANCEMENTS:
+ * Optimized and simplified auto_buffer, shared_buffer and ext::basic_buffer.
+ * Optimized class obj_with_begin_time.
+ * Not use sending buffer (send_msg_buffer) if possible.
+ * Reduced stopped() invocation (because it needs locks).
+ * Introduced asio::io_service::work (asio::executor_work_guard) by defining ASCS_AVOID_AUTO_STOP_SERVICE macro.
+ * Add function service_pump::service_thread_num to fetch the real number of service thread (must define ASCS_DECREASE_THREAD_AT_RUNTIME macro).
+ *
+ * DELETION:
+ * Not support Visual C++ 11.0 (2012) any more, use st_asio_wrapper instead.
+ *
+ * REFACTORING:
+ * Move all deprecated classes (connector_base, client_base, service_base) to alias.h
+ * Refactor the mechanism of message sending.
+ *
+ * REPLACEMENTS:
+ * Rename tcp::client_base to tcp::multi_client_base, ext::tcp::client to ext::tcp::multi_client, udp::service_base to udp::multi_service_base,
+ *  ext::udp::service to ext::udp::multi_service. Old ones are still available, but have became alias.
+ *
  */
 
 #ifndef _ASCS_CONFIG_H_
@@ -201,17 +236,13 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#define ASCS_VER		10202	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.2.2"
+#define ASCS_VER		10203	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.2.3"
 
 //asio and compiler check
 #ifdef _MSC_VER
 	#define ASCS_SF "%Iu" //format used to print 'size_t'
-	static_assert(_MSC_VER >= 1700, "ascs needs Visual C++ 11.0 or higher.");
-
-	#if _MSC_VER >= 1800
-		#define ASCS_HAS_TEMPLATE_USING
-	#endif
+	static_assert(_MSC_VER >= 1800, "ascs needs Visual C++ 12.0 (2013) or higher.");
 #elif defined(__GNUC__)
 	#define ASCS_SF "%zu" //format used to print 'size_t'
 	#ifdef __x86_64__
@@ -226,8 +257,6 @@
 	#if !defined(__GXX_EXPERIMENTAL_CXX0X__) && (!defined(__cplusplus) || __cplusplus < 201103L)
 		#error ascs needs c++11 or higher.
 	#endif
-
-	#define ASCS_HAS_TEMPLATE_USING
 #else
 	#error ascs only support Visual C++, GCC and Clang.
 #endif
@@ -382,17 +411,7 @@ static_assert(ASCS_ASYNC_ACCEPT_NUM > 0, "async accept number must be bigger tha
 //ConcurrentQueue is lock-free, please refer to https://github.com/cameron314/concurrentqueue
 #ifdef ASCS_HAS_CONCURRENT_QUEUE
 	#include <concurrentqueue.h>
-
-	#ifdef ASCS_HAS_TEMPLATE_USING
 	template<typename T> using concurrent_queue = moodycamel::ConcurrentQueue<T>;
-	#else
-	template<typename T> class concurrent_queue : public moodycamel::ConcurrentQueue<T>
-	{
-	public:
-		concurrent_queue() {}
-		explicit concurrent_queue(size_t capacity) : moodycamel::ConcurrentQueue<T>(capacity) {}
-	};
-	#endif
 
 	#ifndef ASCS_INPUT_QUEUE
 	#define ASCS_INPUT_QUEUE lock_free_queue
@@ -462,6 +481,12 @@ static_assert(ASCS_HEARTBEAT_MAX_ABSENCE > 0, "heartbeat absence must be bigger 
 //I tried many ways, onle one way can make asio::ssl::stream reusable, which is:
 // don't call any shutdown functions of asio::ssl::stream, just call asio::ip::tcp::socket's shutdown function,
 // this seems not a normal procedure, but it works, I believe that asio's defect caused this problem.
+
+//#define ASCS_AVOID_AUTO_STOP_SERVICE
+//wrap service_pump with asio::io_service::work (asio::executor_work_guard), then it will never run out
+
+//#define ASCS_DECREASE_THREAD_AT_RUNTIME
+//enable decreasing service thread at runtime.
 //configurations
 
 #endif /* _ASCS_CONFIG_H_ */

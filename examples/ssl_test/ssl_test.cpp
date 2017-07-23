@@ -7,7 +7,11 @@
 #define ASCS_REUSE_SSL_STREAM
 //#define ASCS_FORCE_TO_USE_MSG_RECV_BUFFER //force to use the msg recv buffer
 #define ASCS_ENHANCED_STABILITY
+//#if defined(_MSC_VER) && _MSC_VER <= 1800
+//#define ASCS_DEFAULT_PACKER replaceable_packer<shared_buffer<i_buffer>>
+//#else
 //#define ASCS_DEFAULT_PACKER replaceable_packer<>
+//#endif
 //#define ASCS_DEFAULT_UNPACKER replaceable_unpacker<>
 #define ASCS_HEARTBEAT_INTERVAL	5 //SSL has supported heartbeat because we used user data instead of OOB to implement
 								  //heartbeat since 1.2.0
@@ -43,7 +47,7 @@ int main(int argc, const char* argv[])
 
 ///*
 	//method #1
-	client client_(sp, asio::ssl::context::sslv23_client);
+	multi_client client_(sp, asio::ssl::context::sslv23_client);
 	client_.context().set_options(asio::ssl::context::default_workarounds | asio::ssl::context::no_sslv2 | asio::ssl::context::single_dh_use);
 	client_.context().set_verify_mode(asio::ssl::context::verify_peer | asio::ssl::context::verify_fail_if_no_peer_cert);
 	client_.context().load_verify_file("certs/server.crt");
@@ -107,9 +111,6 @@ int main(int argc, const char* argv[])
 #else
 		else if (RESTART_COMMAND == str)
 		{
-			client_.force_shutdown(true); //important, or client will not be able to reconnect to the server
-//			client_.force_shutdown(true); //if you used single_client
-
 			sp.stop_service(&client_);
 			sp.stop_service();
 

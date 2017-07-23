@@ -96,17 +96,8 @@ public:
 	{
 		if (msg.empty())
 			unified_out::error_out("empty message, will not send it.");
-		else if (!this->sending && !this->stopped() && is_ready())
-		{
-			scope_atomic_lock lock(this->send_atomic);
-			if (!this->sending && lock.locked())
-			{
-				this->sending = true;
-				lock.unlock();
-
-				return do_sync_send_msg(peer_addr, msg);
-			}
-		}
+		else if (this->lock_sending_flag())
+			return do_sync_send_msg(peer_addr, msg);
 
 		return 0;
 	}
@@ -157,6 +148,15 @@ protected:
 		}
 
 		return false;
+	}
+
+	virtual bool do_send_msg(in_msg_type&& msg)
+	{
+		last_send_msg = std::move(msg);
+		this->next_layer().async_send_to(ASCS_SEND_BUFFER_TYPE(last_send_msg.data(), last_send_msg.size()), last_send_msg.peer_addr,
+			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);}));
+
+		return true;
 	}
 
 	virtual void do_recv_msg()
@@ -215,8 +215,7 @@ private:
 			{
 				++this->stat.recv_msg_sum;
 				this->stat.recv_byte_sum += msg.size();
-				this->temp_msg_buffer.emplace_back();
-				this->temp_msg_buffer.back().swap(temp_addr, std::move(msg));
+				this->temp_msg_buffer.emplace_back(out_msg_type(temp_addr, std::move(msg)));
 			}
 			this->handle_msg();
 		}

@@ -54,22 +54,16 @@ public:
 };
 
 class basic_buffer
-#if !defined(_MSC_VER) || _MSC_VER >= 1900 //for naughty VC++, it violate the standard and even itself usually.
-	: public asio::detail::noncopyable //seems asio's noncopyable is not as good as boost's.
+#if defined(_MSC_VER) && _MSC_VER <= 1800
+	: public asio::noncopyable
 #endif
 {
 public:
 	basic_buffer() {do_detach();}
 	basic_buffer(size_t len) {do_detach(); assign(len);}
-#if defined(_MSC_VER) && _MSC_VER <= 1800 //for naughty VC++, it violate the standard and even itself usually.
-	basic_buffer(const basic_buffer& other) {do_detach(); *this = other;}
-#endif
 	basic_buffer(basic_buffer&& other) {do_attach(other.buff, other.len, other.buff_len); other.do_detach();}
 	~basic_buffer() {clear();}
 
-#if defined(_MSC_VER) && _MSC_VER <= 1800 //for naughty VC++, it violate the standard and even itself usually.
-	basic_buffer& operator=(const basic_buffer& other) {if (other.empty()) clear(); else {assign(other.size()); memcpy(buff, other.buff, other.size());} return *this;}
-#endif
 	basic_buffer& operator=(basic_buffer&& other) {clear(); swap(other); return *this;}
 	void assign(size_t len) {clear(); do_attach(new char[len], len, len);}
 

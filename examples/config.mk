@@ -3,6 +3,7 @@
 #ext_location = -I/path of asio/
 # asio.hpp and asio directory should be available in this place.
 
+# If possible, -std=c++14 or -std=c++1y would be better.
 cflag = -Wall -fexceptions -std=c++11
 ifeq (${MAKECMDGOALS}, debug)
 	cflag += -g -DDEBUG

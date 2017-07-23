@@ -17,24 +17,16 @@
 
 namespace ascs { namespace udp {
 
-#ifdef ASCS_HAS_TEMPLATE_USING
 template<typename Socket> using single_service_base = single_socket_service<Socket>;
-#else
-template<typename Socket> class single_service_base : public single_socket_service<Socket>
-{
-public:
-	single_service_base(service_pump& service_pump_) : single_socket_service<Socket>(service_pump_) {}
-};
-#endif
 
 template<typename Socket, typename Pool = object_pool<Socket>>
-class service_base : public multi_socket_service<Socket, Pool>
+class multi_service_base : public multi_socket_service<Socket, Pool>
 {
 private:
 	typedef multi_socket_service<Socket, Pool> super;
 
 public:
-	service_base(service_pump& service_pump_) : super(service_pump_) {}
+	multi_service_base(service_pump& service_pump_) : super(service_pump_) {}
 
 	using super::add_socket;
 	typename Pool::object_type add_socket(unsigned short port, const std::string& ip = std::string())

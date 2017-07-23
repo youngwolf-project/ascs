@@ -30,7 +30,7 @@ public:
 	typedef std::function<void(const asio::error_code&)> handler_with_error;
 	typedef std::function<void(const asio::error_code&, size_t)> handler_with_error_size;
 
-#if (defined(_MSC_VER) && _MSC_VER >= 1900) || (defined(__cplusplus) && __cplusplus > 201103L)
+#if (defined(_MSC_VER) && _MSC_VER > 1800) || (defined(__cplusplus) && __cplusplus > 201103L)
 	#if ASIO_VERSION >= 101100
 	template<typename F> void post(F&& handler) {asio::post(io_service_, [unused(this->async_call_indicator), handler(std::move(handler))]() {handler();});}
 	template<typename F> void post(const F& handler) {asio::post(io_service_, [unused(this->async_call_indicator), handler]() {handler();});}

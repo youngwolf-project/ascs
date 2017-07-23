@@ -34,7 +34,7 @@
 namespace ascs
 {
 
-#if defined(_MSC_VER) && _MSC_VER < 1900 //terrible VC++
+#if defined(_MSC_VER) && _MSC_VER <= 1800 //terrible VC++
 inline bool operator==(asio::error::basic_errors _Left, const asio::error_code& _Right) {return _Left == _Right.value();}
 inline bool operator!=(asio::error::basic_errors _Left, const asio::error_code& _Right) {return !(_Left == _Right);}
 
@@ -42,7 +42,7 @@ inline bool operator==(asio::error::misc_errors _Left, const asio::error_code& _
 inline bool operator!=(asio::error::misc_errors _Left, const asio::error_code& _Right) {return !(_Left == _Right);}
 #endif
 
-class scope_atomic_lock : public asio::detail::noncopyable
+class scope_atomic_lock : public asio::noncopyable
 {
 public:
 	scope_atomic_lock(std::atomic_flag& atomic_) : _locked(false), atomic(atomic_) {lock();} //atomic_ must has been initialized with false
@@ -59,14 +59,17 @@ private:
 
 class service_pump;
 class object;
-class i_server
+namespace tcp
 {
-public:
-	virtual service_pump& get_service_pump() = 0;
-	virtual const service_pump& get_service_pump() const = 0;
-	virtual bool del_socket(const std::shared_ptr<object>& socket_ptr) = 0;
-	virtual bool restore_socket(const std::shared_ptr<object>& socket_ptr, uint_fast64_t id) = 0;
-};
+	class i_server
+	{
+	public:
+		virtual service_pump& get_service_pump() = 0;
+		virtual const service_pump& get_service_pump() const = 0;
+		virtual bool del_socket(const std::shared_ptr<object>& socket_ptr) = 0;
+		virtual bool restore_socket(const std::shared_ptr<object>& socket_ptr, uint_fast64_t id) = 0;
+	};
+} //namespace
 
 class i_buffer
 {
@@ -80,8 +83,10 @@ public:
 
 //convert '->' operation to '.' operation
 //user need to allocate object, and auto_buffer will free it
-template<typename T>
-class auto_buffer : public asio::detail::noncopyable
+template<typename T> class auto_buffer
+#if defined(_MSC_VER) && _MSC_VER <= 1800
+	: public asio::noncopyable
+#endif
 {
 public:
 	typedef T* buffer_type;
@@ -107,11 +112,11 @@ public:
 protected:
 	buffer_type buffer;
 };
+typedef auto_buffer<i_buffer> replaceable_buffer;
 
 //convert '->' operation to '.' operation
 //user need to allocate object, and shared_buffer will free it
-template<typename T>
-class shared_buffer
+template<typename T> class shared_buffer
 {
 public:
 	typedef std::shared_ptr<T> buffer_type;
@@ -120,12 +125,11 @@ public:
 	shared_buffer() {}
 	shared_buffer(T* _buffer) {buffer.reset(_buffer);}
 	shared_buffer(buffer_type _buffer) : buffer(_buffer) {}
-	shared_buffer(const shared_buffer& other) : buffer(other.buffer) {}
-	shared_buffer(shared_buffer&& other) : buffer(std::move(other.buffer)) {}
-	const shared_buffer& operator=(const shared_buffer& other) {buffer = other.buffer; return *this;}
-	~shared_buffer() {clear();}
 
+#if defined(_MSC_VER) && _MSC_VER <= 1800
+	shared_buffer(shared_buffer&& other) : buffer(std::move(other.buffer)) {}
 	shared_buffer& operator=(shared_buffer&& other) {clear(); swap(other); return *this;}
+#endif
 
 	buffer_type raw_buffer() const {return buffer;}
 	void raw_buffer(T* _buffer) {buffer.reset(_buffer);}
@@ -142,13 +146,7 @@ protected:
 	buffer_type buffer;
 };
 //not like auto_buffer, shared_buffer is copyable, but auto_buffer is a bit more efficient.
-
-#if !defined(_MSC_VER) || _MSC_VER >= 1900 //for naughty VC++, it violate the standard and even itself usually.
-typedef auto_buffer<i_buffer> replaceable_buffer;
-#else
-typedef shared_buffer<i_buffer> replaceable_buffer; //before VC++ 14.0, auto_buffer will lead compilation error
-#endif
-//packer or/and unpacker used replaceable_buffer as their msg type will be replaceable.
+//packer or/and unpacker who used auto_buffer or shared_buffer as its msg type will be replaceable.
 
 //packer concept
 template<typename MsgType>
@@ -229,10 +227,14 @@ namespace udp
 		udp_msg(const asio::ip::udp::endpoint& _peer_addr, const MsgType& msg) : MsgType(msg), peer_addr(_peer_addr) {}
 		udp_msg(const asio::ip::udp::endpoint& _peer_addr, MsgType&& msg) : MsgType(std::move(msg)), peer_addr(_peer_addr) {}
 
-		using MsgType::operator =;
+		using MsgType::operator=;
 		using MsgType::swap;
-		void swap(udp_msg& other) {std::swap(peer_addr, other.peer_addr); MsgType::swap(other);}
-		void swap(asio::ip::udp::endpoint& addr, MsgType&& tmp_msg) {std::swap(peer_addr, addr); MsgType::swap(tmp_msg);}
+		void swap(udp_msg& other) {MsgType::swap(other); std::swap(peer_addr, other.peer_addr);}
+
+#if defined(_MSC_VER) && _MSC_VER <= 1800
+		udp_msg(udp_msg&& other) : MsgType(std::move(other)), peer_addr(std::move(other.peer_addr)) {}
+		udp_msg& operator=(udp_msg&& other) {MsgType::clear(); swap(other); return *this;}
+#endif
 	};
 
 	template<typename MsgType>
@@ -263,8 +265,8 @@ struct statistic
 	static stat_time now() {return std::chrono::system_clock::now();}
 	typedef std::chrono::system_clock::duration stat_duration;
 #else
-	struct dummy_duration {const dummy_duration& operator +=(const dummy_duration& other) {return *this;}}; //not a real duration, just satisfy compiler(d1 += d2)
-	struct dummy_time {dummy_duration operator -(const dummy_time& other) {return dummy_duration();}}; //not a real time, just satisfy compiler(t1 - t2)
+	struct dummy_duration {dummy_duration& operator+=(const dummy_duration& other) {return *this;}}; //not a real duration, just satisfy compiler(d1 += d2)
+	struct dummy_time {dummy_duration operator-(const dummy_time& other) {return dummy_duration();}}; //not a real time, just satisfy compiler(t1 - t2)
 
 	typedef dummy_time stat_time;
 	static stat_time now() {return stat_time();}
@@ -290,7 +292,7 @@ struct statistic
 	void reset() {reset_number();}
 #endif
 
-	statistic& operator +=(const struct statistic& other)
+	statistic& operator+=(const struct statistic& other)
 	{
 		send_msg_sum += other.send_msg_sum;
 		send_byte_sum += other.send_byte_sum;
@@ -379,12 +381,13 @@ private:
 template<typename T>
 struct obj_with_begin_time : public T
 {
-	obj_with_begin_time() {restart();}
-	obj_with_begin_time(T&& msg) : T(std::move(msg)) {restart();}
+	obj_with_begin_time() {}
+	obj_with_begin_time(T&& obj) : T(std::move(obj)) {restart();}
+	obj_with_begin_time& operator=(T&& obj) {T::operator=(std::move(obj)); restart(); return *this;}
+
 	void restart() {restart(statistic::now());}
 	void restart(const typename statistic::stat_time& begin_time_) {begin_time = begin_time_;}
-	using T::operator =;
-	using T::swap;
+	void swap(T& obj) {T::swap(obj); restart();}
 	void swap(obj_with_begin_time& other) {T::swap(other); std::swap(begin_time, other.begin_time);}
 
 	typename statistic::stat_time begin_time;
@@ -457,7 +460,7 @@ template<typename _Predicate> void NAME(const _Predicate& __pred) const {for (au
 //used by both TCP and UDP
 #define SAFE_SEND_MSG_CHECK \
 { \
-	if (this->stopped() || !this->is_ready()) return false; \
+	if (!this->is_ready()) return false; \
 	std::this_thread::sleep_for(std::chrono::milliseconds(50)); \
 }
 
@@ -486,20 +489,14 @@ TCP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)
 #define TCP_SYNC_SEND_MSG(FUNNAME, NATIVE) \
 size_t FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) \
 { \
-	if (!this->sending && !this->stopped() && this->is_ready()) \
+	if (this->lock_sending_flag()) \
 	{ \
-		scope_atomic_lock lock(this->send_atomic); \
-		if (!this->sending && lock.locked()) \
-		{ \
-			this->sending = true; \
-			lock.unlock(); \
-			auto_duration dur(this->stat.pack_time_sum); \
-			auto msg = this->packer_->pack_msg(pstr, len, num, NATIVE); \
-			dur.end(); \
-			if (msg.empty()) \
-				unified_out::error_out("found an empty message, please check your packer."); \
-			return do_sync_send_msg(msg); /*always send message even it's empty, this is very important*/ \
-		} \
+		auto_duration dur(this->stat.pack_time_sum); \
+		auto msg = this->packer_->pack_msg(pstr, len, num, NATIVE); \
+		dur.end(); \
+		if (msg.empty()) \
+			unified_out::error_out("found an empty message, please check your packer."); \
+		return do_sync_send_msg(msg); /*always send message even it's empty, this is very important*/ \
 	} \
 	return 0; \
 } \
@@ -541,18 +538,12 @@ UDP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)
 size_t FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) {return FUNNAME(peer_addr, pstr, len, num, can_overflow);} \
 size_t FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) \
 { \
-	if (!this->sending && !this->stopped() && this->is_ready()) \
+	if (this->lock_sending_flag()) \
 	{ \
-		scope_atomic_lock lock(this->send_atomic); \
-		if (!this->sending && lock.locked()) \
-		{ \
-			this->sending = true; \
-			lock.unlock(); \
-			auto msg = this->packer_->pack_msg(pstr, len, num, NATIVE); \
-			if (msg.empty()) \
-				unified_out::error_out("found an empty message, please check your packer."); \
-			return do_sync_send_msg(peer_addr, msg); /*always send message even it's empty, this is very important*/ \
-		} \
+		auto msg = this->packer_->pack_msg(pstr, len, num, NATIVE); \
+		if (msg.empty()) \
+			unified_out::error_out("found an empty message, please check your packer."); \
+		return do_sync_send_msg(peer_addr, msg); /*always send message even it's empty, this is very important*/ \
 	} \
 	return 0; \
 } \
