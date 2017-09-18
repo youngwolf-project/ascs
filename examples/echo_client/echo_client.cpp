@@ -98,7 +98,7 @@ TCP_SEND_MSG_CALL_SWITCH(FUNNAME, void)
 class echo_socket : public client_socket
 {
 public:
-	echo_socket(asio::io_service& io_service_) : client_socket(io_service_), recv_bytes(0), recv_index(0)
+	echo_socket(asio::io_context& io_context_) : client_socket(io_context_), recv_bytes(0), recv_index(0)
 	{
 #if 2 == PACKER_UNPACKER_TYPE
 		std::dynamic_pointer_cast<ASCS_DEFAULT_UNPACKER>(unpacker())->fixed_length(1024);
@@ -182,14 +182,6 @@ public:
 //		do_something_to_all([&total_recv_bytes](object_ctype& item) {total_recv_bytes += item->get_recv_bytes();});
 
 		return total_recv_bytes;
-	}
-
-	statistic get_statistic()
-	{
-		statistic stat;
-		do_something_to_all([&stat](object_ctype& item) {stat += item->get_statistic();});
-
-		return stat;
 	}
 
 	void clear_status() {do_something_to_all([](object_ctype& item) {item->clear_status();});}

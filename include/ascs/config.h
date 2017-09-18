@@ -172,7 +172,7 @@
  * 2017.7.9		version 1.2.2
  *
  * SPECIAL ATTENTION (incompatible with old editions):
- * No error_code will be presented anymore when call io_service::run, suggest to define macro ASCS_ENHANCED_STABILITY.
+ * No error_code will be presented anymore when call io_context::run, suggest to define macro ASCS_ENHANCED_STABILITY.
  *
  * HIGHLIGHT:
  * Add two demos for concurrent test.
@@ -227,6 +227,42 @@
  * Rename tcp::client_base to tcp::multi_client_base, ext::tcp::client to ext::tcp::multi_client, udp::service_base to udp::multi_service_base,
  *  ext::udp::service to ext::udp::multi_service. Old ones are still available, but have became alias.
  *
+ * ===============================================================
+ * 2017.9.17	version 1.2.4
+ *
+ * SPECIAL ATTENTION (incompatible with old editions):
+ * Function object_pool::invalid_object_pop only pop obsoleted objects with no additional reference.
+ * socket::stat.last_recv_time will not be updated before tcp::socket_base::on_connect anymore.
+ * For ssl socket, on_handshake will be invoked before on_connect (before, on_connect is before on_handshake).
+ *
+ * HIGHLIGHT:
+ *
+ * FIX:
+ * If start the same timer and return false in the timer's call_back, its status will be set to TIMER_CANCELED (the right value should be TIMER_OK).
+ * In old compilers (for example gcc 4.7), std::list::splice needs a non-const iterator as the insert point.
+ * If call stop_service after service_pump stopped, timer TIMER_DELAY_CLOSE will be left behind and be triggered after the next start_service,
+ *  this will bring disorders to ascs::socket.
+ *
+ * ENHANCEMENTS:
+ * During congestion controlling, retry interval can be changed at runtime, you can use this feature for performance tuning,
+ *  see macro ASCS_MSG_HANDLING_INTERVAL_STEP1 and ASCS_MSG_HANDLING_INTERVAL_STEP2 for more details.
+ * Avoid decreasing the number of service thread to less than one.
+ * Add a helper function object_pool::get_statistic.
+ * Add another overload of function object_pool::invalid_object_pop.
+ * Introduce asio::defer to object, be careful to use it.
+ * Add link's break time and establish time to the statistic object.
+ * Move virtual function client_socket_base::on_connect to tcp::socket_base, so server_socket_base will have it too (and ssl sockets).
+ *
+ * DELETION:
+ * Drop useless variables which need macro ASCS_DECREASE_THREAD_AT_RUNTIME to be defined.
+ *
+ * REFACTORING:
+ * Move variable last_send_time and last_recv_time from ascs::socket to ascs::socet::stat (a statistic object).
+ * Move common operations in client_socket_base::do_start and server_socket_base::do_start to tcp::socket_base::do_start and socket::do_start.
+ *
+ * REPLACEMENTS:
+ * Always use io_context instead of io_service (before asio 1.11, io_context will be a typedef of io_service).
+ *
  */
 
 #ifndef _ASCS_CONFIG_H_
@@ -236,8 +272,8 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#define ASCS_VER		10203	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.2.3"
+#define ASCS_VER		10204	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.2.4"
 
 //asio and compiler check
 #ifdef _MSC_VER
@@ -267,12 +303,13 @@
 
 static_assert(ASIO_VERSION >= 101001, "ascs needs asio 1.10.1 or higher.");
 
-#if ASIO_VERSION >= 101100 && defined(ASIO_NO_DEPRECATED)
-#define io_service io_context
+#if ASIO_VERSION < 101100
+namespace asio {typedef io_service io_context;}
 #endif
 //asio and compiler check
 
 //configurations
+
 #ifndef ASCS_SERVER_IP
 #define ASCS_SERVER_IP			"127.0.0.1"
 #endif
@@ -298,7 +335,7 @@ static_assert(ASCS_MAX_MSG_NUM > 0, "message capacity must be bigger than zero."
 //don't write any logs.
 //#define ASCS_NO_UNIFIED_OUT
 
-//if defined, service_pump will catch exceptions for asio::io_service::run().
+//if defined, service_pump will catch exceptions for asio::io_context::run().
 //#define ASCS_ENHANCED_STABILITY
 
 //if defined, asio::steady_timer will be used in ascs::timer, otherwise, asio::system_timer will be used.
@@ -487,6 +524,24 @@ static_assert(ASCS_HEARTBEAT_MAX_ABSENCE > 0, "heartbeat absence must be bigger 
 
 //#define ASCS_DECREASE_THREAD_AT_RUNTIME
 //enable decreasing service thread at runtime.
+
+#ifndef ASCS_MSG_HANDLING_INTERVAL_STEP1
+#define ASCS_MSG_HANDLING_INTERVAL_STEP1	50 //milliseconds
+#endif
+static_assert(ASCS_MSG_HANDLING_INTERVAL_STEP1 >= 0, "the interval of msg handling step 1 must be bigger than or equal to zero.");
+//msg handling step 1
+//move msg from temp_msg_buffer to recv_msg_buffer (because on_msg return false or macro ASCS_FORCE_TO_USE_MSG_RECV_BUFFER been defined)
+//if above process failed, retry it after ASCS_MSG_HANDLING_INTERVAL_STEP1 milliseconds later.
+//this value can be changed via msg_handling_interval_step1(size_t) at runtime.
+
+#ifndef ASCS_MSG_HANDLING_INTERVAL_STEP2
+#define ASCS_MSG_HANDLING_INTERVAL_STEP2	50 //milliseconds
+#endif
+static_assert(ASCS_MSG_HANDLING_INTERVAL_STEP2 >= 0, "the interval of msg handling step 2 must be bigger than or equal to zero.");
+//msg handling step 2
+//call on_msg_handle, if failed, retry it after ASCS_MSG_HANDLING_INTERVAL_STEP2 milliseconds later.
+//this value can be changed via msg_handling_interval_step2(size_t) at runtime.
+
 //configurations
 
 #endif /* _ASCS_CONFIG_H_ */

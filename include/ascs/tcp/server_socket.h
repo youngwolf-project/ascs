@@ -77,20 +77,7 @@ public:
 	}
 
 protected:
-	virtual bool do_start()
-	{
-		this->status = super::link_status::CONNECTED;
-		this->last_recv_time = time(nullptr);
-#if ASCS_HEARTBEAT_INTERVAL > 0
-		this->start_heartbeat(ASCS_HEARTBEAT_INTERVAL);
-#endif
-		this->send_msg(); //send buffer may have msgs, send them
-		this->do_recv_msg();
-
-		return true;
-	}
-
-	virtual void on_unpack_error() {unified_out::error_out("can not unpack msg."); this->force_shutdown();}
+	virtual void on_unpack_error() {unified_out::error_out("can not unpack msg."); force_shutdown();}
 	//do not forget to force_shutdown this socket(in del_socket(), there's a force_shutdown() invocation)
 	virtual void on_recv_error(const asio::error_code& ec)
 	{

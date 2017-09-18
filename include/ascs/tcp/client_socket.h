@@ -30,9 +30,9 @@ public:
 	static const timer::tid TIMER_CONNECT = TIMER_BEGIN;
 	static const timer::tid TIMER_END = TIMER_BEGIN + 10;
 
-	client_socket_base(asio::io_service& io_service_) : super(io_service_), need_reconnect(true) {set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
+	client_socket_base(asio::io_context& io_context_) : super(io_context_), need_reconnect(true) {set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
 	template<typename Arg>
-	client_socket_base(asio::io_service& io_service_, Arg& arg) : super(io_service_, arg), need_reconnect(true) {set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
+	client_socket_base(asio::io_context& io_context_, Arg& arg) : super(io_context_, arg), need_reconnect(true) {set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
 
 	//reset all, be ensure that there's no any operations performed on this socket when invoke it
 	//subclass must re-write this function to initialize itself, and then do not forget to invoke superclass' reset function too
@@ -99,24 +99,23 @@ public:
 	}
 
 protected:
-	virtual bool do_start() //connect or receive
+	virtual bool do_start() //connect
 	{
-		if (!this->is_connected())
-			this->lowest_layer().async_connect(server_addr, this->make_handler_error([this](const asio::error_code& ec) {this->connect_handler(ec);}));
-		else
-		{
-			this->last_recv_time = time(nullptr);
-#if ASCS_HEARTBEAT_INTERVAL > 0
-			this->start_heartbeat(ASCS_HEARTBEAT_INTERVAL);
-#endif
-			this->send_msg(); //send buffer may have msgs, send them
-			this->do_recv_msg();
-		}
+		assert(!this->is_connected());
 
+		this->lowest_layer().async_connect(server_addr, this->make_handler_error([this](const asio::error_code& ec) {this->connect_handler(ec);}));
 		return true;
 	}
 
-	//after how much time(ms), client_socket_base will try to reconnect to the server, negative means give up.
+	virtual void connect_handler(const asio::error_code& ec)
+	{
+		if (!ec) //already started, so cannot call start()
+			super::do_start();
+		else
+			prepare_next_reconnect(ec);
+	}
+
+	//after how much time(ms), client_socket_base will try to reconnect to the server, negative value means give up.
 	virtual int prepare_reconnect(const asio::error_code& ec) {return ASCS_RECONNECT_INTERVAL;}
 	virtual void on_connect() {unified_out::info_out("connecting success.");}
 	virtual void on_unpack_error() {unified_out::info_out("can not unpack msg."); force_shutdown();}
@@ -160,19 +159,6 @@ protected:
 		}
 
 		return false;
-	}
-
-private:
-	void connect_handler(const asio::error_code& ec)
-	{
-		if (!ec)
-		{
-			this->status = super::link_status::CONNECTED;
-			on_connect();
-			do_start();
-		}
-		else
-			prepare_next_reconnect(ec);
 	}
 
 protected:

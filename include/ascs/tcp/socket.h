@@ -35,8 +35,8 @@ private:
 protected:
 	enum link_status {CONNECTED, FORCE_SHUTTING_DOWN, GRACEFUL_SHUTTING_DOWN, BROKEN};
 
-	socket_base(asio::io_service& io_service_) : super(io_service_) {first_init();}
-	template<typename Arg> socket_base(asio::io_service& io_service_, Arg& arg) : super(io_service_, arg) {first_init();}
+	socket_base(asio::io_context& io_context_) : super(io_context_) {first_init();}
+	template<typename Arg> socket_base(asio::io_context& io_context_, Arg& arg) : super(io_context_, arg) {first_init();}
 
 	//helper function, just call it in constructor
 	void first_init() {status = link_status::BROKEN; unpacker_ = std::make_shared<Unpacker>();}
@@ -140,6 +140,15 @@ protected:
 		return ec ? -1 : send_size;
 	}
 
+	virtual bool do_start()
+	{
+		status = link_status::CONNECTED;
+		this->stat.establish_time = time(nullptr);
+
+		on_connect(); //in this virtual function, this->stat.last_recv_time has not been updated, please note
+		return super::do_start();
+	}
+
 	//return false if send buffer is empty
 	virtual bool do_send_msg()
 	{
@@ -194,6 +203,7 @@ protected:
 			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);}));
 	}
 
+	virtual void on_connect() {}
 	//msg can not be unpacked
 	//the link is still available, so don't need to shutdown this tcp::socket_base at both client and server endpoint
 	virtual void on_unpack_error() = 0;
@@ -223,7 +233,7 @@ private:
 	{
 		if (!ec && bytes_transferred > 0)
 		{
-			this->last_recv_time = time(nullptr);
+			this->stat.last_recv_time = time(nullptr);
 
 			typename Unpacker::container_type temp_msg_can;
 			auto_duration dur(this->stat.unpack_time_sum);
@@ -255,7 +265,7 @@ private:
 	{
 		if (!ec)
 		{
-			this->last_send_time = time(nullptr);
+			this->stat.last_send_time = time(nullptr);
 
 			this->stat.send_byte_sum += bytes_transferred;
 			if (last_send_msg.empty()) //send message with sync mode
@@ -292,7 +302,7 @@ private:
 
 	bool async_shutdown_handler(size_t loop_num)
 	{
-		if (link_status::GRACEFUL_SHUTTING_DOWN == this->status)
+		if (link_status::GRACEFUL_SHUTTING_DOWN == status)
 		{
 			--loop_num;
 			if (loop_num > 0)

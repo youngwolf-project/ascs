@@ -101,44 +101,28 @@ protected:
 	{
 		assert(object_ptr && !object_ptr->is_equal_to(-1));
 
-		std::unique_lock<std::mutex> lock(invalid_object_can_mutex);
-		auto iter = std::find_if(std::begin(invalid_object_can), std::end(invalid_object_can), [id](object_ctype& item) {return item->is_equal_to(id);});
-		//cannot use invalid_object_pop(uint_fast64_t), it's too arbitrary
-		if (iter != std::end(invalid_object_can) && (*iter).unique() && (*iter)->obsoleted())
+		auto old_object_ptr = invalid_object_pop(id);
+		if (old_object_ptr)
 		{
-			auto invalid_object_ptr(std::move(*iter));
-			invalid_object_can.erase(iter);
-			lock.unlock();
-
 			assert(!find(id));
 
 			std::lock_guard<std::mutex> lock(object_can_mutex);
 			object_can.erase(object_ptr->id());
 			object_ptr->id(id);
 			object_can.emplace(id, object_ptr); //must succeed
-
-			return invalid_object_ptr;
 		}
 
-		return object_type();
+		return old_object_ptr;
 	}
 
 #if defined(ASCS_REUSE_OBJECT) && !defined(ASCS_RESTORE_OBJECT)
 	object_type reuse_object()
 	{
-		std::unique_lock<std::mutex> lock(invalid_object_can_mutex);
-		for (auto iter = std::begin(invalid_object_can); iter != std::end(invalid_object_can); ++iter)
-			if ((*iter).unique() && (*iter)->obsoleted())
-			{
-				auto object_ptr(std::move(*iter));
-				invalid_object_can.erase(iter);
-				lock.unlock();
+		auto object_ptr = invalid_object_pop();
+		if (object_ptr)
+			object_ptr->reset();
 
-				object_ptr->reset();
-				return object_ptr;
-			}
-
-		return object_type();
+		return object_ptr;
 	}
 
 	template<typename Arg>
@@ -237,7 +221,7 @@ public:
 	{
 		std::lock_guard<std::mutex> lock(invalid_object_can_mutex);
 		auto iter = std::find_if(std::begin(invalid_object_can), std::end(invalid_object_can), [id](object_ctype& item) {return item->is_equal_to(id);});
-		if (iter != std::end(invalid_object_can))
+		if (iter != std::end(invalid_object_can) && (*iter).unique() && (*iter)->obsoleted())
 		{
 			auto object_ptr(std::move(*iter));
 			invalid_object_can.erase(iter);
@@ -246,7 +230,19 @@ public:
 		return object_type();
 	}
 
-	void list_all_object() {do_something_to_all([](object_ctype& item) {item->show_info("", "");});}
+	//this method has linear complexity, please note.
+	object_type invalid_object_pop()
+	{
+		std::unique_lock<std::mutex> lock(invalid_object_can_mutex);
+		for (auto iter = std::begin(invalid_object_can); iter != std::end(invalid_object_can); ++iter)
+			if ((*iter).unique() && (*iter)->obsoleted())
+			{
+				auto object_ptr(std::move(*iter));
+				invalid_object_can.erase(iter);
+				return object_ptr;
+			}
+		return object_type();
+	}
 
 	//Kick out obsoleted objects
 	//Consider the following assumptions:
@@ -282,7 +278,7 @@ public:
 
 	//free a specific number of objects
 	//if you used object pool(define ASCS_REUSE_OBJECT or ASCS_RESTORE_OBJECT), you can manually call this function to free some objects
-	// after the object pool(invalid_object_size()) goes big enough for memory saving (because the objects in invalid_object_can
+	// after the object pool(invalid_object_size()) gets big enough for memory saving (because the objects in invalid_object_can
 	// are waiting for reusing and will never be freed).
 	//if you don't used object pool, object_pool will invoke this function automatically and periodically, so you don't need to invoke this function exactly
 	//return affected object number.
@@ -308,6 +304,9 @@ public:
 		return num_affected;
 	}
 
+	void list_all_object() {do_something_to_all([](object_ctype& item) {item->show_info("", "");});}
+	statistic get_statistic() {statistic stat; do_something_to_all([&](object_ctype& item) {stat += item->get_statistic();}); return stat;}
+
 	template<typename _Predicate> void do_something_to_all(const _Predicate& __pred)
 		{std::lock_guard<std::mutex> lock(object_can_mutex); for (typename container_type::value_type& item : object_can) __pred(item.second);}
 
@@ -322,7 +321,7 @@ protected:
 	size_t max_size_;
 
 	//because all objects are dynamic created and stored in object_can, maybe when receiving error occur
-	//(you are recommended to delete the object from object_can, for example via i_server::del_socket), some other asynchronous calls are still queued in asio::io_service,
+	//(you are recommended to delete the object from object_can, for example via i_server::del_socket), some other asynchronous calls are still queued in asio::io_context,
 	//and will be dequeued in the future, we must guarantee these objects not be freed from the heap or reused, so we move these objects from object_can to invalid_object_can,
 	//and free them from the heap or reuse them in the near future.
 	//if ASCS_CLEAR_OBJECT_INTERVAL been defined, clear_obsoleted_object() will be invoked automatically and periodically to move all invalid objects into invalid_object_can.

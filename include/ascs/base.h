@@ -274,7 +274,21 @@ struct statistic
 #endif
 	statistic() {reset();}
 
-	void reset_number() {send_msg_sum = send_byte_sum = 0; recv_msg_sum = recv_byte_sum = 0;}
+	void reset_number()
+	{
+		send_msg_sum = 0;
+		send_byte_sum = 0;
+
+		recv_msg_sum = 0;
+		recv_byte_sum = 0;
+
+		last_send_time = 0;
+		last_recv_time = 0;
+
+		establish_time = 0;
+		break_time = 0;
+	}
+
 #ifdef ASCS_FULL_STATISTIC
 	void reset() {reset_number(); reset_duration();}
 	void reset_duration()
@@ -362,6 +376,12 @@ struct statistic
 #endif
 	stat_duration handle_time_2_sum; //on_msg_handle consumed time, this indicate the efficiency of msg handling
 	stat_duration unpack_time_sum; //udp::socket_base will not gather this item
+
+	time_t last_send_time; //include heartbeat
+	time_t last_recv_time; //include heartbeat
+
+	time_t establish_time; //time of link establishment
+	time_t break_time; //time of link broken
 };
 
 class auto_duration

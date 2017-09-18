@@ -33,7 +33,7 @@ private:
 	typedef socket<Socket, Packer, Unpacker, in_msg_type, out_msg_type, InQueue, InContainer, OutQueue, OutContainer> super;
 
 public:
-	socket_base(asio::io_service& io_service_) : super(io_service_), unpacker_(std::make_shared<Unpacker>()) {}
+	socket_base(asio::io_context& io_context_) : super(io_context_), unpacker_(std::make_shared<Unpacker>()) {}
 
 	virtual bool is_ready() {return this->lowest_layer().is_open();}
 	virtual void send_heartbeat()
@@ -107,17 +107,6 @@ public:
 	void show_info(const char* head, const char* tail) const {unified_out::info_out("%s %s:%hu %s", head, local_addr.address().to_string().data(), local_addr.port(), tail);}
 
 protected:
-	virtual bool do_start()
-	{
-		this->last_recv_time = time(nullptr);
-#if ASCS_HEARTBEAT_INTERVAL > 0
-		this->start_heartbeat(ASCS_HEARTBEAT_INTERVAL);
-#endif
-		do_recv_msg();
-
-		return true;
-	}
-
 	//send message with sync mode
 	//return -1 means error occurred, otherwise the number of bytes been sent
 	size_t do_sync_send_msg(typename Packer::msg_ctype& msg) {return do_sync_send_msg(peer_addr, msg);}
@@ -177,7 +166,7 @@ protected:
 
 	virtual bool on_heartbeat_error()
 	{
-		this->last_recv_time = time(nullptr); //avoid repetitive warnings
+		this->stat.last_recv_time = time(nullptr); //avoid repetitive warnings
 		unified_out::warning_out("%s:%hu is not available", peer_addr.address().to_string().data(), peer_addr.port());
 		return true;
 	}
@@ -208,7 +197,7 @@ private:
 	{
 		if (!ec && bytes_transferred > 0)
 		{
-			this->last_recv_time = time(nullptr);
+			this->stat.last_recv_time = time(nullptr);
 
 			auto msg = this->unpacker_->parse_msg(bytes_transferred);
 			if (!msg.empty())
@@ -231,7 +220,7 @@ private:
 	{
 		if (!ec)
 		{
-			this->last_send_time = time(nullptr);
+			this->stat.last_send_time = time(nullptr);
 
 			this->stat.send_byte_sum += bytes_transferred;
 			++this->stat.send_msg_sum;

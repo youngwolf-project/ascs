@@ -157,14 +157,6 @@ class echo_server : public server_base<echo_socket, object_pool<echo_socket>, i_
 public:
 	echo_server(service_pump& service_pump_) : server_base(service_pump_) {}
 
-	statistic get_statistic()
-	{
-		statistic stat;
-		do_something_to_all([&stat](object_ctype& item) {stat += item->get_statistic();});
-
-		return stat;
-	}
-
 	//from i_echo_server, pure virtual function, we must implement it.
 	virtual void test() {/*puts("in echo_server::test()");*/}
 };

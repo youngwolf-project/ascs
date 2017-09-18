@@ -32,25 +32,20 @@ class socket : public Socket
 
 public:
 	template<typename Arg>
-	socket(Arg& arg, asio::ssl::context& ctx) : Socket(arg, ctx), authorized_(false) {}
-
-	virtual bool is_ready() {return authorized_ && Socket::is_ready();}
-	virtual void reset() {authorized_ = false;}
-	bool authorized() const {return authorized_;}
+	socket(Arg& arg, asio::ssl::context& ctx) : Socket(arg, ctx) {}
 
 protected:
 	virtual void on_recv_error(const asio::error_code& ec)
 	{
-		if (is_ready())
+		if (this->is_ready())
 		{
-			authorized_ = false;
 #ifndef ASCS_REUSE_SSL_STREAM
 			this->status = Socket::link_status::GRACEFUL_SHUTTING_DOWN;
 			this->show_info("ssl link:", "been shut down.");
 			asio::error_code ec;
 			this->next_layer().shutdown(ec);
 
-			if (ec && asio::error::eof != ec) //the endpoint who initiated a shutdown will get error eof.
+			if (ec && asio::error::eof != ec) //the endpoint who initiated a shutdown operation will get error eof.
 				unified_out::info_out("shutdown ssl link failed (maybe intentionally because of reusing)");
 #endif
 		}
@@ -66,24 +61,21 @@ protected:
 			unified_out::error_out("handshake failed: %s", ec.message().data());
 	}
 
-	void handle_handshake(const asio::error_code& ec) {on_handshake(ec); if (!ec) {authorized_ = true; Socket::do_start();}}
-
 	void shutdown_ssl(bool sync = true)
 	{
-		if (!is_ready())
+		if (!this->is_ready())
 		{
 			Socket::force_shutdown();
 			return;
 		}
 
-		authorized_ = false;
 		this->status = Socket::link_status::GRACEFUL_SHUTTING_DOWN;
 
 		if (!sync)
 		{
 			this->show_info("ssl link:", "been shutting down.");
 			this->next_layer().async_shutdown(this->make_handler_error([this](const asio::error_code& ec) {
-				if (ec && asio::error::eof != ec) //the endpoint who initiated a shutdown will get error eof.
+				if (ec && asio::error::eof != ec) //the endpoint who initiated a shutdown operation will get error eof.
 					unified_out::info_out("async shutdown ssl link failed (maybe intentionally because of reusing)");
 			}));
 		}
@@ -93,13 +85,10 @@ protected:
 			asio::error_code ec;
 			this->next_layer().shutdown(ec);
 
-			if (ec && asio::error::eof != ec) //the endpoint who initiated a shutdown will get error eof.
+			if (ec && asio::error::eof != ec) //the endpoint who initiated a shutdown operation will get error eof.
 				unified_out::info_out("shutdown ssl link failed (maybe intentionally because of reusing)");
 		}
 	}
-
-protected:
-	volatile bool authorized_;
 };
 
 template <typename Packer, typename Unpacker, typename Socket = asio::ssl::stream<asio::ip::tcp::socket>,
@@ -111,13 +100,10 @@ private:
 	typedef socket<tcp::client_socket_base<Packer, Unpacker, Socket, InQueue, InContainer, OutQueue, OutContainer>> super;
 
 public:
-	client_socket_base(asio::io_service& io_service_, asio::ssl::context& ctx) : super(io_service_, ctx) {}
+	client_socket_base(asio::io_context& io_context_, asio::ssl::context& ctx) : super(io_context_, ctx) {}
 
+#ifndef ASCS_REUSE_SSL_STREAM
 	void disconnect(bool reconnect = false) {force_shutdown(reconnect);}
-#ifdef ASCS_REUSE_SSL_STREAM
-	void force_shutdown(bool reconnect = false) {this->authorized_ = false; super::force_shutdown(reconnect);}
-	void graceful_shutdown(bool reconnect = false, bool sync = true) {this->authorized_ = false; super::graceful_shutdown(reconnect, sync);}
-#else
 	void force_shutdown(bool reconnect = false) {graceful_shutdown(reconnect);}
 	void graceful_shutdown(bool reconnect = false, bool sync = true)
 	{
@@ -130,24 +116,30 @@ public:
 #endif
 
 protected:
-	virtual bool do_start() //add handshake
+	virtual void connect_handler(const asio::error_code& ec) //intercept tcp::client_socket_base::connect_handler
 	{
-		if (!this->is_connected())
-			super::do_start();
-		else if (!this->authorized())
+		if (!ec)
 			this->next_layer().async_handshake(asio::ssl::stream_base::client, this->make_handler_error([this](const asio::error_code& ec) {this->handle_handshake(ec);}));
-
-		return true;
+		else
+			super::connect_handler(ec);
 	}
 
 #ifndef ASCS_REUSE_SSL_STREAM
 	virtual int prepare_reconnect(const asio::error_code& ec) {return -1;}
 	virtual void on_recv_error(const asio::error_code& ec) {this->need_reconnect = false; super::on_recv_error(ec);}
 #endif
-	virtual void on_unpack_error() {unified_out::info_out("can not unpack msg."); force_shutdown();}
+	virtual void on_unpack_error() {unified_out::info_out("can not unpack msg."); this->force_shutdown();}
 
 private:
-	void handle_handshake(const asio::error_code& ec) {super::handle_handshake(ec); if (ec) force_shutdown();}
+	void handle_handshake(const asio::error_code& ec)
+	{
+		this->on_handshake(ec);
+
+		if (!ec)
+			super::connect_handler(ec); //return to tcp::client_socket_base::connect_handler
+		else
+			this->force_shutdown();
+	}
 };
 
 template<typename Object>
@@ -179,28 +171,31 @@ private:
 public:
 	server_socket_base(Server& server_, asio::ssl::context& ctx) : super(server_, ctx) {}
 
+#ifndef ASCS_REUSE_SSL_STREAM
 	void disconnect() {force_shutdown();}
-#ifdef ASCS_REUSE_SSL_STREAM
-	void force_shutdown() {this->authorized_ = false; super::force_shutdown();}
-	void graceful_shutdown(bool sync = false) {this->authorized_ = false; super::graceful_shutdown(sync);}
-#else
 	void force_shutdown() {graceful_shutdown();} //must with async mode (the default value), because server_base::uninit will call this function
 	void graceful_shutdown(bool sync = false) {this->shutdown_ssl(sync);}
 #endif
 
 protected:
-	virtual bool do_start() //add handshake
+	virtual bool do_start() //intercept tcp::server_socket_base::do_start (to add handshake)
 	{
-		if (!this->authorized())
-			this->next_layer().async_handshake(asio::ssl::stream_base::server, this->make_handler_error([this](const asio::error_code& ec) {this->handle_handshake(ec);}));
-
+		this->next_layer().async_handshake(asio::ssl::stream_base::server, this->make_handler_error([this](const asio::error_code& ec) {this->handle_handshake(ec);}));
 		return true;
 	}
 
-	virtual void on_unpack_error() {unified_out::info_out("can not unpack msg."); force_shutdown();}
+	virtual void on_unpack_error() {unified_out::info_out("can not unpack msg."); this->force_shutdown();}
 
 private:
-	void handle_handshake(const asio::error_code& ec) {super::handle_handshake(ec); if (ec) this->server.del_socket(this->shared_from_this());}
+	void handle_handshake(const asio::error_code& ec)
+	{
+		this->on_handshake(ec);
+
+		if (!ec)
+			super::do_start(); //return to tcp::server_socket_base::do_start
+		else
+			this->server.del_socket(this->shared_from_this());
+	}
 };
 
 template<typename Socket, typename Pool = object_pool<Socket>, typename Server = tcp::i_server> using server_base = tcp::server_base<Socket, Pool, Server>;
