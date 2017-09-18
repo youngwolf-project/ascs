@@ -210,7 +210,7 @@ private:
 		}
 #ifdef _MSC_VER
 		else if (asio::error::connection_refused == ec || asio::error::connection_reset == ec)
-			do_start();
+			do_recv_msg();
 #endif
 		else
 			on_recv_error(ec);
