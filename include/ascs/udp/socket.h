@@ -142,6 +142,7 @@ protected:
 	virtual bool do_send_msg(in_msg_type&& msg)
 	{
 		last_send_msg = std::move(msg);
+		std::lock_guard<std::mutex> lock(shutdown_mutex);
 		this->next_layer().async_send_to(ASCS_SEND_BUFFER_TYPE(last_send_msg.data(), last_send_msg.size()), last_send_msg.peer_addr,
 			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);}));
 

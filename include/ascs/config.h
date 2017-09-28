@@ -263,6 +263,28 @@
  * REPLACEMENTS:
  * Always use io_context instead of io_service (before asio 1.11, io_context will be a typedef of io_service).
  *
+ * ===============================================================
+ * 2017.9.28	version 1.2.5
+ *
+ * SPECIAL ATTENTION (incompatible with old editions):
+ *
+ * HIGHLIGHT:
+ *
+ * FIX:
+ * Support unmovable buffers (for example: a very short std::string).
+ * begin_time not inherited while accessing concurrent queue.
+ * Eliminate race condition in udp::socket_base.
+ * Eliminate race condition in demo file_client.
+ * Avoid division by zero error in demo file_client.
+ *
+ * ENHANCEMENTS:
+ *
+ * DELETION:
+ *
+ * REFACTORING:
+ *
+ * REPLACEMENTS:
+ *
  */
 
 #ifndef _ASCS_CONFIG_H_
@@ -272,8 +294,8 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#define ASCS_VER		10204	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.2.4"
+#define ASCS_VER		10205	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.2.5"
 
 //asio and compiler check
 #ifdef _MSC_VER

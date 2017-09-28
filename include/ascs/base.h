@@ -404,6 +404,9 @@ struct obj_with_begin_time : public T
 	obj_with_begin_time() {}
 	obj_with_begin_time(T&& obj) : T(std::move(obj)) {restart();}
 	obj_with_begin_time& operator=(T&& obj) {T::operator=(std::move(obj)); restart(); return *this;}
+	//following two functions are used by concurrent queue only, ascs just use swap
+	obj_with_begin_time(obj_with_begin_time&& other) : T(std::move(other)), begin_time(std::move(other.begin_time)) {}
+	obj_with_begin_time& operator=(obj_with_begin_time&& other) {T::operator=(std::move(other)); begin_time = std::move(other.begin_time); return *this;}
 
 	void restart() {restart(statistic::now());}
 	void restart(const typename statistic::stat_time& begin_time_) {begin_time = begin_time_;}

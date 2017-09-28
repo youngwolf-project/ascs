@@ -17,9 +17,9 @@
 #define RESTART_COMMAND	"restart"
 #define REQUEST_FILE	"get"
 
-std::atomic_ushort completed_client_num;
 int link_num = 1;
 fl_type file_size;
+std::atomic_int_fast64_t received_size;
 
 int main(int argc, const char* argv[])
 {
@@ -65,24 +65,12 @@ int main(int argc, const char* argv[])
 			str.erase(0, sizeof(REQUEST_FILE));
 			auto files = split_string(str);
 			do_something_to_all(files, [&](const std::string& item) {
-				completed_client_num = 0;
-				file_size = 0;
+				file_size = -1;
+				received_size = 0;
 
-				printf("transfer %s begin.\n", item.data());
-				if (client.find(0)->get_file(item))
-				{
-					//client.do_something_to_all([&item](file_client::object_ctype& item2) {if (0 != item2->id()) item2->get_file(item);});
-					//if you always return false, do_something_to_one will be equal to do_something_to_all.
-					client.do_something_to_one([&item](file_client::object_ctype& item2)->bool {if (0 != item2->id()) item2->get_file(item); return false;});
-					client.start();
-
-					while (completed_client_num != (unsigned short) link_num)
+				if (client.get_file(item))
+					while (client.is_transferring())
 						std::this_thread::sleep_for(std::chrono::milliseconds(50));
-
-					client.stop(item);
-				}
-				else
-					printf("transfer %s failed!\n", item.data());
 			});
 		}
 		else

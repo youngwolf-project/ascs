@@ -10,9 +10,9 @@ using namespace ascs::ext::tcp;
 
 #include "unpacker.h"
 
-extern std::atomic_ushort completed_client_num;
 extern int link_num;
 extern fl_type file_size;
+extern std::atomic_int_fast64_t received_size;
 
 class file_socket : public base_socket, public client_socket
 {
@@ -24,13 +24,6 @@ public:
 	virtual void reset() {clear(); client_socket::reset();}
 
 	void set_index(int index_) {index = index_;}
-	fl_type get_rest_size() const
-	{
-		auto up = std::dynamic_pointer_cast<const data_unpacker>(unpacker());
-		return up ? up->get_rest_size() : 0;
-	}
-	operator fl_type() const {return get_rest_size();}
-
 	bool get_file(const std::string& file_name)
 	{
 		assert(!file_name.empty());
@@ -103,7 +96,7 @@ private:
 
 		unpacker(std::make_shared<ASCS_DEFAULT_UNPACKER>());
 	}
-	void trans_end() {clear(); ++completed_client_num;}
+	void trans_end() {clear();}
 
 	void handle_msg(out_msg_ctype& msg)
 	{
@@ -182,26 +175,29 @@ public:
 
 	file_client(service_pump& service_pump_) : multi_client_base<file_socket>(service_pump_) {}
 
-	void start()
+	bool is_transferring() const {return is_timer(UPDATE_PROGRESS);}
+	bool get_file(const std::string& file_name)
 	{
-		begin_time.restart();
-		set_timer(UPDATE_PROGRESS, 50, [this](tid id)->bool {return this->update_progress_handler(id, -1);});
-	}
+		if (is_transferring())
+			printf("file transfer is ongoing for file %s", file_name.data());
+		else
+		{
+			printf("transfer %s begin.\n", file_name.data());
+			if (find(0)->get_file(file_name))
+			{
+				//do_something_to_all([&file_name](object_ctype& item) {if (0 != item->id()) item->get_file(file_name);});
+				//if you always return false, do_something_to_one will be equal to do_something_to_all.
+				do_something_to_one([&file_name](object_ctype& item)->bool {if (0 != item->id()) item->get_file(file_name); return false;});
+				begin_time.restart();
+				set_timer(UPDATE_PROGRESS, 50, [this](tid id)->bool {return this->update_progress_handler(id, -1);});
 
-	void stop(const std::string& file_name)
-	{
-		stop_timer(UPDATE_PROGRESS);
-		update_progress_handler(UPDATE_PROGRESS, 0);
-		printf("\ntransfer %s end, speed: %f MBps.\n", file_name.data(), file_size / begin_time.elapsed() / 1024 / 1024);
-	}
+				return true;
+			}
+			else
+				printf("transfer %s failed!\n", file_name.data());
+		}
 
-	fl_type get_total_rest_size()
-	{
-		fl_type total_rest_size = 0;
-		do_something_to_all([&total_rest_size](object_ctype& item) {total_rest_size += *item;});
-//		do_something_to_all([&total_rest_size](object_ctype& item) {total_rest_size += item->get_rest_size();});
-
-		return total_rest_size;
+		return false;
 	}
 
 private:
@@ -209,17 +205,25 @@ private:
 	{
 		assert(UPDATE_PROGRESS == id);
 
-		auto total_rest_size = get_total_rest_size();
-		auto new_percent = (unsigned) ((file_size - total_rest_size) * 100 / file_size);
-		if (last_percent != new_percent)
+		if (file_size < 0)
+			return true;
+		else if (file_size > 0)
 		{
-			printf("\r%u%%", new_percent);
-			fflush(stdout);
+			auto new_percent = (unsigned) (received_size * 100 / file_size);
+			if (last_percent != new_percent)
+			{
+				printf("\r%u%%", new_percent);
+				fflush(stdout);
 
-			this->update_timer_info(id, 50, [new_percent, this](tid id)->bool {return this->update_progress_handler(id, new_percent);});
+				update_timer_info(id, 50, [new_percent, this](tid id)->bool {return this->update_progress_handler(id, new_percent);});
+			}
 		}
 
-		return total_rest_size > 0;
+		if (received_size < file_size)
+			return true;
+
+		printf("\r100%%\nend, speed: %f MBps.\n", file_size / begin_time.elapsed() / 1024 / 1024);
+		return false;
 	}
 
 protected:

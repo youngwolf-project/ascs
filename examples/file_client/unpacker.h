@@ -7,6 +7,8 @@ using namespace ascs::tcp;
 
 #include "../file_server/common.h"
 
+extern std::atomic_int_fast64_t received_size;
+
 class data_unpacker : public i_unpacker<replaceable_buffer>
 {
 public:
@@ -19,13 +21,12 @@ public:
 	}
 	~data_unpacker() {delete[] buffer;}
 
-	fl_type get_rest_size() const {return _data_len;}
-
 	virtual void reset() {_file = nullptr; delete[] buffer; buffer = nullptr; _data_len = 0;}
 	virtual bool parse_msg(size_t bytes_transferred, container_type& msg_can)
 	{
 		assert(_data_len >= (fl_type) bytes_transferred && bytes_transferred > 0);
 		_data_len -= bytes_transferred;
+		received_size += bytes_transferred;
 
 		if (bytes_transferred != fwrite(buffer, 1, bytes_transferred, _file))
 		{

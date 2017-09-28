@@ -186,9 +186,8 @@ protected:
 
 	virtual bool do_send_msg(in_msg_type&& msg)
 	{
-		auto buf = ASCS_SEND_BUFFER_TYPE(msg.data(), msg.size());
 		last_send_msg.emplace_back(std::move(msg));
-		asio::async_write(this->next_layer(), buf,
+		asio::async_write(this->next_layer(), ASCS_SEND_BUFFER_TYPE(last_send_msg.back().data(), last_send_msg.back().size()),
 			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);}));
 		return true;
 	}
