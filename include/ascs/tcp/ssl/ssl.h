@@ -10,16 +10,16 @@
  * make ascs support asio::ssl
  */
 
-#ifndef _ASICS_SSL_H_
-#define _ASICS_SSL_H_
+#ifndef _ASCS_SSL_H_
+#define _ASCS_SSL_H_
 
 #include <asio/ssl.hpp>
 
-#include "../../object_pool.h"
-#include "../client_socket.h"
 #include "../client.h"
-#include "../server_socket.h"
 #include "../server.h"
+#include "../client_socket.h"
+#include "../server_socket.h"
+#include "../../object_pool.h"
 
 namespace ascs { namespace ssl {
 
@@ -37,9 +37,9 @@ public:
 protected:
 	virtual void on_recv_error(const asio::error_code& ec)
 	{
+#ifndef ASCS_REUSE_SSL_STREAM
 		if (this->is_ready())
 		{
-#ifndef ASCS_REUSE_SSL_STREAM
 			this->status = Socket::link_status::GRACEFUL_SHUTTING_DOWN;
 			this->show_info("ssl link:", "been shut down.");
 			asio::error_code ec;
@@ -47,8 +47,8 @@ protected:
 
 			if (ec && asio::error::eof != ec) //the endpoint who initiated a shutdown operation will get error eof.
 				unified_out::info_out("shutdown ssl link failed (maybe intentionally because of reusing)");
-#endif
 		}
+#endif
 
 		Socket::on_recv_error(ec);
 	}
@@ -152,9 +152,8 @@ public:
 	object_pool(service_pump& service_pump_, const asio::ssl::context::method& m) : super(service_pump_), ctx(m) {}
 	asio::ssl::context& context() {return ctx;}
 
-	typename object_pool::object_type create_object() {return create_object(this->sp);}
-	template<typename Arg>
-	typename object_pool::object_type create_object(Arg& arg) {return super::create_object(arg, ctx);}
+	typename object_pool::object_type create_object() {return create_object(this->get_service_pump());}
+	template<typename Arg> typename object_pool::object_type create_object(Arg& arg) {return super::create_object(arg, ctx);}
 
 protected:
 	asio::ssl::context ctx;
@@ -194,7 +193,7 @@ private:
 		if (!ec)
 			super::do_start(); //return to tcp::server_socket_base::do_start
 		else
-			this->server.del_socket(this->shared_from_this());
+			this->get_server().del_socket(this->shared_from_this());
 	}
 };
 
@@ -204,4 +203,4 @@ template<typename Socket, typename Pool = object_pool<Socket>> using multi_clien
 
 }} //namespace
 
-#endif /* _ASICS_SSL_H_ */
+#endif /* _ASCS_SSL_H_ */

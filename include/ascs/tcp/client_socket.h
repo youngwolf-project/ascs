@@ -61,7 +61,7 @@ public:
 	void force_shutdown(bool reconnect = false)
 	{
 		if (super::link_status::FORCE_SHUTTING_DOWN != this->status)
-			show_info("client link:", "been shut down.");
+			this->show_info("client link:", "been shut down.");
 
 		need_reconnect = reconnect;
 		super::force_shutdown();
@@ -76,26 +76,10 @@ public:
 		if (this->is_broken())
 			return force_shutdown(reconnect);
 		else if (!this->is_shutting_down())
-			show_info("client link:", "being shut down gracefully.");
+			this->show_info("client link:", "being shut down gracefully.");
 
 		need_reconnect = reconnect;
 		super::graceful_shutdown(sync);
-	}
-
-	void show_info(const char* head, const char* tail) const
-	{
-		asio::error_code ec;
-		auto ep = this->lowest_layer().local_endpoint(ec);
-		if (!ec)
-			unified_out::info_out("%s %s:%hu %s", head, ep.address().to_string().data(), ep.port(), tail);
-	}
-
-	void show_info(const char* head, const char* tail, const asio::error_code& ec) const
-	{
-		asio::error_code ec2;
-		auto ep = this->lowest_layer().local_endpoint(ec2);
-		if (!ec2)
-			unified_out::info_out("%s %s:%hu %s (%d %s)", head, ep.address().to_string().data(), ep.port(), tail, ec.value(), ec.message().data());
 	}
 
 protected:
@@ -121,7 +105,7 @@ protected:
 	virtual void on_unpack_error() {unified_out::info_out("can not unpack msg."); force_shutdown();}
 	virtual void on_recv_error(const asio::error_code& ec)
 	{
-		show_info("client link:", "broken/been shut down", ec);
+		this->show_info("client link:", "broken/been shut down", ec);
 
 		force_shutdown(this->is_shutting_down() ? need_reconnect : prepare_reconnect(ec) >= 0);
 		this->status = super::link_status::BROKEN;
@@ -130,13 +114,13 @@ protected:
 	virtual void on_async_shutdown_error() {force_shutdown(need_reconnect);}
 	virtual bool on_heartbeat_error()
 	{
-		show_info("client link:", "broke unexpectedly.");
+		this->show_info("client link:", "broke unexpectedly.");
 		force_shutdown(this->is_shutting_down() ? need_reconnect : prepare_reconnect(asio::error_code(asio::error::network_down)) >= 0);
 		return false;
 	}
 
 	//reconnect at here rather than in on_recv_error to make sure that there's no any async invocations performed on this socket before reconnectiong
-	virtual void on_close() {if (need_reconnect) this->start(); else super::on_close();}
+	virtual void after_close() {if (need_reconnect) this->start();}
 
 	bool prepare_next_reconnect(const asio::error_code& ec)
 	{

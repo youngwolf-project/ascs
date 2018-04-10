@@ -54,8 +54,8 @@ public:
 	{
 		while (s < _Newsize)
 		{
-			++s;
 			impl.emplace_back();
+			++s;
 		}
 
 		if (s > _Newsize)
@@ -86,7 +86,7 @@ public:
 	void push_back(const _Ty& _Val) {++s; impl.push_back(_Val);}
 	void push_back(_Ty&& _Val) {++s; impl.push_back(std::move(_Val));}
 	template<class... _Valty>
-	void emplace_back(_Valty&&... _Val) {++s; impl.emplace_back(std::forward<_Valty>(_Val)...);}
+	void emplace_back(_Valty&&... _Val) {impl.emplace_back(std::forward<_Valty>(_Val)...); ++s;}
 	void pop_back() {--s; impl.pop_back();}
 	reference back() {return impl.back();}
 	iterator end() {return impl.end();}
@@ -219,8 +219,10 @@ public:
 	bool try_dequeue(T& item) {typename Lockable::lock_guard lock(*this); return try_dequeue_(item);}
 
 	//not thread safe
-	bool enqueue_(const T& item) {this->emplace_back(item); return true;}
-	bool enqueue_(T&& item) {this->emplace_back(std::move(item)); return true;}
+	bool enqueue_(const T& item)
+		{try {this->emplace_back(item);} catch (const std::exception& e) {unified_out::error_out("cannot hold more objects (%s)", e.what()); return false;} return true;}
+	bool enqueue_(T&& item)
+		{try {this->emplace_back(std::move(item));} catch (const std::exception& e) {unified_out::error_out("cannot hold more objects (%s)", e.what()); return false;} return true;}
 	void move_items_in_(std::list<T>& can) {this->splice(std::end(*this), can);}
 	bool try_dequeue_(T& item) {if (this->empty()) return false; item.swap(this->front()); this->pop_front(); return true;}
 };

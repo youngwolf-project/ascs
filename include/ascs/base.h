@@ -17,13 +17,13 @@
 #include <stdarg.h>
 
 #include <list>
+#include <mutex>
 #include <vector>
 #include <chrono>
 #include <memory>
 #include <string>
 #include <thread>
 #include <atomic>
-#include <mutex>
 #include <sstream>
 #include <iomanip>
 
@@ -57,8 +57,8 @@ private:
 	std::atomic_flag& atomic;
 };
 
-class service_pump;
 class object;
+class service_pump;
 namespace tcp
 {
 	class i_server

@@ -41,7 +41,7 @@ public:
 	void force_shutdown()
 	{
 		if (super::link_status::FORCE_SHUTTING_DOWN != this->status)
-			show_info("server link:", "been shut down.");
+			this->show_info("server link:", "been shut down.");
 
 		super::force_shutdown();
 	}
@@ -55,33 +55,20 @@ public:
 		if (this->is_broken())
 			return force_shutdown();
 		else if (!this->is_shutting_down())
-			show_info("server link:", "being shut down gracefully.");
+			this->show_info("server link:", "being shut down gracefully.");
 
 		super::graceful_shutdown(sync);
 	}
 
-	void show_info(const char* head, const char* tail) const
-	{
-		asio::error_code ec;
-		auto ep = this->lowest_layer().remote_endpoint(ec);
-		if (!ec)
-			unified_out::info_out("%s %s:%hu %s", head, ep.address().to_string().data(), ep.port(), tail);
-	}
-
-	void show_info(const char* head, const char* tail, const asio::error_code& ec) const
-	{
-		asio::error_code ec2;
-		auto ep = this->lowest_layer().remote_endpoint(ec2);
-		if (!ec2)
-			unified_out::info_out("%s %s:%hu %s (%d %s)", head, ep.address().to_string().data(), ep.port(), tail, ec.value(), ec.message().data());
-	}
-
 protected:
+	Server& get_server() {return server;}
+	const Server& get_server() const {return server;}
+
 	virtual void on_unpack_error() {unified_out::error_out("can not unpack msg."); force_shutdown();}
 	//do not forget to force_shutdown this socket(in del_socket(), there's a force_shutdown() invocation)
 	virtual void on_recv_error(const asio::error_code& ec)
 	{
-		show_info("server link:", "broken/been shut down", ec);
+		this->show_info("server link:", "broken/been shut down", ec);
 
 #ifdef ASCS_CLEAR_OBJECT_INTERVAL
 		force_shutdown();
@@ -92,9 +79,9 @@ protected:
 	}
 
 	virtual void on_async_shutdown_error() {force_shutdown();}
-	virtual bool on_heartbeat_error() {show_info("server link:", "broke unexpectedly."); force_shutdown(); return false;}
+	virtual bool on_heartbeat_error() {this->show_info("server link:", "broke unexpectedly."); force_shutdown(); return false;}
 
-protected:
+private:
 	Server& server;
 };
 

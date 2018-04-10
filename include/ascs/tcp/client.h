@@ -47,8 +47,13 @@ public:
 	typename Pool::object_type add_socket(unsigned short port, const std::string& ip = ASCS_SERVER_IP)
 	{
 		auto socket_ptr(this->create_object());
-		socket_ptr->set_server_addr(port, ip);
-		return this->add_socket(socket_ptr, false) ? socket_ptr : typename Pool::object_type();
+		if (!socket_ptr)
+			return typename Pool::object_type();
+		else
+		{
+			socket_ptr->set_server_addr(port, ip);
+			return this->add_socket(socket_ptr, false) ? socket_ptr : typename Pool::object_type();
+		}
 	}
 
 	///////////////////////////////////////////////////

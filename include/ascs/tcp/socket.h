@@ -64,6 +64,34 @@ public:
 	bool is_connected() const {return link_status::CONNECTED == status;}
 	bool is_shutting_down() const {return link_status::FORCE_SHUTTING_DOWN == status || link_status::GRACEFUL_SHUTTING_DOWN == status;}
 
+	void show_info(const char* head, const char* tail) const
+	{
+		asio::error_code ec;
+		auto local_ep = this->lowest_layer().local_endpoint(ec);
+		if (!ec)
+		{
+			auto remote_ep = this->lowest_layer().remote_endpoint(ec);
+			if (!ec)
+				unified_out::info_out("%s (%s:%hu %s:%hu) %s", head,
+					local_ep.address().to_string().data(), local_ep.port(),
+					remote_ep.address().to_string().data(), remote_ep.port(), tail);
+		}
+	}
+
+	void show_info(const char* head, const char* tail, const asio::error_code& ec) const
+	{
+		asio::error_code ec2;
+		auto local_ep = this->lowest_layer().local_endpoint(ec2);
+		if (!ec2)
+		{
+			auto remote_ep = this->lowest_layer().remote_endpoint(ec2);
+			if (!ec2)
+				unified_out::info_out("%s (%s:%hu %s:%hu) %s (%d %s)", head,
+					local_ep.address().to_string().data(), local_ep.port(),
+					remote_ep.address().to_string().data(), remote_ep.port(), tail, ec.value(), ec.message().data());
+		}
+	}
+
 	//get or change the unpacker at runtime
 	//changing unpacker at runtime is not thread-safe, this operation can only be done in on_msg(), reset() or constructor, please pay special attention
 	//we can resolve this defect via mutex, but i think it's not worth, because this feature is not frequently used

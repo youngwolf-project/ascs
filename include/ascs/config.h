@@ -285,6 +285,26 @@
  *
  * REPLACEMENTS:
  *
+ * ===============================================================
+ * 2018.4.10	version 1.2.6
+ *
+ * SPECIAL ATTENTION (incompatible with old editions):
+ * Do reconnecting in client_socket_base::after_close rather in client_socket_base::on_close.
+ *
+ * HIGHLIGHT:
+ *
+ * FIX:
+ * Reconnectiong may happen in ascs::socket::reset, it's not a right behavior.
+ *
+ * ENHANCEMENTS:
+ * Add ascs::socket::after_close virtual function, a good case for using it is to reconnect to the server in client_socket_base.
+ *
+ * DELETION:
+ *
+ * REFACTORING:
+ *
+ * REPLACEMENTS:
+ *
  */
 
 #ifndef _ASCS_CONFIG_H_
@@ -294,8 +314,8 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#define ASCS_VER		10205	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.2.5"
+#define ASCS_VER		10206	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.2.6"
 
 //asio and compiler check
 #ifdef _MSC_VER

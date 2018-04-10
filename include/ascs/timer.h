@@ -65,21 +65,24 @@ public:
 
 	timer(asio::io_context& io_context_) : object(io_context_), timer_can((tid) -1) {tid id = -1; do_something_to_all([&id](timer_info& item) {item.id = ++id;});}
 
-	void update_timer_info(tid id, size_t interval, std::function<bool(tid)>&& call_back, bool start = false)
+	bool update_timer_info(tid id, size_t interval, std::function<bool(tid)>&& call_back, bool start = false)
 	{
 		timer_info& ti = timer_can[id];
 
 		if (timer_info::TIMER_FAKE == ti.status)
-			ti.timer = std::make_shared<timer_type>(io_context_);
+			try {ti.timer = std::make_shared<timer_type>(io_context_);}
+			catch (const std::exception& e) {unified_out::error_out("cannot create timer %d (%s)", ti.id, e.what()); return false;}
 		ti.status = timer_info::TIMER_OK;
 		ti.interval_ms = interval;
 		ti.call_back.swap(call_back);
 
 		if (start)
 			start_timer(ti);
+
+		return true;
 	}
-	void update_timer_info(tid id, size_t interval, const std::function<bool(tid)>& call_back, bool start = false)
-		{update_timer_info(id, interval, std::function<bool(tid)>(call_back), start);}
+	bool update_timer_info(tid id, size_t interval, const std::function<bool(tid)>& call_back, bool start = false)
+		{return update_timer_info(id, interval, std::function<bool(tid)>(call_back), start);}
 
 	void change_timer_status(tid id, timer_info::timer_status status) {timer_can[id].status = status;}
 	void change_timer_interval(tid id, size_t interval) {timer_can[id].interval_ms = interval;}
@@ -87,8 +90,8 @@ public:
 	void change_timer_call_back(tid id, std::function<bool(tid)>&& call_back) {timer_can[id].call_back.swap(call_back);}
 	void change_timer_call_back(tid id, const std::function<bool(tid)>& call_back) {change_timer_call_back(id, std::function<bool(tid)>(call_back));}
 
-	void set_timer(tid id, size_t interval, std::function<bool(tid)>&& call_back) {update_timer_info(id, interval, std::move(call_back), true);}
-	void set_timer(tid id, size_t interval, const std::function<bool(tid)>& call_back) {update_timer_info(id, interval, call_back, true);}
+	bool set_timer(tid id, size_t interval, std::function<bool(tid)>&& call_back) {return update_timer_info(id, interval, std::move(call_back), true);}
+	bool set_timer(tid id, size_t interval, const std::function<bool(tid)>& call_back) {return update_timer_info(id, interval, call_back, true);}
 
 	bool start_timer(tid id)
 	{
@@ -140,7 +143,7 @@ protected:
 	{
 		if (timer_info::TIMER_OK == ti.status) //enable stopping timers that has been stopped
 		{
-			try {ti.timer->cancel();} catch (const asio::system_error& e) {}
+			try {ti.timer->cancel();} catch (const asio::system_error& e) {unified_out::error_out("cannot stop timer %d (%d %s)", ti.id, e.code().value(), e.what());}
 			ti.status = timer_info::TIMER_CANCELED;
 		}
 	}

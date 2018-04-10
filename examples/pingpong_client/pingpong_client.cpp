@@ -198,7 +198,8 @@ int main(int argc, const char* argv[])
 				std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
 			uint64_t total_msg_bytes = link_num; total_msg_bytes *= msg_len; total_msg_bytes *= msg_num;
-			printf("finished in %f seconds, speed: %f(*2) MBps.\n", begin_time.elapsed(), total_msg_bytes / begin_time.elapsed() / 1024 / 1024);
+			printf("finished in %f seconds, TPS: %f(*2), speed: %f(*2) MBps.\n",
+				begin_time.elapsed(), link_num * msg_num / begin_time.elapsed(), total_msg_bytes / begin_time.elapsed() / 1024 / 1024);
 
 			delete[] init_msg;
 		}

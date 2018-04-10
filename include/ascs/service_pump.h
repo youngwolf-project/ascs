@@ -62,11 +62,11 @@ public:
 
 	service_pump() : started(false)
 #ifdef ASCS_DECREASE_THREAD_AT_RUNTIME
-		, real_thread_num(0), del_thread_num(0), del_thread_req(false)
+		, real_thread_num(0), del_thread_num(0)
 #endif
 #ifdef ASCS_AVOID_AUTO_STOP_SERVICE
 #if ASIO_VERSION >= 101100
-		, work(asio::make_work_guard(*this))
+		, work(get_executor())
 #else
 		, work(std::make_shared<asio::io_service::work>(*this))
 #endif
@@ -170,7 +170,7 @@ public:
 
 	void add_service_thread(int thread_num) {for (auto i = 0; i < thread_num; ++i) service_threads.emplace_back([this]() {this->run();});}
 #ifdef ASCS_DECREASE_THREAD_AT_RUNTIME
-	void del_service_thread(int thread_num) {if (thread_num > 0) {del_thread_num += thread_num; del_thread_req = true;}}
+	void del_service_thread(int thread_num) {if (thread_num > 0) {del_thread_num += thread_num;}}
 	int service_thread_num() const {return real_thread_num;}
 #endif
 
@@ -222,7 +222,6 @@ protected:
 	size_t run()
 	{
 		size_t n = 0;
-		std::unique_lock<std::mutex> lock(del_thread_mutex, std::defer_lock);
 
 		std::stringstream os;
 		os << "service thread[" << std::this_thread::get_id() << "] begin.";
@@ -230,21 +229,17 @@ protected:
 		++real_thread_num;
 		while (true)
 		{
-			if (del_thread_req)
+			if (del_thread_num > 0)
 			{
 				if (--del_thread_num >= 0)
 				{
-					lock.lock();
-					if (real_thread_num > 1)
+					if (--real_thread_num > 0) //forbid to stop all service thread
 						break;
 					else
-						lock.unlock();
+						++real_thread_num;
 				}
 				else
-				{
-					del_thread_req = false;
 					++del_thread_num;
-				}
 			}
 
 			//we cannot always decrease service thread timely (because run_one can block).
@@ -257,9 +252,11 @@ protected:
 			if (this_n > 0)
 				n += this_n; //n can overflow, please note.
 			else
+			{
+				--real_thread_num;
 				break;
+			}
 		}
-		--real_thread_num;
 		os.str("");
 		os << "service thread[" << std::this_thread::get_id() << "] end.";
 		unified_out::info_out(os.str().data());
@@ -293,8 +290,6 @@ protected:
 #ifdef ASCS_DECREASE_THREAD_AT_RUNTIME
 	std::atomic_int_fast32_t real_thread_num;
 	std::atomic_int_fast32_t del_thread_num;
-	std::mutex del_thread_mutex;
-	bool del_thread_req;
 #endif
 
 #ifdef ASCS_AVOID_AUTO_STOP_SERVICE
