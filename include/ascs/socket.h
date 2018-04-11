@@ -41,10 +41,10 @@ protected:
 		_id = -1;
 		packer_ = std::make_shared<Packer>();
 		sending = false;
-		dispatching = false;
-		congestion_controlling = false;
 		started_ = false;
+		dispatching = false;
 		recv_idle_began = false;
+		congestion_controlling = false;
 		msg_handling_interval_step1_ = ASCS_MSG_HANDLING_INTERVAL_STEP1;
 		msg_handling_interval_step2_ = ASCS_MSG_HANDLING_INTERVAL_STEP2;
 		send_atomic.clear(std::memory_order_relaxed);

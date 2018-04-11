@@ -82,7 +82,7 @@ public:
 			"\n\tcongestion controlling: %d"
 			"\n\tstarted: %d"
 			"\n\trecv suspended: %d",
-			this->sending, this->dispatching, this->congestion_controlling, this->started_, this->recv_idle_began);
+			this->id(), this->is_sending_msg(), this->is_dispatching_msg(), this->congestion_control(), this->started(), this->recv_idle_began);
 	}
 
 	//get or change the unpacker at runtime

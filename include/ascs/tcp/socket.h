@@ -103,7 +103,7 @@ public:
 			"\n\tstarted: %d"
 			"\n\trecv suspended: %d"
 			"\n\tlink status: %d",
-			this->sending, this->dispatching, this->congestion_controlling, this->started_, this->recv_idle_began, status);
+			this->id(), this->is_sending_msg(), this->is_dispatching_msg(), this->congestion_control(), this->started(), this->recv_idle_began, status);
 	}
 
 	//get or change the unpacker at runtime
