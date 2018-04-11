@@ -35,8 +35,8 @@ private:
 protected:
 	enum link_status {CONNECTED, FORCE_SHUTTING_DOWN, GRACEFUL_SHUTTING_DOWN, BROKEN};
 
-	socket_base(asio::io_context& io_context_) : super(io_context_) {first_init();}
-	template<typename Arg> socket_base(asio::io_context& io_context_, Arg& arg) : super(io_context_, arg) {first_init();}
+	socket_base(asio::io_context& io_context_) : super(io_context_), async_operation_strand(io_context_) {first_init();}
+	template<typename Arg> socket_base(asio::io_context& io_context_, Arg& arg) : super(io_context_, arg), async_operation_strand(io_context_) {first_init();}
 
 	//helper function, just call it in constructor
 	void first_init() {status = link_status::BROKEN; unpacker_ = std::make_shared<Unpacker>();}
@@ -48,6 +48,7 @@ public:
 
 	virtual bool obsoleted() {return !is_shutting_down() && super::obsoleted();}
 	virtual bool is_ready() {return is_connected();}
+	virtual bool send_msg() {if (lock_sending_flag()) this->post(asio::bind_executor(async_operation_strand, [this]() {if (!this->do_send_msg()) this->sending = false;})); return sending;}
 	virtual void send_heartbeat()
 	{
 		auto_duration dur(this->stat.pack_time_sum);
@@ -92,6 +93,19 @@ public:
 		}
 	}
 
+	void show_status() const
+	{
+		unified_out::info_out(
+			"\n\tid: " ASCS_LLF
+			"\n\tsending: %d"
+			"\n\tdispatching: %d"
+			"\n\tcongestion controlling: %d"
+			"\n\tstarted: %d"
+			"\n\trecv suspended: %d"
+			"\n\tlink status: %d",
+			this->sending, this->dispatching, this->congestion_controlling, this->started_, this->recv_idle_began, status);
+	}
+
 	//get or change the unpacker at runtime
 	//changing unpacker at runtime is not thread-safe, this operation can only be done in on_msg(), reset() or constructor, please pay special attention
 	//we can resolve this defect via mutex, but i think it's not worth, because this feature is not frequently used
@@ -99,7 +113,6 @@ public:
 	std::shared_ptr<const i_unpacker<out_msg_type>> unpacker() const {return unpacker_;}
 	void unpacker(const std::shared_ptr<i_unpacker<out_msg_type>>& _unpacker_) {unpacker_ = _unpacker_;}
 
-	using super::send_msg;
 	///////////////////////////////////////////////////
 	//msg sending interface
 	TCP_SEND_MSG(send_msg, false) //use the packer with native = false to pack the msgs
@@ -177,8 +190,81 @@ protected:
 		return super::do_start();
 	}
 
+	virtual void recv_msg() {this->post(asio::bind_executor(async_operation_strand, [this]() {this->do_recv_msg();}));}
+
+	virtual void on_connect() {}
+	//msg can not be unpacked
+	//the link is still available, so don't need to shutdown this tcp::socket_base at both client and server endpoint
+	virtual void on_unpack_error() = 0;
+	virtual void on_async_shutdown_error() = 0;
+
+#ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
+	virtual bool on_msg(out_msg_type& msg) {unified_out::debug_out("recv(" ASCS_SF "): %s", msg.size(), msg.data()); return true;}
+#endif
+
+	virtual bool on_msg_handle(out_msg_type& msg) {unified_out::debug_out("recv(" ASCS_SF "): %s", msg.size(), msg.data()); return true;}
+
+private:
+	void shutdown()
+	{
+		if (!is_broken())
+			status = link_status::FORCE_SHUTTING_DOWN; //not thread safe because of this assignment
+		this->close();
+	}
+
+	size_t completion_checker(const asio::error_code& ec, size_t bytes_transferred)
+	{
+		auto_duration dur(this->stat.unpack_time_sum);
+		return this->unpacker_->completion_condition(ec, bytes_transferred);
+	}
+
+	void do_recv_msg()
+	{
+		auto recv_buff = unpacker_->prepare_next_recv();
+		assert(asio::buffer_size(recv_buff) > 0);
+
+		asio::async_read(this->next_layer(), recv_buff,
+			[this](const asio::error_code& ec, size_t bytes_transferred)->size_t {return this->completion_checker(ec, bytes_transferred);},
+			asio::bind_executor(async_operation_strand,
+				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);})));
+	}
+
+	void recv_handler(const asio::error_code& ec, size_t bytes_transferred)
+	{
+		if (!ec && bytes_transferred > 0)
+		{
+			this->stat.last_recv_time = time(nullptr);
+
+			typename Unpacker::container_type temp_msg_can;
+			auto_duration dur(this->stat.unpack_time_sum);
+			auto unpack_ok = unpacker_->parse_msg(bytes_transferred, temp_msg_can);
+			dur.end();
+
+			auto msg_num = temp_msg_can.size();
+			if (msg_num > 0)
+			{
+				this->stat.recv_msg_sum += msg_num;
+				this->temp_msg_buffer.resize(this->temp_msg_buffer.size() + msg_num);
+				auto op_iter = this->temp_msg_buffer.rbegin();
+				for (auto iter = temp_msg_can.rbegin(); iter != temp_msg_can.rend(); ++op_iter, ++iter)
+				{
+					this->stat.recv_byte_sum += iter->size();
+					op_iter->swap(*iter);
+				}
+			}
+
+			if (this->handle_msg(false))
+				do_recv_msg();
+
+			if (!unpack_ok)
+				on_unpack_error(); //the user will decide whether to reset the unpacker or not in this callback
+		}
+		else
+			this->on_recv_error(ec);
+	}
+
 	//return false if send buffer is empty
-	virtual bool do_send_msg()
+	bool do_send_msg()
 	{
 		std::list<asio::const_buffer> bufs;
 		{
@@ -207,85 +293,9 @@ protected:
 			return false;
 
 		last_send_msg.front().restart();
-		asio::async_write(this->next_layer(), bufs,
-			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);}));
+		asio::async_write(this->next_layer(), bufs, asio::bind_executor(async_operation_strand,
+			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);})));
 		return true;
-	}
-
-	virtual bool do_send_msg(in_msg_type&& msg)
-	{
-		last_send_msg.emplace_back(std::move(msg));
-		asio::async_write(this->next_layer(), ASCS_SEND_BUFFER_TYPE(last_send_msg.back().data(), last_send_msg.back().size()),
-			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);}));
-		return true;
-	}
-
-	virtual void do_recv_msg()
-	{
-		auto recv_buff = unpacker_->prepare_next_recv();
-		assert(asio::buffer_size(recv_buff) > 0);
-
-		asio::async_read(this->next_layer(), recv_buff,
-			[this](const asio::error_code& ec, size_t bytes_transferred)->size_t {return this->completion_checker(ec, bytes_transferred);},
-			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);}));
-	}
-
-	virtual void on_connect() {}
-	//msg can not be unpacked
-	//the link is still available, so don't need to shutdown this tcp::socket_base at both client and server endpoint
-	virtual void on_unpack_error() = 0;
-	virtual void on_async_shutdown_error() = 0;
-
-#ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
-	virtual bool on_msg(out_msg_type& msg) {unified_out::debug_out("recv(" ASCS_SF "): %s", msg.size(), msg.data()); return true;}
-#endif
-
-	virtual bool on_msg_handle(out_msg_type& msg) {unified_out::debug_out("recv(" ASCS_SF "): %s", msg.size(), msg.data()); return true;}
-
-private:
-	void shutdown()
-	{
-		if (!is_broken())
-			status = link_status::FORCE_SHUTTING_DOWN; //not thread safe because of this assignment
-		this->close();
-	}
-
-	size_t completion_checker(const asio::error_code& ec, size_t bytes_transferred)
-	{
-		auto_duration dur(this->stat.unpack_time_sum);
-		return this->unpacker_->completion_condition(ec, bytes_transferred);
-	}
-
-	void recv_handler(const asio::error_code& ec, size_t bytes_transferred)
-	{
-		if (!ec && bytes_transferred > 0)
-		{
-			this->stat.last_recv_time = time(nullptr);
-
-			typename Unpacker::container_type temp_msg_can;
-			auto_duration dur(this->stat.unpack_time_sum);
-			auto unpack_ok = unpacker_->parse_msg(bytes_transferred, temp_msg_can);
-			dur.end();
-
-			auto msg_num = temp_msg_can.size();
-			if (msg_num > 0)
-			{
-				this->stat.recv_msg_sum += msg_num;
-				this->temp_msg_buffer.resize(this->temp_msg_buffer.size() + msg_num);
-				auto op_iter = this->temp_msg_buffer.rbegin();
-				for (auto iter = temp_msg_can.rbegin(); iter != temp_msg_can.rend(); ++op_iter, ++iter)
-				{
-					this->stat.recv_byte_sum += iter->size();
-					op_iter->swap(*iter);
-				}
-			}
-			this->handle_msg();
-
-			if (!unpack_ok)
-				on_unpack_error(); //the user will decide whether to reset the unpacker or not in this callback
-		}
-		else
-			this->on_recv_error(ec);
 	}
 
 	void send_handler(const asio::error_code& ec, size_t bytes_transferred)
@@ -315,7 +325,7 @@ private:
 			{
 				this->sending = false;
 				if (!this->send_msg_buffer.empty())
-					this->send_msg(); //just make sure no pending msgs
+					send_msg(); //just make sure no pending msgs
 			}
 		}
 		else
@@ -352,6 +362,9 @@ protected:
 	std::shared_ptr<i_unpacker<out_msg_type>> unpacker_;
 
 	volatile link_status status;
+
+private:
+	asio::io_context::strand async_operation_strand;
 };
 
 }} //namespace

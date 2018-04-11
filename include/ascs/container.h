@@ -194,7 +194,7 @@ public:
 // swap
 // emplace_back(const T& item)
 // emplace_back(T&& item)
-// splice(Container::const_iterator, std::list<T>&), after this, std::list<T> must be empty
+// splice(Container::const_iterator, Container& can), after this, can must be empty
 // front
 // pop_front
 template<typename T, typename Container, typename Lockable> //thread safety depends on Container or Lockable
@@ -215,7 +215,7 @@ public:
 	//thread safe
 	bool enqueue(const T& item) {typename Lockable::lock_guard lock(*this); return enqueue_(item);}
 	bool enqueue(T&& item) {typename Lockable::lock_guard lock(*this); return enqueue_(std::move(item));}
-	void move_items_in(std::list<T>& can) {typename Lockable::lock_guard lock(*this); move_items_in_(can);}
+	void move_items_in(Container& can) {typename Lockable::lock_guard lock(*this); move_items_in_(can);}
 	bool try_dequeue(T& item) {typename Lockable::lock_guard lock(*this); return try_dequeue_(item);}
 
 	//not thread safe
@@ -223,7 +223,7 @@ public:
 		{try {this->emplace_back(item);} catch (const std::exception& e) {unified_out::error_out("cannot hold more objects (%s)", e.what()); return false;} return true;}
 	bool enqueue_(T&& item)
 		{try {this->emplace_back(std::move(item));} catch (const std::exception& e) {unified_out::error_out("cannot hold more objects (%s)", e.what()); return false;} return true;}
-	void move_items_in_(std::list<T>& can) {this->splice(std::end(*this), can);}
+	void move_items_in_(Container& can) {this->splice(std::end(*this), can);}
 	bool try_dequeue_(T& item) {if (this->empty()) return false; item.swap(this->front()); this->pop_front(); return true;}
 };
 

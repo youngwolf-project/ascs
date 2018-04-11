@@ -305,6 +305,24 @@
  *
  * REPLACEMENTS:
  *
+ * ===============================================================
+ * 2018.4.x	version 1.3.0
+ *
+ * SPECIAL ATTENTION (incompatible with old editions):
+ *
+ * HIGHLIGHT:
+ *
+ * FIX:
+ * Wiped race condition between async_read and async_write on the same ascs::socket.
+ *
+ * ENHANCEMENTS:
+ *
+ * DELETION:
+ *
+ * REFACTORING:
+ *
+ * REPLACEMENTS:
+ *
  */
 
 #ifndef _ASCS_CONFIG_H_
@@ -314,8 +332,8 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#define ASCS_VER		10206	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.2.6"
+#define ASCS_VER		10300	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.3.0"
 
 //asio and compiler check
 #ifdef _MSC_VER

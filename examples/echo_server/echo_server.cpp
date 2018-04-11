@@ -52,7 +52,8 @@ using namespace ascs::ext::tcp;
 #define QUIT_COMMAND	"quit"
 #define RESTART_COMMAND	"restart"
 #define LIST_ALL_CLIENT	"list_all_client"
-#define LIST_STATUS		"status"
+#define STATISTIC		"statistic"
+#define STATUS			"status"
 #define INCREASE_THREAD	"increase_thread"
 #define DECREASE_THREAD	"decrease_thread"
 
@@ -227,12 +228,17 @@ int main(int argc, const char* argv[])
 			sp.stop_service();
 			sp.start_service(thread_num);
 		}
-		else if (LIST_STATUS == str)
+		else if (STATISTIC == str)
 		{
 			printf("normal server, link #: " ASCS_SF ", invalid links: " ASCS_SF "\n", server_.size(), server_.invalid_object_size());
 			printf("echo server, link #: " ASCS_SF ", invalid links: " ASCS_SF "\n", echo_server_.size(), echo_server_.invalid_object_size());
 			puts("");
 			puts(echo_server_.get_statistic().to_string().data());
+		}
+		else if (STATUS == str)
+		{
+			server_.list_all_status();
+			echo_server_.list_all_status();
 		}
 		else if (LIST_ALL_CLIENT == str)
 		{

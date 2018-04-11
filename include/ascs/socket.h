@@ -95,6 +95,7 @@ public:
 
 	virtual bool obsoleted() {return !started_ && !is_async_calling();}
 	virtual bool is_ready() = 0; //is ready for sending and receiving messages
+	virtual bool send_msg() = 0;
 	virtual void send_heartbeat() = 0;
 
 	bool started() const {return started_;}
@@ -107,9 +108,6 @@ public:
 				started_ = do_start();
 		}
 	}
-
-	//return false if send buffer is empty or sending not allowed
-	bool send_msg() {if (lock_sending_flag() && !do_send_msg()) sending = false; return sending;}
 
 	void start_heartbeat(int interval, int max_absence = ASCS_HEARTBEAT_MAX_ABSENCE)
 	{
@@ -194,15 +192,12 @@ protected:
 		start_heartbeat(ASCS_HEARTBEAT_INTERVAL);
 #endif
 		send_msg(); //send buffer may have msgs, send them
-		do_recv_msg();
+		recv_msg();
 
 		return true;
 	}
 
-	virtual bool do_send_msg() = 0;
-	virtual bool do_send_msg(InMsgType&& msg) = 0;
-	virtual void do_recv_msg() = 0;
-	//socket will guarantee not call these 4 functions (include do_start()) in more than one thread concurrently.
+	virtual void recv_msg() = 0;
 
 	//generally, you don't have to rewrite this to maintain the status of connections (TCP)
 	virtual void on_send_error(const asio::error_code& ec) {unified_out::error_out("send msg error (%d %s)", ec.value(), ec.message().data());}
@@ -231,8 +226,7 @@ protected:
 
 	//handling msg in om_msg_handle() will not block msg receiving on the same socket
 	//return true means msg been handled, false means msg cannot be handled right now, and socket will re-dispatch it asynchronously
-	//
-	//notice: the msg is unpacked, using inconstant is for the convenience of swapping
+	//notice: using inconstant is for the convenience of swapping
 	virtual bool on_msg_handle(OutMsgType& msg) = 0;
 
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
@@ -283,7 +277,7 @@ protected:
 
 	//call this in subclasses' recv_handler only
 	//subclasses must guarantee not call this function in more than one thread concurrently.
-	void handle_msg()
+	bool handle_msg(bool raise_recv)
 	{
 #ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
 		decltype(temp_msg_buffer) temp_buffer;
@@ -314,18 +308,20 @@ protected:
 				stat.recv_idle_sum += statistic::now() - recv_idle_begin_time;
 			}
 
-			do_recv_msg(); //receive msg in sequence
-		}
-		else
-		{
-			if (!recv_idle_began)
-			{
-				recv_idle_began = true;
-				recv_idle_begin_time = statistic::now();
-			}
+			if (raise_recv)
+				recv_msg(); //receive msg in sequence
 
-			set_timer(TIMER_HANDLE_MSG, msg_handling_interval_step1_, [this](tid id)->bool {return this->timer_handler(TIMER_HANDLE_MSG);});
+			return true;
 		}
+
+		if (!recv_idle_began)
+		{
+			recv_idle_began = true;
+			recv_idle_begin_time = statistic::now();
+		}
+
+		set_timer(TIMER_HANDLE_MSG, msg_handling_interval_step1_, [this](tid id)->bool {return this->timer_handler(TIMER_HANDLE_MSG);});
+		return false;
 	}
 
 	//return false if receiving buffer is empty
@@ -347,8 +343,6 @@ protected:
 	{
 		if (msg.empty())
 			unified_out::error_out("found an empty message, please check your packer.");
-		else if (lock_sending_flag())
-			do_send_msg(std::move(msg));
 		else
 		{
 			send_msg_buffer.enqueue(in_msg(std::move(msg)));
@@ -396,7 +390,7 @@ private:
 		switch (id)
 		{
 		case TIMER_HANDLE_MSG:
-			handle_msg();
+			handle_msg(true);
 			break;
 		case TIMER_DISPATCH_MSG:
 			dispatch_msg();
@@ -460,7 +454,11 @@ protected:
 
 	in_container_type send_msg_buffer;
 	out_container_type recv_msg_buffer;
+#ifdef ASCS_HAS_CONCURRENT_QUEUE
 	std::list<out_msg> temp_msg_buffer; //the size of this list is always very small, so std::list is enough (std::list::size maybe has linear complexity)
+#else
+	OutContainer<out_msg> temp_msg_buffer;
+#endif
 	//subclass will invoke handle_msg() when got some msgs. if these msgs can't be dispatched via on_msg() because of congestion control opened,
 	//socket will delay 'msg_handling_interval_step1_' milliseconds(non-blocking) to invoke handle_msg() again, temp_msg_buffer is used to hold these msgs temporarily.
 

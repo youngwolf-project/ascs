@@ -289,8 +289,9 @@ public:
 		return num_affected;
 	}
 
-	void list_all_object() {do_something_to_all([](object_ctype& item) {item->show_info("", "");});}
 	statistic get_statistic() {statistic stat; do_something_to_all([&](object_ctype& item) {stat += item->get_statistic();}); return stat;}
+	void list_all_status() {do_something_to_all([](object_ctype& item) {item->show_status();});}
+	void list_all_object() {do_something_to_all([](object_ctype& item) {item->show_info("", "");});}
 
 	template<typename _Predicate> void do_something_to_all(const _Predicate& __pred)
 		{std::lock_guard<std::mutex> lock(object_can_mutex); for (typename container_type::value_type& item : object_can) __pred(item.second);}

@@ -61,7 +61,8 @@ using namespace ascs::ext::tcp;
 #define QUIT_COMMAND	"quit"
 #define RESTART_COMMAND	"restart"
 #define LIST_ALL_CLIENT	"list_all_client"
-#define LIST_STATUS		"status"
+#define STATISTIC		"statistic"
+#define STATUS			"status"
 #define INCREASE_THREAD	"increase_thread"
 #define DECREASE_THREAD	"decrease_thread"
 
@@ -441,14 +442,20 @@ int main(int argc, const char* argv[])
 		std::getline(std::cin, str);
 		if (str.empty())
 			;
-		else if (LIST_STATUS == str)
+		else if (STATISTIC == str)
 		{
 			printf("link #: " ASCS_SF ", valid links: " ASCS_SF ", invalid links: " ASCS_SF "\n", client.size(), client.valid_size(), client.invalid_object_size());
 			puts("");
 			puts(client.get_statistic().to_string().data());
 		}
+		else if (STATUS == str)
+			client.list_all_status();
 		else if (LIST_ALL_CLIENT == str)
 			client.list_all_object();
+		else if (INCREASE_THREAD == str)
+			sp.add_service_thread(1);
+		else if (DECREASE_THREAD == str)
+			sp.del_service_thread(1);
 		else if (is_testing)
 			puts("testing has not finished yet!");
 		else if (QUIT_COMMAND == str)
@@ -458,10 +465,6 @@ int main(int argc, const char* argv[])
 			sp.stop_service();
 			sp.start_service(thread_num);
 		}
-		else if (INCREASE_THREAD == str)
-			sp.add_service_thread(1);
-		else if (DECREASE_THREAD == str)
-			sp.del_service_thread(1);
 		else
 		{
 			if ('+' == str[0] || '-' == str[0])

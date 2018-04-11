@@ -36,6 +36,7 @@ public:
 	socket_base(asio::io_context& io_context_) : super(io_context_), unpacker_(std::make_shared<Unpacker>()) {}
 
 	virtual bool is_ready() {return this->lowest_layer().is_open();}
+	virtual bool send_msg() {return do_send_msg();}
 	virtual void send_heartbeat()
 	{
 		in_msg_type msg(peer_addr, this->packer_->pack_heartbeat());
@@ -70,6 +71,20 @@ public:
 	void force_shutdown() {show_info("link:", "been shut down."); shutdown();}
 	void graceful_shutdown() {force_shutdown();}
 
+	void show_info(const char* head, const char* tail) const {unified_out::info_out("%s %s:%hu %s", head, local_addr.address().to_string().data(), local_addr.port(), tail);}
+
+	void show_status() const
+	{
+		unified_out::info_out(
+			"\n\tid: " ASCS_LLF
+			"\n\tsending: %d"
+			"\n\tdispatching: %d"
+			"\n\tcongestion controlling: %d"
+			"\n\tstarted: %d"
+			"\n\trecv suspended: %d",
+			this->sending, this->dispatching, this->congestion_controlling, this->started_, this->recv_idle_began);
+	}
+
 	//get or change the unpacker at runtime
 	//changing unpacker at runtime is not thread-safe, this operation can only be done in on_msg(), reset() or constructor, please pay special attention
 	//we can resolve this defect via mutex, but i think it's not worth, because this feature is not frequently used
@@ -77,7 +92,6 @@ public:
 	std::shared_ptr<const i_unpacker<typename Unpacker::msg_type>> unpacker() const {return unpacker_;}
 	void unpacker(const std::shared_ptr<i_unpacker<typename Unpacker::msg_type>>& _unpacker_) {unpacker_ = _unpacker_;}
 
-	using super::send_msg;
 	///////////////////////////////////////////////////
 	//msg sending interface
 	UDP_SEND_MSG(send_msg, false) //use the packer with native = false to pack the msgs
@@ -104,8 +118,6 @@ public:
 	//msg sending interface
 	///////////////////////////////////////////////////
 
-	void show_info(const char* head, const char* tail) const {unified_out::info_out("%s %s:%hu %s", head, local_addr.address().to_string().data(), local_addr.port(), tail);}
-
 protected:
 	//send message with sync mode
 	//return -1 means error occurred, otherwise the number of bytes been sent
@@ -121,44 +133,6 @@ protected:
 		return ec ? -1 : send_size;
 	}
 
-	//return false if send buffer is empty
-	virtual bool do_send_msg()
-	{
-		if (this->send_msg_buffer.try_dequeue(last_send_msg))
-		{
-			this->stat.send_delay_sum += statistic::now() - last_send_msg.begin_time;
-
-			last_send_msg.restart();
-			std::lock_guard<std::mutex> lock(shutdown_mutex);
-			this->next_layer().async_send_to(ASCS_SEND_BUFFER_TYPE(last_send_msg.data(), last_send_msg.size()), last_send_msg.peer_addr,
-				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);}));
-
-			return true;
-		}
-
-		return false;
-	}
-
-	virtual bool do_send_msg(in_msg_type&& msg)
-	{
-		last_send_msg = std::move(msg);
-		std::lock_guard<std::mutex> lock(shutdown_mutex);
-		this->next_layer().async_send_to(ASCS_SEND_BUFFER_TYPE(last_send_msg.data(), last_send_msg.size()), last_send_msg.peer_addr,
-			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);}));
-
-		return true;
-	}
-
-	virtual void do_recv_msg()
-	{
-		auto recv_buff = unpacker_->prepare_next_recv();
-		assert(asio::buffer_size(recv_buff) > 0);
-
-		std::lock_guard<std::mutex> lock(shutdown_mutex);
-		this->next_layer().async_receive_from(recv_buff, temp_addr,
-			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);}));
-	}
-
 	virtual void on_recv_error(const asio::error_code& ec)
 	{
 		if (asio::error::operation_aborted != ec)
@@ -171,6 +145,8 @@ protected:
 		unified_out::warning_out("%s:%hu is not available", peer_addr.address().to_string().data(), peer_addr.port());
 		return true;
 	}
+
+	virtual void recv_msg() {do_recv_msg();}
 
 #ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
 	virtual bool on_msg(out_msg_type& msg) {unified_out::debug_out("recv(" ASCS_SF "): %s", msg.size(), msg.data()); return true;}
@@ -194,6 +170,16 @@ protected:
 	}
 
 private:
+	void do_recv_msg()
+	{
+		auto recv_buff = unpacker_->prepare_next_recv();
+		assert(asio::buffer_size(recv_buff) > 0);
+
+		std::lock_guard<std::mutex> lock(shutdown_mutex);
+		this->next_layer().async_receive_from(recv_buff, temp_addr,
+			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred); }));
+	}
+
 	void recv_handler(const asio::error_code& ec, size_t bytes_transferred)
 	{
 		if (!ec && bytes_transferred > 0)
@@ -207,7 +193,9 @@ private:
 				this->stat.recv_byte_sum += msg.size();
 				this->temp_msg_buffer.emplace_back(out_msg_type(temp_addr, std::move(msg)));
 			}
-			this->handle_msg();
+
+			if (this->handle_msg(false))
+				do_recv_msg();
 		}
 #ifdef _MSC_VER
 		else if (asio::error::connection_refused == ec || asio::error::connection_reset == ec)
@@ -215,6 +203,24 @@ private:
 #endif
 		else
 			on_recv_error(ec);
+	}
+
+	//return false if send buffer is empty
+	bool do_send_msg()
+	{
+		if (this->send_msg_buffer.try_dequeue(last_send_msg))
+		{
+			this->stat.send_delay_sum += statistic::now() - last_send_msg.begin_time;
+
+			last_send_msg.restart();
+			std::lock_guard<std::mutex> lock(shutdown_mutex);
+			this->next_layer().async_send_to(ASCS_SEND_BUFFER_TYPE(last_send_msg.data(), last_send_msg.size()), last_send_msg.peer_addr,
+				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred); }));
+
+			return true;
+		}
+
+		return false;
 	}
 
 	void send_handler(const asio::error_code& ec, size_t bytes_transferred)
