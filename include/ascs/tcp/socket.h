@@ -48,7 +48,7 @@ public:
 
 	virtual bool obsoleted() {return !is_shutting_down() && super::obsoleted();}
 	virtual bool is_ready() {return is_connected();}
-	virtual bool send_msg() {if (lock_sending_flag()) this->post(asio::bind_executor(async_operation_strand, [this]() {if (!this->do_send_msg()) this->sending = false;})); return sending;}
+	virtual bool send_msg() {if (this->lock_sending_flag()) post(asio::bind_executor(async_operation_strand, [this]() {if (!this->do_send_msg()) this->sending = false;})); return this->sending;}
 	virtual void send_heartbeat()
 	{
 		auto_duration dur(this->stat.pack_time_sum);
@@ -190,7 +190,7 @@ protected:
 		return super::do_start();
 	}
 
-	virtual void recv_msg() {this->post(asio::bind_executor(async_operation_strand, [this]() {this->do_recv_msg();}));}
+	virtual void recv_msg() {post(asio::bind_executor(async_operation_strand, [this]() {this->do_recv_msg();}));}
 
 	virtual void on_connect() {}
 	//msg can not be unpacked
