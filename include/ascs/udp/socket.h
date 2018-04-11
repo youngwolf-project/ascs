@@ -36,7 +36,7 @@ public:
 	socket_base(asio::io_context& io_context_) : super(io_context_), unpacker_(std::make_shared<Unpacker>()) {}
 
 	virtual bool is_ready() {return this->lowest_layer().is_open();}
-	virtual bool send_msg() {return do_send_msg();}
+	virtual bool send_msg() {if (this->lock_sending_flag() && !do_send_msg()) this->sending = false; return this->sending;}
 	virtual void send_heartbeat()
 	{
 		in_msg_type msg(peer_addr, this->packer_->pack_heartbeat());
@@ -256,7 +256,7 @@ private:
 		{
 			this->sending = false;
 			if (!this->send_msg_buffer.empty())
-				this->send_msg(); //just make sure no pending msgs
+				send_msg(); //just make sure no pending msgs
 		}
 	}
 
