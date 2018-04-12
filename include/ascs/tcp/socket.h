@@ -48,7 +48,11 @@ public:
 
 	virtual bool obsoleted() {return !is_shutting_down() && super::obsoleted();}
 	virtual bool is_ready() {return is_connected();}
-	virtual bool send_msg() {if (this->lock_sending_flag()) post(asio::bind_executor(async_operation_strand, [this]() {if (!this->do_send_msg()) this->sending = false;})); return this->sending;}
+#if ASIO_VERSION < 101100
+	virtual bool send_msg() {if (this->lock_sending_flag()) this->post(async_operation_strand.wrap([this]() {if (!this->do_send_msg()) this->sending = false;})); return this->sending;}
+#else
+	virtual bool send_msg() {if (this->lock_sending_flag()) this->post(asio::bind_executor(async_operation_strand, [this]() {if (!this->do_send_msg()) this->sending = false;})); return this->sending;}
+#endif
 	virtual void send_heartbeat()
 	{
 		auto_duration dur(this->stat.pack_time_sum);
@@ -190,7 +194,11 @@ protected:
 		return super::do_start();
 	}
 
-	virtual void recv_msg() {post(asio::bind_executor(async_operation_strand, [this]() {this->do_recv_msg();}));}
+#if ASIO_VERSION < 101100
+	virtual void recv_msg() {this->post(async_operation_strand.wrap([this]() {this->do_recv_msg();}));}
+#else
+	virtual void recv_msg() {this->post(asio::bind_executor(async_operation_strand, [this]() {this->do_recv_msg();}));}
+#endif
 
 	virtual void on_connect() {}
 	//msg can not be unpacked
@@ -225,7 +233,11 @@ private:
 
 		asio::async_read(this->next_layer(), recv_buff,
 			[this](const asio::error_code& ec, size_t bytes_transferred)->size_t {return this->completion_checker(ec, bytes_transferred);},
+#if ASIO_VERSION < 101100
+			async_operation_strand.wrap(
+#else
 			asio::bind_executor(async_operation_strand,
+#endif
 				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);})));
 	}
 
@@ -293,7 +305,11 @@ private:
 			return false;
 
 		last_send_msg.front().restart();
+#if ASIO_VERSION < 101100
+		asio::async_write(this->next_layer(), bufs, async_operation_strand.wrap(
+#else
 		asio::async_write(this->next_layer(), bufs, asio::bind_executor(async_operation_strand,
+#endif
 			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);})));
 		return true;
 	}
