@@ -35,8 +35,8 @@ private:
 protected:
 	enum link_status {CONNECTED, FORCE_SHUTTING_DOWN, GRACEFUL_SHUTTING_DOWN, BROKEN};
 
-	socket_base(asio::io_context& io_context_) : super(io_context_), async_operation_strand(io_context_) {first_init();}
-	template<typename Arg> socket_base(asio::io_context& io_context_, Arg& arg) : super(io_context_, arg), async_operation_strand(io_context_) {first_init();}
+	socket_base(asio::io_context& io_context_) : super(io_context_) {first_init();}
+	template<typename Arg> socket_base(asio::io_context& io_context_, Arg& arg) : super(io_context_, arg) {first_init();}
 
 	//helper function, just call it in constructor
 	void first_init() {status = link_status::BROKEN; unpacker_ = std::make_shared<Unpacker>();}
@@ -48,11 +48,7 @@ public:
 
 	virtual bool obsoleted() {return !is_shutting_down() && super::obsoleted();}
 	virtual bool is_ready() {return is_connected();}
-#if ASIO_VERSION < 101100
-	virtual bool send_msg() {if (this->lock_sending_flag()) this->post(async_operation_strand.wrap([this]() {if (!this->do_send_msg()) this->sending = false;})); return this->sending;}
-#else
-	virtual bool send_msg() {if (this->lock_sending_flag()) this->post(asio::bind_executor(async_operation_strand, [this]() {if (!this->do_send_msg()) this->sending = false;})); return this->sending;}
-#endif
+	virtual bool send_msg() {if (this->lock_sending_flag()) this->post_strand([this]() {if (!this->do_send_msg()) this->sending = false;}); return this->sending;}
 	virtual void send_heartbeat()
 	{
 		auto_duration dur(this->stat.pack_time_sum);
@@ -194,11 +190,7 @@ protected:
 		return super::do_start();
 	}
 
-#if ASIO_VERSION < 101100
-	virtual void recv_msg() {this->post(async_operation_strand.wrap([this]() {this->do_recv_msg();}));}
-#else
-	virtual void recv_msg() {this->post(asio::bind_executor(async_operation_strand, [this]() {this->do_recv_msg();}));}
-#endif
+	virtual void recv_msg() {this->post_strand([this]() {this->do_recv_msg();});}
 
 	virtual void on_connect() {}
 	//msg can not be unpacked
@@ -232,12 +224,7 @@ private:
 		assert(asio::buffer_size(recv_buff) > 0);
 
 		asio::async_read(this->next_layer(), recv_buff,
-			[this](const asio::error_code& ec, size_t bytes_transferred)->size_t {return this->completion_checker(ec, bytes_transferred);},
-#if ASIO_VERSION < 101100
-			async_operation_strand.wrap(
-#else
-			asio::bind_executor(async_operation_strand,
-#endif
+			[this](const asio::error_code& ec, size_t bytes_transferred)->size_t {return this->completion_checker(ec, bytes_transferred);}, this->make_strand(
 				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);})));
 	}
 
@@ -305,11 +292,7 @@ private:
 			return false;
 
 		last_send_msg.front().restart();
-#if ASIO_VERSION < 101100
-		asio::async_write(this->next_layer(), bufs, async_operation_strand.wrap(
-#else
-		asio::async_write(this->next_layer(), bufs, asio::bind_executor(async_operation_strand,
-#endif
+		asio::async_write(this->next_layer(), bufs, this->make_strand(
 			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);})));
 		return true;
 	}
@@ -378,9 +361,6 @@ protected:
 	std::shared_ptr<i_unpacker<out_msg_type>> unpacker_;
 
 	volatile link_status status;
-
-private:
-	asio::io_context::strand async_operation_strand;
 };
 
 }} //namespace
