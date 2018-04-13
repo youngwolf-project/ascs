@@ -309,19 +309,31 @@
  * 2018.4.x	version 1.3.0
  *
  * SPECIAL ATTENTION (incompatible with old editions):
+ * Not support sync sending mode anymore.
+ * Explicitly need macro ASCS_RECV_AFTER_HANDLING to gain the ability of changing the unpacker at runtime.
+ * Function disconnect, force_shutdown and graceful_shutdown in udp::socket_base will now be performed asynchronously.
+ * Not support macro ASCS_FORCE_TO_USE_MSG_RECV_BUFFER anymore, which means now we have the behavior as this macro is always defined,
+ *  thus, virtual function ascs::socket::on_msg() is useless and also has been deleted.
  *
  * HIGHLIGHT:
+ * Because of introduction of asio::io_context::strand (which is required, see FIX section for more details), we wiped two atomic in ascs::socket.
  *
  * FIX:
- * Wiped race condition between async_read and async_write on the same ascs::socket.
+ * Wiped race condition between async_read and async_write on the same ascs::socket, so sync sending mode will not be supported anymore.
  *
  * ENHANCEMENTS:
+ * Explicitly define macro ASCS_RECV_AFTER_HANDLING to gain the ability of changing the unpacker at runtime.
  *
  * DELETION:
+ * Deleted virtual function bool ascs::socket::on_msg().
+ * Not support sync sending mode anymore, so we reduced an atomic object in ascs::socket.
+
  *
  * REFACTORING:
  *
  * REPLACEMENTS:
+ * Renamed macro ASCS_MSG_HANDLING_INTERVAL_STEP1 to ASCS_MSG_RESUMING_INTERVAL.
+ * Renamed macro ASCS_MSG_HANDLING_INTERVAL_STEP2 to ASCS_MSG_HANDLING_INTERVAL.
  *
  */
 
@@ -413,9 +425,6 @@ static_assert(ASCS_DELAY_CLOSE >= 0, "delay close duration must be bigger than o
 
 //full statistic include time consumption, or only numerable informations will be gathered
 //#define ASCS_FULL_STATISTIC
-
-//when got some msgs, not call on_msg(), but asynchronously dispatch them, on_msg_handle() will be called later.
-//#define ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
 
 //after every msg sent, call ascs::socket::on_msg_send()
 //#define ASCS_WANT_MSG_SEND_NOTIFY
@@ -585,22 +594,27 @@ static_assert(ASCS_HEARTBEAT_MAX_ABSENCE > 0, "heartbeat absence must be bigger 
 //#define ASCS_DECREASE_THREAD_AT_RUNTIME
 //enable decreasing service thread at runtime.
 
-#ifndef ASCS_MSG_HANDLING_INTERVAL_STEP1
-#define ASCS_MSG_HANDLING_INTERVAL_STEP1	50 //milliseconds
+#ifndef ASCS_MSG_RESUMING_INTERVAL
+#define ASCS_MSG_RESUMING_INTERVAL	50 //milliseconds
 #endif
-static_assert(ASCS_MSG_HANDLING_INTERVAL_STEP1 >= 0, "the interval of msg handling step 1 must be bigger than or equal to zero.");
-//msg handling step 1
-//move msg from temp_msg_buffer to recv_msg_buffer (because on_msg return false or macro ASCS_FORCE_TO_USE_MSG_RECV_BUFFER been defined)
-//if above process failed, retry it after ASCS_MSG_HANDLING_INTERVAL_STEP1 milliseconds later.
-//this value can be changed via msg_handling_interval_step1(size_t) at runtime.
+static_assert(ASCS_MSG_RESUMING_INTERVAL >= 0, "the interval of msg resuming must be bigger than or equal to zero.");
+//msg receiving
+//if receiving buffer is overflow, message receiving will stop and resume after the buffer becomes available, 
+//this is the interval of receiving buffer checking.
+//this value can be changed via ascs::socket::msg_resuming_interval(size_t) at runtime.
 
-#ifndef ASCS_MSG_HANDLING_INTERVAL_STEP2
-#define ASCS_MSG_HANDLING_INTERVAL_STEP2	50 //milliseconds
+#ifndef ASCS_MSG_HANDLING_INTERVAL
+#define ASCS_MSG_HANDLING_INTERVAL	50 //milliseconds
 #endif
-static_assert(ASCS_MSG_HANDLING_INTERVAL_STEP2 >= 0, "the interval of msg handling step 2 must be bigger than or equal to zero.");
-//msg handling step 2
-//call on_msg_handle, if failed, retry it after ASCS_MSG_HANDLING_INTERVAL_STEP2 milliseconds later.
-//this value can be changed via msg_handling_interval_step2(size_t) at runtime.
+static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling must be bigger than or equal to zero.");
+//msg handling
+//call on_msg_handle, if failed, retry it after ASCS_MSG_HANDLING_INTERVAL milliseconds later.
+//this value can be changed via ascs::socket::msg_handling_interval(size_t) at runtime.
+
+//#define ASCS_RECV_AFTER_HANDLING
+//to gain the ability of changing the unpacker at runtime, with this mcro, ascs will not do message receiving automatically (except the firt one),
+//user need to call ascs::socket::recv_msg(), if you need to change the unpacker, do it before recv_msg() invocation, please note.
+//because user can call recv_msg() at any time, it's your responsibility to keep the recv buffer not overflowed, please pay special attention.
 
 //configurations
 

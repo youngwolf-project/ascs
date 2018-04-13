@@ -4,6 +4,7 @@
 //configuration
 #define ASCS_SERVER_PORT	5050
 #define ASCS_DELAY_CLOSE	5 //define this to avoid hooks for async call (and slightly improve efficiency)
+#define ASCS_RECV_AFTER_HANDLING
 //#define ASCS_INPUT_QUEUE non_lock_queue
 //we cannot use non_lock_queue, because we also send messages (talking messages) out of ascs::socket::on_msg_send().
 #define ASCS_DEFAULT_UNPACKER replaceable_unpacker<>

@@ -63,13 +63,7 @@ public:
 
 protected:
 	//msg handling
-#ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
-	//we always handle messages in on_msg(), so we don't care the type of input queue and input container at all.
-	virtual bool on_msg(out_msg_type& msg) {handle_msg(msg); return true;}
-#endif
-	//we will change unpacker at runtime, this operation can only be done in on_msg(), reset() or constructor,
-	//so we must guarantee all messages to be handled in on_msg()
-	//virtual bool on_msg_handle(out_msg_type& msg) {handle_msg(msg); return true;}
+	virtual bool on_msg_handle(out_msg_type& msg) {handle_msg(msg); recv_msg(); return true;}
 	//msg handling end
 
 	virtual void on_connect()

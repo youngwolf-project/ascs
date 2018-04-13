@@ -25,15 +25,15 @@ class socket : public timer
 {
 public:
 	static const tid TIMER_BEGIN = timer::TIMER_END;
-	static const tid TIMER_HANDLE_MSG = TIMER_BEGIN;
+	static const tid TIMER_CHECK_RECV = TIMER_BEGIN;
 	static const tid TIMER_DISPATCH_MSG = TIMER_BEGIN + 1;
 	static const tid TIMER_DELAY_CLOSE = TIMER_BEGIN + 2;
 	static const tid TIMER_HEARTBEAT_CHECK = TIMER_BEGIN + 3;
 	static const tid TIMER_END = TIMER_BEGIN + 10;
 
 protected:
-	socket(asio::io_context& io_context_) : timer(io_context_), next_layer_(io_context_) {first_init();}
-	template<typename Arg> socket(asio::io_context& io_context_, Arg& arg) : timer(io_context_), next_layer_(io_context_, arg) {first_init();}
+	socket(asio::io_context& io_context_) : timer(io_context_), next_layer_(io_context_), strand(io_context_) {first_init();}
+	template<typename Arg> socket(asio::io_context& io_context_, Arg& arg) : timer(io_context_), next_layer_(io_context_, arg), strand(io_context_) {first_init();}
 
 	//helper function, just call it in constructor
 	void first_init()
@@ -44,11 +44,8 @@ protected:
 		started_ = false;
 		dispatching = false;
 		recv_idle_began = false;
-		congestion_controlling = false;
-		msg_handling_interval_step1_ = ASCS_MSG_HANDLING_INTERVAL_STEP1;
-		msg_handling_interval_step2_ = ASCS_MSG_HANDLING_INTERVAL_STEP2;
-		send_atomic.clear(std::memory_order_relaxed);
-		dispatch_atomic.clear(std::memory_order_relaxed);
+		msg_resuming_interval_ = ASCS_MSG_RESUMING_INTERVAL;
+		msg_handling_interval_ = ASCS_MSG_HANDLING_INTERVAL;
 		start_atomic.clear(std::memory_order_relaxed);
 	}
 
@@ -67,7 +64,6 @@ protected:
 		sending = false;
 		dispatching = false;
 		recv_idle_began = false;
-		congestion_controlling = false;
 		clear_buffer();
 	}
 
@@ -76,7 +72,6 @@ protected:
 		last_dispatch_msg.clear();
 		send_msg_buffer.clear();
 		recv_msg_buffer.clear();
-		temp_msg_buffer.clear();
 	}
 
 public:
@@ -141,14 +136,11 @@ public:
 	bool is_sending_msg() const {return sending;}
 	bool is_dispatching_msg() const {return dispatching;}
 
-	void congestion_control(bool enable) {congestion_controlling = enable;} //enable congestion controlling in on_msg, disable it in on_msg_handle, please note.
-	bool congestion_control() const {return congestion_controlling;}
+	void msg_resuming_interval(size_t interval) {msg_resuming_interval_ = interval;}
+	size_t msg_resuming_interval() const {return msg_resuming_interval_;}
 
-	void msg_handling_interval_step1(size_t interval) {msg_handling_interval_step1_ = interval;}
-	size_t msg_handling_interval_step1() const {return msg_handling_interval_step1_;}
-
-	void msg_handling_interval_step2(size_t interval) {msg_handling_interval_step2_ = interval;}
-	size_t msg_handling_interval_step2() const {return msg_handling_interval_step2_;}
+	void msg_handling_interval(size_t interval) {msg_handling_interval_ = interval;}
+	size_t msg_handling_interval() const {return msg_handling_interval_;}
 
 	//in ascs, it's thread safe to access stat without mutex, because for a specific member of stat, ascs will never access it concurrently.
 	//in other words, in a specific thread, ascs just access only one member of stat.
@@ -158,7 +150,7 @@ public:
 	const struct statistic& get_statistic() const {return stat;}
 
 	//get or change the packer at runtime
-	//changing packer at runtime is not thread-safe, please pay special attention
+	//changing packer at runtime is not thread-safe (if we're sending messages concurrently), please pay special attention,
 	//we can resolve this defect via mutex, but i think it's not worth, because this feature is not frequently used
 	std::shared_ptr<i_packer<typename Packer::msg_type>> packer() {return packer_;}
 	std::shared_ptr<const i_packer<typename Packer::msg_type>> packer() const {return packer_;}
@@ -186,7 +178,6 @@ public:
 protected:
 	virtual bool do_start()
 	{
-		stat.last_recv_time = time(nullptr);
 #if ASCS_HEARTBEAT_INTERVAL > 0
 		start_heartbeat(ASCS_HEARTBEAT_INTERVAL);
 #endif
@@ -195,9 +186,6 @@ protected:
 
 		return true;
 	}
-
-	virtual void send_msg() = 0;
-	virtual void recv_msg() = 0;
 
 	//generally, you don't have to rewrite this to maintain the status of connections (TCP)
 	virtual void on_send_error(const asio::error_code& ec) {unified_out::error_out("send msg error (%d %s)", ec.value(), ec.message().data());}
@@ -210,19 +198,6 @@ protected:
 	//otherwise (bigger than zero), socket simply call this callback ASCS_DELAY_CLOSE seconds later after link down, no any guarantees.
 	virtual void on_close() {unified_out::info_out("on_close()");}
 	virtual void after_close() {} //a good case for using this is to reconnect to the server, please refer to client_socket_base.
-
-#ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
-	//if you want to use your own receive buffer, you can move the msg to your own receive buffer, then handle them as your own strategy(may be you'll need a msg dispatch thread),
-	//or you can handle the msg at here, but this will reduce efficiency because this msg handling will block the next msg receiving on the same socket,
-	//but if you can handle the msg very fast, you are recommended to handle them at here, which will inversely more efficient,
-	//because msg receive buffer and msg dispatching are not needed any more.
-	//
-	//return true means msg been handled, socket will not maintain it anymore, return false means msg cannot be handled right now, you must handle it in on_msg_handle()
-	//notice: on_msg_handle() will not be invoked from within this function
-	//
-	//notice: the msg is unpacked, using inconstant is for the convenience of swapping
-	virtual bool on_msg(OutMsgType& msg) = 0;
-#endif
 
 	//handling msg in om_msg_handle() will not block msg receiving on the same socket
 	//return true means msg been handled, false means msg cannot be handled right now, and socket will re-dispatch it asynchronously
@@ -277,65 +252,30 @@ protected:
 
 	//call this in subclasses' recv_handler only
 	//subclasses must guarantee not call this function in more than one thread concurrently.
-	bool handle_msg(bool raise_recv)
+	template <typename T> bool handle_msg(T& temp_msg_can)
 	{
-#ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
-		decltype(temp_msg_buffer) temp_buffer;
-		if (!temp_msg_buffer.empty() && !congestion_controlling)
+		auto msg_num = temp_msg_can.size();
+		if (msg_num > 0)
 		{
-			auto_duration(stat.handle_time_1_sum);
-			for (auto iter = std::begin(temp_msg_buffer); !congestion_controlling && iter != std::end(temp_msg_buffer);)
-				if (on_msg(*iter))
-					temp_msg_buffer.erase(iter++);
-				else
-					temp_buffer.splice(std::end(temp_buffer), temp_msg_buffer, iter++);
-		}
-#else
-		auto temp_buffer(std::move(temp_msg_buffer));
-#endif
+			stat.recv_msg_sum += msg_num;
+			std::list<out_msg> temp_buffer(msg_num);
+			auto op_iter = temp_buffer.begin();
+			for (auto iter = temp_msg_can.begin(); iter != temp_msg_can.end(); ++op_iter, ++iter)
+			{
+				stat.recv_byte_sum += iter->size();
+				op_iter->swap(*iter);
+			}
 
-		if (!temp_buffer.empty())
-		{
 			recv_msg_buffer.move_items_in(temp_buffer);
 			dispatch_msg();
 		}
 
-		if (temp_msg_buffer.empty() && recv_msg_buffer.size() < ASCS_MAX_MSG_NUM)
-		{
-			if (recv_idle_began)
-			{
-				recv_idle_began = false;
-				stat.recv_idle_sum += statistic::now() - recv_idle_begin_time;
-			}
-
-			if (raise_recv)
-				recv_msg(); //receive msg in sequence
-
+#ifndef ASCS_RECV_AFTER_HANDLING
+		if (check_receiving(false))
 			return true;
-		}
 
-		if (!recv_idle_began)
-		{
-			recv_idle_began = true;
-			recv_idle_begin_time = statistic::now();
-		}
-
-		set_timer(TIMER_HANDLE_MSG, msg_handling_interval_step1_, [this](tid id)->bool {return this->timer_handler(TIMER_HANDLE_MSG);});
-		return false;
-	}
-
-	//return false if receiving buffer is empty
-	bool dispatch_msg() {if (lock_dispatching_flag() && !do_dispatch_msg()) dispatching = false; return dispatching;}
-
-	//return false if receiving buffer is empty
-	bool do_dispatch_msg()
-	{
-		if (!last_dispatch_msg.empty() || recv_msg_buffer.try_dequeue(last_dispatch_msg))
-		{
-			post([this]() {this->msg_handler();});
-			return true;
-		}
-
+		set_timer(TIMER_CHECK_RECV, msg_resuming_interval_, [this](tid id)->bool {return this->timer_handler(TIMER_CHECK_RECV);});
+#endif
 		return false;
 	}
 
@@ -355,44 +295,77 @@ protected:
 		return true;
 	}
 
-	bool lock_sending_flag()
-	{
-		if (!sending && is_ready())
-		{
-			scope_atomic_lock lock(send_atomic);
-			if (!sending && lock.locked())
-				return (sending = true);
-		}
-
-		return false;
-	}
-
-	bool lock_dispatching_flag()
-	{
-		if (!dispatching)
-		{
-			scope_atomic_lock lock(dispatch_atomic);
-			if (!dispatching && lock.locked())
-				return (dispatching = true);
-		}
-
-		return false;
-	}
-
 private:
+	virtual void recv_msg() = 0;
+	virtual void send_msg() = 0;
+
 	//please do not change id at runtime via the following function, except this socket is not managed by object_pool,
 	//it should only be used by object_pool when reusing or creating new socket.
 	template<typename Object> friend class object_pool;
 	void id(uint_fast64_t id) {_id = id;}
 
+	bool check_receiving(bool raise_recv)
+	{
+		if (recv_msg_buffer.size() < ASCS_MAX_MSG_NUM)
+		{
+			if (recv_idle_began)
+			{
+				recv_idle_began = false;
+				stat.recv_idle_sum += statistic::now() - recv_idle_begin_time;
+			}
+
+			if (raise_recv)
+				recv_msg(); //receive msg in sequence
+
+			return true;
+		}
+		else if (!recv_idle_began)
+		{
+			recv_idle_began = true;
+			recv_idle_begin_time = statistic::now();
+		}
+
+		return false;
+	}
+
+	void dispatch_msg() {if (!dispatching) this->post(object::make_strand(strand, [this]() {this->do_dispatch_msg();}));}
+	void do_dispatch_msg()
+	{
+		if (dispatching)
+			return;
+
+		dispatching = !last_dispatch_msg.empty() || recv_msg_buffer.try_dequeue(last_dispatch_msg);
+		if (dispatching)
+		{
+			auto begin_time = statistic::now();
+			stat.dispatch_dealy_sum += begin_time - last_dispatch_msg.begin_time;
+			bool re = on_msg_handle(last_dispatch_msg); //must before next msg dispatching to keep sequence
+			auto end_time = statistic::now();
+			stat.handle_time_2_sum += end_time - begin_time;
+
+			if (!re) //dispatch failed, re-dispatch
+			{
+				last_dispatch_msg.restart(end_time);
+				set_timer(TIMER_DISPATCH_MSG, msg_handling_interval_, [this](tid id)->bool {return this->timer_handler(TIMER_DISPATCH_MSG);}); //hold dispatching
+			}
+			else //dispatch msg in sequence
+			{
+				last_dispatch_msg.clear();
+				dispatching = false;
+				dispatch_msg(); //just make sure no pending msgs
+			}
+		}
+	}
+
 	bool timer_handler(tid id)
 	{
 		switch (id)
 		{
-		case TIMER_HANDLE_MSG:
-			handle_msg(true);
+		case TIMER_CHECK_RECV:
+			return !check_receiving(true);
 			break;
 		case TIMER_DISPATCH_MSG:
+			dispatching = false;
 			dispatch_msg();
 			break;
 		case TIMER_DELAY_CLOSE:
@@ -419,32 +392,6 @@ private:
 		return false;
 	}
 
-	void msg_handler()
-	{
-		auto begin_time = statistic::now();
-		stat.dispatch_dealy_sum += begin_time - last_dispatch_msg.begin_time;
-		bool re = on_msg_handle(last_dispatch_msg); //must before next msg dispatching to keep sequence
-		auto end_time = statistic::now();
-		stat.handle_time_2_sum += end_time - begin_time;
-
-		if (!re) //dispatch failed, re-dispatch
-		{
-			last_dispatch_msg.restart(end_time);
-			dispatching = false;
-			set_timer(TIMER_DISPATCH_MSG, msg_handling_interval_step2_, [this](tid id)->bool {return this->timer_handler(TIMER_DISPATCH_MSG);});
-		}
-		else //dispatch msg in sequence
-		{
-			last_dispatch_msg.clear();
-			if (!do_dispatch_msg())
-			{
-				dispatching = false;
-				if (!recv_msg_buffer.empty())
-					dispatch_msg(); //just make sure no pending msgs
-			}
-		}
-	}
-
 protected:
 	uint_fast64_t _id;
 	Socket next_layer_;
@@ -454,17 +401,11 @@ protected:
 
 	in_container_type send_msg_buffer;
 	out_container_type recv_msg_buffer;
-	std::list<out_msg> temp_msg_buffer; //the size of this list is always very small, so std::list is enough (std::list::size maybe has linear complexity)
-	//subclass will invoke handle_msg() when got some msgs. if these msgs can't be dispatched via on_msg() because of congestion control opened,
-	//socket will delay 'msg_handling_interval_step1_' milliseconds(non-blocking) to invoke handle_msg() again, temp_msg_buffer is used to hold these msgs temporarily.
 
 	volatile bool sending;
-	std::atomic_flag send_atomic;
 
 	volatile bool dispatching;
-	std::atomic_flag dispatch_atomic;
-
-	volatile bool congestion_controlling;
+	asio::io_context::strand strand;
 
 	volatile bool started_; //has started or not
 	std::atomic_flag start_atomic;
@@ -473,7 +414,7 @@ protected:
 	typename statistic::stat_time recv_idle_begin_time;
 	bool recv_idle_began;
 
-	size_t msg_handling_interval_step1_, msg_handling_interval_step2_;
+	size_t msg_resuming_interval_, msg_handling_interval_;
 };
 
 } //namespace

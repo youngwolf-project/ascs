@@ -6,7 +6,6 @@
 #define ASCS_MAX_OBJECT_NUM		102400
 #define ASCS_REUSE_OBJECT //use objects pool
 #define ASCS_DELAY_CLOSE		5 //define this to avoid hooks for async call (and slightly improve efficiency)
-//#define ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
 #define ASCS_MSG_BUFFER_SIZE	1024
 #define ASCS_INPUT_QUEUE		non_lock_queue //we will never operate sending buffer concurrently, so need no locks
 #define ASCS_INPUT_CONTAINER	list
@@ -50,9 +49,6 @@ protected:
 	}
 
 	//msg handling
-#ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
-	virtual bool on_msg(out_msg_type& msg) {handle_msg(std::move(msg)); return true;}
-#endif
 	virtual bool on_msg_handle(out_msg_type& msg) {handle_msg(std::move(msg)); return true;}
 
 private:

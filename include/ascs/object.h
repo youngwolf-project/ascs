@@ -27,9 +27,13 @@ public:
 	bool stopped() const {return io_context_.stopped();}
 
 #if ASIO_VERSION >= 101100
+	template <typename F> inline static asio::executor_binder<typename asio::decay<F>::type, asio::io_context::strand> make_strand(asio::io_context::strand& strand, ASIO_MOVE_ARG(F) f)
+		{return asio::bind_executor(strand, ASIO_MOVE_CAST(F)(f));}
 	template <typename F> inline asio::executor_binder<typename asio::decay<F>::type, asio::io_context::strand> make_strand(ASIO_MOVE_ARG(F) f)
 		{return asio::bind_executor(strand, ASIO_MOVE_CAST(F)(f));}
 #else
+	template <typename F> static asio::detail::wrapped_handler<asio::io_context::strand, F, asio::detail::is_continuation_if_running> make_strand(asio::io_context::strand& strand, F f)
+		{return strand.wrap(f);}
 	template <typename F> asio::detail::wrapped_handler<asio::io_context::strand, F, asio::detail::is_continuation_if_running> make_strand(F f) {return strand.wrap(f);}
 #endif
 

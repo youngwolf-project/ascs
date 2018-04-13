@@ -509,22 +509,6 @@ bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_
 } \
 TCP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)
 
-#define TCP_SYNC_SEND_MSG(FUNNAME, NATIVE) \
-size_t FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) \
-{ \
-	if (this->lock_sending_flag()) \
-	{ \
-		auto_duration dur(this->stat.pack_time_sum); \
-		auto msg = this->packer_->pack_msg(pstr, len, num, NATIVE); \
-		dur.end(); \
-		if (msg.empty()) \
-			unified_out::error_out("found an empty message, please check your packer."); \
-		return do_sync_send_msg(msg); /*always send message even it's empty, this is very important*/ \
-	} \
-	return 0; \
-} \
-TCP_SEND_MSG_CALL_SWITCH(FUNNAME, size_t)
-
 //guarantee send msg successfully even if can_overflow equal to false, success at here just means putting the msg into tcp::socket_base's send buffer successfully
 //if can_overflow equal to false and the buffer is not available, will wait until it becomes available
 #define TCP_SAFE_SEND_MSG(FUNNAME, SEND_FUNNAME) \
@@ -556,21 +540,6 @@ bool FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* const pstr[],
 	return this->do_direct_send_msg(std::move(msg)); \
 } \
 UDP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)
-
-#define UDP_SYNC_SEND_MSG(FUNNAME, NATIVE) \
-size_t FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) {return FUNNAME(peer_addr, pstr, len, num, can_overflow);} \
-size_t FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) \
-{ \
-	if (this->lock_sending_flag()) \
-	{ \
-		auto msg = this->packer_->pack_msg(pstr, len, num, NATIVE); \
-		if (msg.empty()) \
-			unified_out::error_out("found an empty message, please check your packer."); \
-		return do_sync_send_msg(peer_addr, msg); /*always send message even it's empty, this is very important*/ \
-	} \
-	return 0; \
-} \
-UDP_SEND_MSG_CALL_SWITCH(FUNNAME, size_t)
 
 //guarantee send msg successfully even if can_overflow equal to false, success at here just means putting the msg into udp::socket_base's send buffer successfully
 //if can_overflow equal to false and the buffer is not available, will wait until it becomes available

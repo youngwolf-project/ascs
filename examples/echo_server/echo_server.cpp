@@ -5,7 +5,6 @@
 #define ASCS_SERVER_PORT		9527
 #define ASCS_REUSE_OBJECT //use objects pool
 //#define ASCS_FREE_OBJECT_INTERVAL	60 //it's useless if ASCS_REUSE_OBJECT macro been defined
-//#define ASCS_FORCE_TO_USE_MSG_RECV_BUFFER //force to use the msg recv buffer
 #define ASCS_ENHANCED_STABILITY
 //#define ASCS_FULL_STATISTIC //full statistic will slightly impact efficiency
 //#define ASCS_USE_STEADY_TIMER
@@ -63,22 +62,6 @@ using namespace ascs::ext::tcp;
 //notice: do not do this for unpacker, because unpacker has member variables and can't share each other
 auto global_packer(std::make_shared<ASCS_DEFAULT_PACKER>());
 
-//about congestion control
-//
-//in 1.3, congestion control has been removed (no post_msg nor post_native_msg anymore), this is because
-//without known the business (or logic), framework cannot always do congestion control properly.
-//now, users should take the responsibility to do congestion control, there're two ways:
-//
-//1. for receiver, if you cannot handle msgs timely, which means the bottleneck is in your business,
-//    you should open/close congestion control intermittently;
-//   for sender, send msgs in on_msg_send() or use sending buffer limitation (like safe_send_msg(..., false)),
-//    but must not in service threads, please note.
-//
-//2. for sender, if responses are available (like pingpong test), send msgs in on_msg()/on_msg_handle(),
-//    but this will reduce IO throughput because SOCKET's sliding window is not fully used, pleae note.
-//
-//asio_server chose method #1
-
 //demonstrate how to control the type of tcp::server_socket_base::server from template parameter
 class i_echo_server : public i_server
 {
@@ -116,40 +99,8 @@ protected:
 	}
 
 	//msg handling: send the original msg back(echo server)
-	//congestion control, method #1, the peer needs its own congestion control too.
-#ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
-	//this virtual function doesn't exists if ASCS_FORCE_TO_USE_MSG_RECV_BUFFER been defined
-	virtual bool on_msg(out_msg_type& msg)
-	{
-		auto re = send_msg(msg.data(), msg.size());
-		if (!re)
-		{
-			//cannot handle (send it back) this msg timely, begin congestion control
-			//'msg' will be put into receiving buffer, and be dispatched via on_msg_handle() in the future
-			congestion_control(true);
-			//unified_out::warning_out("open congestion control."); //too many prompts will affect efficiency
-		}
-
-		return re;
-	}
-
-	virtual bool on_msg_handle(out_msg_type& msg)
-	{
-		auto re = send_msg(msg.data(), msg.size());
-		if (re)
-		{
-			//successfully handled the only one msg in receiving buffer, end congestion control
-			//subsequent msgs will be dispatched via on_msg() again.
-			congestion_control(false);
-			//unified_out::warning_out("close congestion control."); //too many prompts will affect efficiency
-		}
-
-		return re;
-	}
-#else
 	//if we used receiving buffer, congestion control will become much simpler, like this:
 	virtual bool on_msg_handle(out_msg_type& msg) {return send_msg(msg.data(), msg.size());}
-#endif
 	//msg handling end
 };
 
@@ -255,16 +206,10 @@ int main(int argc, const char* argv[])
 		{
 //			/*
 			//broadcast series functions call pack_msg for each client respectively, because clients may used different protocols(so different type of packers, of course)
-			server_.sync_broadcast_msg(str.data(), str.size() + 1);
-			//send \0 character too, because demo client used basic_buffer as its msg type, it will not append \0 character automatically as std::string does,
-			//so need \0 character when printing it.
-//			*/
-			/*
-			//broadcast series functions call pack_msg for each client respectively, because clients may used different protocols(so different type of packers, of course)
 			server_.broadcast_msg(str.data(), str.size() + 1);
 			//send \0 character too, because demo client used basic_buffer as its msg type, it will not append \0 character automatically as std::string does,
 			//so need \0 character when printing it.
-			*/
+//			*/
 			/*
 			//if all clients used the same protocol, we can pack msg one time, and send it repeatedly like this:
 			packer p;

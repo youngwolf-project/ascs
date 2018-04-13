@@ -33,7 +33,7 @@ private:
 	typedef socket<Socket, Packer, Unpacker, in_msg_type, out_msg_type, InQueue, InContainer, OutQueue, OutContainer> super;
 
 public:
-	socket_base(asio::io_context& io_context_) : super(io_context_), unpacker_(std::make_shared<Unpacker>()) {}
+	socket_base(asio::io_context& io_context_) : super(io_context_), unpacker_(std::make_shared<Unpacker>()), sending(false) {send_atomic.clear(std::memory_order_relaxed);}
 
 	virtual bool is_ready() {return this->lowest_layer().is_open();}
 	virtual void send_heartbeat()
@@ -56,6 +56,7 @@ public:
 		if (ec)
 			unified_out::error_out("bind failed.");
 
+		sending = false;
 		last_send_msg.clear();
 		unpacker_->reset();
 		super::reset();
@@ -70,18 +71,17 @@ public:
 	void force_shutdown() {show_info("link:", "been shut down."); shutdown();}
 	void graceful_shutdown() {force_shutdown();}
 
+	bool is_sending_msg() const {return sending;}
 	void show_info(const char* head, const char* tail) const {unified_out::info_out("%s %s:%hu %s", head, local_addr.address().to_string().data(), local_addr.port(), tail);}
 
 	void show_status() const
 	{
 		unified_out::info_out(
 			"\n\tid: " ASCS_LLF
-			"\n\tsending: %d"
-			"\n\tdispatching: %d"
-			"\n\tcongestion controlling: %d"
 			"\n\tstarted: %d"
+			"\n\tdispatching: %d"
 			"\n\trecv suspended: %d",
-			this->id(), this->is_sending_msg(), this->is_dispatching_msg(), this->congestion_control(), this->started(), this->recv_idle_began);
+			this->id(), this->started(), this->is_dispatching_msg(), this->recv_idle_began);
 	}
 
 	//get or change the unpacker at runtime
@@ -99,39 +99,10 @@ public:
 	//success at here just means put the msg into udp::socket_base's send buffer
 	UDP_SAFE_SEND_MSG(safe_send_msg, send_msg)
 	UDP_SAFE_SEND_MSG(safe_send_native_msg, send_native_msg)
-	//send message with sync mode
-	//return 0 means empty message or this socket is busy on sending messages
-	//return -1 means error occurred, otherwise the number of bytes been sent
-	UDP_SYNC_SEND_MSG(sync_send_msg, false) //use the packer with native = false to pack the msgs
-	UDP_SYNC_SEND_MSG(sync_send_native_msg, true) //use the packer with native = true to pack the msgs
-	size_t direct_sync_send_msg(typename Packer::msg_ctype& msg) {return direct_sync_send_msg(peer_addr, msg);}
-	size_t direct_sync_send_msg(const asio::ip::udp::endpoint& peer_addr, typename Packer::msg_ctype& msg)
-	{
-		if (msg.empty())
-			unified_out::error_out("empty message, will not send it.");
-		else if (this->lock_sending_flag())
-			return do_sync_send_msg(peer_addr, msg);
-
-		return 0;
-	}
 	//msg sending interface
 	///////////////////////////////////////////////////
 
 protected:
-	//send message with sync mode
-	//return -1 means error occurred, otherwise the number of bytes been sent
-	size_t do_sync_send_msg(typename Packer::msg_ctype& msg) {return do_sync_send_msg(peer_addr, msg);}
-	size_t do_sync_send_msg(const asio::ip::udp::endpoint& peer_addr, typename Packer::msg_ctype& msg)
-	{
-		asio::error_code ec;
-		auto_duration dur(this->stat.send_time_sum);
-		auto send_size = this->next_layer().send_to(ASCS_SEND_BUFFER_TYPE(msg.data(), msg.size()), peer_addr, 0, ec);
-		dur.end();
-
-		send_handler(ec, send_size);
-		return ec ? -1 : send_size;
-	}
-
 	virtual void on_recv_error(const asio::error_code& ec)
 	{
 		if (asio::error::operation_aborted != ec)
@@ -145,39 +116,36 @@ protected:
 		return true;
 	}
 
-	virtual void send_msg() {if (this->lock_sending_flag() && !do_send_msg()) this->sending = false;}
-	virtual void recv_msg() {do_recv_msg();}
-
-#ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
-	virtual bool on_msg(out_msg_type& msg) {unified_out::debug_out("recv(" ASCS_SF "): %s", msg.size(), msg.data()); return true;}
-#endif
-
 	virtual bool on_msg_handle(out_msg_type& msg) {unified_out::debug_out("recv(" ASCS_SF "): %s", msg.size(), msg.data()); return true;}
+
+private:
+	virtual void recv_msg() {this->post_strand([this]() {this->do_recv_msg();});}
+	virtual void send_msg() {if (!this->sending) this->post_strand([this]() {this->do_send_msg(false);});}
 
 	void shutdown()
 	{
-		std::lock_guard<std::mutex> lock(shutdown_mutex);
+		this->post_strand([this]() {
+			this->stop_all_timer();
+			this->close();
 
-		this->stop_all_timer();
-		this->close();
-
-		if (this->lowest_layer().is_open())
-		{
-			asio::error_code ec;
-			this->lowest_layer().shutdown(asio::ip::udp::socket::shutdown_both, ec);
-			this->lowest_layer().close(ec);
-		}
+			if (this->lowest_layer().is_open())
+			{
+				asio::error_code ec;
+				this->lowest_layer().shutdown(asio::ip::udp::socket::shutdown_both, ec);
+				this->lowest_layer().close(ec);
+			}
+		});
 	}
 
-private:
 	void do_recv_msg()
 	{
 		auto recv_buff = unpacker_->prepare_next_recv();
 		assert(asio::buffer_size(recv_buff) > 0);
-
-		std::lock_guard<std::mutex> lock(shutdown_mutex);
-		this->next_layer().async_receive_from(recv_buff, temp_addr,
-			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred); }));
+		if (0 == asio::buffer_size(recv_buff))
+			unified_out::error_out("The unpacker returned an empty buffer, quit receiving!");
+		else
+			this->next_layer().async_receive_from(recv_buff, temp_addr, this->make_strand(
+				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);})));
 	}
 
 	void recv_handler(const asio::error_code& ec, size_t bytes_transferred)
@@ -186,16 +154,17 @@ private:
 		{
 			this->stat.last_recv_time = time(nullptr);
 
+			std::list<out_msg_type> temp_msg_can;
 			auto msg = this->unpacker_->parse_msg(bytes_transferred);
 			if (!msg.empty())
 			{
 				++this->stat.recv_msg_sum;
 				this->stat.recv_byte_sum += msg.size();
-				this->temp_msg_buffer.emplace_back(out_msg_type(temp_addr, std::move(msg)));
+				temp_msg_can.emplace_back(out_msg_type(temp_addr, std::move(msg)));
 			}
 
-			if (this->handle_msg(false))
-				do_recv_msg();
+			if (this->handle_msg(temp_msg_can))
+				do_recv_msg(); //receive msg in sequence
 		}
 #ifdef _MSC_VER
 		else if (asio::error::connection_refused == ec || asio::error::connection_reset == ec)
@@ -205,22 +174,22 @@ private:
 			on_recv_error(ec);
 	}
 
-	//return false if send buffer is empty
-	bool do_send_msg()
+	bool do_send_msg(bool in_strand)
 	{
-		if (this->send_msg_buffer.try_dequeue(last_send_msg))
+		if (!in_strand && this->sending)
+			return true;
+
+		this->sending = this->send_msg_buffer.try_dequeue(last_send_msg);
+		if (this->sending)
 		{
 			this->stat.send_delay_sum += statistic::now() - last_send_msg.begin_time;
 
 			last_send_msg.restart();
-			std::lock_guard<std::mutex> lock(shutdown_mutex);
-			this->next_layer().async_send_to(ASCS_SEND_BUFFER_TYPE(last_send_msg.data(), last_send_msg.size()), last_send_msg.peer_addr,
-				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred); }));
-
-			return true;
+			this->next_layer().async_send_to(ASCS_SEND_BUFFER_TYPE(last_send_msg.data(), last_send_msg.size()), last_send_msg.peer_addr, this->make_strand(
+				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);})));
 		}
 
-		return false;
+		return this->sending;
 	}
 
 	void send_handler(const asio::error_code& ec, size_t bytes_transferred)
@@ -249,15 +218,14 @@ private:
 			this->on_send_error(ec);
 		last_send_msg.clear(); //clear sending message after on_send_error, then user can decide how to deal with it in on_send_error
 
+		if (ec && (asio::error::not_socket == ec || asio::error::bad_descriptor == ec))
+			return;
+
 		//send msg in sequence
 		//on windows, sending a msg to addr_any may cause errors, please note
 		//for UDP, sending error will not stop subsequent sendings.
-		if (!do_send_msg())
-		{
-			this->sending = false;
-			if (!this->send_msg_buffer.empty())
-				send_msg(); //just make sure no pending msgs
-		}
+		if (!do_send_msg(true) && !this->send_msg_buffer.empty())
+			send_msg(); //just make sure no pending msgs
 	}
 
 	bool set_addr(asio::ip::udp::endpoint& endpoint, unsigned short port, const std::string& ip)
@@ -288,7 +256,8 @@ protected:
 	asio::ip::udp::endpoint temp_addr; //used when receiving messages
 	asio::ip::udp::endpoint peer_addr;
 
-	std::mutex shutdown_mutex;
+	volatile bool sending;
+	std::atomic_flag send_atomic;
 };
 
 }} //namespace

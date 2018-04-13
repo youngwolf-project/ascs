@@ -5,7 +5,6 @@
 #define ASCS_SERVER_PORT	9527
 //#define ASCS_REUSE_OBJECT //use objects pool
 #define ASCS_DELAY_CLOSE	5 //define this to avoid hooks for async call (and slightly improve efficiency)
-//#define ASCS_FORCE_TO_USE_MSG_RECV_BUFFER //force to use the msg recv buffer
 //#define ASCS_CLEAR_OBJECT_INTERVAL 1
 //#define ASCS_WANT_MSG_SEND_NOTIFY
 #define ASCS_FULL_STATISTIC //full statistic will slightly impact efficiency
@@ -68,22 +67,6 @@ using namespace ascs::ext::tcp;
 
 static bool check_msg;
 
-//about congestion control
-//
-//in 1.3, congestion control has been removed (no post_msg nor post_native_msg anymore), this is because
-//without known the business (or logic), framework cannot always do congestion control properly.
-//now, users should take the responsibility to do congestion control, there're two ways:
-//
-//1. for receiver, if you cannot handle msgs timely, which means the bottleneck is in your business,
-//    you should open/close congestion control intermittently;
-//   for sender, send msgs in on_msg_send() or use sending buffer limitation (like safe_send_msg(..., false)),
-//    but must not in service threads, please note.
-//
-//2. for sender, if responses are available (like pingpong test), send msgs in on_msg()/on_msg_handle(),
-//    but this will reduce IO throughput because SOCKET's sliding window is not fully used, pleae note.
-//
-//echo_client chose method #1
-
 ///////////////////////////////////////////////////
 //msg sending interface
 #define TCP_RANDOM_SEND_MSG(FUNNAME, SEND_FUNNAME) \
@@ -128,10 +111,6 @@ public:
 
 protected:
 	//msg handling
-#ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
-	//this virtual function doesn't exists if ASCS_FORCE_TO_USE_MSG_RECV_BUFFER been defined
-	virtual bool on_msg(out_msg_type& msg) {handle_msg(msg); return true;}
-#endif
 	virtual bool on_msg_handle(out_msg_type& msg) {handle_msg(msg); return true;}
 	//msg handling end
 
