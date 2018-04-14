@@ -36,7 +36,6 @@ public:
 	socket_base(asio::io_context& io_context_) : super(io_context_), unpacker_(std::make_shared<Unpacker>()) {}
 
 	virtual bool is_ready() {return this->lowest_layer().is_open();}
-	virtual bool send_msg() {if (this->lock_sending_flag() && !do_send_msg()) this->sending = false; return this->sending;}
 	virtual void send_heartbeat()
 	{
 		in_msg_type msg(peer_addr, this->packer_->pack_heartbeat());
@@ -146,6 +145,7 @@ protected:
 		return true;
 	}
 
+	virtual void send_msg() {if (this->lock_sending_flag() && !do_send_msg()) this->sending = false;}
 	virtual void recv_msg() {do_recv_msg();}
 
 #ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER

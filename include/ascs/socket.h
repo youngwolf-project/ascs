@@ -95,7 +95,6 @@ public:
 
 	virtual bool obsoleted() {return !started_ && !is_async_calling();}
 	virtual bool is_ready() = 0; //is ready for sending and receiving messages
-	virtual bool send_msg() = 0;
 	virtual void send_heartbeat() = 0;
 
 	bool started() const {return started_;}
@@ -197,6 +196,7 @@ protected:
 		return true;
 	}
 
+	virtual void send_msg() = 0;
 	virtual void recv_msg() = 0;
 
 	//generally, you don't have to rewrite this to maintain the status of connections (TCP)
