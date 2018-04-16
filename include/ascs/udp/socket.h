@@ -89,7 +89,11 @@ public:
 	//we can resolve this defect via mutex, but i think it's not worth, because this feature is not frequently used
 	std::shared_ptr<i_unpacker<typename Unpacker::msg_type>> unpacker() {return unpacker_;}
 	std::shared_ptr<const i_unpacker<typename Unpacker::msg_type>> unpacker() const {return unpacker_;}
+#ifdef ASCS_RECV_AFTER_HANDLING
+	//changing unpacker must before calling ascs::socket::recv_msg, and define ASCS_RECV_AFTER_HANDLING macro.
 	void unpacker(const std::shared_ptr<i_unpacker<typename Unpacker::msg_type>>& _unpacker_) {unpacker_ = _unpacker_;}
+	virtual void recv_msg() {this->post_strand([this]() {this->do_recv_msg();});}
+#endif
 
 	///////////////////////////////////////////////////
 	//msg sending interface
@@ -119,7 +123,9 @@ protected:
 	virtual bool on_msg_handle(out_msg_type& msg) {unified_out::debug_out("recv(" ASCS_SF "): %s", msg.size(), msg.data()); return true;}
 
 private:
+#ifndef ASCS_RECV_AFTER_HANDLING
 	virtual void recv_msg() {this->post_strand([this]() {this->do_recv_msg();});}
+#endif
 	virtual void send_msg() {if (!this->sending) this->post_strand([this]() {this->do_send_msg(false);});}
 
 	void shutdown()
