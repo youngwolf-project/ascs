@@ -250,15 +250,15 @@ private:
 			}
 		}
 
-		this->sending = !bufs.empty();
-		if (this->sending)
+		if (this->sending = !bufs.empty())
 		{
 			last_send_msg.front().restart();
 			asio::async_write(this->next_layer(), bufs, this->make_strand(
 				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);})));
+			return true;
 		}
 
-		return this->sending;
+		return false;
 	}
 
 	void send_handler(const asio::error_code& ec, size_t bytes_transferred)
