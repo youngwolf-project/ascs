@@ -97,7 +97,11 @@ private:
 		if (TRANS_BUSY == state)
 		{
 			assert(msg.empty());
-			trans_end();
+
+			auto unp = std::dynamic_pointer_cast<data_unpacker>(unpacker());
+			if (nullptr == unp || unp->is_finished())
+				trans_end();
+
 			return;
 		}
 		else if (msg.size() <= ORDER_LEN)
