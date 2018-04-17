@@ -52,7 +52,6 @@ protected:
 	virtual bool on_msg_handle(out_msg_type& msg) {handle_msg(msg); return true;}
 
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
-	//congestion control, method #1, the peer needs its own congestion control too.
 	virtual void on_msg_send(in_msg_type& msg)
 	{
 		send_bytes += msg.size();
@@ -69,7 +68,6 @@ private:
 	}
 #else
 private:
-	//congestion control, method #2, the peer totally doesn't have to consider congestion control.
 	void handle_msg(out_msg_type& msg)
 	{
 		if (0 == total_bytes)

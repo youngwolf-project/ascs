@@ -115,7 +115,6 @@ protected:
 	//msg handling end
 
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
-	//congestion control, method #1, the peer needs its own congestion control too.
 	virtual void on_msg_send(in_msg_type& msg)
 	{
 		if (0 == --msg_num)
@@ -138,7 +137,7 @@ private:
 	{
 		recv_bytes += msg.size();
 		if (check_msg && (msg.size() < sizeof(size_t) || 0 != memcmp(&recv_index, msg.data(), sizeof(size_t))))
-			printf("check msg error: " ASCS_SF ".\n", recv_index);
+			printf("check msg error: " ASCS_LLF "->" ASCS_SF "/" ASCS_SF ".\n", id(), recv_index, *(size_t*) msg.data());
 		++recv_index;
 
 		//i'm the bottleneck -_-
@@ -244,7 +243,6 @@ void send_msg_randomly(echo_client& client, size_t msg_num, size_t msg_len, char
 	{
 		memcpy(buff, &i, sizeof(size_t)); //seq
 
-		//congestion control, method #1, the peer needs its own congestion control too.
 		client.safe_random_send_msg(buff, msg_len); //can_overflow is false, it's important
 		send_bytes += msg_len;
 
@@ -308,7 +306,6 @@ void send_msg_concurrently(echo_client& client, size_t send_thread_num, size_t m
 			{
 				memcpy(buff, &i, sizeof(size_t)); //seq
 
-				//congestion control, method #1, the peer needs its own congestion control too.
 				do_something_to_all(item, [buff, msg_len](echo_client::object_ctype& item2) {item2->safe_send_msg(buff, msg_len);}); //can_overflow is false, it's important
 			}
 			delete[] buff;

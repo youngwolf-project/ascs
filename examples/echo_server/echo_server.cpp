@@ -99,7 +99,6 @@ protected:
 	}
 
 	//msg handling: send the original msg back(echo server)
-	//if we used receiving buffer, congestion control will become much simpler, like this:
 	virtual bool on_msg_handle(out_msg_type& msg) {return send_msg(msg.data(), msg.size());}
 	//msg handling end
 };

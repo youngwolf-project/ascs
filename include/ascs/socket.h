@@ -134,6 +134,7 @@ public:
 	}
 
 	bool is_sending_msg() const {return sending;}
+	bool is_recv_idle() const {return recv_idle_began;}
 	bool is_dispatching_msg() const {return dispatching;}
 
 	void msg_resuming_interval(size_t interval) {msg_resuming_interval_ = interval;}
@@ -181,6 +182,8 @@ protected:
 #if ASCS_HEARTBEAT_INTERVAL > 0
 		start_heartbeat(ASCS_HEARTBEAT_INTERVAL);
 #endif
+		stat.last_recv_time = time(nullptr);
+
 		send_msg(); //send buffer may have msgs, send them
 		recv_msg();
 
@@ -250,8 +253,6 @@ protected:
 		return true;
 	}
 
-	//call this in subclasses' recv_handler only
-	//subclasses must guarantee not call this function in more than one thread concurrently.
 	template <typename T> bool handle_msg(T& temp_msg_can)
 	{
 		auto msg_num = temp_msg_can.size();
@@ -328,7 +329,7 @@ private:
 		return false;
 	}
 
-	void dispatch_msg() {if (!dispatching) this->post(object::make_strand(strand, [this]() {this->do_dispatch_msg();}));}
+	void dispatch_msg() {if (!dispatching) this->post_strand(strand, [this]() {this->do_dispatch_msg();});}
 	void do_dispatch_msg()
 	{
 		if (dispatching)
@@ -341,7 +342,7 @@ private:
 			stat.dispatch_dealy_sum += begin_time - last_dispatch_msg.begin_time;
 			bool re = on_msg_handle(last_dispatch_msg); //must before next msg dispatching to keep sequence
 			auto end_time = statistic::now();
-			stat.handle_time_2_sum += end_time - begin_time;
+			stat.handle_time_sum += end_time - begin_time;
 
 			if (!re) //dispatch failed, re-dispatch
 			{
@@ -393,26 +394,27 @@ private:
 	}
 
 protected:
-	uint_fast64_t _id;
-	Socket next_layer_;
-
 	out_msg last_dispatch_msg;
 	std::shared_ptr<i_packer<typename Packer::msg_type>> packer_;
 
-	in_container_type send_msg_buffer;
-	out_container_type recv_msg_buffer;
-
 	volatile bool sending;
+	in_container_type send_msg_buffer;
 
-	volatile bool dispatching;
-	asio::io_context::strand strand;
+	struct statistic stat;
+
+private:
+	uint_fast64_t _id;
+	Socket next_layer_;
 
 	volatile bool started_; //has started or not
 	std::atomic_flag start_atomic;
 
-	struct statistic stat;
+	out_container_type recv_msg_buffer;
 	typename statistic::stat_time recv_idle_begin_time;
 	bool recv_idle_began;
+
+	volatile bool dispatching;
+	asio::io_context::strand strand;
 
 	size_t msg_resuming_interval_, msg_handling_interval_;
 };

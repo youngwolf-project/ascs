@@ -27,13 +27,9 @@ public:
 	bool stopped() const {return io_context_.stopped();}
 
 #if ASIO_VERSION >= 101100
-	template <typename F> inline static asio::executor_binder<typename asio::decay<F>::type, asio::io_context::strand> make_strand(asio::io_context::strand& strand, ASIO_MOVE_ARG(F) f)
-		{return asio::bind_executor(strand, ASIO_MOVE_CAST(F)(f));}
 	template <typename F> inline asio::executor_binder<typename asio::decay<F>::type, asio::io_context::strand> make_strand(ASIO_MOVE_ARG(F) f)
 		{return asio::bind_executor(strand, ASIO_MOVE_CAST(F)(f));}
 #else
-	template <typename F> static asio::detail::wrapped_handler<asio::io_context::strand, F, asio::detail::is_continuation_if_running> make_strand(asio::io_context::strand& strand, F f)
-		{return strand.wrap(f);}
 	template <typename F> asio::detail::wrapped_handler<asio::io_context::strand, F, asio::detail::is_continuation_if_running> make_strand(F f) {return strand.wrap(f);}
 #endif
 
@@ -46,17 +42,23 @@ public:
 	template<typename F> void post(F&& handler) {asio::post(io_context_, [unused(this->async_call_indicator), handler(std::move(handler))]() {handler();});}
 	template<typename F> void post(const F& handler) {asio::post(io_context_, [unused(this->async_call_indicator), handler]() {handler();});}
 	template<typename F> void post_strand(F&& handler) {asio::post(strand, [unused(this->async_call_indicator), handler(std::move(handler))]() {handler();});}
+	template<typename F> void post_strand(asio::io_context::strand& strand, F&& handler) {asio::post(strand, [unused(this->async_call_indicator), handler(std::move(handler))]() {handler();});}
 	template<typename F> void post_strand(const F& handler) {asio::post(strand, [unused(this->async_call_indicator), handler]() {handler();});}
+	template<typename F> void post_strand(asio::io_context::strand& strand, const F& handler) {asio::post(strand, [unused(this->async_call_indicator), handler]() {handler();});}
 	//Don't use defer function unless you fully understand asio::defer, which was introduced in asio 1.11
 	template<typename F> void defer(F&& handler) {asio::defer(io_context_, [unused(this->async_call_indicator), handler(std::move(handler))]() {handler();});}
 	template<typename F> void defer(const F& handler) {asio::defer(io_context_, [unused(this->async_call_indicator), handler]() {handler();});}
 	template<typename F> void defer_strand(F&& handler) {strand.defer([unused(this->async_call_indicator), handler(std::move(handler))]() {handler();});}
+	template<typename F> void defer_strand(asio::io_context::strand& strand, F&& handler) {strand.defer([unused(this->async_call_indicator), handler(std::move(handler))]() {handler();});}
 	template<typename F> void defer_strand(const F& handler) {strand.defer([unused(this->async_call_indicator), handler]() {handler();});}
+	template<typename F> void defer_strand(asio::io_context::strand& strand, const F& handler) {strand.defer([unused(this->async_call_indicator), handler]() {handler();});}
 	#else
 	template<typename F> void post(F&& handler) {io_context_.post([unused(this->async_call_indicator), handler(std::move(handler))]() {handler();});}
 	template<typename F> void post(const F& handler) {io_context_.post([unused(this->async_call_indicator), handler]() {handler();});}
 	template<typename F> void post_strand(F&& handler) {strand.post([unused(this->async_call_indicator), handler(std::move(handler))]() {handler();});}
-	template<typename F> void post_strand( const F& handler) {strand.post([unused(this->async_call_indicator), handler]() {handler();});}
+	template<typename F> void post_strand(asio::io_context::strand& strand, F&& handler) {strand.post([unused(this->async_call_indicator), handler(std::move(handler))]() {handler();});}
+	template<typename F> void post_strand(const F& handler) {strand.post([unused(this->async_call_indicator), handler]() {handler();});}
+	template<typename F> void post_strand(asio::io_context::strand& strand, const F& handler) {strand.post([unused(this->async_call_indicator), handler]() {handler();});}
 	#endif
 
 	template<typename F> handler_with_error make_handler_error(F&& handler) const {return [unused(this->async_call_indicator), handler(std::move(handler))](const auto& ec) {handler(ec);};}
@@ -70,12 +72,15 @@ public:
 	#if ASIO_VERSION >= 101100
 	template<typename F> void post(const F& handler) {auto unused(async_call_indicator); asio::post(io_context_, [=]() {handler();});}
 	template<typename F> void post_strand(const F& handler) {auto unused(async_call_indicator); asio::post(strand, [=]() {handler();});}
+	template<typename F> void post_strand(asio::io_context::strand& strand, const F& handler) {auto unused(async_call_indicator); asio::post(strand, [=]() {handler();});}
 	//Don't use defer function unless you fully understand asio::defer, which was introduced in asio 1.11
 	template<typename F> void defer(const F& handler) {auto unused(async_call_indicator); asio::defer(io_context_, [=]() {handler();});}
 	template<typename F> void defer_strand(const F& handler) {auto unused(async_call_indicator); strand.defer([=]() {handler();});}
+	template<typename F> void defer_strand(asio::io_context::strand& strand, const F& handler) {auto unused(async_call_indicator); strand.defer([=]() {handler();});}
 	#else
 	template<typename F> void post(const F& handler) {auto unused(async_call_indicator); io_context_.post([=]() {handler();});}
 	template<typename F> void post_strand(const F& handler) {auto unused(async_call_indicator); strand.post([=]() {handler();});}
+	template<typename F> void post_strand(asio::io_context::strand& strand, const F& handler) {auto unused(async_call_indicator); strand.post([=]() {handler();});}
 	#endif
 	template<typename F> handler_with_error make_handler_error(const F& handler) const {auto unused(async_call_indicator); return [=](const asio::error_code& ec) {handler(ec);};}
 	template<typename F> handler_with_error_size make_handler_error_size(const F& handler) const
@@ -94,17 +99,23 @@ protected:
 	template<typename F> void post(F&& handler) {asio::post(io_context_, std::move(handler));}
 	template<typename F> void post(const F& handler) {asio::post(io_context_, handler);}
 	template<typename F> void post_strand(F&& handler) {asio::post(strand, std::move(handler));}
+	template<typename F> void post_strand(asio::io_context::strand& strand, F&& handler) {asio::post(strand, std::move(handler));}
 	template<typename F> void post_strand(const F& handler) {asio::post(strand, handler);}
+	template<typename F> void post_strand(asio::io_context::strand& strand, const F& handler) {asio::post(strand, handler);}
 	//Don't use defer function unless you fully understand asio::defer, which was introduced in asio 1.11
 	template<typename F> void defer(F&& handler) {asio::defer(io_context_, std::move(handler));}
 	template<typename F> void defer(const F& handler) {asio::defer(io_context_, handler);}
 	template<typename F> void defer_strand(F&& handler) {strand.defer(std::move(handler));}
+	template<typename F> void defer_strand(asio::io_context::strand& strand, F&& handler) {strand.defer(std::move(handler));}
 	template<typename F> void defer_strand(const F& handler) {strand.defer(handler);}
+	template<typename F> void defer_strand(asio::io_context::strand& strand, const F& handler) {strand.defer(handler);}
 	#else
 	template<typename F> void post(F&& handler) {io_context_.post(std::move(handler));}
 	template<typename F> void post(const F& handler) {io_context_.post(handler);}
 	template<typename F> void post_strand(F&& handler) {strand.post(std::move(handler));}
+	template<typename F> void post_strand(asio::io_context::strand& strand, F&& handler) {strand.post(std::move(handler));}
 	template<typename F> void post_strand(const F& handler) {strand.post(handler);}
+	template<typename F> void post_strand(asio::io_context::strand& strand, const F& handler) {strand.post(handler);}
 	#endif
 
 	template<typename F> inline F&& make_handler_error(F&& f) const {return std::move(f);}

@@ -81,7 +81,7 @@ public:
 			"\n\tstarted: %d"
 			"\n\tdispatching: %d"
 			"\n\trecv suspended: %d",
-			this->id(), this->started(), this->is_dispatching_msg(), this->recv_idle_began);
+			this->id(), this->started(), this->is_dispatching_msg(), this->is_recv_idle());
 	}
 
 	//get or change the unpacker at runtime

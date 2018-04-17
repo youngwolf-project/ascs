@@ -312,8 +312,9 @@
  * Not support sync sending mode anymore.
  * Explicitly need macro ASCS_RECV_AFTER_HANDLING to gain the ability of changing the unpacker at runtime.
  * Function disconnect, force_shutdown and graceful_shutdown in udp::socket_base will now be performed asynchronously.
- * Not support macro ASCS_FORCE_TO_USE_MSG_RECV_BUFFER anymore, which means now we have the behavior as this macro is always defined,
+ * Not support macro ASCS_FORCE_TO_USE_MSG_RECV_BUFFER anymore, which means now we have the behavior as this macro always defined,
  *  thus, virtual function ascs::socket::on_msg() is useless and also has been deleted.
+ * statistic.handle_time_2_sum has been renamed to handle_time_sum.
  *
  * HIGHLIGHT:
  * Because of introduction of asio::io_context::strand (which is required, see FIX section for more details), we wiped two atomic in ascs::socket.
@@ -327,13 +328,13 @@
  * DELETION:
  * Deleted virtual function bool ascs::socket::on_msg().
  * Not support sync sending mode anymore, so we reduced an atomic object in ascs::socket.
-
  *
  * REFACTORING:
  *
  * REPLACEMENTS:
  * Renamed macro ASCS_MSG_HANDLING_INTERVAL_STEP1 to ASCS_MSG_RESUMING_INTERVAL.
  * Renamed macro ASCS_MSG_HANDLING_INTERVAL_STEP2 to ASCS_MSG_HANDLING_INTERVAL.
+ * Renamed statistic.handle_time_2_sum to handle_time_sum.
  *
  */
 

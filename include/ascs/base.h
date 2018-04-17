@@ -296,10 +296,7 @@ struct statistic
 		send_delay_sum = send_time_sum = pack_time_sum = stat_duration(0);
 
 		dispatch_dealy_sum = recv_idle_sum = stat_duration(0);
-#ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
-		handle_time_1_sum = stat_duration(0);
-#endif
-		handle_time_2_sum = stat_duration(0);
+		handle_time_sum = stat_duration(0);
 		unpack_time_sum = stat_duration(0);
 	}
 #else
@@ -318,10 +315,7 @@ struct statistic
 		recv_byte_sum += other.recv_byte_sum;
 		dispatch_dealy_sum += other.dispatch_dealy_sum;
 		recv_idle_sum += other.recv_idle_sum;
-#ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
-		handle_time_1_sum += other.handle_time_1_sum;
-#endif
-		handle_time_2_sum += other.handle_time_2_sum;
+		handle_time_sum += other.handle_time_sum;
 		unpack_time_sum += other.unpack_time_sum;
 
 		return *this;
@@ -342,10 +336,7 @@ struct statistic
 			<< "size in bytes: " << recv_byte_sum << std::endl
 			<< "dispatch delay: " << std::chrono::duration_cast<std::chrono::duration<float>>(dispatch_dealy_sum).count() << std::endl
 			<< "recv idle duration: " << std::chrono::duration_cast<std::chrono::duration<float>>(recv_idle_sum).count() << std::endl
-#ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
-			<< "on_msg duration: " << std::chrono::duration_cast<std::chrono::duration<float>>(handle_time_1_sum).count() << std::endl
-#endif
-			<< "on_msg_handle duration: " << std::chrono::duration_cast<std::chrono::duration<float>>(handle_time_2_sum).count() << std::endl
+			<< "on_msg_handle duration: " << std::chrono::duration_cast<std::chrono::duration<float>>(handle_time_sum).count() << std::endl
 			<< "unpack duration: " << std::chrono::duration_cast<std::chrono::duration<float>>(unpack_time_sum).count();
 #else
 		s << std::setfill('0') << "send corresponding statistic:\n"
@@ -370,11 +361,8 @@ struct statistic
 	uint_fast64_t recv_msg_sum; //msgs returned by i_unpacker::parse_msg
 	uint_fast64_t recv_byte_sum; //msgs (in bytes) returned by i_unpacker::parse_msg
 	stat_duration dispatch_dealy_sum; //from parse_msg(exclude msg unpacking) to on_msg_handle
-	stat_duration recv_idle_sum; //during this duration, socket suspended msg reception (receiving buffer overflow or doing congestion control)
-#ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
-	stat_duration handle_time_1_sum; //on_msg consumed time, this indicate the efficiency of msg handling
-#endif
-	stat_duration handle_time_2_sum; //on_msg_handle consumed time, this indicate the efficiency of msg handling
+	stat_duration recv_idle_sum; //during this duration, socket suspended msg reception (receiving buffer overflow)
+	stat_duration handle_time_sum; //on_msg_handle consumed time, this indicate the efficiency of msg handling
 	stat_duration unpack_time_sum; //udp::socket_base will not gather this item
 
 	time_t last_send_time; //include heartbeat

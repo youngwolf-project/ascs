@@ -100,7 +100,7 @@ public:
 			"\n\tlink status: %d"
 			"\n\tdispatching: %d"
 			"\n\trecv suspended: %d",
-			this->id(), this->started(), status, this->is_dispatching_msg(), this->recv_idle_began);
+			this->id(), this->started(), status, this->is_dispatching_msg(), this->is_recv_idle());
 	}
 
 	//get or change the unpacker at runtime
@@ -156,9 +156,9 @@ protected:
 	virtual bool do_start()
 	{
 		status = link_status::CONNECTED;
-		this->stat.last_recv_time = this->stat.establish_time = time(nullptr);
+		this->stat.establish_time = time(nullptr);
 
-		on_connect();
+		on_connect(); //in this virtual function, this->stat.last_recv_time has not been updated (super::do_start will update it), please note
 		return super::do_start();
 	}
 
