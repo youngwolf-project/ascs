@@ -330,6 +330,8 @@
  * Not support sync sending mode anymore, so we reduced an atomic object in ascs::socket.
  *
  * REFACTORING:
+ * If you want to change unpacker at runtime, first, you must define macro ASCS_RECV_AFTER_HANDLING, second, you must call ascs::socket::recv_msg and
+ *  guarantee only zero or one recv_msg invocation (this may need mutex, please carefully design your logic). See file_client for more details.
  *
  * REPLACEMENTS:
  * Renamed macro ASCS_MSG_HANDLING_INTERVAL_STEP1 to ASCS_MSG_RESUMING_INTERVAL.

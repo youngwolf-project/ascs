@@ -185,17 +185,17 @@ private:
 		if (!in_strand && this->sending)
 			return true;
 
-		this->sending = this->send_msg_buffer.try_dequeue(last_send_msg);
-		if (this->sending)
+		if (this->sending = this->send_msg_buffer.try_dequeue(last_send_msg))
 		{
 			this->stat.send_delay_sum += statistic::now() - last_send_msg.begin_time;
 
 			last_send_msg.restart();
 			this->next_layer().async_send_to(ASCS_SEND_BUFFER_TYPE(last_send_msg.data(), last_send_msg.size()), last_send_msg.peer_addr, this->make_strand(
 				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);})));
+			return true;
 		}
 
-		return this->sending;
+		return false;
 	}
 
 	void send_handler(const asio::error_code& ec, size_t bytes_transferred)
