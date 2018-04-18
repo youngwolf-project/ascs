@@ -35,8 +35,8 @@ private:
 protected:
 	enum link_status {CONNECTED, FORCE_SHUTTING_DOWN, GRACEFUL_SHUTTING_DOWN, BROKEN};
 
-	socket_base(asio::io_context& io_context_) : super(io_context_) {first_init();}
-	template<typename Arg> socket_base(asio::io_context& io_context_, Arg& arg) : super(io_context_, arg) {first_init();}
+	socket_base(asio::io_context& io_context_) : super(io_context_), strand(io_context_) {first_init();}
+	template<typename Arg> socket_base(asio::io_context& io_context_, Arg& arg) : super(io_context_, arg), strand(io_context_) {first_init();}
 
 	//helper function, just call it in constructor
 	void first_init() {status = link_status::BROKEN; unpacker_ = std::make_shared<Unpacker>();}
@@ -109,7 +109,7 @@ public:
 #ifdef ASCS_RECV_AFTER_HANDLING
 	//changing unpacker must before calling ascs::socket::recv_msg, and define ASCS_RECV_AFTER_HANDLING macro.
 	void unpacker(const std::shared_ptr<i_unpacker<out_msg_type>>& _unpacker_) {unpacker_ = _unpacker_;}
-	virtual void recv_msg() {this->post_strand([this]() {this->do_recv_msg();});}
+	virtual void recv_msg() {this->dispatch_strand(strand, [this]() {this->do_recv_msg();});}
 #endif
 
 	///////////////////////////////////////////////////
@@ -172,9 +172,9 @@ protected:
 
 private:
 #ifndef ASCS_RECV_AFTER_HANDLING
-	virtual void recv_msg() {this->post_strand([this]() {this->do_recv_msg();});}
+	virtual void recv_msg() {this->dispatch_strand(strand, [this]() {this->do_recv_msg();});}
 #endif
-	virtual void send_msg() {if (!this->sending) this->post_strand([this]() {this->do_send_msg(false);});}
+	virtual void send_msg() {if (!this->sending) this->dispatch_strand(strand, [this]() {this->do_send_msg(false);});}
 
 	void shutdown()
 	{
@@ -197,7 +197,7 @@ private:
 			unified_out::error_out("The unpacker returned an empty buffer, quit receiving!");
 		else
 			asio::async_read(this->next_layer(), recv_buff,
-				[this](const asio::error_code& ec, size_t bytes_transferred)->size_t {return this->completion_checker(ec, bytes_transferred);}, this->make_strand(
+				[this](const asio::error_code& ec, size_t bytes_transferred)->size_t {return this->completion_checker(ec, bytes_transferred);}, this->make_strand(strand,
 					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);})));
 	}
 
@@ -253,7 +253,7 @@ private:
 		if ((this->sending = !bufs.empty()))
 		{
 			last_send_msg.front().restart();
-			asio::async_write(this->next_layer(), bufs, this->make_strand(
+			asio::async_write(this->next_layer(), bufs, this->make_strand(strand,
 				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);})));
 			return true;
 		}
@@ -315,6 +315,9 @@ protected:
 	std::shared_ptr<i_unpacker<out_msg_type>> unpacker_;
 
 	volatile link_status status;
+
+private:
+	asio::io_context::strand strand;
 };
 
 }} //namespace

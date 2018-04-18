@@ -196,7 +196,7 @@ protected:
 	virtual bool on_heartbeat_error() = 0; //heartbeat timed out, return true to continue heartbeat function (useful for UDP)
 
 	//if ASCS_DELAY_CLOSE is equal to zero, in this callback, socket guarantee that there's no any other async call associated it,
-	// include user timers(created by set_timer()) and user async calls(started via post() or defer()), this means you can clean up any resource
+	// include user timers(created by set_timer()) and user async calls(started via post(), dispatch() or defer()), this means you can clean up any resource
 	// in this socket except this socket itself, because this socket maybe is being maintained by object_pool.
 	//otherwise (bigger than zero), socket simply call this callback ASCS_DELAY_CLOSE seconds later after link down, no any guarantees.
 	virtual void on_close() {unified_out::info_out("on_close()");}
@@ -329,7 +329,7 @@ private:
 		return false;
 	}
 
-	void dispatch_msg() {if (!dispatching) this->post_strand(strand, [this]() {this->do_dispatch_msg();});}
+	void dispatch_msg() {if (!dispatching) this->dispatch_strand(strand, [this]() {this->do_dispatch_msg();});}
 	void do_dispatch_msg()
 	{
 		if (dispatching)
