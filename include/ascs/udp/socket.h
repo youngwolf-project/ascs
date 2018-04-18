@@ -185,7 +185,7 @@ private:
 		if (!in_strand && this->sending)
 			return true;
 
-		if (this->sending = this->send_msg_buffer.try_dequeue(last_send_msg))
+		if ((this->sending = this->send_msg_buffer.try_dequeue(last_send_msg)))
 		{
 			this->stat.send_delay_sum += statistic::now() - last_send_msg.begin_time;
 

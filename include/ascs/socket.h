@@ -335,7 +335,7 @@ private:
 		if (dispatching)
 			return;
 
-		if (dispatching = !last_dispatch_msg.empty() || recv_msg_buffer.try_dequeue(last_dispatch_msg))
+		if ((dispatching = !last_dispatch_msg.empty() || recv_msg_buffer.try_dequeue(last_dispatch_msg)))
 		{
 			auto begin_time = statistic::now();
 			stat.dispatch_dealy_sum += begin_time - last_dispatch_msg.begin_time;

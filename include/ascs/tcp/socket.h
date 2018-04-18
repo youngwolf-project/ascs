@@ -250,7 +250,7 @@ private:
 			}
 		}
 
-		if (this->sending = !bufs.empty())
+		if ((this->sending = !bufs.empty()))
 		{
 			last_send_msg.front().restart();
 			asio::async_write(this->next_layer(), bufs, this->make_strand(
