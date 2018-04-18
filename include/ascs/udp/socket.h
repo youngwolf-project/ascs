@@ -33,7 +33,7 @@ private:
 	typedef socket<Socket, Packer, Unpacker, in_msg_type, out_msg_type, InQueue, InContainer, OutQueue, OutContainer> super;
 
 public:
-	socket_base(asio::io_context& io_context_) : super(io_context_), unpacker_(std::make_shared<Unpacker>()), sending(false) {send_atomic.clear(std::memory_order_relaxed);}
+	socket_base(asio::io_context& io_context_) : super(io_context_), unpacker_(std::make_shared<Unpacker>()) {}
 
 	virtual bool is_ready() {return this->lowest_layer().is_open();}
 	virtual void send_heartbeat()
@@ -56,7 +56,6 @@ public:
 		if (ec)
 			unified_out::error_out("bind failed.");
 
-		sending = false;
 		last_send_msg.clear();
 		unpacker_->reset();
 		super::reset();
@@ -71,7 +70,6 @@ public:
 	void force_shutdown() {show_info("link:", "been shut down."); shutdown();}
 	void graceful_shutdown() {force_shutdown();}
 
-	bool is_sending_msg() const {return sending;}
 	void show_info(const char* head, const char* tail) const {unified_out::info_out("%s %s:%hu %s", head, local_addr.address().to_string().data(), local_addr.port(), tail);}
 
 	void show_status() const
@@ -261,9 +259,6 @@ protected:
 	asio::ip::udp::endpoint local_addr;
 	asio::ip::udp::endpoint temp_addr; //used when receiving messages
 	asio::ip::udp::endpoint peer_addr;
-
-	volatile bool sending;
-	std::atomic_flag send_atomic;
 };
 
 }} //namespace
