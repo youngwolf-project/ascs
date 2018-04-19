@@ -180,10 +180,10 @@ public:
 protected:
 	virtual bool do_start()
 	{
+		stat.last_recv_time = time(nullptr);
 #if ASCS_HEARTBEAT_INTERVAL > 0
 		start_heartbeat(ASCS_HEARTBEAT_INTERVAL);
 #endif
-		stat.last_recv_time = time(nullptr);
 
 		send_msg(); //send buffer may have msgs, send them
 		recv_msg();
@@ -254,7 +254,7 @@ protected:
 		return true;
 	}
 
-	template <typename T> bool handle_msg(T& temp_msg_can)
+	template<typename T> bool handle_msg(T& temp_msg_can)
 	{
 		auto msg_num = temp_msg_can.size();
 		if (msg_num > 0)
@@ -340,7 +340,7 @@ private:
 		{
 			auto begin_time = statistic::now();
 			stat.dispatch_dealy_sum += begin_time - last_dispatch_msg.begin_time;
-			bool re = on_msg_handle(last_dispatch_msg); //must before next msg dispatching to keep sequence
+			auto re = on_msg_handle(last_dispatch_msg); //must before next msg dispatching to keep sequence
 			auto end_time = statistic::now();
 			stat.handle_time_sum += end_time - begin_time;
 

@@ -67,7 +67,7 @@ public:
 	const asio::ip::udp::endpoint& get_peer_addr() const {return peer_addr;}
 
 	void disconnect() {force_shutdown();}
-	void force_shutdown() {show_info("link:", "been shut down."); shutdown();}
+	void force_shutdown() {show_info("link:", "been shutting down."); this->dispatch_strand(strand, [this]() {this->shutdown();});}
 	void graceful_shutdown() {force_shutdown();}
 
 	void show_info(const char* head, const char* tail) const {unified_out::info_out("%s %s:%hu %s", head, local_addr.address().to_string().data(), local_addr.port(), tail);}
@@ -128,17 +128,15 @@ private:
 
 	void shutdown()
 	{
-		this->dispatch_strand(strand, [this]() {
-			this->stop_all_timer();
-			this->close();
+		this->stop_all_timer();
+		this->close();
 
-			if (this->lowest_layer().is_open())
-			{
-				asio::error_code ec;
-				this->lowest_layer().shutdown(asio::ip::udp::socket::shutdown_both, ec);
-				this->lowest_layer().close(ec);
-			}
-		});
+		if (this->lowest_layer().is_open())
+		{
+			asio::error_code ec;
+			this->lowest_layer().shutdown(asio::ip::udp::socket::shutdown_both, ec);
+			this->lowest_layer().close(ec);
+		}
 	}
 
 	void do_recv_msg()
