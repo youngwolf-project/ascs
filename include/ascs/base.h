@@ -57,7 +57,7 @@ private:
 	std::atomic_flag& atomic;
 };
 
-class object;
+class executor;
 class service_pump;
 namespace tcp
 {
@@ -66,8 +66,8 @@ namespace tcp
 	public:
 		virtual service_pump& get_service_pump() = 0;
 		virtual const service_pump& get_service_pump() const = 0;
-		virtual bool del_socket(const std::shared_ptr<object>& socket_ptr) = 0;
-		virtual bool restore_socket(const std::shared_ptr<object>& socket_ptr, uint_fast64_t id) = 0;
+		virtual bool del_socket(const std::shared_ptr<executor>& socket_ptr) = 0;
+		virtual bool restore_socket(const std::shared_ptr<executor>& socket_ptr, uint_fast64_t id) = 0;
 	};
 } //namespace
 

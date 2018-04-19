@@ -331,7 +331,9 @@
  *
  * REFACTORING:
  * If you want to change unpacker at runtime, first, you must define macro ASCS_RECV_AFTER_HANDLING, second, you must call ascs::socket::recv_msg and
- *  guarantee only zero or one recv_msg invocation (this may need mutex, please carefully design your logic). See file_client for more details.
+ *  guarantee only zero or one recv_msg invocation (include initiating and asynchronous operation, this may need mutex, please carefully design your logic),
+ *  see file_client for more details.
+ * Class object has been split into executor and tracked_executor, object_pool use the former, and ascs::socket use the latter.
  *
  * REPLACEMENTS:
  * Renamed macro ASCS_MSG_HANDLING_INTERVAL_STEP1 to ASCS_MSG_RESUMING_INTERVAL.
@@ -480,7 +482,7 @@ static_assert(ASCS_MAX_OBJECT_NUM > 0, "object capacity must be bigger than zero
 #endif
 
 //IO thread number
-//listening, msg sending and receiving, msg handling (on_msg_handle() and on_msg()), all timers(include user timers) and other asynchronous calls (object::post())
+//listening, msg sending and receiving, msg handling (on_msg_handle() and on_msg()), all timers(include user timers) and other asynchronous calls (from executor)
 //keep big enough, no empirical value I can suggest, you must try to find it out in your own environment
 #ifndef ASCS_SERVICE_THREAD_NUM
 #define ASCS_SERVICE_THREAD_NUM	8

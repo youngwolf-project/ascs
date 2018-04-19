@@ -17,6 +17,7 @@
 #include <unordered_map>
 
 #include "timer.h"
+#include "executor.h"
 #include "container.h"
 #include "service_pump.h"
 
@@ -24,32 +25,32 @@ namespace ascs
 {
 
 template<typename Object>
-class object_pool : public service_pump::i_service, protected timer
+class object_pool : public service_pump::i_service, protected timer<executor>
 {
 public:
 	typedef std::shared_ptr<Object> object_type;
 	typedef const object_type object_ctype;
 	typedef std::unordered_map<uint_fast64_t, object_type> container_type;
 
-	static const tid TIMER_BEGIN = timer::TIMER_END;
+	static const tid TIMER_BEGIN = timer<executor>::TIMER_END;
 	static const tid TIMER_FREE_SOCKET = TIMER_BEGIN;
 	static const tid TIMER_CLEAR_SOCKET = TIMER_BEGIN + 1;
 	static const tid TIMER_END = TIMER_BEGIN + 10;
 
 protected:
-	object_pool(service_pump& service_pump_) : i_service(service_pump_), timer(service_pump_), cur_id(-1), max_size_(ASCS_MAX_OBJECT_NUM) {}
+	object_pool(service_pump& service_pump_) : i_service(service_pump_), timer<executor>(service_pump_), cur_id(-1), max_size_(ASCS_MAX_OBJECT_NUM) {}
 
 	void start()
 	{
 #if !defined(ASCS_REUSE_OBJECT) && !defined(ASCS_RESTORE_OBJECT)
-		set_timer(TIMER_FREE_SOCKET, 1000 * ASCS_FREE_OBJECT_INTERVAL, [this](tid id)->bool {this->free_object(); return true;});
+		this->set_timer(TIMER_FREE_SOCKET, 1000 * ASCS_FREE_OBJECT_INTERVAL, [this](tid id)->bool {this->free_object(); return true;});
 #endif
 #ifdef ASCS_CLEAR_OBJECT_INTERVAL
-		set_timer(TIMER_CLEAR_SOCKET, 1000 * ASCS_CLEAR_OBJECT_INTERVAL, [this](tid id)->bool {this->clear_obsoleted_object(); return true;});
+		this->set_timer(TIMER_CLEAR_SOCKET, 1000 * ASCS_CLEAR_OBJECT_INTERVAL, [this](tid id)->bool {this->clear_obsoleted_object(); return true;});
 #endif
 	}
 
-	void stop() {stop_all_timer();}
+	void stop() {this->stop_all_timer();}
 
 	bool add_object(object_ctype& object_ptr)
 	{

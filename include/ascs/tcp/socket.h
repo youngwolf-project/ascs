@@ -42,9 +42,9 @@ protected:
 	void first_init() {status = link_status::BROKEN; unpacker_ = std::make_shared<Unpacker>();}
 
 public:
-	static const timer::tid TIMER_BEGIN = super::TIMER_END;
-	static const timer::tid TIMER_ASYNC_SHUTDOWN = TIMER_BEGIN;
-	static const timer::tid TIMER_END = TIMER_BEGIN + 10;
+	static const typename super::tid TIMER_BEGIN = super::TIMER_END;
+	static const typename super::tid TIMER_ASYNC_SHUTDOWN = TIMER_BEGIN;
+	static const typename super::tid TIMER_END = TIMER_BEGIN + 10;
 
 	virtual bool obsoleted() {return !is_shutting_down() && super::obsoleted();}
 	virtual bool is_ready() {return is_connected();}
@@ -138,7 +138,7 @@ protected:
 			if (ec) //graceful shutdown is impossible
 				shutdown();
 			else if (!sync)
-				this->set_timer(TIMER_ASYNC_SHUTDOWN, 10, [this](timer::tid id)->bool {return this->async_shutdown_handler(ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION * 100);});
+				this->set_timer(TIMER_ASYNC_SHUTDOWN, 10, [this](typename super::tid id)->bool {return this->async_shutdown_handler(ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION * 100);});
 			else
 			{
 				auto loop_num = ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION * 100; //seconds to 10 milliseconds
@@ -297,7 +297,7 @@ private:
 			--loop_num;
 			if (loop_num > 0)
 			{
-				this->update_timer_info(TIMER_ASYNC_SHUTDOWN, 10, [loop_num, this](timer::tid id)->bool {return this->async_shutdown_handler(loop_num);});
+				this->update_timer_info(TIMER_ASYNC_SHUTDOWN, 10, [loop_num, this](typename super::tid id)->bool {return this->async_shutdown_handler(loop_num);});
 				return true;
 			}
 			else

@@ -1,7 +1,7 @@
 /*
- * object.h
+ * stracked_executor.h
  *
- *  Created on: 2016-6-11
+ *  Created on: 2018-4-19
  *      Author: youngwolf
  *		email: mail2tao@163.com
  *		QQ: 676218192
@@ -10,31 +10,21 @@
  * the top class
  */
 
-#ifndef _ASCS_OBJECT_H_
-#define _ASCS_OBJECT_H_
+#ifndef _ASCS_TRACKED_EXECUTOR_H_
+#define _ASCS_TRACKED_EXECUTOR_H_
 
-#include "base.h"
+#include "executor.h"
 
 namespace ascs
 {
-
-class object
+	
+#if 0 == ASCS_DELAY_CLOSE
+class tracked_executor : public executor
 {
 protected:
-	virtual ~object() {}
+	tracked_executor(asio::io_context& io_context_) : executor(io_context_), async_call_indicator(std::make_shared<char>('\0')) {}
 
 public:
-	bool stopped() const {return io_context_.stopped();}
-
-#if ASIO_VERSION >= 101100
-	template <typename F> inline static asio::executor_binder<typename asio::decay<F>::type, asio::io_context::strand> make_strand(asio::io_context::strand& strand, ASIO_MOVE_ARG(F) f)
-		{return asio::bind_executor(strand, ASIO_MOVE_CAST(F)(f));}
-#else
-	template <typename F> static asio::detail::wrapped_handler<asio::io_context::strand, F, asio::detail::is_continuation_if_running> make_strand(asio::io_context::strand& strand, F f)
-		{return strand.wrap(f);}
-#endif
-
-#if 0 == ASCS_DELAY_CLOSE
 	typedef std::function<void(const asio::error_code&)> handler_with_error;
 	typedef std::function<void(const asio::error_code&, size_t)> handler_with_error_size;
 
@@ -80,39 +70,25 @@ public:
 	bool is_last_async_call() const {return async_call_indicator.use_count() <= 2;} //can only be called in callbacks
 	inline void set_async_calling(bool) {}
 
-protected:
-	object(asio::io_context& _io_context_) : async_call_indicator(std::make_shared<char>('\0')), io_context_(_io_context_) {}
+private:
 	std::shared_ptr<char> async_call_indicator;
+};
 #else
-	#if ASIO_VERSION >= 101100
-	template<typename F> void post(F&& handler) {asio::post(io_context_, std::forward<F>(handler));}
-	template<typename F> void defer(F&& handler) {asio::defer(io_context_, std::forward<F>(handler));}
-	template<typename F> void dispatch(F&& handler) {asio::dispatch(io_context_, std::forward<F>(handler));}
-	template<typename F> void post_strand(asio::io_context::strand& strand, F&& handler) {asio::post(strand, std::forward<F>(handler));}
-	template<typename F> void defer_strand(asio::io_context::strand& strand, F&& handler) {asio::defer(strand, std::forward<F>(handler));}
-	template<typename F> void dispatch_strand(asio::io_context::strand& strand, F&& handler) {asio::dispatch(strand, std::forward<F>(handler));}
-	#else
-	template<typename F> void post(F&& handler) {io_context_.post(std::forward<F>(handler));}
-	template<typename F> void dispatch(F&& handler) {io_context_.dispatch(std::forward<F>(handler));}
-	template<typename F> void post_strand(asio::io_context::strand& strand, F&& handler) {strand.post(std::forward<F>(handler));}
-	template<typename F> void dispatch_strand(asio::io_context::strand& strand, F&& handler) {strand.dispatch(std::forward<F>(handler));}
-	#endif
+class tracked_executor : public executor
+{
+protected:
+	tracked_executor(asio::io_context& io_context_) : executor(io_context_), async_calling(false) {}
 
-	template<typename F> inline F&& make_handler_error(F&& f) const {return std::forward<F>(f);}
-	template<typename F> inline F&& make_handler_error_size(F&& f) const {return std::forward<F>(f);}
-
+public:
 	inline bool is_async_calling() const {return async_calling;}
 	inline bool is_last_async_call() const {return true;}
 	inline void set_async_calling(bool value) {async_calling = value;}
 
-protected:
-	object(asio::io_context& _io_context_) : async_calling(false), io_context_(_io_context_) {}
+private:
 	bool async_calling;
-#endif
-
-	asio::io_context& io_context_;
 };
+#endif
 
 } //namespace
 
-#endif /* _ASCS_OBJECT_H_ */
+#endif /* _ASCS_TRACKED_EXECUTOR_H_ */

@@ -14,6 +14,7 @@
 #define _ASCS_SOCKET_H_
 
 #include "timer.h"
+#include "tracked_executor.h"
 
 namespace ascs
 {
@@ -21,10 +22,10 @@ namespace ascs
 template<typename Socket, typename Packer, typename Unpacker, typename InMsgType, typename OutMsgType,
 	template<typename, typename> class InQueue, template<typename> class InContainer,
 	template<typename, typename> class OutQueue, template<typename> class OutContainer>
-class socket : public timer
+class socket : public timer<tracked_executor>
 {
 public:
-	static const tid TIMER_BEGIN = timer::TIMER_END;
+	static const tid TIMER_BEGIN = timer<tracked_executor>::TIMER_END;
 	static const tid TIMER_CHECK_RECV = TIMER_BEGIN;
 	static const tid TIMER_DISPATCH_MSG = TIMER_BEGIN + 1;
 	static const tid TIMER_DELAY_CLOSE = TIMER_BEGIN + 2;
@@ -32,8 +33,8 @@ public:
 	static const tid TIMER_END = TIMER_BEGIN + 10;
 
 protected:
-	socket(asio::io_context& io_context_) : timer(io_context_), next_layer_(io_context_), strand(io_context_) {first_init();}
-	template<typename Arg> socket(asio::io_context& io_context_, Arg& arg) : timer(io_context_), next_layer_(io_context_, arg), strand(io_context_) {first_init();}
+	socket(asio::io_context& io_context_) : timer<tracked_executor>(io_context_), next_layer_(io_context_), strand(io_context_) {first_init();}
+	template<typename Arg> socket(asio::io_context& io_context_, Arg& arg) : timer<tracked_executor>(io_context_), next_layer_(io_context_, arg), strand(io_context_) {first_init();}
 
 	//helper function, just call it in constructor
 	void first_init()
@@ -51,12 +52,12 @@ protected:
 
 	void reset()
 	{
-		auto need_clean_up = is_timer(TIMER_DELAY_CLOSE);
-		stop_all_timer(); //just in case, theoretically, timer TIMER_DELAY_CLOSE and TIMER_ASYNC_SHUTDOWN (used by tcp::socket_base) can left behind.
+		auto need_clean_up = this->is_timer(TIMER_DELAY_CLOSE);
+		this->stop_all_timer(); //just in case, theoretically, timer TIMER_DELAY_CLOSE and TIMER_ASYNC_SHUTDOWN (used by tcp::socket_base) can left behind.
 		if (need_clean_up)
 		{
 			on_close();
-			set_async_calling(false);
+			this->set_async_calling(false);
 		}
 
 		stat.reset();
@@ -88,14 +89,14 @@ public:
 	typename Socket::lowest_layer_type& lowest_layer() {return next_layer().lowest_layer();}
 	const typename Socket::lowest_layer_type& lowest_layer() const {return next_layer().lowest_layer();}
 
-	virtual bool obsoleted() {return !started_ && !is_async_calling();}
+	virtual bool obsoleted() {return !started_ && !this->is_async_calling();}
 	virtual bool is_ready() = 0; //is ready for sending and receiving messages
 	virtual void send_heartbeat() = 0;
 
 	bool started() const {return started_;}
 	void start()
 	{
-		if (!started_ && !is_timer(TIMER_DELAY_CLOSE) && !stopped())
+		if (!started_ && !this->is_timer(TIMER_DELAY_CLOSE) && !stopped())
 		{
 			scope_atomic_lock lock(start_atomic);
 			if (!started_ && lock.locked())
@@ -107,8 +108,8 @@ public:
 	{
 		assert(interval > 0 && max_absence > 0);
 
-		if (!is_timer(TIMER_HEARTBEAT_CHECK))
-			set_timer(TIMER_HEARTBEAT_CHECK, interval * 1000, [=](tid id)->bool {return this->check_heartbeat(interval, max_absence);});
+		if (!this->is_timer(TIMER_HEARTBEAT_CHECK))
+			this->set_timer(TIMER_HEARTBEAT_CHECK, interval * 1000, [=](tid id)->bool {return this->check_heartbeat(interval, max_absence);});
 	}
 
 	//interval's unit is second
@@ -229,7 +230,7 @@ protected:
 			return false;
 
 		started_ = false;
-		stop_all_timer();
+		this->stop_all_timer();
 
 		if (lowest_layer().is_open())
 		{
@@ -246,8 +247,8 @@ protected:
 		}
 		else
 		{
-			set_async_calling(true);
-			set_timer(TIMER_DELAY_CLOSE, ASCS_DELAY_CLOSE * 1000 + 50, [this](tid id)->bool {return this->timer_handler(TIMER_DELAY_CLOSE);});
+			this->set_async_calling(true);
+			this->set_timer(TIMER_DELAY_CLOSE, ASCS_DELAY_CLOSE * 1000 + 50, [this](tid id)->bool {return this->timer_handler(TIMER_DELAY_CLOSE);});
 		}
 
 		return true;
@@ -275,7 +276,7 @@ protected:
 		if (check_receiving(false))
 			return true;
 
-		set_timer(TIMER_CHECK_RECV, msg_resuming_interval_, [this](tid id)->bool {return this->timer_handler(TIMER_CHECK_RECV);});
+		this->set_timer(TIMER_CHECK_RECV, msg_resuming_interval_, [this](tid id)->bool {return this->timer_handler(TIMER_CHECK_RECV);});
 #endif
 		return false;
 	}
@@ -329,7 +330,7 @@ private:
 		return false;
 	}
 
-	void dispatch_msg() {if (!dispatching) this->dispatch_strand(strand, [this]() {this->do_dispatch_msg();});}
+	void dispatch_msg() {if (!dispatching) dispatch_strand(strand, [this]() {this->do_dispatch_msg();});}
 	void do_dispatch_msg()
 	{
 		if (dispatching)
@@ -346,7 +347,7 @@ private:
 			if (!re) //dispatch failed, re-dispatch
 			{
 				last_dispatch_msg.restart(end_time);
-				set_timer(TIMER_DISPATCH_MSG, msg_handling_interval_, [this](tid id)->bool {return this->timer_handler(TIMER_DISPATCH_MSG);}); //hold dispatching
+				this->set_timer(TIMER_DISPATCH_MSG, msg_handling_interval_, [this](tid id)->bool {return this->timer_handler(TIMER_DISPATCH_MSG);}); //hold dispatching
 			}
 			else //dispatch msg in sequence
 			{
@@ -369,9 +370,9 @@ private:
 			dispatch_msg();
 			break;
 		case TIMER_DELAY_CLOSE:
-			if (!is_last_async_call())
+			if (!this->is_last_async_call())
 			{
-				stop_all_timer(TIMER_DELAY_CLOSE);
+				this->stop_all_timer(TIMER_DELAY_CLOSE);
 				return true;
 			}
 			else if (lowest_layer().is_open())
@@ -379,10 +380,10 @@ private:
 				asio::error_code ec;
 				lowest_layer().close(ec);
 			}
-			change_timer_status(TIMER_DELAY_CLOSE, timer_info::TIMER_CANCELED);
+			this->change_timer_status(TIMER_DELAY_CLOSE, timer_info::TIMER_CANCELED);
 			on_close();
 			after_close();
-			set_async_calling(false);
+			this->set_async_calling(false);
 			break;
 		default:
 			assert(false);
