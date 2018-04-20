@@ -43,14 +43,14 @@ protected:
 	void start()
 	{
 #if !defined(ASCS_REUSE_OBJECT) && !defined(ASCS_RESTORE_OBJECT)
-		this->set_timer(TIMER_FREE_SOCKET, 1000 * ASCS_FREE_OBJECT_INTERVAL, [this](tid id)->bool {this->free_object(); return true;});
+		set_timer(TIMER_FREE_SOCKET, 1000 * ASCS_FREE_OBJECT_INTERVAL, [this](tid id)->bool {this->free_object(); return true;});
 #endif
 #ifdef ASCS_CLEAR_OBJECT_INTERVAL
-		this->set_timer(TIMER_CLEAR_SOCKET, 1000 * ASCS_CLEAR_OBJECT_INTERVAL, [this](tid id)->bool {this->clear_obsoleted_object(); return true;});
+		set_timer(TIMER_CLEAR_SOCKET, 1000 * ASCS_CLEAR_OBJECT_INTERVAL, [this](tid id)->bool {this->clear_obsoleted_object(); return true;});
 #endif
 	}
 
-	void stop() {this->stop_all_timer();}
+	void stop() {stop_all_timer();}
 
 	bool add_object(object_ctype& object_ptr)
 	{
