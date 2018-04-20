@@ -382,6 +382,9 @@ static_assert(ASIO_VERSION >= 101001, "ascs needs asio 1.10.1 or higher.");
 
 #if ASIO_VERSION < 101100
 namespace asio {typedef io_service io_context;}
+#define make_strand_handler(S, F) S.wrap(F)
+#else
+#define make_strand_handler(S, F) asio::bind_executor(S, F)
 #endif
 //asio and compiler check
 
