@@ -146,7 +146,7 @@ private:
 		if (0 == asio::buffer_size(recv_buff))
 			unified_out::error_out("The unpacker returned an empty buffer, quit receiving!");
 		else
-			this->next_layer().async_receive_from(recv_buff, temp_addr, this->make_strand(strand,
+			this->next_layer().async_receive_from(recv_buff, temp_addr, make_strand(strand,
 				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);})));
 	}
 
@@ -186,7 +186,7 @@ private:
 			this->stat.send_delay_sum += statistic::now() - last_send_msg.begin_time;
 
 			last_send_msg.restart();
-			this->next_layer().async_send_to(ASCS_SEND_BUFFER_TYPE(last_send_msg.data(), last_send_msg.size()), last_send_msg.peer_addr, this->make_strand(strand,
+			this->next_layer().async_send_to(ASCS_SEND_BUFFER_TYPE(last_send_msg.data(), last_send_msg.size()), last_send_msg.peer_addr, make_strand(strand,
 				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);})));
 			return true;
 		}

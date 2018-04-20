@@ -30,8 +30,7 @@ public:
 	bool stopped() const {return io_context_.stopped();}
 
 #if ASIO_VERSION >= 101100
-	template <typename F> inline static asio::executor_binder<typename asio::decay<F>::type, asio::io_context::strand> make_strand(asio::io_context::strand& strand, ASIO_MOVE_ARG(F) f)
-		{return asio::bind_executor(strand, ASIO_MOVE_CAST(F)(f));}
+	#define make_strand(STRAND, F) asio::bind_executor(STRAND, F)
 
 	template<typename F> void post(F&& handler) {asio::post(io_context_, std::forward<F>(handler));}
 	template<typename F> void defer(F&& handler) {asio::defer(io_context_, std::forward<F>(handler));}
@@ -40,8 +39,7 @@ public:
 	template<typename F> void defer_strand(asio::io_context::strand& strand, F&& handler) {asio::defer(strand, std::forward<F>(handler));}
 	template<typename F> void dispatch_strand(asio::io_context::strand& strand, F&& handler) {asio::dispatch(strand, std::forward<F>(handler));}
 #else
-	template <typename F> static asio::detail::wrapped_handler<asio::io_context::strand, F, asio::detail::is_continuation_if_running> make_strand(asio::io_context::strand& strand, F f)
-		{return strand.wrap(f);}
+	#define make_strand(STRAND, F) STRAND.wrap(F)
 
 	template<typename F> void post(F&& handler) {io_context_.post(std::forward<F>(handler));}
 	template<typename F> void dispatch(F&& handler) {io_context_.dispatch(std::forward<F>(handler));}

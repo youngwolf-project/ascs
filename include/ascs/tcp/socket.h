@@ -197,7 +197,7 @@ private:
 			unified_out::error_out("The unpacker returned an empty buffer, quit receiving!");
 		else
 			asio::async_read(this->next_layer(), recv_buff,
-				[this](const asio::error_code& ec, size_t bytes_transferred)->size_t {return this->completion_checker(ec, bytes_transferred);}, this->make_strand(strand,
+				[this](const asio::error_code& ec, size_t bytes_transferred)->size_t {return this->completion_checker(ec, bytes_transferred);}, make_strand(strand,
 					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);})));
 	}
 
@@ -253,7 +253,7 @@ private:
 		if ((this->sending = !bufs.empty()))
 		{
 			last_send_msg.front().restart();
-			asio::async_write(this->next_layer(), bufs, this->make_strand(strand,
+			asio::async_write(this->next_layer(), bufs, make_strand(strand,
 				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);})));
 			return true;
 		}
