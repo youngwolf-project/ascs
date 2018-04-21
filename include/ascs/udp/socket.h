@@ -124,7 +124,7 @@ private:
 #ifndef ASCS_RECV_AFTER_HANDLING
 	virtual void recv_msg() {this->dispatch_strand(strand, [this]() {this->do_recv_msg();});}
 #endif
-	virtual void send_msg() {if (!this->sending) this->dispatch_strand(strand, [this]() {this->do_send_msg(false);});}
+	virtual void send_msg() {this->dispatch_strand(strand, [this]() {this->do_send_msg(false);});}
 
 	void shutdown()
 	{
@@ -227,7 +227,7 @@ private:
 		//on windows, sending a msg to addr_any may cause errors, please note
 		//for UDP, sending error will not stop subsequent sendings.
 		if (!do_send_msg(true) && !this->send_msg_buffer.empty())
-			send_msg(); //just make sure no pending msgs
+			do_send_msg(true); //just make sure no pending msgs
 	}
 
 	bool set_addr(asio::ip::udp::endpoint& endpoint, unsigned short port, const std::string& ip)

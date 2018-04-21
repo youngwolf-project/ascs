@@ -174,7 +174,7 @@ private:
 #ifndef ASCS_RECV_AFTER_HANDLING
 	virtual void recv_msg() {this->dispatch_strand(strand, [this]() {this->do_recv_msg();});}
 #endif
-	virtual void send_msg() {if (!this->sending) this->dispatch_strand(strand, [this]() {this->do_send_msg(false);});}
+	virtual void send_msg() {this->dispatch_strand(strand, [this]() {this->do_send_msg(false);});}
 
 	void shutdown()
 	{
@@ -279,7 +279,7 @@ private:
 #endif
 			last_send_msg.clear();
 			if (!do_send_msg(true) && !this->send_msg_buffer.empty()) //send msg in sequence
-				send_msg(); //just make sure no pending msgs
+				do_send_msg(true); //just make sure no pending msgs
 		}
 		else
 		{
