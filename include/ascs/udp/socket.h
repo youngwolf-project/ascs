@@ -169,7 +169,7 @@ private:
 
 	void recv_handler(const asio::error_code& ec, size_t bytes_transferred)
 	{
-		bool keep_reading = false;
+		auto keep_reading = false;
 		if (!ec && bytes_transferred > 0)
 		{
 			this->stat.last_recv_time = time(nullptr);

@@ -329,6 +329,7 @@
  * ENHANCEMENTS:
  * Explicitly define macro ASCS_PASSIVE_RECV to gain the ability of changing the unpacker at runtime.
  * Add function ascs::socket::is_reading() if macro ASCS_PASSIVE_RECV been defined, otherwise, the socket will always be reading.
+ * Add function ascs::socket::is_recv_buffer_available(), you can use it before calling recv_msg() to avoid receiving buffer overflow.
  *
  * DELETION:
  * Deleted virtual function bool ascs::socket::on_msg().
@@ -624,6 +625,7 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 //#define ASCS_PASSIVE_RECV
 //to gain the ability of changing the unpacker at runtime, with this mcro, ascs will not do message receiving automatically (except the firt one),
 //user need to call ascs::socket::recv_msg(), if you need to change the unpacker, do it before recv_msg() invocation, please note.
+//because user can call recv_msg() at any time, it's your responsibility to keep the recv buffer not overflowed, please pay special attention.
 
 //configurations
 
