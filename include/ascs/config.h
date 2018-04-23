@@ -321,7 +321,7 @@
  * ascs::socket::is_dispatching_msg() has been renamed to is_dispatching().
  *
  * HIGHLIGHT:
- * After introduced asio::io_context::strand (which is required, see FIX section for more details), we wiped an atomic in ascs::socket.
+ * After introduced asio::io_context::strand (which is required, see FIX section for more details), we wiped two atomic in ascs::socket.
  *
  * FIX:
  * Wiped race condition between async_read and async_write on the same ascs::socket, so sync sending mode will not be supported anymore.
