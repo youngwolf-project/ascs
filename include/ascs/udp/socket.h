@@ -33,7 +33,7 @@ private:
 	typedef socket<Socket, Packer, Unpacker, in_msg_type, out_msg_type, InQueue, InContainer, OutQueue, OutContainer> super;
 
 public:
-	socket_base(asio::io_context& io_context_) : super(io_context_), unpacker_(std::make_shared<Unpacker>()), strand(io_context_) {}
+	socket_base(asio::io_context& io_context_) : super(io_context_), unpacker_(std::make_shared<Unpacker>()) {}
 
 	virtual bool is_ready() {return this->lowest_layer().is_open();}
 	virtual void send_heartbeat()
@@ -67,7 +67,7 @@ public:
 	const asio::ip::udp::endpoint& get_peer_addr() const {return peer_addr;}
 
 	void disconnect() {force_shutdown();}
-	void force_shutdown() {show_info("link:", "been shutting down."); this->dispatch_strand(strand, [this]() {this->shutdown();});}
+	void force_shutdown() {show_info("link:", "been shutting down."); this->dispatch_strand(this->get_strand(), [this]() {this->shutdown();});}
 	void graceful_shutdown() {force_shutdown();}
 
 	void show_info(const char* head, const char* tail) const {unified_out::info_out("%s %s:%hu %s", head, local_addr.address().to_string().data(), local_addr.port(), tail);}
@@ -77,9 +77,17 @@ public:
 		unified_out::info_out(
 			"\n\tid: " ASCS_LLF
 			"\n\tstarted: %d"
+			"\n\tsending: %d"
+#ifdef ASCS_PASSIVE_RECV
+			"\n\treading: %d"
+#endif
 			"\n\tdispatching: %d"
 			"\n\trecv suspended: %d",
-			this->id(), this->started(), this->is_dispatching_msg(), this->is_recv_idle());
+			this->id(), this->started(), this->is_sending(),
+#ifdef ASCS_PASSIVE_RECV
+			this->is_reading(),
+#endif
+			this->is_dispatching(), this->is_recv_idle());
 	}
 
 	//get or change the unpacker at runtime
@@ -87,10 +95,10 @@ public:
 	//we can resolve this defect via mutex, but i think it's not worth, because this feature is not frequently used
 	std::shared_ptr<i_unpacker<typename Unpacker::msg_type>> unpacker() {return unpacker_;}
 	std::shared_ptr<const i_unpacker<typename Unpacker::msg_type>> unpacker() const {return unpacker_;}
-#ifdef ASCS_RECV_AFTER_HANDLING
-	//changing unpacker must before calling ascs::socket::recv_msg, and define ASCS_RECV_AFTER_HANDLING macro.
+#ifdef ASCS_PASSIVE_RECV
+	//changing unpacker must before calling ascs::socket::recv_msg, and define ASCS_PASSIVE_RECV macro.
 	void unpacker(const std::shared_ptr<i_unpacker<typename Unpacker::msg_type>>& _unpacker_) {unpacker_ = _unpacker_;}
-	virtual void recv_msg() {this->dispatch_strand(strand, [this]() {this->do_recv_msg();});}
+	using super::recv_msg;
 #endif
 
 	///////////////////////////////////////////////////
@@ -121,11 +129,44 @@ protected:
 	virtual bool on_msg_handle(out_msg_type& msg) {unified_out::debug_out("recv(" ASCS_SF "): %s", msg.size(), msg.data()); return true;}
 
 private:
-#ifndef ASCS_RECV_AFTER_HANDLING
-	virtual void recv_msg() {this->dispatch_strand(strand, [this]() {this->do_recv_msg();});}
+	virtual void do_recv_msg()
+	{
+#ifdef ASCS_PASSIVE_RECV
+		if (this->reading)
+			return;
 #endif
-	virtual void send_msg() {this->dispatch_strand(strand, [this]() {this->do_send_msg(false);});}
+		auto recv_buff = unpacker_->prepare_next_recv();
+		assert(asio::buffer_size(recv_buff) > 0);
+		if (0 == asio::buffer_size(recv_buff))
+			unified_out::error_out("The unpacker returned an empty buffer, quit receiving!");
+		else
+		{
+#ifdef ASCS_PASSIVE_RECV
+			this->reading = true;
+#endif
+			this->next_layer().async_receive_from(recv_buff, temp_addr, make_strand_handler(this->get_strand(),
+				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);})));
+		}
+	}
 
+	virtual bool do_send_msg(bool in_strand)
+	{
+		if (!in_strand && this->sending)
+			return true;
+
+		if ((this->sending = this->send_msg_buffer.try_dequeue(last_send_msg)))
+		{
+			this->stat.send_delay_sum += statistic::now() - last_send_msg.begin_time;
+
+			last_send_msg.restart();
+			this->next_layer().async_send_to(ASCS_SEND_BUFFER_TYPE(last_send_msg.data(), last_send_msg.size()), last_send_msg.peer_addr, make_strand_handler(this->get_strand(),
+				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);})));
+			return true;
+		}
+
+		return false;
+	}
+	
 	void shutdown()
 	{
 		this->stop_all_timer();
@@ -139,19 +180,9 @@ private:
 		}
 	}
 
-	void do_recv_msg()
-	{
-		auto recv_buff = unpacker_->prepare_next_recv();
-		assert(asio::buffer_size(recv_buff) > 0);
-		if (0 == asio::buffer_size(recv_buff))
-			unified_out::error_out("The unpacker returned an empty buffer, quit receiving!");
-		else
-			this->next_layer().async_receive_from(recv_buff, temp_addr, make_strand_handler(strand,
-				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);})));
-	}
-
 	void recv_handler(const asio::error_code& ec, size_t bytes_transferred)
 	{
+		bool keep_reading = false;
 		if (!ec && bytes_transferred > 0)
 		{
 			this->stat.last_recv_time = time(nullptr);
@@ -165,33 +196,24 @@ private:
 				temp_msg_can.emplace_back(out_msg_type(temp_addr, std::move(msg)));
 			}
 
-			if (this->handle_msg(temp_msg_can))
-				do_recv_msg(); //receive msg in sequence
+			keep_reading = this->handle_msg(temp_msg_can);
 		}
 #ifdef _MSC_VER
 		else if (asio::error::connection_refused == ec || asio::error::connection_reset == ec)
-			do_recv_msg();
+#ifndef ASCS_PASSIVE_RECV
+			keep_reading = true
+#endif
+			;
 #endif
 		else
 			on_recv_error(ec);
-	}
 
-	bool do_send_msg(bool in_strand)
-	{
-		if (!in_strand && this->sending)
-			return true;
-
-		if ((this->sending = this->send_msg_buffer.try_dequeue(last_send_msg)))
-		{
-			this->stat.send_delay_sum += statistic::now() - last_send_msg.begin_time;
-
-			last_send_msg.restart();
-			this->next_layer().async_send_to(ASCS_SEND_BUFFER_TYPE(last_send_msg.data(), last_send_msg.size()), last_send_msg.peer_addr, make_strand_handler(strand,
-				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);})));
-			return true;
-		}
-
-		return false;
+		if (keep_reading)
+			do_recv_msg(); //receive msg in sequence
+#ifdef ASCS_PASSIVE_RECV
+		else
+			this->reading = false;
+#endif
 	}
 
 	void send_handler(const asio::error_code& ec, size_t bytes_transferred)
@@ -257,9 +279,6 @@ protected:
 	asio::ip::udp::endpoint local_addr;
 	asio::ip::udp::endpoint temp_addr; //used when receiving messages
 	asio::ip::udp::endpoint peer_addr;
-
-private:
-	asio::io_context::strand strand;
 };
 
 }} //namespace

@@ -42,12 +42,16 @@ protected:
 		_id = -1;
 		packer_ = std::make_shared<Packer>();
 		sending = false;
+#ifdef ASCS_PASSIVE_RECV
+		reading = false;
+#endif
 		started_ = false;
 		dispatching = false;
 		recv_idle_began = false;
 		msg_resuming_interval_ = ASCS_MSG_RESUMING_INTERVAL;
 		msg_handling_interval_ = ASCS_MSG_HANDLING_INTERVAL;
 		start_atomic.clear(std::memory_order_relaxed);
+		dispatch_atomic.clear(std::memory_order_relaxed);
 	}
 
 	void reset()
@@ -63,6 +67,9 @@ protected:
 		stat.reset();
 		packer_->reset();
 		sending = false;
+#ifdef ASCS_PASSIVE_RECV
+		reading = false;
+#endif
 		dispatching = false;
 		recv_idle_began = false;
 		clear_buffer();
@@ -104,6 +111,10 @@ public:
 		}
 	}
 
+#ifdef ASCS_PASSIVE_RECV
+	void recv_msg() {if (!reading && is_ready()) dispatch_strand(strand, [this]() {this->do_recv_msg();});}
+#endif
+
 	void start_heartbeat(int interval, int max_absence = ASCS_HEARTBEAT_MAX_ABSENCE)
 	{
 		assert(interval > 0 && max_absence > 0);
@@ -127,16 +138,19 @@ public:
 				if (!on_heartbeat_error())
 					return false;
 
-			if (!is_sending_msg() && now - stat.last_send_time >= interval) //don't need to send heartbeat if we're sending messages
+			if (!sending && now - stat.last_send_time >= interval) //don't need to send heartbeat if we're sending messages
 				send_heartbeat();
 		}
 
 		return true;
 	}
 
-	bool is_sending_msg() const {return sending;}
+	bool is_sending() const {return sending;}
+#ifdef ASCS_PASSIVE_RECV
+	bool is_reading() const {return reading;}
+#endif
+	bool is_dispatching() const {return dispatching;}
 	bool is_recv_idle() const {return recv_idle_began;}
-	bool is_dispatching_msg() const {return dispatching;}
 
 	void msg_resuming_interval(size_t interval) {msg_resuming_interval_ = interval;}
 	size_t msg_resuming_interval() const {return msg_resuming_interval_;}
@@ -185,8 +199,8 @@ protected:
 		start_heartbeat(ASCS_HEARTBEAT_INTERVAL);
 #endif
 		assert(is_ready());
-		send_msg(); //send buffer may have msgs, send them
 		recv_msg();
+		send_msg(); //send buffer may have msgs, send them
 
 		return true;
 	}
@@ -254,6 +268,8 @@ protected:
 		return true;
 	}
 
+	asio::io_context::strand& get_strand() {return strand;}
+
 	template<typename T> bool handle_msg(T& temp_msg_can)
 	{
 		auto msg_num = temp_msg_can.size();
@@ -272,7 +288,7 @@ protected:
 			dispatch_msg();
 		}
 
-#ifndef ASCS_RECV_AFTER_HANDLING
+#ifndef ASCS_PASSIVE_RECV
 		if (check_receiving(false))
 			return true;
 
@@ -299,8 +315,13 @@ protected:
 	}
 
 private:
-	virtual void recv_msg() = 0;
-	virtual void send_msg() = 0;
+	virtual void do_recv_msg() = 0;
+	virtual bool do_send_msg(bool in_strand) = 0;
+
+#ifndef ASCS_PASSIVE_RECV
+	void recv_msg() {dispatch_strand(strand, [this]() {this->do_recv_msg();});}
+#endif
+	void send_msg() {dispatch_strand(strand, [this]() {this->do_send_msg(false);});}
 
 	//please do not change id at runtime via the following function, except this socket is not managed by object_pool,
 	//it should only be used by object_pool when reusing or creating new socket.
@@ -331,32 +352,53 @@ private:
 		return false;
 	}
 
-	//do not use dispatch_strand at here, because the handler (do_dispatch_msg) may call this function, which can lead stack overflow.
-	void dispatch_msg() {if (!dispatching) post_strand(strand, [this]() {this->do_dispatch_msg();});}
-	void do_dispatch_msg()
+	bool lock_dispatching_flag()
 	{
-		if ((dispatching = !last_dispatch_msg.empty() || recv_msg_buffer.try_dequeue(last_dispatch_msg)))
+		if (!dispatching)
 		{
-			auto begin_time = statistic::now();
-			stat.dispatch_dealy_sum += begin_time - last_dispatch_msg.begin_time;
-			auto re = on_msg_handle(last_dispatch_msg); //must before next msg dispatching to keep sequence
-			auto end_time = statistic::now();
-			stat.handle_time_sum += end_time - begin_time;
+			scope_atomic_lock lock(dispatch_atomic);
+			if (!dispatching && lock.locked())
+				return (dispatching = true);
+		}
 
-			if (!re) //dispatch failed, re-dispatch
+		return false;
+	}
+
+	bool dispatch_msg() {if (lock_dispatching_flag() && !do_dispatch_msg()) dispatching = false; return dispatching;}
+	bool do_dispatch_msg()
+	{
+		if (!last_dispatch_msg.empty() || recv_msg_buffer.try_dequeue(last_dispatch_msg))
+		{
+			post([this]() {this->msg_handler();});
+			return true;
+		}
+
+		return false;
+	}
+
+	void msg_handler()
+	{
+		auto begin_time = statistic::now();
+		stat.dispatch_dealy_sum += begin_time - last_dispatch_msg.begin_time;
+		auto re = on_msg_handle(last_dispatch_msg); //must before next msg dispatching to keep sequence
+		auto end_time = statistic::now();
+		stat.handle_time_sum += end_time - begin_time;
+
+		if (!re) //dispatch failed, re-dispatch
+		{
+			last_dispatch_msg.restart(end_time);
+			set_timer(TIMER_DISPATCH_MSG, msg_handling_interval_, [this](tid id)->bool {return this->timer_handler(TIMER_DISPATCH_MSG);}); //hold dispatching
+		}
+		else //dispatch msg in sequence
+		{
+			last_dispatch_msg.clear();
+			if (!do_dispatch_msg())
 			{
-				last_dispatch_msg.restart(end_time);
-				set_timer(TIMER_DISPATCH_MSG, msg_handling_interval_, [this](tid id)->bool {return this->timer_handler(TIMER_DISPATCH_MSG);}); //hold dispatching
-			}
-			else //dispatch msg in sequence
-			{
-				last_dispatch_msg.clear();
 				dispatching = false;
-				dispatch_msg(); //just make sure no pending msgs
+				if (!recv_msg_buffer.empty())
+					dispatch_msg(); //just make sure no pending msgs
 			}
 		}
-		else if (!recv_msg_buffer.empty())
-			dispatch_msg(); //just make sure no pending msgs
 	}
 
 	bool timer_handler(tid id)
@@ -401,6 +443,10 @@ protected:
 	volatile bool sending;
 	in_container_type send_msg_buffer;
 
+#ifdef ASCS_PASSIVE_RECV
+	volatile bool reading;
+#endif
+
 	struct statistic stat;
 
 private:
@@ -414,8 +460,10 @@ private:
 	typename statistic::stat_time recv_idle_begin_time;
 	bool recv_idle_began;
 
-	volatile bool dispatching;
 	asio::io_context::strand strand;
+
+	volatile bool dispatching;
+	std::atomic_flag dispatch_atomic;
 
 	size_t msg_resuming_interval_, msg_handling_interval_;
 };

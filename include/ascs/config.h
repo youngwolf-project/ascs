@@ -310,35 +310,37 @@
  *
  * SPECIAL ATTENTION (incompatible with old editions):
  * Not support sync sending mode anymore.
- * Explicitly need macro ASCS_RECV_AFTER_HANDLING to gain the ability of changing the unpacker at runtime.
+ * Explicitly need macro ASCS_PASSIVE_RECV to gain the ability of changing the unpacker at runtime.
  * Function disconnect, force_shutdown and graceful_shutdown in udp::socket_base will now be performed asynchronously.
  * Not support macro ASCS_FORCE_TO_USE_MSG_RECV_BUFFER anymore, which means now we have the behavior as this macro always defined,
  *  thus, virtual function ascs::socket::on_msg() is useless and also has been deleted.
  * statistic.handle_time_2_sum has been renamed to handle_time_sum.
+ * Macro ASCS_MSG_HANDLING_INTERVAL_STEP1 has been renamed to ASCS_MSG_RESUMING_INTERVAL.
+ * Macro ASCS_MSG_HANDLING_INTERVAL_STEP2 has been renamed to ASCS_MSG_HANDLING_INTERVAL.
+ * ascs::socket::is_sending_msg() has been renamed to is_sending().
+ * ascs::socket::is_dispatching_msg() has been renamed to is_dispatching().
  *
  * HIGHLIGHT:
- * Because of introduction of asio::io_context::strand (which is required, see FIX section for more details), we wiped two atomic in ascs::socket.
+ * After introduced asio::io_context::strand (which is required, see FIX section for more details), we wiped an atomic in ascs::socket.
  *
  * FIX:
  * Wiped race condition between async_read and async_write on the same ascs::socket, so sync sending mode will not be supported anymore.
  *
  * ENHANCEMENTS:
- * Explicitly define macro ASCS_RECV_AFTER_HANDLING to gain the ability of changing the unpacker at runtime.
+ * Explicitly define macro ASCS_PASSIVE_RECV to gain the ability of changing the unpacker at runtime.
+ * Add function ascs::socket::is_reading() if macro ASCS_PASSIVE_RECV been defined, otherwise, the socket will always be reading.
  *
  * DELETION:
  * Deleted virtual function bool ascs::socket::on_msg().
  * Not support sync sending mode anymore, so we reduced an atomic object in ascs::socket.
  *
  * REFACTORING:
- * If you want to change unpacker at runtime, first, you must define macro ASCS_RECV_AFTER_HANDLING, second, you must call ascs::socket::recv_msg and
+ * If you want to change unpacker at runtime, first, you must define macro ASCS_PASSIVE_RECV, second, you must call ascs::socket::recv_msg and
  *  guarantee only zero or one recv_msg invocation (include initiating and asynchronous operation, this may need mutex, please carefully design your logic),
  *  see file_client for more details.
  * Class object has been split into executor and tracked_executor, object_pool use the former, and ascs::socket use the latter.
  *
  * REPLACEMENTS:
- * Renamed macro ASCS_MSG_HANDLING_INTERVAL_STEP1 to ASCS_MSG_RESUMING_INTERVAL.
- * Renamed macro ASCS_MSG_HANDLING_INTERVAL_STEP2 to ASCS_MSG_HANDLING_INTERVAL.
- * Renamed statistic.handle_time_2_sum to handle_time_sum.
  *
  */
 
@@ -619,10 +621,9 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 //call on_msg_handle, if failed, retry it after ASCS_MSG_HANDLING_INTERVAL milliseconds later.
 //this value can be changed via ascs::socket::msg_handling_interval(size_t) at runtime.
 
-//#define ASCS_RECV_AFTER_HANDLING
+//#define ASCS_PASSIVE_RECV
 //to gain the ability of changing the unpacker at runtime, with this mcro, ascs will not do message receiving automatically (except the firt one),
 //user need to call ascs::socket::recv_msg(), if you need to change the unpacker, do it before recv_msg() invocation, please note.
-//because user can call recv_msg() at any time, it's your responsibility to keep the recv buffer not overflowed, please pay special attention.
 
 //configurations
 

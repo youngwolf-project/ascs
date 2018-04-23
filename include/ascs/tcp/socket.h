@@ -35,8 +35,8 @@ private:
 protected:
 	enum link_status {CONNECTED, FORCE_SHUTTING_DOWN, GRACEFUL_SHUTTING_DOWN, BROKEN};
 
-	socket_base(asio::io_context& io_context_) : super(io_context_), strand(io_context_) {first_init();}
-	template<typename Arg> socket_base(asio::io_context& io_context_, Arg& arg) : super(io_context_, arg), strand(io_context_) {first_init();}
+	socket_base(asio::io_context& io_context_) : super(io_context_) {first_init();}
+	template<typename Arg> socket_base(asio::io_context& io_context_, Arg& arg) : super(io_context_, arg) {first_init();}
 
 	//helper function, just call it in constructor
 	void first_init() {status = link_status::BROKEN; unpacker_ = std::make_shared<Unpacker>();}
@@ -97,19 +97,27 @@ public:
 		unified_out::info_out(
 			"\n\tid: " ASCS_LLF
 			"\n\tstarted: %d"
-			"\n\tlink status: %d"
+			"\n\tsending: %d"
+#ifdef ASCS_PASSIVE_RECV
+			"\n\treading: %d"
+#endif
 			"\n\tdispatching: %d"
+			"\n\tlink status: %d"
 			"\n\trecv suspended: %d",
-			this->id(), this->started(), status, this->is_dispatching_msg(), this->is_recv_idle());
+			this->id(), this->started(), this->is_sending(),
+#ifdef ASCS_PASSIVE_RECV
+			this->is_reading(),
+#endif
+			this->is_dispatching(), status, this->is_recv_idle());
 	}
 
 	//get or change the unpacker at runtime
 	std::shared_ptr<i_unpacker<out_msg_type>> unpacker() {return unpacker_;}
 	std::shared_ptr<const i_unpacker<out_msg_type>> unpacker() const {return unpacker_;}
-#ifdef ASCS_RECV_AFTER_HANDLING
-	//changing unpacker must before calling ascs::socket::recv_msg, and define ASCS_RECV_AFTER_HANDLING macro.
+#ifdef ASCS_PASSIVE_RECV
+	//changing unpacker must before calling ascs::socket::recv_msg, and define ASCS_PASSIVE_RECV macro.
 	void unpacker(const std::shared_ptr<i_unpacker<out_msg_type>>& _unpacker_) {unpacker_ = _unpacker_;}
-	virtual void recv_msg() {this->dispatch_strand(strand, [this]() {this->do_recv_msg();});}
+	using super::recv_msg;
 #endif
 
 	///////////////////////////////////////////////////
@@ -171,58 +179,28 @@ protected:
 	virtual bool on_msg_handle(out_msg_type& msg) {unified_out::debug_out("recv(" ASCS_SF "): %s", msg.size(), msg.data()); return true;}
 
 private:
-#ifndef ASCS_RECV_AFTER_HANDLING
-	virtual void recv_msg() {this->dispatch_strand(strand, [this]() {this->do_recv_msg();});}
+	virtual void do_recv_msg()
+	{
+#ifdef ASCS_PASSIVE_RECV
+		if (this->reading)
+			return;
 #endif
-	virtual void send_msg() {this->dispatch_strand(strand, [this]() {this->do_send_msg(false);});}
-
-	void shutdown()
-	{
-		if (!is_broken())
-			status = link_status::FORCE_SHUTTING_DOWN; //not thread safe because of this assignment
-		this->close();
-	}
-
-	size_t completion_checker(const asio::error_code& ec, size_t bytes_transferred)
-	{
-		auto_duration dur(this->stat.unpack_time_sum);
-		return this->unpacker_->completion_condition(ec, bytes_transferred);
-	}
-
-	void do_recv_msg()
-	{
 		auto recv_buff = unpacker_->prepare_next_recv();
 		assert(asio::buffer_size(recv_buff) > 0);
 		if (0 == asio::buffer_size(recv_buff))
 			unified_out::error_out("The unpacker returned an empty buffer, quit receiving!");
 		else
-			asio::async_read(this->next_layer(), recv_buff,
-				[this](const asio::error_code& ec, size_t bytes_transferred)->size_t {return this->completion_checker(ec, bytes_transferred);}, make_strand_handler(strand,
-					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);})));
-	}
-
-	void recv_handler(const asio::error_code& ec, size_t bytes_transferred)
-	{
-		if (!ec && bytes_transferred > 0)
 		{
-			this->stat.last_recv_time = time(nullptr);
-
-			typename Unpacker::container_type temp_msg_can;
-			auto_duration dur(this->stat.unpack_time_sum);
-			auto unpack_ok = unpacker_->parse_msg(bytes_transferred, temp_msg_can);
-			dur.end();
-
-			if (this->handle_msg(temp_msg_can))
-				do_recv_msg(); //receive msg in sequence
-
-			if (!unpack_ok)
-				on_unpack_error(); //the user will decide whether to reset the unpacker or not in this callback
+#ifdef ASCS_PASSIVE_RECV
+			this->reading = true;
+#endif
+			asio::async_read(this->next_layer(), recv_buff,
+				[this](const asio::error_code& ec, size_t bytes_transferred)->size_t {return this->completion_checker(ec, bytes_transferred);}, make_strand_handler(this->get_strand(),
+					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);})));
 		}
-		else
-			this->on_recv_error(ec);
 	}
 
-	bool do_send_msg(bool in_strand)
+	virtual bool do_send_msg(bool in_strand)
 	{
 		if (!in_strand && this->sending)
 			return true;
@@ -253,12 +231,52 @@ private:
 		if ((this->sending = !bufs.empty()))
 		{
 			last_send_msg.front().restart();
-			asio::async_write(this->next_layer(), bufs, make_strand_handler(strand,
+			asio::async_write(this->next_layer(), bufs, make_strand_handler(this->get_strand(),
 				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);})));
 			return true;
 		}
 
 		return false;
+	}
+
+	void shutdown()
+	{
+		if (!is_broken())
+			status = link_status::FORCE_SHUTTING_DOWN; //not thread safe because of this assignment
+		this->close();
+	}
+
+	size_t completion_checker(const asio::error_code& ec, size_t bytes_transferred)
+	{
+		auto_duration dur(this->stat.unpack_time_sum);
+		return this->unpacker_->completion_condition(ec, bytes_transferred);
+	}
+
+	void recv_handler(const asio::error_code& ec, size_t bytes_transferred)
+	{
+		bool keep_reading = false;
+		if (!ec && bytes_transferred > 0)
+		{
+			this->stat.last_recv_time = time(nullptr);
+
+			typename Unpacker::container_type temp_msg_can;
+			auto_duration dur(this->stat.unpack_time_sum);
+			auto unpack_ok = unpacker_->parse_msg(bytes_transferred, temp_msg_can);
+			dur.end();
+
+			keep_reading = this->handle_msg(temp_msg_can);
+			if (!unpack_ok)
+				on_unpack_error(); //the user will decide whether to reset the unpacker or not in this callback
+		}
+		else
+			this->on_recv_error(ec);
+
+		if (keep_reading)
+			do_recv_msg(); //receive msg in sequence
+#ifdef ASCS_PASSIVE_RECV
+		else
+			this->reading = false;
+#endif
 	}
 
 	void send_handler(const asio::error_code& ec, size_t bytes_transferred)
@@ -315,9 +333,6 @@ protected:
 	std::shared_ptr<i_unpacker<out_msg_type>> unpacker_;
 
 	volatile link_status status;
-
-private:
-	asio::io_context::strand strand;
 };
 
 }} //namespace
