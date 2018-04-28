@@ -77,15 +77,15 @@ private:
 class tracked_executor : public executor
 {
 protected:
-	tracked_executor(asio::io_context& io_context_) : executor(io_context_), async_calling(false) {}
+	tracked_executor(asio::io_context& io_context_) : executor(io_context_), aci(false) {}
 
 public:
-	inline bool is_async_calling() const {return async_calling;}
+	inline bool is_async_calling() const {return aci;}
 	inline bool is_last_async_call() const {return true;}
-	inline void set_async_calling(bool value) {async_calling = value;}
+	inline void set_async_calling(bool value) {aci = value;}
 
 private:
-	bool async_calling;
+	bool aci; //asynchronous calling indicator
 };
 #endif
 
