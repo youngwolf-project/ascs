@@ -11,6 +11,9 @@
  *
  * license: www.boost.org/LICENSE_1_0.txt
  *
+ * Known issues:
+ * 1. For a specific version of gcc (maybe clang too), please define '-std=' as big as it supported.
+ *
  * 2016.9.25	version 1.0.0
  * Based on st_asio_wrapper 1.2.0.
  * Directory structure refactoring.
