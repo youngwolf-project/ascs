@@ -360,23 +360,25 @@ private:
 
 	//do not use dispatch_strand at here, because the handler (do_dispatch_msg) may call this function, which can lead stack overflow.
 	void dispatch_msg() {if (!dispatching) post_strand(strand, [this]() {this->do_dispatch_msg();});}
-#ifdef ASCS_DISPATCH_BATCH_MSG
 	void do_dispatch_msg()
 	{
+#ifdef ASCS_DISPATCH_BATCH_MSG
 		if ((dispatching = !recv_msg_buffer.empty()))
 		{
 			auto begin_time = statistic::now();
+			stat.dispatch_dealy_sum += begin_time - recv_msg_buffer.front().begin_time;
 			auto re = on_msg_handle(recv_msg_buffer);
-			stat.handle_time_sum += statistic::now() - begin_time;
-			//statistic.dispatch_dealy_sum will not be updated, please note.
+			auto end_time = statistic::now();
+			stat.handle_time_sum += end_time - begin_time;
 
 			if (0 == re) //dispatch failed, re-dispatch
+			{
+				recv_msg_buffer.front().restart(end_time);
 				set_timer(TIMER_DISPATCH_MSG, msg_handling_interval_, [this](tid id)->bool {return this->timer_handler(TIMER_DISPATCH_MSG);}); //hold dispatching
+			}
 			else //dispatch msg in sequence
 			{
 #else
-	void do_dispatch_msg()
-	{
 		if ((dispatching = !last_dispatch_msg.empty() || recv_msg_buffer.try_dequeue(last_dispatch_msg)))
 		{
 			auto begin_time = statistic::now();
