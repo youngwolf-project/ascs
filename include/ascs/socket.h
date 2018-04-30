@@ -76,7 +76,9 @@ protected:
 
 	void clear_buffer()
 	{
+#ifndef ASCS_DISPATCH_BATCH_MSG
 		last_dispatch_msg.clear();
+#endif
 		send_msg_buffer.clear();
 		recv_msg_buffer.clear();
 	}
@@ -84,8 +86,10 @@ protected:
 public:
 	typedef obj_with_begin_time<InMsgType> in_msg;
 	typedef obj_with_begin_time<OutMsgType> out_msg;
-	typedef InQueue<in_msg, InContainer<in_msg>> in_container_type;
-	typedef OutQueue<out_msg, OutContainer<out_msg>> out_container_type;
+	typedef InContainer<in_msg> in_container_type;
+	typedef OutContainer<out_msg> out_container_type;
+	typedef InQueue<in_msg, in_container_type> in_queue_type;
+	typedef OutQueue<out_msg, out_container_type> out_queue_type;
 
 	uint_fast64_t id() const {return _id;}
 	bool is_equal_to(uint_fast64_t id) const {return _id == id;}
@@ -187,8 +191,8 @@ public:
 	POP_FIRST_PENDING_MSG(pop_first_pending_recv_msg, recv_msg_buffer, out_msg)
 
 	//clear all pending msgs
-	POP_ALL_PENDING_MSG(pop_all_pending_send_msg, send_msg_buffer, in_container_type)
-	POP_ALL_PENDING_MSG(pop_all_pending_recv_msg, recv_msg_buffer, out_container_type)
+	POP_ALL_PENDING_MSG(pop_all_pending_send_msg, send_msg_buffer, InContainer<in_msg>)
+	POP_ALL_PENDING_MSG(pop_all_pending_recv_msg, recv_msg_buffer, OutContainer<out_msg>)
 
 protected:
 	virtual bool do_start()
@@ -216,10 +220,20 @@ protected:
 	virtual void on_close() {unified_out::info_out("on_close()");}
 	virtual void after_close() {} //a good case for using this is to reconnect to the server, please refer to client_socket_base.
 
-	//handling msg in om_msg_handle() will not block msg receiving on the same socket
-	//return true means msg been handled, false means msg cannot be handled right now, and socket will re-dispatch it asynchronously
+	//return true (or > 0) means msg been handled, false (or 0) means msg cannot be handled right now, and socket will re-dispatch it asynchronously
 	//notice: using inconstant is for the convenience of swapping
-	virtual bool on_msg_handle(OutMsgType& msg) = 0;
+#ifdef ASCS_DISPATCH_BATCH_MSG
+	virtual size_t on_msg_handle(out_queue_type& can)
+	{
+		out_container_type tmp_can;
+		can.swap(tmp_can);
+
+		ascs::do_something_to_all(tmp_can, [](OutMsgType& msg) {unified_out::debug_out("recv(" ASCS_SF "): %s", msg.size(), msg.data());});
+		return tmp_can.size();
+	}
+#else
+	virtual bool on_msg_handle(OutMsgType& msg) {unified_out::debug_out("recv(" ASCS_SF "): %s", msg.size(), msg.data()); return true;}
+#endif
 
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
 	//one msg has sent to the kernel buffer, msg is the right msg
@@ -346,6 +360,21 @@ private:
 
 	//do not use dispatch_strand at here, because the handler (do_dispatch_msg) may call this function, which can lead stack overflow.
 	void dispatch_msg() {if (!dispatching) post_strand(strand, [this]() {this->do_dispatch_msg();});}
+#ifdef ASCS_DISPATCH_BATCH_MSG
+	void do_dispatch_msg()
+	{
+		if ((dispatching = !recv_msg_buffer.empty()))
+		{
+			auto begin_time = statistic::now();
+			auto re = on_msg_handle(recv_msg_buffer);
+			stat.handle_time_sum += statistic::now() - begin_time;
+			//statistic.dispatch_dealy_sum will not be updated, please note.
+
+			if (0 == re) //dispatch failed, re-dispatch
+				set_timer(TIMER_DISPATCH_MSG, msg_handling_interval_, [this](tid id)->bool {return this->timer_handler(TIMER_DISPATCH_MSG);}); //hold dispatching
+			else //dispatch msg in sequence
+			{
+#else
 	void do_dispatch_msg()
 	{
 		if ((dispatching = !last_dispatch_msg.empty() || recv_msg_buffer.try_dequeue(last_dispatch_msg)))
@@ -364,12 +393,13 @@ private:
 			else //dispatch msg in sequence
 			{
 				last_dispatch_msg.clear();
+#endif
 				dispatching = false;
-				dispatch_msg(); //just make sure no pending msgs
+				dispatch_msg();
 			}
 		}
-		else if (!recv_msg_buffer.empty())
-			dispatch_msg(); //just make sure no pending msgs
+		else if (!recv_msg_buffer.empty()) //just make sure no pending msgs
+			dispatch_msg();
 	}
 
 	bool timer_handler(tid id)
@@ -408,11 +438,10 @@ private:
 	}
 
 protected:
-	out_msg last_dispatch_msg;
 	std::shared_ptr<i_packer<typename Packer::msg_type>> packer_;
 
 	volatile bool sending;
-	in_container_type send_msg_buffer;
+	in_queue_type send_msg_buffer;
 
 #ifdef ASCS_PASSIVE_RECV
 	volatile bool reading;
@@ -427,7 +456,11 @@ private:
 	volatile bool started_; //has started or not
 	std::atomic_flag start_atomic;
 
-	out_container_type recv_msg_buffer;
+#ifndef ASCS_DISPATCH_BATCH_MSG
+	out_msg last_dispatch_msg;
+#endif
+
+	out_queue_type recv_msg_buffer;
 	typename statistic::stat_time recv_idle_begin_time;
 	bool recv_idle_began;
 

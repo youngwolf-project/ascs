@@ -6,6 +6,7 @@
 //#define ASCS_REUSE_OBJECT //use objects pool
 #define ASCS_DELAY_CLOSE	5 //define this to avoid hooks for async call (and slightly improve efficiency)
 //#define ASCS_CLEAR_OBJECT_INTERVAL 1
+#define ASCS_DISPATCH_BATCH_MSG
 //#define ASCS_WANT_MSG_SEND_NOTIFY
 #define ASCS_FULL_STATISTIC //full statistic will slightly impact efficiency
 #define ASCS_AVOID_AUTO_STOP_SERVICE
@@ -111,7 +112,18 @@ public:
 
 protected:
 	//msg handling
+#ifdef ASCS_DISPATCH_BATCH_MSG
+	virtual size_t on_msg_handle(out_queue_type& can)
+	{
+		out_container_type tmp_can;
+		can.swap(tmp_can);
+
+		ascs::do_something_to_all(tmp_can, [this](out_msg_type& msg) {this->handle_msg(msg);});
+		return tmp_can.size();
+	}
+#else
 	virtual bool on_msg_handle(out_msg_type& msg) {handle_msg(msg); return true;}
+#endif
 	//msg handling end
 
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY

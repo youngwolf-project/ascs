@@ -306,7 +306,7 @@
  * REPLACEMENTS:
  *
  * ===============================================================
- * 2018.4.x	version 1.3.0
+ * 2018.5.x	version 1.3.0
  *
  * SPECIAL ATTENTION (incompatible with old editions):
  * Not support sync sending mode anymore.
@@ -319,9 +319,12 @@
  * Macro ASCS_MSG_HANDLING_INTERVAL_STEP2 has been renamed to ASCS_MSG_HANDLING_INTERVAL.
  * ascs::socket::is_sending_msg() has been renamed to is_sending().
  * ascs::socket::is_dispatching_msg() has been renamed to is_dispatching().
+ * typedef ascs::socket::in_container_type has been renamed to in_queue_type.
+ * typedef ascs::socket::out_container_type has been renamed to out_queue_type.
  *
  * HIGHLIGHT:
  * After introduced asio::io_context::strand (which is required, see FIX section for more details), we wiped two atomic in ascs::socket.
+ * Introduced macro ASCS_DISPATCH_BATCH_MSG, then all messages will be dispatched via on_handle_msg with a variable-length contianer.
  *
  * FIX:
  * Wiped race condition between async_read and async_write on the same ascs::socket, so sync sending mode will not be supported anymore.
@@ -330,6 +333,8 @@
  * Explicitly define macro ASCS_PASSIVE_RECV to gain the ability of changing the unpacker at runtime.
  * Add function ascs::socket::is_reading() if macro ASCS_PASSIVE_RECV been defined, otherwise, the socket will always be reading.
  * Add function ascs::socket::is_recv_buffer_available(), you can use it before calling recv_msg() to avoid receiving buffer overflow.
+ * Add typedef ascs::socket::in_container_type to represent the container type used by in_queue_type (sending buffer).
+ * Add typedef ascs::socket::out_container_type to represent the container type used by out_queue_type (receiving buffer).
  *
  * DELETION:
  * Deleted virtual function bool ascs::socket::on_msg().
@@ -626,6 +631,12 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 //to gain the ability of changing the unpacker at runtime, with this mcro, ascs will not do message receiving automatically (except the firt one),
 //user need to call ascs::socket::recv_msg(), if you need to change the unpacker, do it before recv_msg() invocation, please note.
 //because user can call recv_msg() at any time, it's your responsibility to keep the recv buffer not overflowed, please pay special attention.
+
+//#define ASCS_DISPATCH_BATCH_MSG
+//all messages will be dispatched via on_handle_msg with a variable-length container, this will change the signature of function on_msg_handle,
+//it's very useful if you want to re-dispatch message in your own logic or with very simple message handling (such as echo server).
+//it's your responsibility to remove handled messages from the container (can be part of them).
+//statistic.dispatch_dealy_sum will not be updated, please note. demo echo_client and echo_server demonstrated the usage of this macro.
 
 //configurations
 

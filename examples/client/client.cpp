@@ -6,6 +6,7 @@
 #define ASCS_DELAY_CLOSE	1 //this demo not used object pool and doesn't need life cycle management,
 							  //so, define this to avoid hooks for async call (and slightly improve efficiency),
 							  //any value which is bigger than zero is okay.
+#define ASCS_DISPATCH_BATCH_MSG
 #define ASCS_CUSTOM_LOG
 #define ASCS_DEFAULT_UNPACKER	non_copy_unpacker
 //#define ASCS_DEFAULT_UNPACKER	stream_unpacker

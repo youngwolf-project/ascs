@@ -5,6 +5,7 @@
 #define ASCS_SERVER_PORT		9527
 #define ASCS_REUSE_OBJECT //use objects pool
 //#define ASCS_FREE_OBJECT_INTERVAL	60 //it's useless if ASCS_REUSE_OBJECT macro been defined
+#define ASCS_DISPATCH_BATCH_MSG
 #define ASCS_ENHANCED_STABILITY
 //#define ASCS_FULL_STATISTIC //full statistic will slightly impact efficiency
 //#define ASCS_USE_STEADY_TIMER
@@ -99,7 +100,21 @@ protected:
 	}
 
 	//msg handling: send the original msg back(echo server)
+#ifdef ASCS_DISPATCH_BATCH_MSG
+	virtual size_t on_msg_handle(out_queue_type& can)
+	{
+		if (!is_send_buffer_available())
+			return 0;
+
+		out_container_type tmp_can;
+		can.swap(tmp_can);
+
+		ascs::do_something_to_all(tmp_can, [this](out_msg_type& msg) {this->send_msg(msg.data(), msg.size(), true);});
+		return tmp_can.size();
+	}
+#else
 	virtual bool on_msg_handle(out_msg_type& msg) {return send_msg(msg.data(), msg.size());}
+#endif
 	//msg handling end
 };
 

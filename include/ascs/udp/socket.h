@@ -126,8 +126,6 @@ protected:
 		return true;
 	}
 
-	virtual bool on_msg_handle(out_msg_type& msg) {unified_out::debug_out("recv(" ASCS_SF "): %s", msg.size(), msg.data()); return true;}
-
 private:
 #ifndef ASCS_PASSIVE_RECV
 	virtual void recv_msg() {this->dispatch_strand(strand, [this]() {this->do_recv_msg();});}

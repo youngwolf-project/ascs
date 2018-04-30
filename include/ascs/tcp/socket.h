@@ -176,8 +176,6 @@ protected:
 	virtual void on_unpack_error() = 0;
 	virtual void on_async_shutdown_error() = 0;
 
-	virtual bool on_msg_handle(out_msg_type& msg) {unified_out::debug_out("recv(" ASCS_SF "): %s", msg.size(), msg.data()); return true;}
-
 private:
 #ifndef ASCS_PASSIVE_RECV
 	virtual void recv_msg() {this->dispatch_strand(strand, [this]() {this->do_recv_msg();});}
@@ -261,7 +259,7 @@ private:
 			typename super::in_msg msg;
 			auto end_time = statistic::now();
 
-			typename super::in_container_type::lock_guard lock(this->send_msg_buffer);
+			typename super::in_queue_type::lock_guard lock(this->send_msg_buffer);
 			while (this->send_msg_buffer.try_dequeue_(msg))
 			{
 				this->stat.send_delay_sum += end_time - msg.begin_time;
