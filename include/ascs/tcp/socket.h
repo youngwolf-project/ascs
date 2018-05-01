@@ -218,7 +218,9 @@ private:
 
 	void recv_handler(const asio::error_code& ec, size_t bytes_transferred)
 	{
-		auto keep_reading = false;
+#ifdef ASCS_PASSIVE_RECV
+		this->reading = false;
+#endif
 		if (!ec && bytes_transferred > 0)
 		{
 			this->stat.last_recv_time = time(nullptr);
@@ -228,19 +230,14 @@ private:
 			auto unpack_ok = unpacker_->parse_msg(bytes_transferred, temp_msg_can);
 			dur.end();
 
-			keep_reading = this->handle_msg(temp_msg_can);
 			if (!unpack_ok)
 				on_unpack_error(); //the user will decide whether to reset the unpacker or not in this callback
+
+			if (this->handle_msg(temp_msg_can))
+				do_recv_msg(); //receive msg in sequence
 		}
 		else
 			this->on_recv_error(ec);
-
-		if (keep_reading)
-			do_recv_msg(); //receive msg in sequence
-#ifdef ASCS_PASSIVE_RECV
-		else
-			this->reading = false;
-#endif
 	}
 
 	bool do_send_msg(bool in_strand)
