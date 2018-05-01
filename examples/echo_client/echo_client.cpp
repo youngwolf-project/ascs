@@ -71,7 +71,7 @@ static bool check_msg;
 ///////////////////////////////////////////////////
 //msg sending interface
 #define TCP_RANDOM_SEND_MSG(FUNNAME, SEND_FUNNAME) \
-void FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) \
+void FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow) \
 { \
 	auto index = (size_t) ((uint64_t) rand() * (size() - 1) / RAND_MAX); \
 	at(index)->SEND_FUNNAME(pstr, len, num, can_overflow); \
@@ -106,7 +106,7 @@ public:
 		memset(buff, msg_fill, msg_len);
 		memcpy(buff, &recv_index, sizeof(size_t)); //seq
 
-		send_msg(buff, msg_len);
+		send_msg(buff, msg_len, false);
 		delete[] buff;
 	}
 
@@ -255,7 +255,7 @@ void send_msg_randomly(echo_client& client, size_t msg_num, size_t msg_len, char
 	{
 		memcpy(buff, &i, sizeof(size_t)); //seq
 
-		client.safe_random_send_msg(buff, msg_len); //can_overflow is false, it's important
+		client.safe_random_send_msg(buff, msg_len, false); //can_overflow is false, it's important
 		send_bytes += msg_len;
 
 		auto new_percent = (unsigned) (100 * send_bytes / total_msg_bytes);
@@ -318,7 +318,7 @@ void send_msg_concurrently(echo_client& client, size_t send_thread_num, size_t m
 			{
 				memcpy(buff, &i, sizeof(size_t)); //seq
 
-				do_something_to_all(item, [buff, msg_len](echo_client::object_ctype& item2) {item2->safe_send_msg(buff, msg_len);}); //can_overflow is false, it's important
+				do_something_to_all(item, [buff, msg_len](echo_client::object_ctype& item2) {item2->safe_send_msg(buff, msg_len, false);}); //can_overflow is false, it's important
 			}
 			delete[] buff;
 		});

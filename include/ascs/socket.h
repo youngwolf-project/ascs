@@ -191,8 +191,8 @@ public:
 	POP_FIRST_PENDING_MSG(pop_first_pending_recv_msg, recv_msg_buffer, out_msg)
 
 	//clear all pending msgs
-	POP_ALL_PENDING_MSG(pop_all_pending_send_msg, send_msg_buffer, InContainer<in_msg>)
-	POP_ALL_PENDING_MSG(pop_all_pending_recv_msg, recv_msg_buffer, OutContainer<out_msg>)
+	POP_ALL_PENDING_MSG(pop_all_pending_send_msg, send_msg_buffer, in_container_type)
+	POP_ALL_PENDING_MSG(pop_all_pending_recv_msg, recv_msg_buffer, out_container_type)
 
 protected:
 	virtual bool do_start()
@@ -376,7 +376,7 @@ private:
 				recv_msg_buffer.front().restart(end_time);
 				set_timer(TIMER_DISPATCH_MSG, msg_handling_interval_, [this](tid id)->bool {return this->timer_handler(TIMER_DISPATCH_MSG);}); //hold dispatching
 			}
-			else //dispatch msg in sequence
+			else
 			{
 #else
 		if ((dispatching = !last_dispatch_msg.empty() || recv_msg_buffer.try_dequeue(last_dispatch_msg)))
@@ -392,12 +392,12 @@ private:
 				last_dispatch_msg.restart(end_time);
 				set_timer(TIMER_DISPATCH_MSG, msg_handling_interval_, [this](tid id)->bool {return this->timer_handler(TIMER_DISPATCH_MSG);}); //hold dispatching
 			}
-			else //dispatch msg in sequence
+			else
 			{
 				last_dispatch_msg.clear();
 #endif
 				dispatching = false;
-				dispatch_msg();
+				dispatch_msg(); //dispatch msg in sequence
 			}
 		}
 		else if (!recv_msg_buffer.empty()) //just make sure no pending msgs

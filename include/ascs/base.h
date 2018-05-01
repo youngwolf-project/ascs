@@ -482,11 +482,11 @@ template<typename _Predicate> void NAME(const _Predicate& __pred) const {for (au
 ///////////////////////////////////////////////////
 //TCP msg sending interface
 #define TCP_SEND_MSG_CALL_SWITCH(FUNNAME, TYPE) \
-TYPE FUNNAME(const char* pstr, size_t len, bool can_overflow = false) {return FUNNAME(&pstr, &len, 1, can_overflow);} \
-TYPE FUNNAME(const std::string& str, bool can_overflow = false) {return FUNNAME(str.data(), str.size(), can_overflow);}
+TYPE FUNNAME(const char* pstr, size_t len, bool can_overflow) {return FUNNAME(&pstr, &len, 1, can_overflow);} \
+template<typename Buffer> TYPE FUNNAME(const Buffer& buffer, bool can_overflow) {return FUNNAME(buffer.data(), buffer.size(), can_overflow);}
 
 #define TCP_SEND_MSG(FUNNAME, NATIVE) \
-bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) \
+bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow) \
 { \
 	if (!can_overflow && !this->is_send_buffer_available()) \
 		return false; \
@@ -500,11 +500,11 @@ TCP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)
 //guarantee send msg successfully even if can_overflow equal to false, success at here just means putting the msg into tcp::socket_base's send buffer successfully
 //if can_overflow equal to false and the buffer is not available, will wait until it becomes available
 #define TCP_SAFE_SEND_MSG(FUNNAME, SEND_FUNNAME) \
-bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) {while (!SEND_FUNNAME(pstr, len, num, can_overflow)) SAFE_SEND_MSG_CHECK return true;} \
+bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow) {while (!SEND_FUNNAME(pstr, len, num, can_overflow)) SAFE_SEND_MSG_CHECK return true;} \
 TCP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)
 
 #define TCP_BROADCAST_MSG(FUNNAME, SEND_FUNNAME) \
-void FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) \
+void FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow) \
 	{this->do_something_to_all([=](typename Pool::object_ctype& item) {item->SEND_FUNNAME(pstr, len, num, can_overflow);});} \
 TCP_SEND_MSG_CALL_SWITCH(FUNNAME, void)
 //TCP msg sending interface
@@ -513,14 +513,15 @@ TCP_SEND_MSG_CALL_SWITCH(FUNNAME, void)
 ///////////////////////////////////////////////////
 //UDP msg sending interface
 #define UDP_SEND_MSG_CALL_SWITCH(FUNNAME, TYPE) \
-TYPE FUNNAME(const char* pstr, size_t len, bool can_overflow = false) {return FUNNAME(peer_addr, pstr, len, can_overflow);} \
-TYPE FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* pstr, size_t len, bool can_overflow = false) {return FUNNAME(peer_addr, &pstr, &len, 1, can_overflow);} \
-TYPE FUNNAME(const std::string& str, bool can_overflow = false) {return FUNNAME(peer_addr, str, can_overflow);} \
-TYPE FUNNAME(const asio::ip::udp::endpoint& peer_addr, const std::string& str, bool can_overflow = false) {return FUNNAME(peer_addr, str.data(), str.size(), can_overflow);}
+TYPE FUNNAME(const char* pstr, size_t len, bool can_overflow) {return FUNNAME(peer_addr, pstr, len, can_overflow);} \
+TYPE FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* pstr, size_t len, bool can_overflow) {return FUNNAME(peer_addr, &pstr, &len, 1, can_overflow);} \
+template<typename Buffer> TYPE FUNNAME(const Buffer& buffer, bool can_overflow) {return FUNNAME(peer_addr, buffer, can_overflow);} \
+template<typename Buffer> TYPE FUNNAME(const asio::ip::udp::endpoint& peer_addr, const Buffer& buffer, bool can_overflow) \
+	{return FUNNAME(peer_addr, buffer.data(), buffer.size(), can_overflow);}
 
 #define UDP_SEND_MSG(FUNNAME, NATIVE) \
-bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) {return FUNNAME(peer_addr, pstr, len, num, can_overflow);} \
-bool FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) \
+bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow) {return FUNNAME(peer_addr, pstr, len, num, can_overflow);} \
+bool FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* const pstr[], const size_t len[], size_t num, bool can_overflow) \
 { \
 	if (!can_overflow && !this->is_send_buffer_available()) \
 		return false; \
@@ -532,8 +533,8 @@ UDP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)
 //guarantee send msg successfully even if can_overflow equal to false, success at here just means putting the msg into udp::socket_base's send buffer successfully
 //if can_overflow equal to false and the buffer is not available, will wait until it becomes available
 #define UDP_SAFE_SEND_MSG(FUNNAME, SEND_FUNNAME) \
-bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false)  {return FUNNAME(peer_addr, pstr, len, num, can_overflow);} \
-bool FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) \
+bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow)  {return FUNNAME(peer_addr, pstr, len, num, can_overflow);} \
+bool FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* const pstr[], const size_t len[], size_t num, bool can_overflow) \
 	{while (!SEND_FUNNAME(peer_addr, pstr, len, num, can_overflow)) SAFE_SEND_MSG_CHECK return true;} \
 UDP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)
 //UDP msg sending interface

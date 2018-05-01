@@ -321,6 +321,10 @@
  * ascs::socket::is_dispatching_msg() has been renamed to is_dispatching().
  * typedef ascs::socket::in_container_type has been renamed to in_queue_type.
  * typedef ascs::socket::out_container_type has been renamed to out_queue_type.
+ * Wipe default value for parameter can_overflow in function send_msg, send_native_msg, safe_send_msg, safe_send_native_msg,
+ *  broadcast_msg, broadcast_native_msg, safe_broadcast_msg and safe_broadcast_native_msg, this is because we added template parameter to some of them,
+ *  and the compiler will complain (ambiguity) if we omit the can_overflow parameter. So take send_msg function for example, if you omitted can_overflow
+ *  before, then in 1.3, you must supplement it, like send_msg(...) -> send_msg(..., false).
  *
  * HIGHLIGHT:
  * After introduced asio::io_context::strand (which is required, see FIX section for more details), we wiped two atomic in ascs::socket.
@@ -335,6 +339,8 @@
  * Add function ascs::socket::is_recv_buffer_available(), you can use it before calling recv_msg() to avoid receiving buffer overflow.
  * Add typedef ascs::socket::in_container_type to represent the container type used by in_queue_type (sending buffer).
  * Add typedef ascs::socket::out_container_type to represent the container type used by out_queue_type (receiving buffer).
+ * Generalize function send_msg, send_native_msg, safe_send_msg, safe_send_native_msg, broadcast_msg, broadcast_native_msg,
+ *  safe_broadcast_msg and safe_broadcast_native_msg.
  *
  * DELETION:
  * Deleted virtual function bool ascs::socket::on_msg().

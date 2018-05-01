@@ -109,11 +109,11 @@ protected:
 		out_container_type tmp_can;
 		can.swap(tmp_can);
 
-		ascs::do_something_to_all(tmp_can, [this](out_msg_type& msg) {this->send_msg(msg.data(), msg.size(), true);});
+		ascs::do_something_to_all(tmp_can, [this](out_msg_type& msg) {this->send_msg(msg, true);});
 		return tmp_can.size();
 	}
 #else
-	virtual bool on_msg_handle(out_msg_type& msg) {return send_msg(msg.data(), msg.size());}
+	virtual bool on_msg_handle(out_msg_type& msg) {return send_msg(msg, false);}
 #endif
 	//msg handling end
 };
@@ -220,7 +220,7 @@ int main(int argc, const char* argv[])
 		{
 //			/*
 			//broadcast series functions call pack_msg for each client respectively, because clients may used different protocols(so different type of packers, of course)
-			server_.broadcast_msg(str.data(), str.size() + 1);
+			server_.broadcast_msg(str.data(), str.size() + 1, false);
 			//send \0 character too, because demo client used basic_buffer as its msg type, it will not append \0 character automatically as std::string does,
 			//so need \0 character when printing it.
 //			*/
@@ -231,12 +231,12 @@ int main(int argc, const char* argv[])
 			//send \0 character too, because demo client used basic_buffer as its msg type, it will not append \0 character automatically as std::string does,
 			//so need \0 character when printing it.
 			if (!msg.empty())
-				server_.do_something_to_all([&msg](server_base<normal_server_socket>::object_ctype& item) {item->direct_send_msg(msg);});
+				server_.do_something_to_all([&msg](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(msg);});
 			*/
 			/*
 			//if demo client is using stream_unpacker
 			if (!str.empty())
-				server_.do_something_to_all([&str](server_base<normal_server_socket>::object_ctype& item) {item->direct_send_msg(str);});
+				server_.do_something_to_all([&str](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(str);});
 			*/
 		}
 	}
