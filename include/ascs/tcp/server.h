@@ -53,7 +53,7 @@ public:
 	//implement i_server's pure virtual functions
 	virtual service_pump& get_service_pump() {return Pool::get_service_pump();}
 	virtual const service_pump& get_service_pump() const {return Pool::get_service_pump();}
-	virtual bool del_socket(const std::shared_ptr<executor>& socket_ptr)
+	virtual bool del_socket(const std::shared_ptr<tracked_executor>& socket_ptr)
 	{
 		auto raw_socket_ptr(std::dynamic_pointer_cast<Socket>(socket_ptr));
 		if (!raw_socket_ptr)
@@ -65,7 +65,7 @@ public:
 	//restore the invalid socket whose id is equal to id, if successful, socket_ptr's take_over function will be invoked,
 	//you can restore the invalid socket to socket_ptr, everything is restorable except socket::next_layer_ (on the other
 	//hand, restore socket::next_layer_ doesn't make any sense).
-	virtual bool restore_socket(const std::shared_ptr<executor>& socket_ptr, uint_fast64_t id)
+	virtual bool restore_socket(const std::shared_ptr<tracked_executor>& socket_ptr, uint_fast64_t id)
 	{
 		auto raw_socket_ptr(std::dynamic_pointer_cast<Socket>(socket_ptr));
 		if (!raw_socket_ptr)

@@ -19,14 +19,17 @@ namespace ascs
 {
 	
 #if 0 == ASCS_DELAY_CLOSE
-class tracked_executor : public executor
+class tracked_executor
 {
 protected:
-	tracked_executor(asio::io_context& io_context_) : executor(io_context_), aci(std::make_shared<char>('\0')) {}
+	virtual ~tracked_executor() {}
+	tracked_executor(asio::io_context& _io_context_) : io_context_(_io_context_), aci(std::make_shared<char>('\0')) {}
 
 public:
 	typedef std::function<void(const asio::error_code&)> handler_with_error;
 	typedef std::function<void(const asio::error_code&, size_t)> handler_with_error_size;
+
+	bool stopped() const {return io_context_.stopped();}
 
 #if (defined(_MSC_VER) && _MSC_VER > 1800) || (defined(__cplusplus) && __cplusplus > 201103L)
 	#if ASIO_VERSION >= 101100
@@ -69,6 +72,9 @@ public:
 	bool is_async_calling() const {return !aci.unique();}
 	bool is_last_async_call() const {return aci.use_count() <= 2;} //can only be called in callbacks
 	inline void set_async_calling(bool) {}
+
+protected:
+	asio::io_context& io_context_;
 
 private:
 	std::shared_ptr<char> aci; //asynchronous calling indicator

@@ -1,0 +1,110 @@
+假设你想在现有工程里面引入ascs库，之前你一直是直接发送结构体，那么现在（基于《ascs开发文档.docx》里面的demo）：
+1. 你已经有了一个结构体：
+struct native_msg
+{
+	char c;
+	short s;
+	int i;
+	long long ll;
+	char cc[100];
+	short ss[100];
+};
+
+2. 编写一个message类（类名无要求，以后不再说明），ascs需要你这么做：
+class message
+{
+public:
+	char* data() { return (char*) &msg; } //解包器使用，有了这个，解包器可以直接写msg，从而减少一次对native_msg的拷贝
+	const char* data() const { return (const char*) &msg; }
+	size_t size() const { return sizeof(native_msg); }
+	bool empty() const { return false; }
+
+public:
+	native_msg msg;
+};
+
+3. 大家看到，message里面用的是不支持swap的对象（native_msg），这样会造成内存拷贝（所以ascs会编译出错的，这是我故意的），
+那么我们只需要用ascs::auto_buffer来包装message，一切问题都解决了，如下：
+ascs::auto_buffer<messge> really_used_msg;
+当然你也可以让message支持swap，不过当你实现了之后，你会发现，你实现的跟auto_buffer大同小异。
+
+4. 要不要编写打包器呢？
+不需要，因为库只能看到i_packer里面的接口，你的打包器要打一个message，显然原来的参数个数肯定不够了。
+如果你是老工程，那么生成native_msg的代码已经有了，你可以用dummy_packer：
+#define ASCS_DEFAULT_PACKER ascs::dummy_packer<ascs::auto_buffer<message>>
+大多数情况下，都是不需要写打包器的（但打包的代码肯定要写，然后direct_send_msg）。
+
+然后需要发送消息的时候：
+ascs::auto_buffer<message> msg(new message);
+strncmp(msg->msg.cc, "abc", sizeof(msg->msg.cc));
+...; //初始其它的成员
+client.direct_send_msg(msg); //不能再调用以send_开头的消息了，因为它们需要调用打包器来打包，我们在这里用的是dumm_packer
+
+最后，当你收到消息的时候，在on_msg_handle里面得到的消息类型的ascs::auto_buffer<message>，你调用msg.raw_buffer()
+即得到了一个message对象指针。
+
+5. 解包器是必须要写的
+因为解包器还负责提供接收数据时需要的缓存。好在提供它非常简单，如下：
+class my_unpacker : public ascs::tcp::i_unpacker<auto_buffer<message>>
+{
+public:
+	virtual void reset() { raw_buff.clear(); }
+	virtual bool parse_msg(size_t bytes_transferred, container_type& msg_can)
+	{
+		if (bytes_transferred != raw_buff.size())
+		｛
+			raw_buff.clear();
+			return false;
+		｝
+
+		msg_can.emplace_back(std::move(raw_buff));
+		return true;
+	}
+
+	virtual size_t completion_condition(const asio::error_code& ec, size_t bytes_transferred)
+	{
+		return ec || bytes_transferred == raw_buff.size() ? 0 : asio::detail::default_max_transfer_size;
+	}
+
+	virtual buffer_type prepare_next_recv()
+	{
+		if (raw_buff.empty())
+			raw_buff.raw_buffer(new message);
+		return asio::buffer(raw_buff.raw_buffer()->data(), raw_buff.size()); //直接写native_msg对象
+	}
+
+private:
+	auto_buffer<message> raw_buff;
+};
+
+6. 最后的代码如下：
+class message;
+#define ASCS_DEFAULT_PACKER	ascs::dummy_packer<ascs::auto_buffer<message>>
+class my_unpacker;
+#define ASCS_DEFAULT_UNPACKER	my_unpacker
+
+int main(int argc, const char* argv[])
+{
+	service_pump sp;
+	single_client client(sp);
+
+	sp.start_service();
+	while(sp.is_running())
+	{
+		std::string str;
+		std::cin >> str;
+
+		if (!str.empty())
+		{
+			ascs::auto_buffer<message> msg(new message);
+			strncmp(msg->msg.cc, str.data(), sizeof(msg->msg.cc)); //这里需要考虑内在越界
+			//这里还应该组装message中的其它成员
+			client.direct_send_msg(msg);
+		}
+	}
+}
+除了main函数，有效代码不超过15行！但注意，大小端未考虑，一般也不需要考虑。
+
+
+
+

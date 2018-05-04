@@ -177,7 +177,7 @@ public:
 
 	//if you define macro ASCS_PASSIVE_RECV and call recv_msg greedily, the receiving buffer may overflow, this can exhaust all virtual memory,
 	//to avoid this problem, call recv_msg only if is_recv_buffer_available returns true.
-	bool is_recv_buffer_available() const {return send_msg_buffer.size() < ASCS_MAX_MSG_NUM;}
+	bool is_recv_buffer_available() const {return recv_msg_buffer.size() < ASCS_MAX_MSG_NUM;}
 
 	//don't use the packer but insert into send buffer directly
 	bool direct_send_msg(const InMsgType& msg, bool can_overflow = false) {return direct_send_msg(InMsgType(msg), can_overflow);}
@@ -336,7 +336,7 @@ private:
 
 	bool check_receiving(bool raise_recv)
 	{
-		if (recv_msg_buffer.size() < ASCS_MAX_MSG_NUM)
+		if (is_recv_buffer_available())
 		{
 			if (recv_idle_began)
 			{

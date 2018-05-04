@@ -1,9 +1,11 @@
-﻿
-hook异步调用时的回调函数，以便让这个回调函数所需的对象不会被释放或者被重用，直到所有异步调用结束或者被取消。
+﻿继承自executor，接口类似，只是对每个异步调用都加了hook，以便让回调函数所需的对象不会被释放或者被重用，直到所有异步调用结束或者被取消。
 只支持对1个待定参数和2个待定参数的函数对象的包装，具体用法举例：
 未hook之前，如果你的异步调用是这样的：
 asio::async_write(socket, buffer, [this](const auto& ec, auto bytes_transferred) {this->send_handler(ec, bytes_transferred);});
 那么look之后应该是这样的：
 asio::async_write(socket, buffer, this->make_handler_error_size([this](const auto& ec, auto bytes_transferred) {this->send_handler(ec, bytes_transferred);}));
 
-如果定义了ASCS_DELAY_CLOSE宏且其值等于0，则ascs中所有用于异步调用的函数对象都将被自动的hook。
+post，defer，dispatch,post_strand，defer_strand和dispatch_strand都将被hook。
+
+注意，hook需要宏ASCS_DELAY_CLOSE等于0（默认），影响范围局限于ascs::socket及其继承者。
+

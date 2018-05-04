@@ -64,9 +64,6 @@ static_assert(ASCS_DELAY_CLOSE >= 0, "delay close duration must be bigger than o
 //full statistic include time consumption, or only numerable informations will be gathered
 //#define ASCS_FULL_STATISTIC
 
-//when got some msgs, not call on_msg(), but asynchronously dispatch them, on_msg_handle() will be called later.
-//#define ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
-
 //after every msg sent, call ascs::socket::on_msg_send()
 //#define ASCS_WANT_MSG_SEND_NOTIFY
 
@@ -196,8 +193,24 @@ ascs默认提供了三种消息队列供你选择，一是concurrent queue，它
 容器需要实现一些特定的接口（队列需要调用），可以参看moodycamel::ConcurrentQueue以及ascs::list，需要支持一个模板参数，至于确切的需要实现哪些接口，
 因不同的队列而不同，最好的办法就是编译，让编译器告诉你缺少哪些接口，接口从名称上就可以看出其作用，非常清晰。
 
-//#define ASCS_SCATTERED_RECV_BUFFER
-是否支持scatter-gather缓存，即一次提供多个不连续的缓存用于接收消息，如果你使用了ring buffer，相信你知道我在说什么。
+#ifndef ASCS_RECV_BUFFER_TYPE
+	#if ASIO_VERSION >= 101100
+	#define ASCS_RECV_BUFFER_TYPE asio::mutable_buffer
+	#else
+	#define ASCS_RECV_BUFFER_TYPE asio::mutable_buffers_1
+	#endif
+#endif
+unpacker的prepare_next_recv返回的数据类型的定义。
+
+#ifdef ASCS_SEND_BUFFER_TYPE
+	#error macro ASCS_SEND_BUFFER_TYPE is just used internally.
+#endif
+#if ASIO_VERSION >= 101100
+#define ASCS_SEND_BUFFER_TYPE asio::const_buffer
+#else
+#define ASCS_SEND_BUFFER_TYPE asio::const_buffers_1
+#endif
+内部使用，不要定义
 
 #ifndef ASCS_HEARTBEAT_INTERVAL
 #define ASCS_HEARTBEAT_INTERVAL	0 //second(s)
@@ -214,4 +227,32 @@ static_assert(ASCS_HEARTBEAT_MAX_ABSENCE > 0, "heartbeat absence must be bigger 
 
 //#define ASCS_REUSE_SSL_STREAM
 定义这个宏，ssl::server_socket_base和ssl::client_socket_base将支持重用。
+
+//#define ASCS_AVOID_AUTO_STOP_SERVICE
+在无任何异步IO可做的时候，让service_pump不自动退出。
+
+//#define ASCS_DECREASE_THREAD_AT_RUNTIME
+是否支持运行时减少service线程，增加线程一直都可以，不管是否定义了该宏。
+
+#ifndef ASCS_MSG_RESUMING_INTERVAL
+#define ASCS_MSG_RESUMING_INTERVAL	50 //milliseconds
+#endif
+static_assert(ASCS_MSG_RESUMING_INTERVAL >= 0, "the interval of msg resuming must be bigger than or equal to zero.");
+当接收缓存满的时候，消息接收将暂停，然后以该宏为间隔检测接收缓存的可用性，一但变得可用，将恢复消息接收，
+该参数也可以通过ascs::socket::msg_resuming_interval(size_t)在运行时修改。
+
+#ifndef ASCS_MSG_HANDLING_INTERVAL
+#define ASCS_MSG_HANDLING_INTERVAL	50 //milliseconds
+#endif
+static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling must be bigger than or equal to zero.");
+当on_msg_handle返回false或者0（若定义了ASCS_DISPATCH_BATCH_MSG）时，消息派发将暂停，然后以该宏为间隔重新派发，直到返回true或者大于0之后，派发将不再暂停，
+该参数也可以通过ascs::socket::msg_handling_interval(size_t)在运行时修改。
+
+//#define ASCS_PASSIVE_RECV
+如果你想在运行时动态修改解包器，那就必须要定义该宏，这会让ascs在收到至少一个消息之后，不会继续async_read，用户必须显示调用recv_msg来触发下一次async_read，
+在这之前替换解包器才是安全的，所以最好的时机是在on_msg_handle里，且在派发最后一个消息时，切换解包器，可以看file_client里面有演示。
+
+//#define ASCS_DISPATCH_BATCH_MSG
+是否批量派发消息，如果你的消息处理很简单（比如echo server，或者你有自己的消息派发逻辑，在on_msg_handle里面只需要将消息push到另外一个队列），推荐定义该宏。
+
 //configurations
