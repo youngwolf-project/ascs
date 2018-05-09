@@ -343,6 +343,7 @@
  *  safe_broadcast_msg and safe_broadcast_native_msg.
  *
  * DELETION:
+ * Deleted macro ASCS_SEND_BUFFER_TYPE.
  * Deleted virtual function bool ascs::socket::on_msg().
  * Not support sync sending mode anymore, so we reduced an atomic object in ascs::socket.
  *
@@ -578,15 +579,6 @@ static_assert(ASCS_ASYNC_ACCEPT_NUM > 0, "async accept number must be bigger tha
 	#else
 	#define ASCS_RECV_BUFFER_TYPE asio::mutable_buffers_1
 	#endif
-#endif
-
-#ifdef ASCS_SEND_BUFFER_TYPE
-	#error macro ASCS_SEND_BUFFER_TYPE is just used internally.
-#endif
-#if ASIO_VERSION >= 101100
-#define ASCS_SEND_BUFFER_TYPE asio::const_buffer
-#else
-#define ASCS_SEND_BUFFER_TYPE asio::const_buffers_1
 #endif
 
 #ifndef ASCS_HEARTBEAT_INTERVAL
