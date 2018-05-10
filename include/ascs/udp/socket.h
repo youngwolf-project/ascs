@@ -167,8 +167,20 @@ private:
 
 	void recv_handler(const asio::error_code& ec, size_t bytes_transferred)
 	{
-		auto keep_reading = false;
-		if (!ec && bytes_transferred > 0)
+#ifdef ASCS_PASSIVE_RECV
+		this->reading = false; //clear reading flag before call handle_msg() to make sure that recv_msg() can be called successfully in on_msg_handle()
+#endif
+		auto keep_reading = !ec;
+		if (ec)
+		{
+#ifdef _MSC_VER
+			if (asio::error::connection_refused == ec || asio::error::connection_reset == ec)
+				keep_reading = true;
+			else
+#endif
+				on_recv_error(ec);
+		}
+		else if (bytes_transferred > 0)
 		{
 			this->stat.last_recv_time = time(nullptr);
 
@@ -181,23 +193,12 @@ private:
 				temp_msg_can.emplace_back(out_msg_type(temp_addr, std::move(msg)));
 			}
 
-			keep_reading = this->handle_msg(temp_msg_can);
+			keep_reading = this->handle_msg(temp_msg_can); //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
 		}
-#ifdef _MSC_VER
-		else if (asio::error::connection_refused == ec || asio::error::connection_reset == ec)
-#ifndef ASCS_PASSIVE_RECV
-			keep_reading = true
-#endif
-			;
-#endif
-		else
-			on_recv_error(ec);
 
+#ifndef ASCS_PASSIVE_RECV
 		if (keep_reading)
 			do_recv_msg(); //receive msg in sequence
-#ifdef ASCS_PASSIVE_RECV
-		else
-			this->reading = false;
 #endif
 	}
 
