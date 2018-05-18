@@ -306,7 +306,7 @@
  * REPLACEMENTS:
  *
  * ===============================================================
- * 2018.5.x	version 1.3.0
+ * 2018.5.20	version 1.3.0
  *
  * SPECIAL ATTENTION (incompatible with old editions):
  * Not support sync sending mode anymore.

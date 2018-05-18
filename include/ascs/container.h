@@ -95,16 +95,15 @@ public:
 	const_iterator end() const {return impl.end();}
 	const_reverse_iterator rend() const {return impl.rend();}
 
-	void splice(iterator _Where, _Mybase& _Right) {s += _Right.size(); impl.splice(_Where, _Right);} //just satisfy old compilers (for example gcc 4.7)
-	void splice(const_iterator _Where, _Mybase& _Right) {s += _Right.size(); impl.splice(_Where, _Right);}
+#if	__GNUC__ > 4 || __GNUC_MINOR__ > 8
+	typedef const_iterator Iter;
+#else
+	typedef iterator Iter; //just satisfy old gcc compilers (before gcc 4.9)
+#endif
 
-	void splice(iterator _Where, _Myt& _Right) {s += _Right.size(); _Right.s = 0; impl.splice(_Where, _Right.impl);} //just satisfy old compilers (for example gcc 4.7)
-	void splice(const_iterator _Where, _Myt& _Right) {s += _Right.size(); _Right.s = 0; impl.splice(_Where, _Right.impl);}
-
-	//please add corresponding overloads which take non-const iterators for following 3 functions,
-	//i didn't provide them because ascs doesn't use them and it violated the standard, just some old compilers need them.
-	void splice(const_iterator _Where, _Mybase& _Right, const_iterator _First) {++s; impl.splice(_Where, _Right, _First);} //1
-	void splice(const_iterator _Where, _Mybase& _Right, const_iterator _First, const_iterator _Last) //2
+	void splice(Iter _Where, _Mybase& _Right) {s += _Right.size(); impl.splice(_Where, _Right);}
+	void splice(Iter _Where, _Mybase& _Right, Iter _First) {++s; impl.splice(_Where, _Right, _First);}
+	void splice(Iter _Where, _Mybase& _Right, Iter _First, Iter _Last)
 	{
 		auto size = std::distance(_First, _Last);
 		//this std::distance invocation is the penalty for making complexity of size() constant.
@@ -113,9 +112,9 @@ public:
 		impl.splice(_Where, _Right, _First, _Last);
 	}
 
-	void splice(iterator _Where, _Myt& _Right, iterator _First) {++s; --_Right.s; impl.splice(_Where, _Right.impl, _First);} //just satisfy old compilers (for example gcc 4.7)
-	void splice(const_iterator _Where, _Myt& _Right, const_iterator _First) {++s; --_Right.s; impl.splice(_Where, _Right.impl, _First);}
-	void splice(const_iterator _Where, _Myt& _Right, const_iterator _First, const_iterator _Last) //3
+	void splice(Iter _Where, _Myt& _Right) {s += _Right.size(); _Right.s = 0; impl.splice(_Where, _Right.impl);}
+	void splice(Iter _Where, _Myt& _Right, Iter _First) {++s; --_Right.s; impl.splice(_Where, _Right.impl, _First);}
+	void splice(Iter _Where, _Myt& _Right, Iter _First, Iter _Last)
 	{
 		auto size = std::distance(_First, _Last);
 		//this std::distance invocation is the penalty for making complexity of size() constant.

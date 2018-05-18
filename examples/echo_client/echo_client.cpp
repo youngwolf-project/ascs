@@ -115,6 +115,7 @@ protected:
 #ifdef ASCS_DISPATCH_BATCH_MSG
 	virtual size_t on_msg_handle(out_queue_type& can)
 	{
+		//to consume part of messages in can, see echo_server.
 		out_container_type tmp_can;
 		can.swap(tmp_can);
 
