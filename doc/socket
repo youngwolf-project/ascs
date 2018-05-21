@@ -8,11 +8,6 @@ template<typename Socket, typename Packer, typename Unpacker, typename InMsgType
 class socket: public timer
 {
 protected:
-	typedef obj_with_begin_time<InMsgType> in_msg;
-	typedef obj_with_begin_time<OutMsgType> out_msg;
-	typedef InQueue<in_msg, InContainer<in_msg>> in_container_type;
-	typedef OutQueue<out_msg, OutContainer<out_msg>> out_container_type;
-
 	socket(asio::io_service& io_service_);
 	template<typename Arg>
 	socket(asio::io_service& io_service_, Arg& arg);
@@ -30,8 +25,10 @@ ssl使用。
 public:
 	typedef obj_with_begin_time<InMsgType> in_msg;
 	typedef obj_with_begin_time<OutMsgType> out_msg;
-	typedef InQueue<in_msg, InContainer<in_msg>> in_container_type;
-	typedef OutQueue<out_msg, OutContainer<out_msg>> out_container_type;
+	typedef InContainer<in_msg> in_container_type;
+	typedef OutContainer<out_msg> out_container_type;
+	typedef InQueue<in_msg, in_container_type> in_queue_type;
+	typedef OutQueue<out_msg, out_container_type> out_queue_type;
 
 	uint_fast64_t id() const;
 	bool is_equal_to(uint_fast64_t id) const;
@@ -75,20 +72,24 @@ socket内部有消息发送缓存，当连接未建立的时候，用户仍然�
 	bool is_sending_msg() const;
 是否正在发送数据。
 
+#ifdef ASCS_PASSIVE_RECV
+	bool is_reading() const;
+#endif
+是否正在接收数据，如果未定义ASCS_PASSIVE_RECV宏，则总是处于接收数据的状态。
+
 	bool is_dispatching_msg() const;
 是否正在派发数据。
 
-	void congestion_control(bool enable);
-	bool congestion_control() const;
-拥塞控制。
-如果你在处理消息的过程中，发现无法处理当前这条消息（比如处理消息产生的回应消息会造成发送缓存溢出，或者其它必要条件还未准备好，
-比如你要读取数据库，但数据库连接还未建立起来），那么你怎么办呢？第一是等，但一但阻塞在on_msg或者on_msg_handle，就阻塞了一个
-service线程，service线程是非常有限的资源，除非你开了很多很多的service线程（这会严重影响效率，增加线程切换开销）。第二你可以开启拥塞控制，
-然后在on_msg或者on_msg_handle里面返回false，代表无法处理当前这条消息。
-具体来说，如果你在on_msg里面开启拥塞控制，那么马上停止通过on_msg派发剩下的消息，当前这条消息（你返回false的这条）进入接收缓存，并通过
-on_msg_handle来派发，在on_msg_handle里面，如果你发现仍然处理不了，则继续返回false，直到你能够处理它，并在处理它之后（on_msg_handle里面）
-关闭拥塞控制并返回true，那么剩下的消息将再次通过on_msg派发。
-如果你在on_msg_handle里面处理消息，那返回false就是拥塞控制，不再需要调用congestion_control函数（调用也无效果）。
+	bool is_recv_idle() const;
+是否暂停了消息接收，因为接收缓存满（等到缓存可用时自动恢复）。
+
+	void msg_resuming_interval(size_t interval);
+	size_t msg_resuming_interval() const;
+接收缓存满时，重复检查间隔。
+
+	void msg_handling_interval(size_t interval);
+	size_t msg_handling_interval() const;
+on_msg_handle返回false或者0时，延时多久重复派发消息。
 
 	const struct statistic& get_statistic() const;
 综合统计信息。
@@ -105,6 +106,9 @@ on_msg_handle来派发，在on_msg_handle里面，如果你发现仍然处理不
 判断消息发送缓存是否可用，即里面的消息数量是否小于ASCS_MAX_MSG_NUM条，如果以can_overflow为true调用任何消息发送函数（如send_msg），
 将马上成功而无论消息发送缓存是否可用，所以可能会造成消息发送缓存大小不可控。
 
+	bool is_recv_buffer_available() const;
+接收缓存是否可用，即里面的消息数量是否小于ASCS_MAX_MSG_NUM条。
+
 	bool direct_send_msg(const InMsgType& msg, bool can_overflow = false);
 	bool direct_send_msg(InMsgType&& msg, bool can_overflow = false);
 直接发送消息（放入消息发送缓存）而不再调用i_packer::pack_msg函数，其实socket内部在发送消息时也是调用这个函数，只是在调用
@@ -114,8 +118,8 @@ on_msg_handle来派发，在on_msg_handle里面，如果你发现仍然处理不
 	size_t get_pending_recv_msg_num();
 获取缓存里面的消息数量，其中post和send缓存里面的消息是打包过的；recv缓存里面的消息是解包过后的，下同。
 
-	void pop_first_pending_send_msg(InMsgType& msg);
-	void pop_first_pending_recv_msg(OutMsgType& msg);
+	void pop_first_pending_send_msg(in_msg& msg);
+	void pop_first_pending_recv_msg(out_msg& msg);
 弹出缓存中第一个包，如果得到一个空包（msg.empty()等于true），则说明缓存里面没有消息。
 
 	void pop_all_pending_send_msg(in_container_type& msg_list);
@@ -125,12 +129,6 @@ on_msg_handle来派发，在on_msg_handle里面，如果你发现仍然处理不
 protected:
 	virtual bool do_start() = 0;
 子类重写，请看tcp:server_socket_base、tcp::client_socket_base、udp::socket_base、ssl::server_socket_base和ssl::client_socket_base的实现。
-
-	virtual bool do_send_msg() = 0;
-真正的消息发送（调用asio函数），具体怎么发请看tcp::socket和udp::socket的实现。
-
-	virtual void do_recv_msg() = 0;
-真正的消息接收（调用asio函数），具体怎么发请看tcp::socket和udp::socket的实现。
 
 	virtual void on_send_error(const error_code& ec);
 	virtual void on_recv_error(const asio::error_code& ec) = 0;
@@ -142,15 +140,16 @@ protected:
 	virtual void on_close();
 当对象真正被close之前，会调用这个回调，用户可以在这里面释放资源，在这之后，对象可能会被重用或者被释放。
 
-#ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
-	virtual bool on_msg(OutMsgType& msg) = 0;
-收到一条消息时回调，返回true表示消息被成功处理，返回false表示消息无法立即处理，于是进入接收缓存，通过on_msg_handle再次派发。
-#endif
+	virtual void after_close();
+重写这个函数的最好的例子就是客户端做重连接。
 
-	virtual bool on_msg_handle(OutMsgType& msg, bool link_down) = 0;
-从接收缓存派发一条消息，返回true表示消息被成功处理，返回false表示消息无法立即处理，于是将暂停一小段时间之后继续重试（异步）；
-如果link_down，则无论返回true还是false，都将当成消息已经处理，将继续派发下一条消息（同步地），在连接断开时，会置link_down为真，
-此时需要尽快的派发完所有剩余的消息。
+#ifdef ASCS_DISPATCH_BATCH_MSG
+	virtual size_t on_msg_handle(out_queue_type& can);
+#else
+	virtual bool on_msg_handle(OutMsgType& msg, bool link_down);
+#endif
+从接收缓存派发一条（或者所有）消息，返回true（或者大于0）表示消息被成功处理，返回false（或者0）表示消息无法立即处理，于是将暂停一小段时间之后继续重试（异步）。
+如果派发所有消息，用户需要把处理过的消息从queue里面弹出来，剩下的将继承在下次on_msg_handle里面派发。
 
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
 	virtual void on_msg_send(InMsgType& msg);
@@ -168,23 +167,29 @@ protected:
 如果定义了ASCS_DELAY_CLOSE宏且其值等于0，则socket将保证以上说的行为，如果没有定义，则简单地在ASCS_DELAY_CLOSE秒后，调用on_close()，
 然后同样的道理，object_pool将完全接管这个socket，以便在适当的时候重用或者释放它。
 
-	void handle_msg();
-子类收到消息之后，调用这个函数来派发消息，它要么直接调用on_msg，要么把消息放入消息接收缓存，然后调用dispatch_msg，如果消息处理完毕（调用on_msg）
-或者都放入了消息接收缓存，则调用do_recv_msg以继续接收数据。
-
-	void dispatch_msg();
-派发消息（调用do_dispatch_msg）。
-
-	void do_dispatch_msg(bool need_lock);
-调用io_service::post发出一个异步调用，调度到时回调msg_handler。
+	template<typename T> bool handle_msg(T& temp_msg_can);
+子类收到消息之后，调用这个函数来派发消息，它会把消息放入消息接收缓存，然后调用dispatch_msg。
 
 	bool do_direct_send_msg(InMsgType&& msg);
 将消息插入容器，内部使用。
 
 private:
+	virtual void recv_msg() = 0;
+	virtual void send_msg() = 0;
+收发消息，子类实现。
+
 	template<typename Object> friend class object_pool;
 	void id(uint_fast64_t id);
 设置id，注意使用者不可设置id，只有socket的创建者（object_pool或者其继承者）才可设置id，除非这个socket没有被任何对象池管理。
+
+bool check_receiving(bool raise_recv);
+辅助函数，如果接收缓存可用返回true（调用recv_msg如果raise_recv为true），否则返回false并记录暂停消息接收时间。
+
+	void dispatch_msg();
+派发消息，post一个异步调用到do_dispatch_msg。
+
+	void do_dispatch_msg();
+调用on_msg_handle函数派发消息。
 
 	bool timer_handler(tid id);
 处理所有定时器
@@ -201,42 +206,43 @@ private:
 异步派发接收缓存里面的消息时，asio调用本函数，在这个函数里面将调用on_msg_handle，然后调用do_dispatch_msg或者dispatch_msg继续派发消息。
 
 protected:
-	uint_fast64_t _id;
-保存在对象池中时，作为key，所以必须唯一，对象池用hash作为容器以快速查找。
-	Socket next_layer_;
-前面在next_layer里面解释过了。
-
-	out_msg last_dispatch_msg;
-由于是异步发送和派发消息，这两个成员变量保证其在异步处理过程中的有效性。
 	std::shared_ptr<i_packer<typename Packer::msg_type>> packer_;
 打包器。
 
-	in_container_type send_msg_buffer;
-	out_container_type recv_msg_buffer;
-	std::list<out_msg> temp_msg_buffer;
-收发缓存，访问temp_msg_buffer无需互斥，它只能在内部访问，作用是当收到消息之后，当消息无法存入接收缓存
-（消息派发被暂停，或者正在拥塞控制），那么消息将被存放于temp_msg_buffer，并且不再继续接收消息，直到temp_msg_buffer
-里面的消息全部被处理掉，或者移到了recv_msg_buffer，socket会周期性的做以上尝试。
-
 	volatile bool sending;
-	std::atomic_flag send_atomic;
+	in_queue_type send_msg_buffer;
 
-	volatile bool dispatching;
-	std::atomic_flag dispatch_atomic;
+#ifdef ASCS_PASSIVE_RECV
+	volatile bool reading;
+#endif
 
-	volatile bool congestion_controlling;
-内部使用的一些状态，看名字应该能猜到其意思。
+	struct statistic stat;
+
+private:
+	uint_fast64_t _id;
+保存在对象池中时，作为key，所以必须唯一，对象池用hash作为容器以快速查找
+
+	Socket next_layer_;
+前面在next_layer里面解释过了。
 
 	volatile bool started_; //has started or not
 	std::atomic_flag start_atomic;
 是否已经开始，开始的概念由子类具体实现，socket只是记录是否已经调用过start函数而已。
 
-	struct statistic stat;
+#ifndef ASCS_DISPATCH_BATCH_MSG
+	out_msg last_dispatch_msg;
+#endif
+由于是异步派发消息，这个成员变量保证其在异步处理过程中的有效性。
+
+	out_queue_type recv_msg_buffer;
 	typename statistic::stat_time recv_idle_begin_time;
+	bool recv_idle_began;
 时间消耗统计。
 
-	time_t last_send_time, last_recv_time;
-上次读写时间，由于判断是否需要发送心跳包，和心跳包是否超时。
+	volatile bool dispatching;
+	asio::io_context::strand strand;
+
+	size_t msg_resuming_interval_, msg_handling_interval_;
 };
 
 } //namespace

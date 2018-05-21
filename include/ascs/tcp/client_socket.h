@@ -26,9 +26,9 @@ private:
 	typedef socket_base<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer> super;
 
 public:
-	static const timer::tid TIMER_BEGIN = super::TIMER_END;
-	static const timer::tid TIMER_CONNECT = TIMER_BEGIN;
-	static const timer::tid TIMER_END = TIMER_BEGIN + 10;
+	static const typename super::tid TIMER_BEGIN = super::TIMER_END;
+	static const typename super::tid TIMER_CONNECT = TIMER_BEGIN;
+	static const typename super::tid TIMER_END = TIMER_BEGIN + 10;
 
 	client_socket_base(asio::io_context& io_context_) : super(io_context_), need_reconnect(true) {set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
 	template<typename Arg>
@@ -137,7 +137,7 @@ protected:
 			auto delay = prepare_reconnect(ec);
 			if (delay >= 0)
 			{
-				this->set_timer(TIMER_CONNECT, delay, [this](timer::tid id)->bool {this->do_start(); return false;});
+				this->set_timer(TIMER_CONNECT, delay, [this](typename super::tid id)->bool {this->do_start(); return false;});
 				return true;
 			}
 		}

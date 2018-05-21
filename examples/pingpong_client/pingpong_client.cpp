@@ -5,7 +5,6 @@
 #define ASCS_SERVER_PORT	9527
 #define ASCS_REUSE_OBJECT //use objects pool
 #define ASCS_DELAY_CLOSE	5 //define this to avoid hooks for async call (and slightly improve efficiency)
-//#define ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
 //#define ASCS_WANT_MSG_SEND_NOTIFY
 #define ASCS_MSG_BUFFER_SIZE 65536
 #define ASCS_INPUT_QUEUE non_lock_queue //we will never operate sending buffer concurrently, so need no locks
@@ -25,31 +24,14 @@ using namespace ascs::ext::tcp;
 #endif
 
 #define QUIT_COMMAND	"quit"
-#define LIST_STATUS		"status"
+#define LIST_ALL_CLIENT	"list_all_client"
+#define STATISTIC		"statistic"
+#define STATUS			"status"
 #define INCREASE_THREAD	"increase_thread"
 #define DECREASE_THREAD	"decrease_thread"
 
 cpu_timer begin_time;
 std::atomic_ushort completed_session_num;
-
-//about congestion control
-//
-//in 1.3, congestion control has been removed (no post_msg nor post_native_msg anymore), this is because
-//without known the business (or logic), framework cannot always do congestion control properly.
-//now, users should take the responsibility to do congestion control, there're two ways:
-//
-//1. for receiver, if you cannot handle msgs timely, which means the bottleneck is in your business,
-//    you should open/close congestion control intermittently;
-//   for sender, send msgs in on_msg_send() or use sending buffer limitation (like safe_send_msg(..., false)),
-//    but must not in service threads, please note.
-//
-//2. for sender, if responses are available (like pingpong test), send msgs in on_msg()/on_msg_handle(),
-//    but this will reduce IO throughput because SOCKET's sliding window is not fully used, pleae note.
-//
-//pingpong_client will choose method #1 if defined ASCS_WANT_MSG_SEND_NOTIFY, otherwise #2
-//BTW, if pingpong_client chose method #2, then pingpong_server can work properly without any congestion control,
-//which means pingpong_server can send msgs back with can_overflow parameter equal to true, and memory occupation
-//will be under control.
 
 class echo_socket : public client_socket
 {
@@ -62,20 +44,16 @@ public:
 		total_bytes *= msg_num;
 		send_bytes = recv_bytes = 0;
 
-		send_native_msg(msg, msg_len);
+		send_native_msg(msg, msg_len, false);
 	}
 
 protected:
 	virtual void on_connect() {asio::ip::tcp::no_delay option(true); lowest_layer().set_option(option); client_socket::on_connect();}
 
 	//msg handling
-#ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
-	virtual bool on_msg(out_msg_type& msg) {handle_msg(msg); return true;}
-#endif
 	virtual bool on_msg_handle(out_msg_type& msg) {handle_msg(msg); return true;}
 
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
-	//congestion control, method #1, the peer needs its own congestion control too.
 	virtual void on_msg_send(in_msg_type& msg)
 	{
 		send_bytes += msg.size();
@@ -92,7 +70,6 @@ private:
 	}
 #else
 private:
-	//congestion control, method #2, the peer totally doesn't have to consider congestion control.
 	void handle_msg(out_msg_type& msg)
 	{
 		if (0 == total_bytes)
@@ -163,12 +140,16 @@ int main(int argc, const char* argv[])
 		std::getline(std::cin, str);
 		if (QUIT_COMMAND == str)
 			sp.stop_service();
-		else if (LIST_STATUS == str)
+		else if (STATISTIC == str)
 		{
 			printf("link #: " ASCS_SF ", valid links: " ASCS_SF ", invalid links: " ASCS_SF "\n", client.size(), client.valid_size(), client.invalid_object_size());
 			puts("");
 			puts(client.get_statistic().to_string().data());
 		}
+		else if (STATUS == str)
+			client.list_all_status();
+		else if (LIST_ALL_CLIENT == str)
+			client.list_all_object();
 		else if (INCREASE_THREAD == str)
 			sp.add_service_thread(1);
 		else if (DECREASE_THREAD == str)

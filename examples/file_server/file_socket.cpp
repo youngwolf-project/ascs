@@ -34,10 +34,6 @@ void file_socket::take_over(std::shared_ptr<server_socket> socket_ptr)
 //void file_socket::take_over(std::shared_ptr<file_socket> socket_ptr) {printf("restore user data from invalid object (" ASCS_LLF ").\n", socket_ptr->id());}
 
 //msg handling
-#ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
-//we can handle msg very fast, so we don't use recv buffer
-bool file_socket::on_msg(out_msg_type& msg) {handle_msg(msg); return true;}
-#endif
 bool file_socket::on_msg_handle(out_msg_type& msg) {handle_msg(msg); return true;}
 //msg handling end
 

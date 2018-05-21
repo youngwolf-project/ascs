@@ -17,6 +17,7 @@
 #include <unordered_map>
 
 #include "timer.h"
+#include "executor.h"
 #include "container.h"
 #include "service_pump.h"
 
@@ -24,20 +25,20 @@ namespace ascs
 {
 
 template<typename Object>
-class object_pool : public service_pump::i_service, protected timer
+class object_pool : public service_pump::i_service, protected timer<executor>
 {
 public:
 	typedef std::shared_ptr<Object> object_type;
 	typedef const object_type object_ctype;
 	typedef std::unordered_map<uint_fast64_t, object_type> container_type;
 
-	static const tid TIMER_BEGIN = timer::TIMER_END;
+	static const tid TIMER_BEGIN = timer<executor>::TIMER_END;
 	static const tid TIMER_FREE_SOCKET = TIMER_BEGIN;
 	static const tid TIMER_CLEAR_SOCKET = TIMER_BEGIN + 1;
 	static const tid TIMER_END = TIMER_BEGIN + 10;
 
 protected:
-	object_pool(service_pump& service_pump_) : i_service(service_pump_), timer(service_pump_), cur_id(-1), max_size_(ASCS_MAX_OBJECT_NUM) {}
+	object_pool(service_pump& service_pump_) : i_service(service_pump_), timer<executor>(service_pump_), cur_id(-1), max_size_(ASCS_MAX_OBJECT_NUM) {}
 
 	void start()
 	{
@@ -289,8 +290,9 @@ public:
 		return num_affected;
 	}
 
-	void list_all_object() {do_something_to_all([](object_ctype& item) {item->show_info("", "");});}
 	statistic get_statistic() {statistic stat; do_something_to_all([&](object_ctype& item) {stat += item->get_statistic();}); return stat;}
+	void list_all_status() {do_something_to_all([](object_ctype& item) {item->show_status();});}
+	void list_all_object() {do_something_to_all([](object_ctype& item) {item->show_info("", "");});}
 
 	template<typename _Predicate> void do_something_to_all(const _Predicate& __pred)
 		{std::lock_guard<std::mutex> lock(object_can_mutex); for (typename container_type::value_type& item : object_can) __pred(item.second);}

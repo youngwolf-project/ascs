@@ -5,7 +5,6 @@
 #define ASCS_SERVER_PORT		9527
 #define ASCS_REUSE_OBJECT //use objects pool
 #define ASCS_DELAY_CLOSE		5 //define this to avoid hooks for async call (and slightly improve efficiency)
-//#define ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
 #define ASCS_MSG_BUFFER_SIZE	65536
 #define ASCS_INPUT_QUEUE non_lock_queue
 #define ASCS_INPUT_CONTAINER list
@@ -25,28 +24,11 @@ using namespace ascs::tcp;
 using namespace ascs::ext::tcp;
 
 #define QUIT_COMMAND	"quit"
-#define LIST_STATUS		"status"
+#define LIST_ALL_CLIENT	"list_all_client"
+#define STATISTIC		"statistic"
+#define STATUS			"status"
 #define INCREASE_THREAD	"increase_thread"
 #define DECREASE_THREAD	"decrease_thread"
-
-//about congestion control
-//
-//in 1.3, congestion control has been removed (no post_msg nor post_native_msg anymore), this is because
-//without known the business (or logic), framework cannot always do congestion control properly.
-//now, users should take the responsibility to do congestion control, there're two ways:
-//
-//1. for receiver, if you cannot handle msgs timely, which means the bottleneck is in your business,
-//    you should open/close congestion control intermittently;
-//   for sender, send msgs in on_msg_send() or use sending buffer limitation (like safe_send_msg(..., false)),
-//    but must not in service threads, please note.
-//
-//2. for sender, if responses are available (like pingpong test), send msgs in on_msg()/on_msg_handle(),
-//    but this will reduce IO throughput because SOCKET's sliding window is not fully used, pleae note.
-//
-//pingpong_server chose method #1
-//BTW, if pingpong_client chose method #2, then pingpong_server can work properly without any congestion control,
-//which means pingpong_server can send msgs back with can_overflow parameter equal to true, and memory occupation
-//will be under control.
 
 class echo_socket : public server_socket
 {
@@ -55,39 +37,7 @@ public:
 
 protected:
 	//msg handling: send the original msg back(echo server)
-	//congestion control, method #1, the peer needs its own congestion control too.
-#ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER //this virtual function doesn't exist if ASCS_FORCE_TO_USE_MSG_RECV_BUFFER been defined
-	virtual bool on_msg(out_msg_type& msg)
-	{
-		auto re = direct_send_msg(std::move(msg));
-		if (!re)
-		{
-			//cannot handle (send it back) this msg timely, begin congestion control
-			//'msg' will be put into receiving buffer, and be dispatched via on_msg_handle() in the future
-			congestion_control(true);
-			//unified_out::warning_out("open congestion control."); //too many prompts will affect efficiency
-		}
-
-		return re;
-	}
-
-	virtual bool on_msg_handle(out_msg_type& msg)
-	{
-		auto re = direct_send_msg(std::move(msg));
-		if (re)
-		{
-			//successfully handled the only one msg in receiving buffer, end congestion control
-			//subsequent msgs will be dispatched via on_msg() again.
-			congestion_control(false);
-			//unified_out::warning_out("close congestion control."); //too many prompts will affect efficiency
-		}
-
-		return re;
-	}
-#else
-	//if we used receiving buffer, congestion control will become much simpler, like this:
 	virtual bool on_msg_handle(out_msg_type& msg) {return direct_send_msg(std::move(msg));}
-#endif
 	//msg handling end
 };
 
@@ -127,12 +77,16 @@ int main(int argc, const char* argv[])
 		std::cin >> str;
 		if (QUIT_COMMAND == str)
 			sp.stop_service();
-		else if (LIST_STATUS == str)
+		else if (STATISTIC == str)
 		{
 			printf("link #: " ASCS_SF ", invalid links: " ASCS_SF "\n", echo_server_.size(), echo_server_.invalid_object_size());
 			puts("");
 			puts(echo_server_.get_statistic().to_string().data());
 		}
+		else if (STATUS == str)
+			echo_server_.list_all_status();
+		else if (LIST_ALL_CLIENT == str)
+			echo_server_.list_all_object();
 		else if (INCREASE_THREAD == str)
 			sp.add_service_thread(1);
 		else if (DECREASE_THREAD == str)

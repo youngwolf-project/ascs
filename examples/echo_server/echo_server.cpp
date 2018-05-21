@@ -5,7 +5,7 @@
 #define ASCS_SERVER_PORT		9527
 #define ASCS_REUSE_OBJECT //use objects pool
 //#define ASCS_FREE_OBJECT_INTERVAL	60 //it's useless if ASCS_REUSE_OBJECT macro been defined
-//#define ASCS_FORCE_TO_USE_MSG_RECV_BUFFER //force to use the msg recv buffer
+#define ASCS_DISPATCH_BATCH_MSG
 #define ASCS_ENHANCED_STABILITY
 //#define ASCS_FULL_STATISTIC //full statistic will slightly impact efficiency
 //#define ASCS_USE_STEADY_TIMER
@@ -52,7 +52,8 @@ using namespace ascs::ext::tcp;
 #define QUIT_COMMAND	"quit"
 #define RESTART_COMMAND	"restart"
 #define LIST_ALL_CLIENT	"list_all_client"
-#define LIST_STATUS		"status"
+#define STATISTIC		"statistic"
+#define STATUS			"status"
 #define INCREASE_THREAD	"increase_thread"
 #define DECREASE_THREAD	"decrease_thread"
 
@@ -61,22 +62,6 @@ using namespace ascs::ext::tcp;
 //at here, we make each echo_socket use the same global packer for memory saving
 //notice: do not do this for unpacker, because unpacker has member variables and can't share each other
 auto global_packer(std::make_shared<ASCS_DEFAULT_PACKER>());
-
-//about congestion control
-//
-//in 1.3, congestion control has been removed (no post_msg nor post_native_msg anymore), this is because
-//without known the business (or logic), framework cannot always do congestion control properly.
-//now, users should take the responsibility to do congestion control, there're two ways:
-//
-//1. for receiver, if you cannot handle msgs timely, which means the bottleneck is in your business,
-//    you should open/close congestion control intermittently;
-//   for sender, send msgs in on_msg_send() or use sending buffer limitation (like safe_send_msg(..., false)),
-//    but must not in service threads, please note.
-//
-//2. for sender, if responses are available (like pingpong test), send msgs in on_msg()/on_msg_handle(),
-//    but this will reduce IO throughput because SOCKET's sliding window is not fully used, pleae note.
-//
-//asio_server chose method #1
 
 //demonstrate how to control the type of tcp::server_socket_base::server from template parameter
 class i_echo_server : public i_server
@@ -115,39 +100,29 @@ protected:
 	}
 
 	//msg handling: send the original msg back(echo server)
-	//congestion control, method #1, the peer needs its own congestion control too.
-#ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
-	//this virtual function doesn't exists if ASCS_FORCE_TO_USE_MSG_RECV_BUFFER been defined
-	virtual bool on_msg(out_msg_type& msg)
+#ifdef ASCS_DISPATCH_BATCH_MSG
+	virtual size_t on_msg_handle(out_queue_type& can)
 	{
-		auto re = send_msg(msg.data(), msg.size());
-		if (!re)
-		{
-			//cannot handle (send it back) this msg timely, begin congestion control
-			//'msg' will be put into receiving buffer, and be dispatched via on_msg_handle() in the future
-			congestion_control(true);
-			//unified_out::warning_out("open congestion control."); //too many prompts will affect efficiency
-		}
+		if (!is_send_buffer_available())
+			return 0;
 
-		return re;
-	}
+		out_container_type tmp_can;
+		//this manner requires the container used by the message queue can be spliced (such as std::list, but not std::vector,
+		// ascs doesn't require this characteristic).
+		//these code can be compiled because we used list as the container of the message queue, see macro ASCS_OUTPUT_CONTAINER for more details
+		//to consume all of messages in can, see echo_client.
+		can.lock();
+		auto begin_iter = std::begin(can);
+		//don't be too greedy, here is in a service thread, we should not block this thread for a long time
+		auto end_iter = can.size() > 10 ? std::next(begin_iter, 10) : std::end(can);
+		tmp_can.splice(std::end(tmp_can), can, begin_iter, end_iter);
+		can.unlock();
 
-	virtual bool on_msg_handle(out_msg_type& msg)
-	{
-		auto re = send_msg(msg.data(), msg.size());
-		if (re)
-		{
-			//successfully handled the only one msg in receiving buffer, end congestion control
-			//subsequent msgs will be dispatched via on_msg() again.
-			congestion_control(false);
-			//unified_out::warning_out("close congestion control."); //too many prompts will affect efficiency
-		}
-
-		return re;
+		ascs::do_something_to_all(tmp_can, [this](out_msg_type& msg) {this->send_msg(msg, true);});
+		return tmp_can.size();
 	}
 #else
-	//if we used receiving buffer, congestion control will become much simpler, like this:
-	virtual bool on_msg_handle(out_msg_type& msg) {return send_msg(msg.data(), msg.size());}
+	virtual bool on_msg_handle(out_msg_type& msg) {return send_msg(msg, false);}
 #endif
 	//msg handling end
 };
@@ -227,12 +202,17 @@ int main(int argc, const char* argv[])
 			sp.stop_service();
 			sp.start_service(thread_num);
 		}
-		else if (LIST_STATUS == str)
+		else if (STATISTIC == str)
 		{
 			printf("normal server, link #: " ASCS_SF ", invalid links: " ASCS_SF "\n", server_.size(), server_.invalid_object_size());
 			printf("echo server, link #: " ASCS_SF ", invalid links: " ASCS_SF "\n", echo_server_.size(), echo_server_.invalid_object_size());
 			puts("");
 			puts(echo_server_.get_statistic().to_string().data());
+		}
+		else if (STATUS == str)
+		{
+			server_.list_all_status();
+			echo_server_.list_all_status();
 		}
 		else if (LIST_ALL_CLIENT == str)
 		{
@@ -249,16 +229,10 @@ int main(int argc, const char* argv[])
 		{
 //			/*
 			//broadcast series functions call pack_msg for each client respectively, because clients may used different protocols(so different type of packers, of course)
-			server_.sync_broadcast_msg(str.data(), str.size() + 1);
+			server_.broadcast_msg(str.data(), str.size() + 1, false);
 			//send \0 character too, because demo client used basic_buffer as its msg type, it will not append \0 character automatically as std::string does,
 			//so need \0 character when printing it.
 //			*/
-			/*
-			//broadcast series functions call pack_msg for each client respectively, because clients may used different protocols(so different type of packers, of course)
-			server_.broadcast_msg(str.data(), str.size() + 1);
-			//send \0 character too, because demo client used basic_buffer as its msg type, it will not append \0 character automatically as std::string does,
-			//so need \0 character when printing it.
-			*/
 			/*
 			//if all clients used the same protocol, we can pack msg one time, and send it repeatedly like this:
 			packer p;
@@ -266,12 +240,12 @@ int main(int argc, const char* argv[])
 			//send \0 character too, because demo client used basic_buffer as its msg type, it will not append \0 character automatically as std::string does,
 			//so need \0 character when printing it.
 			if (!msg.empty())
-				server_.do_something_to_all([&msg](server_base<normal_server_socket>::object_ctype& item) {item->direct_send_msg(msg);});
+				server_.do_something_to_all([&msg](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(msg);});
 			*/
 			/*
 			//if demo client is using stream_unpacker
 			if (!str.empty())
-				server_.do_something_to_all([&str](server_base<normal_server_socket>::object_ctype& item) {item->direct_send_msg(str);});
+				server_.do_something_to_all([&str](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(str);});
 			*/
 		}
 	}

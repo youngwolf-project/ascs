@@ -6,7 +6,6 @@
 #define ASCS_MAX_OBJECT_NUM		102400
 #define ASCS_REUSE_OBJECT //use objects pool
 #define ASCS_DELAY_CLOSE		5 //define this to avoid hooks for async call (and slightly improve efficiency)
-//#define ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
 #define ASCS_MSG_BUFFER_SIZE	1024
 #define ASCS_INPUT_QUEUE		non_lock_queue //we will never operate sending buffer concurrently, so need no locks
 #define ASCS_INPUT_CONTAINER	list
@@ -20,7 +19,9 @@ using namespace ascs::ext;
 using namespace ascs::ext::tcp;
 
 #define QUIT_COMMAND	"quit"
-#define LIST_STATUS		"status"
+#define LIST_ALL_CLIENT	"list_all_client"
+#define STATISTIC		"statistic"
+#define STATUS			"status"
 #define INCREASE_THREAD	"increase_thread"
 #define DECREASE_THREAD	"decrease_thread"
 
@@ -50,9 +51,6 @@ protected:
 	}
 
 	//msg handling
-#ifndef ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
-	virtual bool on_msg(out_msg_type& msg) {handle_msg(std::move(msg)); return true;}
-#endif
 	virtual bool on_msg_handle(out_msg_type& msg) {handle_msg(std::move(msg)); return true;}
 
 private:
@@ -130,12 +128,16 @@ int main(int argc, const char* argv[])
 		std::getline(std::cin, str);
 		if (QUIT_COMMAND == str)
 			sp.stop_service();
-		else if (LIST_STATUS == str)
+		else if (STATISTIC == str)
 		{
 			printf("link #: " ASCS_SF ", valid links: " ASCS_SF ", invalid links: " ASCS_SF "\n", client.size(), client.valid_size(), client.invalid_object_size());
 			puts("");
 			puts(client.get_statistic().to_string().data());
 		}
+		else if (STATUS == str)
+			client.list_all_status();
+		else if (LIST_ALL_CLIENT == str)
+			client.list_all_object();
 		else if (INCREASE_THREAD == str)
 			sp.add_service_thread(1);
 		else if (DECREASE_THREAD == str)

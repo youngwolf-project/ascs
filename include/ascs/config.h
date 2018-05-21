@@ -305,6 +305,56 @@
  *
  * REPLACEMENTS:
  *
+ * ===============================================================
+ * 2018.5.20	version 1.3.0
+ *
+ * SPECIAL ATTENTION (incompatible with old editions):
+ * Not support sync sending mode anymore.
+ * Explicitly need macro ASCS_PASSIVE_RECV to gain the ability of changing the unpacker at runtime.
+ * Function disconnect, force_shutdown and graceful_shutdown in udp::socket_base will now be performed asynchronously.
+ * Not support macro ASCS_FORCE_TO_USE_MSG_RECV_BUFFER anymore, which means now we have the behavior as this macro always defined,
+ *  thus, virtual function ascs::socket::on_msg() is useless and also has been deleted.
+ * statistic.handle_time_2_sum has been renamed to handle_time_sum.
+ * Macro ASCS_MSG_HANDLING_INTERVAL_STEP1 has been renamed to ASCS_MSG_RESUMING_INTERVAL.
+ * Macro ASCS_MSG_HANDLING_INTERVAL_STEP2 has been renamed to ASCS_MSG_HANDLING_INTERVAL.
+ * ascs::socket::is_sending_msg() has been renamed to is_sending().
+ * ascs::socket::is_dispatching_msg() has been renamed to is_dispatching().
+ * typedef ascs::socket::in_container_type has been renamed to in_queue_type.
+ * typedef ascs::socket::out_container_type has been renamed to out_queue_type.
+ * Wipe default value for parameter can_overflow in function send_msg, send_native_msg, safe_send_msg, safe_send_native_msg,
+ *  broadcast_msg, broadcast_native_msg, safe_broadcast_msg and safe_broadcast_native_msg, this is because we added template parameter to some of them,
+ *  and the compiler will complain (ambiguity) if we omit the can_overflow parameter. So take send_msg function for example, if you omitted can_overflow
+ *  before, then in 1.3, you must supplement it, like send_msg(...) -> send_msg(..., false).
+ *
+ * HIGHLIGHT:
+ * After introduced asio::io_context::strand (which is required, see FIX section for more details), we wiped two atomic in ascs::socket.
+ * Introduced macro ASCS_DISPATCH_BATCH_MSG, then all messages will be dispatched via on_handle_msg with a variable-length contianer.
+ *
+ * FIX:
+ * Wiped race condition between async_read and async_write on the same ascs::socket, so sync sending mode will not be supported anymore.
+ *
+ * ENHANCEMENTS:
+ * Explicitly define macro ASCS_PASSIVE_RECV to gain the ability of changing the unpacker at runtime.
+ * Add function ascs::socket::is_reading() if macro ASCS_PASSIVE_RECV been defined, otherwise, the socket will always be reading.
+ * Add function ascs::socket::is_recv_buffer_available(), you can use it before calling recv_msg() to avoid receiving buffer overflow.
+ * Add typedef ascs::socket::in_container_type to represent the container type used by in_queue_type (sending buffer).
+ * Add typedef ascs::socket::out_container_type to represent the container type used by out_queue_type (receiving buffer).
+ * Generalize function send_msg, send_native_msg, safe_send_msg, safe_send_native_msg, broadcast_msg, broadcast_native_msg,
+ *  safe_broadcast_msg and safe_broadcast_native_msg.
+ *
+ * DELETION:
+ * Deleted macro ASCS_SEND_BUFFER_TYPE.
+ * Deleted virtual function bool ascs::socket::on_msg().
+ * Not support sync sending mode anymore, so we reduced an atomic object in ascs::socket.
+ *
+ * REFACTORING:
+ * If you want to change unpacker at runtime, first, you must define macro ASCS_PASSIVE_RECV, second, you must call ascs::socket::recv_msg and
+ *  guarantee only zero or one recv_msg invocation (include initiating and asynchronous operation, this may need mutex, please carefully design your logic),
+ *  see file_client for more details.
+ * Class object has been split into executor and tracked_executor, object_pool use the former, and ascs::socket use the latter.
+ *
+ * REPLACEMENTS:
+ *
  */
 
 #ifndef _ASCS_CONFIG_H_
@@ -314,8 +364,8 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#define ASCS_VER		10206	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.2.6"
+#define ASCS_VER		10300	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.3.0"
 
 //asio and compiler check
 #ifdef _MSC_VER
@@ -347,6 +397,9 @@ static_assert(ASIO_VERSION >= 101001, "ascs needs asio 1.10.1 or higher.");
 
 #if ASIO_VERSION < 101100
 namespace asio {typedef io_service io_context;}
+#define make_strand_handler(S, F) S.wrap(F)
+#else
+#define make_strand_handler(S, F) asio::bind_executor(S, F)
 #endif
 //asio and compiler check
 
@@ -395,9 +448,6 @@ static_assert(ASCS_DELAY_CLOSE >= 0, "delay close duration must be bigger than o
 
 //full statistic include time consumption, or only numerable informations will be gathered
 //#define ASCS_FULL_STATISTIC
-
-//when got some msgs, not call on_msg(), but asynchronously dispatch them, on_msg_handle() will be called later.
-//#define ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
 
 //after every msg sent, call ascs::socket::on_msg_send()
 //#define ASCS_WANT_MSG_SEND_NOTIFY
@@ -450,7 +500,7 @@ static_assert(ASCS_MAX_OBJECT_NUM > 0, "object capacity must be bigger than zero
 #endif
 
 //IO thread number
-//listening, msg sending and receiving, msg handling (on_msg_handle() and on_msg()), all timers(include user timers) and other asynchronous calls (object::post())
+//listening, msg sending and receiving, msg handling (on_msg_handle() and on_msg()), all timers(include user timers) and other asynchronous calls (from executor)
 //keep big enough, no empirical value I can suggest, you must try to find it out in your own environment
 #ifndef ASCS_SERVICE_THREAD_NUM
 #define ASCS_SERVICE_THREAD_NUM	8
@@ -531,15 +581,6 @@ static_assert(ASCS_ASYNC_ACCEPT_NUM > 0, "async accept number must be bigger tha
 	#endif
 #endif
 
-#ifdef ASCS_SEND_BUFFER_TYPE
-	#error macro ASCS_SEND_BUFFER_TYPE is just used internally.
-#endif
-#if ASIO_VERSION >= 101100
-#define ASCS_SEND_BUFFER_TYPE asio::const_buffer
-#else
-#define ASCS_SEND_BUFFER_TYPE asio::const_buffers_1
-#endif
-
 #ifndef ASCS_HEARTBEAT_INTERVAL
 #define ASCS_HEARTBEAT_INTERVAL	0 //second(s), disable heartbeat by default, just for compatibility
 #endif
@@ -567,22 +608,32 @@ static_assert(ASCS_HEARTBEAT_MAX_ABSENCE > 0, "heartbeat absence must be bigger 
 //#define ASCS_DECREASE_THREAD_AT_RUNTIME
 //enable decreasing service thread at runtime.
 
-#ifndef ASCS_MSG_HANDLING_INTERVAL_STEP1
-#define ASCS_MSG_HANDLING_INTERVAL_STEP1	50 //milliseconds
+#ifndef ASCS_MSG_RESUMING_INTERVAL
+#define ASCS_MSG_RESUMING_INTERVAL	50 //milliseconds
 #endif
-static_assert(ASCS_MSG_HANDLING_INTERVAL_STEP1 >= 0, "the interval of msg handling step 1 must be bigger than or equal to zero.");
-//msg handling step 1
-//move msg from temp_msg_buffer to recv_msg_buffer (because on_msg return false or macro ASCS_FORCE_TO_USE_MSG_RECV_BUFFER been defined)
-//if above process failed, retry it after ASCS_MSG_HANDLING_INTERVAL_STEP1 milliseconds later.
-//this value can be changed via msg_handling_interval_step1(size_t) at runtime.
+static_assert(ASCS_MSG_RESUMING_INTERVAL >= 0, "the interval of msg resuming must be bigger than or equal to zero.");
+//msg receiving
+//if receiving buffer is overflow, message receiving will stop and resume after the buffer becomes available, 
+//this is the interval of receiving buffer checking.
+//this value can be changed via ascs::socket::msg_resuming_interval(size_t) at runtime.
 
-#ifndef ASCS_MSG_HANDLING_INTERVAL_STEP2
-#define ASCS_MSG_HANDLING_INTERVAL_STEP2	50 //milliseconds
+#ifndef ASCS_MSG_HANDLING_INTERVAL
+#define ASCS_MSG_HANDLING_INTERVAL	50 //milliseconds
 #endif
-static_assert(ASCS_MSG_HANDLING_INTERVAL_STEP2 >= 0, "the interval of msg handling step 2 must be bigger than or equal to zero.");
-//msg handling step 2
-//call on_msg_handle, if failed, retry it after ASCS_MSG_HANDLING_INTERVAL_STEP2 milliseconds later.
-//this value can be changed via msg_handling_interval_step2(size_t) at runtime.
+static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling must be bigger than or equal to zero.");
+//msg handling
+//call on_msg_handle, if failed, retry it after ASCS_MSG_HANDLING_INTERVAL milliseconds later.
+//this value can be changed via ascs::socket::msg_handling_interval(size_t) at runtime.
+
+//#define ASCS_PASSIVE_RECV
+//to gain the ability of changing the unpacker at runtime, with this mcro, ascs will not do message receiving automatically (except the firt one),
+//user need to call ascs::socket::recv_msg(), if you need to change the unpacker, do it before recv_msg() invocation, please note.
+//because user can call recv_msg() at any time, it's your responsibility to keep the recv buffer not overflowed, please pay special attention.
+
+//#define ASCS_DISPATCH_BATCH_MSG
+//all messages will be dispatched via on_handle_msg with a variable-length container, this will change the signature of function on_msg_handle,
+//it's very useful if you want to re-dispatch message in your own logic or with very simple message handling (such as echo server).
+//it's your responsibility to remove handled messages from the container (can be part of them).
 
 //configurations
 

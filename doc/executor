@@ -1,0 +1,3 @@
+﻿提供post，defer和dispatch接口，简单的调用asio的同名函数，因为继承者访问不了private的io_context。
+提供post_strand，defer_strand和dispatch_strand接口，简单的以一个strand调用asio的类似函数，strand需要使用都传入。
+

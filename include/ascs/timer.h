@@ -19,7 +19,7 @@
 #include <asio/system_timer.hpp>
 #endif
 
-#include "object.h"
+#include "base.h"
 
 //If you inherit a class from class X, your own timer ids must begin from X::TIMER_END
 namespace ascs
@@ -33,7 +33,8 @@ namespace ascs
 //for same timer object: same timer, on_timer is called in sequence
 //for same timer object: distinct timer, on_timer is called concurrently
 //for distinct timer object: on_timer is always called concurrently
-class timer : public object
+template<typename Executor>
+class timer : public Executor
 {
 public:
 	typedef std::chrono::milliseconds milliseconds;
@@ -63,7 +64,7 @@ public:
 	typedef const timer_info timer_cinfo;
 	typedef std::vector<timer_info> container_type;
 
-	timer(asio::io_context& io_context_) : object(io_context_), timer_can((tid) -1) {tid id = -1; do_something_to_all([&id](timer_info& item) {item.id = ++id;});}
+	timer(asio::io_context& io_context_) : Executor(io_context_), timer_can((tid) -1) {tid id = -1; do_something_to_all([&id](timer_info& item) {item.id = ++id;});}
 
 	bool update_timer_info(tid id, size_t interval, std::function<bool(tid)>&& call_back, bool start = false)
 	{
@@ -84,7 +85,7 @@ public:
 	bool update_timer_info(tid id, size_t interval, const std::function<bool(tid)>& call_back, bool start = false)
 		{return update_timer_info(id, interval, std::function<bool(tid)>(call_back), start);}
 
-	void change_timer_status(tid id, timer_info::timer_status status) {timer_can[id].status = status;}
+	void change_timer_status(tid id, typename timer_info::timer_status status) {timer_can[id].status = status;}
 	void change_timer_interval(tid id, size_t interval) {timer_can[id].interval_ms = interval;}
 
 	void change_timer_call_back(tid id, std::function<bool(tid)>&& call_back) {timer_can[id].call_back.swap(call_back);}
@@ -127,10 +128,10 @@ protected:
 #endif
 
 #if (defined(_MSC_VER) && _MSC_VER > 1800) || (defined(__cplusplus) && __cplusplus > 201103L)
-		ti.timer->async_wait(make_handler_error([this, &ti, prev_seq(++ti.seq)](const asio::error_code& ec) {
+		ti.timer->async_wait(this->make_handler_error([this, &ti, prev_seq(++ti.seq)](const asio::error_code& ec) {
 #else
 		auto prev_seq = ++ti.seq;
-		ti.timer->async_wait(make_handler_error([this, &ti, prev_seq](const asio::error_code& ec) {
+		ti.timer->async_wait(this->make_handler_error([this, &ti, prev_seq](const asio::error_code& ec) {
 #endif
 			if (!ec && ti.call_back(ti.id) && timer_info::TIMER_OK == ti.status)
 				this->start_timer(ti);
@@ -148,11 +149,9 @@ protected:
 		}
 	}
 
-protected:
-	container_type timer_can;
-
 private:
-	using object::io_context_;
+	container_type timer_can;
+	using Executor::io_context_;
 };
 
 } //namespace
