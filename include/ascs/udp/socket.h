@@ -183,17 +183,7 @@ private:
 		else if (bytes_transferred > 0)
 		{
 			this->stat.last_recv_time = time(nullptr);
-
-			std::list<out_msg_type> temp_msg_can;
-			auto msg = this->unpacker_->parse_msg(bytes_transferred);
-			if (!msg.empty())
-			{
-				++this->stat.recv_msg_sum;
-				this->stat.recv_byte_sum += msg.size();
-				temp_msg_can.emplace_back(out_msg_type(temp_addr, std::move(msg)));
-			}
-
-			keep_reading = this->handle_msg(temp_msg_can); //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
+			keep_reading = this->handle_msg(in_msg_type(temp_addr, unpacker_->parse_msg(bytes_transferred))); //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
 		}
 
 #ifndef ASCS_PASSIVE_RECV

@@ -42,6 +42,12 @@ public:
 	typedef typename _Mybase::reverse_iterator reverse_iterator;
 	typedef typename _Mybase::const_reverse_iterator const_reverse_iterator;
 
+#if	__GNUC__ > 4 || __GNUC_MINOR__ > 8
+	typedef const_iterator Iter;
+#else
+	typedef iterator Iter; //just satisfy old gcc compilers (before gcc 4.9)
+#endif
+
 	list() : s(0) {}
 	list(list&& other) : s(0) {swap(other);}
 
@@ -68,8 +74,7 @@ public:
 		}
 	}
 	void clear() {s = 0; impl.clear();}
-	iterator erase(iterator _Where) {--s; return impl.erase(_Where);} //just satisfy old compilers (for example gcc 4.7)
-	iterator erase(const_iterator _Where) {--s; return impl.erase(_Where);}
+	iterator erase(Iter _Where) {--s; return impl.erase(_Where);}
 
 	void push_front(const _Ty& _Val) {++s; impl.push_front(_Val);}
 	void push_front(_Ty&& _Val) {++s; impl.push_front(std::move(_Val));}
@@ -94,12 +99,6 @@ public:
 	const_reference back() const {return impl.back();}
 	const_iterator end() const {return impl.end();}
 	const_reverse_iterator rend() const {return impl.rend();}
-
-#if	__GNUC__ > 4 || __GNUC_MINOR__ > 8
-	typedef const_iterator Iter;
-#else
-	typedef iterator Iter; //just satisfy old gcc compilers (before gcc 4.9)
-#endif
 
 	void splice(Iter _Where, _Mybase& _Right) {s += _Right.size(); impl.splice(_Where, _Right);}
 	void splice(Iter _Where, _Mybase& _Right, Iter _First) {++s; impl.splice(_Where, _Right, _First);}

@@ -281,6 +281,19 @@ protected:
 		return true;
 	}
 
+	bool handle_msg(OutMsgType&& temp_msg)
+	{
+		if (!temp_msg.empty())
+		{
+			++stat.recv_msg_sum;
+			stat.recv_byte_sum += temp_msg.size();
+			recv_msg_buffer.enqueue(out_msg(std::move(temp_msg)));
+			dispatch_msg();
+		}
+
+		return handled_msg();
+	}
+
 	template<typename T> bool handle_msg(T& temp_msg_can)
 	{
 		auto msg_num = temp_msg_can.size();
@@ -299,13 +312,7 @@ protected:
 			dispatch_msg();
 		}
 
-#ifndef ASCS_PASSIVE_RECV
-		if (check_receiving(false))
-			return true;
-
-		set_timer(TIMER_CHECK_RECV, msg_resuming_interval_, [this](tid id)->bool {return this->timer_handler(TIMER_CHECK_RECV);});
-#endif
-		return false;
+		return handled_msg();
 	}
 
 	bool do_direct_send_msg(InMsgType&& msg)
@@ -355,6 +362,17 @@ private:
 			recv_idle_begin_time = statistic::now();
 		}
 
+		return false;
+	}
+
+	bool handled_msg()
+	{
+#ifndef ASCS_PASSIVE_RECV
+		if (check_receiving(false))
+			return true;
+
+		set_timer(TIMER_CHECK_RECV, msg_resuming_interval_, [this](tid id)->bool {return this->timer_handler(TIMER_CHECK_RECV);});
+#endif
 		return false;
 	}
 
