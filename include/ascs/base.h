@@ -243,7 +243,6 @@ namespace udp
 	public:
 		typedef MsgType msg_type;
 		typedef const msg_type msg_ctype;
-		typedef std::list<udp_msg<msg_type>> container_type;
 		typedef ASCS_RECV_BUFFER_TYPE buffer_type;
 
 	protected:

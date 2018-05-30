@@ -183,7 +183,7 @@ private:
 		else if (bytes_transferred > 0)
 		{
 			this->stat.last_recv_time = time(nullptr);
-			keep_reading = this->handle_msg(unpacker_->parse_msg(bytes_transferred)); //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
+			keep_reading = this->handle_msg(in_msg_type(temp_addr, unpacker_->parse_msg(bytes_transferred))); //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
 		}
 
 #ifndef ASCS_PASSIVE_RECV
