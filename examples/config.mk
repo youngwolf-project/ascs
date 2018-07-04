@@ -22,11 +22,25 @@ cflag += -DASIO_STANDALONE -DASIO_NO_DEPRECATED
 
 kernel = ${shell uname -s}
 ifeq (${kernel}, SunOS)
-cflag += -pthreads
-lflag += -pthreads -lsocket -lnsl
+	cflag += -pthreads
+	lflag += -pthreads -lsocket -lnsl
 else
-cflag += -pthread
-lflag += -pthread
+	cflag += -pthread
+	lflag += -pthread
+
+	win = ${findstring CYGWIN, ${kernel}}
+	ifeq (${win}, CYGWIN)
+		win = true
+	else
+		win = ${findstring MINGW, ${kernel}}
+		ifeq (${win}, MINGW)
+			win = true
+		endif
+	endif
+	ifeq (${win}, true)
+		cflag += -D__USE_W32_SOCKETS -D_WIN32_WINNT=0x0501
+		lflag += -lws2_32 -lwsock32
+	endif
 endif
 
 cflag += ${ext_cflag} ${ext_location} -I../../include/

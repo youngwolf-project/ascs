@@ -8,6 +8,10 @@
 #define ftello _ftelli64
 #define fl_type __int64
 #else
+#ifdef __CYGWIN__
+#define fseeko fseek
+#define ftello ftell
+#endif
 #define fl_type off_t
 #endif
 
