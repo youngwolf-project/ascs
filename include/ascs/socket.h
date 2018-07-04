@@ -458,33 +458,32 @@ private:
 	}
 
 protected:
+	struct statistic stat;
 	std::shared_ptr<i_packer<typename Packer::msg_type>> packer_;
 
-	volatile bool sending;
 	in_queue_type send_msg_buffer;
+	volatile bool sending;
 
 #ifdef ASCS_PASSIVE_RECV
 	volatile bool reading;
 #endif
 
-	struct statistic stat;
-
 private:
+	bool recv_idle_began;
+	volatile bool dispatching;
+	volatile bool started_; //has started or not
+
+	typename statistic::stat_time recv_idle_begin_time;
+	out_queue_type recv_msg_buffer;
+
 	uint_fast64_t _id;
 	Socket next_layer_;
-
-	volatile bool started_; //has started or not
-	std::atomic_flag start_atomic;
 
 #ifndef ASCS_DISPATCH_BATCH_MSG
 	out_msg last_dispatch_msg;
 #endif
 
-	out_queue_type recv_msg_buffer;
-	typename statistic::stat_time recv_idle_begin_time;
-	bool recv_idle_began;
-
-	volatile bool dispatching;
+	std::atomic_flag start_atomic;
 	asio::io_context::strand strand;
 
 	size_t msg_resuming_interval_, msg_handling_interval_;
