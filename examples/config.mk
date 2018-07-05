@@ -28,16 +28,8 @@ else
 	cflag += -pthread
 	lflag += -pthread
 
-	win = ${findstring CYGWIN, ${kernel}}
-	ifeq (${win}, CYGWIN)
-		win = true
-	else
-		win = ${findstring MINGW, ${kernel}}
-		ifeq (${win}, MINGW)
-			win = true
-		endif
-	endif
-	ifeq (${win}, true)
+	cygwin = ${findstring CYGWIN, ${kernel}}
+	ifeq (${cygwin}, CYGWIN)
 		cflag += -D__USE_W32_SOCKETS -D_WIN32_WINNT=0x0501
 		lflag += -lws2_32 -lwsock32
 	endif

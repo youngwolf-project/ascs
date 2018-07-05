@@ -372,10 +372,10 @@
 	#define ASCS_SF "%Iu" //format used to print 'size_t'
 	static_assert(_MSC_VER >= 1800, "ascs needs Visual C++ 12.0 (2013) or higher.");
 #elif defined(__GNUC__)
-	#define ASCS_SF "%zu" //format used to print 'size_t'
-	#ifdef __x86_64__
-	#define ASCS_LLF "%lu" //format used to print 'uint_fast64_t'
+	#if defined(__MINGW32__) || defined(__MINGW64__)
+		#error ascs does not support MINGW.
 	#endif
+
 	#ifdef __clang__
 		static_assert(__clang_major__ > 3 || (__clang_major__ == 3 && __clang_minor__ >= 1), "ascs needs Clang 3.1 or higher.");
 	#else
@@ -384,6 +384,11 @@
 
 	#if !defined(__GXX_EXPERIMENTAL_CXX0X__) && (!defined(__cplusplus) || __cplusplus < 201103L)
 		#error ascs needs c++11 or higher.
+	#endif
+
+	#define ASCS_SF "%zu" //format used to print 'size_t'
+	#ifdef __x86_64__
+	#define ASCS_LLF "%lu" //format used to print 'uint_fast64_t'
 	#endif
 #else
 	#error ascs only support Visual C++, GCC and Clang.
