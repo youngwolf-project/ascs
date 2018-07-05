@@ -28,7 +28,7 @@ private:
 public:
 	static const typename super::tid TIMER_BEGIN = super::TIMER_END;
 	static const typename super::tid TIMER_CONNECT = TIMER_BEGIN;
-	static const typename super::tid TIMER_END = TIMER_BEGIN + 10;
+	static const typename super::tid TIMER_END = TIMER_BEGIN + 5;
 
 	client_socket_base(asio::io_context& io_context_) : super(io_context_), need_reconnect(true) {set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
 	template<typename Arg>

@@ -171,7 +171,7 @@ class file_client : public multi_client_base<file_socket>
 public:
 	static const tid TIMER_BEGIN = multi_client_base<file_socket>::TIMER_END;
 	static const tid UPDATE_PROGRESS = TIMER_BEGIN;
-	static const tid TIMER_END = TIMER_BEGIN + 10;
+	static const tid TIMER_END = TIMER_BEGIN + 5;
 
 	file_client(service_pump& service_pump_) : multi_client_base<file_socket>(service_pump_) {}
 

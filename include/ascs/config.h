@@ -640,6 +640,11 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 //it's very useful if you want to re-dispatch message in your own logic or with very simple message handling (such as echo server).
 //it's your responsibility to remove handled messages from the container (can be part of them).
 
+#ifndef ASCS_MAX_TIMER
+#define ASCS_MAX_TIMER	40 //means [0, 40)
+#endif
+static_assert(256 > ASCS_MAX_TIMER && ASCS_MAX_TIMER >= 0, "the max timer must in [0, 256).");
+
 //configurations
 
 #endif /* _ASCS_CONFIG_H_ */

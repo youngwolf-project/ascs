@@ -44,7 +44,7 @@ protected:
 public:
 	static const typename super::tid TIMER_BEGIN = super::TIMER_END;
 	static const typename super::tid TIMER_ASYNC_SHUTDOWN = TIMER_BEGIN;
-	static const typename super::tid TIMER_END = TIMER_BEGIN + 10;
+	static const typename super::tid TIMER_END = TIMER_BEGIN + 5;
 
 	virtual bool obsoleted() {return !is_shutting_down() && super::obsoleted();}
 	virtual bool is_ready() {return is_connected();}

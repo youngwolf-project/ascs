@@ -151,8 +151,8 @@ public:
 	bool is_dispatching() const {return dispatching;}
 	bool is_recv_idle() const {return recv_idle_began;}
 
-	void msg_resuming_interval(size_t interval) {msg_resuming_interval_ = interval;}
-	size_t msg_resuming_interval() const {return msg_resuming_interval_;}
+	void msg_resuming_interval(unsigned interval) {msg_resuming_interval_ = interval;}
+	unsigned msg_resuming_interval() const {return msg_resuming_interval_;}
 
 	void msg_handling_interval(size_t interval) {msg_handling_interval_ = interval;}
 	size_t msg_handling_interval() const {return msg_handling_interval_;}
@@ -486,7 +486,7 @@ private:
 	std::atomic_flag start_atomic;
 	asio::io_context::strand strand;
 
-	size_t msg_resuming_interval_, msg_handling_interval_;
+	unsigned msg_resuming_interval_, msg_handling_interval_;
 };
 
 } //namespace
