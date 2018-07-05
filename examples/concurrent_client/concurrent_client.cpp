@@ -51,10 +51,10 @@ protected:
 	}
 
 	//msg handling
-	virtual bool on_msg_handle(out_msg_type& msg) {handle_msg(std::move(msg)); return true;}
+	virtual bool on_msg_handle(out_msg_type& msg) {handle_msg(msg); return true;}
 
 private:
-	void handle_msg(out_msg_type&& msg)
+	void handle_msg(out_msg_type& msg)
 	{
 		last_send_time.restart();
 		direct_send_msg(std::move(msg), true);

@@ -8,7 +8,7 @@
 #define ASCS_MSG_BUFFER_SIZE	65536
 #define ASCS_INPUT_QUEUE non_lock_queue
 #define ASCS_INPUT_CONTAINER list
-//if pingpong_client only send message in on_msg() or on_msg_handle(), which means a responsive system, a real pingpong test,
+//if pingpong_client only send message in on_msg_handle(), which means a responsive system, a real pingpong test,
 //then, before pingpong_server send each message, the previous message has been sent to pingpong_client,
 //so sending buffer will always be empty, which means we will never operate sending buffer concurrently, so need no locks.
 //
