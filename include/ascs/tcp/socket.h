@@ -319,7 +319,7 @@ private:
 			--loop_num;
 			if (loop_num > 0)
 			{
-				this->update_timer_info(TIMER_ASYNC_SHUTDOWN, 10, [loop_num, this](typename super::tid id)->bool {return this->async_shutdown_handler(loop_num);});
+				this->change_timer_call_back(TIMER_ASYNC_SHUTDOWN, [loop_num, this](typename super::tid id)->bool {return this->async_shutdown_handler(loop_num);});
 				return true;
 			}
 			else

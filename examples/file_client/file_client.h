@@ -175,13 +175,31 @@ public:
 
 	file_client(service_pump& service_pump_) : multi_client_base<file_socket>(service_pump_) {}
 
-	bool is_transferring() const {return is_timer(UPDATE_PROGRESS);}
-	bool get_file(const std::string& file_name)
+	void get_file(std::list<std::string>& files)
 	{
-		if (is_transferring())
-			printf("file transfer is ongoing for file %s", file_name.data());
-		else
+		std::unique_lock<std::mutex> lock(file_list_mutex);
+		file_list.splice(std::end(file_list), files);
+		lock.unlock();
+
+		get_file();
+	}
+
+private:
+	void get_file()
+	{
+		std::unique_lock<std::mutex> lock(file_list_mutex);
+
+		if (is_timer(UPDATE_PROGRESS))
+			return;
+
+		while (!file_list.empty())
 		{
+			std::string file_name(std::move(file_list.front()));
+			file_list.pop_front();
+
+			file_size = -1;
+			received_size = 0;
+
 			printf("transfer %s begin.\n", file_name.data());
 			if (find(0)->get_file(file_name))
 			{
@@ -189,18 +207,15 @@ public:
 				//if you always return false, do_something_to_one will be equal to do_something_to_all.
 				do_something_to_one([&file_name](object_ctype& item)->bool {if (0 != item->id()) item->get_file(file_name); return false;});
 				begin_time.restart();
-				set_timer(UPDATE_PROGRESS, 50, [this](tid id)->bool {return this->update_progress_handler(id, -1);});
+				set_timer(UPDATE_PROGRESS, 50, [this](tid id)->bool {return this->update_progress_handler(id, -1); });
 
-				return true;
+				break;
 			}
 			else
 				printf("transfer %s failed!\n", file_name.data());
 		}
-
-		return false;
 	}
 
-private:
 	bool update_progress_handler(tid id, unsigned last_percent)
 	{
 		assert(UPDATE_PROGRESS == id);
@@ -215,7 +230,7 @@ private:
 				printf("\r%u%%", new_percent);
 				fflush(stdout);
 
-				update_timer_info(id, 50, [new_percent, this](tid id)->bool {return this->update_progress_handler(id, new_percent);});
+				change_timer_call_back(id, [new_percent, this](tid id)->bool {return this->update_progress_handler(id, new_percent);});
 			}
 		}
 
@@ -223,11 +238,17 @@ private:
 			return true;
 
 		printf("\r100%%\nend, speed: %f MBps.\n", file_size / begin_time.elapsed() / 1024 / 1024);
+		change_timer_status(id, timer_info::TIMER_CANCELED);
+		get_file();
+
 		return false;
 	}
 
 protected:
 	cpu_timer begin_time;
+
+	std::list<std::string> file_list;
+	std::mutex file_list_mutex;
 };
 
 #endif //#ifndef FILE_CLIENT_H_

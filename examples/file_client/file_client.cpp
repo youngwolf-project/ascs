@@ -17,6 +17,9 @@
 #define QUIT_COMMAND	"quit"
 #define RESTART_COMMAND	"restart"
 #define REQUEST_FILE	"get"
+#define LIST_ALL_CLIENT	"list_all_client"
+#define STATISTIC		"statistic"
+#define STATUS			"status"
 
 int link_num = 1;
 fl_type file_size;
@@ -61,18 +64,20 @@ int main(int argc, const char* argv[])
 			sp.stop_service();
 			sp.start_service();
 		}
+		else if (STATISTIC == str)
+		{
+			printf("link #: " ASCS_SF ", valid links: " ASCS_SF ", invalid links: " ASCS_SF "\n", client.size(), client.valid_size(), client.invalid_object_size());
+			puts("");
+			puts(client.get_statistic().to_string().data());
+		}
+		else if (STATUS == str)
+			client.list_all_status();
+		else if (LIST_ALL_CLIENT == str)
+			client.list_all_object();
 		else if (str.size() > sizeof(REQUEST_FILE) && !strncmp(REQUEST_FILE, str.data(), sizeof(REQUEST_FILE) - 1) && isspace(str[sizeof(REQUEST_FILE) - 1]))
 		{
 			str.erase(0, sizeof(REQUEST_FILE));
-			auto files = split_string(str);
-			do_something_to_all(files, [&](const std::string& item) {
-				file_size = -1;
-				received_size = 0;
-
-				if (client.get_file(item))
-					while (client.is_transferring())
-						std::this_thread::sleep_for(std::chrono::milliseconds(50));
-			});
+			client.get_file(split_string(str));
 		}
 		else
 			client.at(0)->talk(str);

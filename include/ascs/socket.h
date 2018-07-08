@@ -24,8 +24,11 @@ template<typename Socket, typename Packer, typename Unpacker, typename InMsgType
 	template<typename, typename> class OutQueue, template<typename> class OutContainer>
 class socket : public timer<tracked_executor>
 {
+private:
+	typedef timer<tracked_executor> super;
+
 public:
-	static const tid TIMER_BEGIN = timer<tracked_executor>::TIMER_END;
+	static const tid TIMER_BEGIN = super::TIMER_END;
 	static const tid TIMER_CHECK_RECV = TIMER_BEGIN;
 	static const tid TIMER_DISPATCH_MSG = TIMER_BEGIN + 1;
 	static const tid TIMER_DELAY_CLOSE = TIMER_BEGIN + 2;
@@ -33,8 +36,8 @@ public:
 	static const tid TIMER_END = TIMER_BEGIN + 10;
 
 protected:
-	socket(asio::io_context& io_context_) : timer<tracked_executor>(io_context_), next_layer_(io_context_), strand(io_context_) {first_init();}
-	template<typename Arg> socket(asio::io_context& io_context_, Arg& arg) : timer<tracked_executor>(io_context_), next_layer_(io_context_, arg), strand(io_context_) {first_init();}
+	socket(asio::io_context& io_context_) : super(io_context_), next_layer_(io_context_), strand(io_context_) {first_init();}
+	template<typename Arg> socket(asio::io_context& io_context_, Arg& arg) : super(io_context_), next_layer_(io_context_, arg), strand(io_context_) {first_init();}
 
 	//helper function, just call it in constructor
 	void first_init()
