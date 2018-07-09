@@ -209,7 +209,7 @@ private:
 				//if you always return false, do_something_to_one will be equal to do_something_to_all.
 				do_something_to_one([&file_name](object_ctype& item)->bool {if (0 != item->id()) item->get_file(file_name); return false;});
 				begin_time.restart();
-				set_timer(UPDATE_PROGRESS, 50, [this](tid id)->bool {return this->update_progress_handler(id, -1); });
+				set_timer(UPDATE_PROGRESS, 50, [this](tid id)->bool {return this->update_progress_handler(id, -1);});
 
 				break;
 			}

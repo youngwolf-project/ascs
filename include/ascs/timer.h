@@ -13,8 +13,6 @@
 #ifndef _ASCS_TIMER_H_
 #define _ASCS_TIMER_H_
 
-#include <map>
-
 #ifdef ASCS_USE_STEADY_TIMER
 #include <asio/steady_timer.hpp>
 #else
@@ -61,6 +59,8 @@ public:
 		std::function<bool(tid)> call_back; //return true from call_back to continue the timer, or the timer will stop
 
 		timer_info(tid id_, asio::io_context& io_context_) : id(id_), seq(-1), status(TIMER_CREATED), interval_ms(0), timer(io_context_) {}
+		bool operator ==(const timer_info& other) {return id == other.id;}
+		bool operator ==(tid id_) {return id == id_;}
 	};
 	typedef const timer_info timer_cinfo;
 
@@ -72,14 +72,14 @@ public:
 		timer_info* ti = nullptr;
 		{
 			std::lock_guard<std::mutex> lock(timer_can_mutex);
-			auto iter = timer_can.find(id);
+			auto iter = std::find(std::begin(timer_can), std::end(timer_can), id);
 			if (iter == std::end(timer_can))
 			{
-				try {auto re = timer_can.emplace(id, timer_info(id, io_context_)); ti = &re.first->second;}
+				try {timer_can.emplace_back(id, io_context_); ti = &timer_can.back();}
 				catch (const std::exception& e) {unified_out::error_out("cannot create timer %d (%s)", id, e.what()); return false;}
 			}
 			else
-				ti = &iter->second;
+				ti = &*iter;
 		}
 		assert (nullptr != ti);
 
@@ -104,11 +104,11 @@ public:
 	bool set_timer(tid id, unsigned interval, const std::function<bool(tid)>& call_back) {return create_or_update_timer(id, interval, call_back, true);}
 
 	timer_info* find_timer(tid id)
-	{	
+	{
 		std::lock_guard<std::mutex> lock(timer_can_mutex);
-		auto iter = timer_can.find(id);
+		auto iter = std::find(std::begin(timer_can), std::end(timer_can), id);
 		if (iter != std::end(timer_can))
-			return &iter->second;
+			return &*iter;
 
 		return nullptr;
 	}
@@ -119,11 +119,8 @@ public:
 	void stop_all_timer() {do_something_to_all([this](timer_info& item) {this->stop_timer(item);});}
 	void stop_all_timer(tid excepted_id) {do_something_to_all([=](timer_info& item) {if (excepted_id != item.id) this->stop_timer(item);});}
 
-	template<typename _Predicate> void do_something_to_all(const _Predicate& __pred)
-		{std::lock_guard<std::mutex> lock(timer_can_mutex); for (typename container_type::value_type& item : timer_can) __pred(item.second);}
-
-	template<typename _Predicate> void do_something_to_one(const _Predicate& __pred)
-		{std::lock_guard<std::mutex> lock(timer_can_mutex); for (auto iter = std::begin(timer_can); iter != std::end(timer_can); ++iter) if (__pred(iter->second)) break;}
+	DO_SOMETHING_TO_ALL_MUTEX(timer_can, timer_can_mutex)
+	DO_SOMETHING_TO_ONE_MUTEX(timer_can, timer_can_mutex)
 
 protected:
 	bool start_timer(timer_info& ti)
@@ -165,7 +162,7 @@ protected:
 	}
 
 private:
-	typedef std::map<tid, timer_info> container_type;
+	typedef std::list<timer_info> container_type;
 	container_type timer_can;
 	std::mutex timer_can_mutex;
 
