@@ -175,7 +175,7 @@ public:
 
 	file_client(service_pump& service_pump_) : multi_client_base<file_socket>(service_pump_) {}
 
-	void get_file(std::list<std::string>& files)
+	void get_file(std::list<std::string>&& files)
 	{
 		std::unique_lock<std::mutex> lock(file_list_mutex);
 		file_list.splice(std::end(file_list), files);
@@ -183,6 +183,8 @@ public:
 
 		get_file();
 	}
+
+	void get_file(const std::list<std::string>& files) {get_file(std::list<std::string>(files));}
 
 private:
 	void get_file()

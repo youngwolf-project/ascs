@@ -46,8 +46,8 @@ public:
 	typedef asio::system_timer timer_type;
 #endif
 
-	typedef unsigned char tid;
-	static const tid TIMER_END = 0; //user timer's id must begin from parent class' TIMER_END
+	typedef unsigned short tid;
+	static const tid TIMER_END = 0; //subclass' id must begin from parent class' TIMER_END
 
 	struct timer_info
 	{

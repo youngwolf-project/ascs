@@ -355,6 +355,28 @@
  *
  * REPLACEMENTS:
  *
+ * ===============================================================
+ * 2018.x.x		version 1.3.1
+ *
+ * SPECIAL ATTENTION (incompatible with old editions):
+ * The data type of timer ID has been changed from unsigned char to unsigned short.
+ *
+ * HIGHLIGHT:
+ * Support Cygwin.
+ * Dynamically allocate timers when needed (multithreading releated behaviors kept as before, so we must introduce a mutex for ascs::timer object).
+ *
+ * FIX:
+ *
+ * ENHANCEMENTS:
+ * The range of timer ID has been expanded from [0, 256) to [0, 65536)
+ *
+ * DELETION:
+ *
+ * REFACTORING:
+ * Realigned member variables for ascs::socket to save a few memory.
+ *
+ * REPLACEMENTS:
+ *
  */
 
 #ifndef _ASCS_CONFIG_H_
@@ -364,8 +386,8 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#define ASCS_VER		10300	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.3.0"
+#define ASCS_VER		10301	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.3.1"
 
 //asio and compiler check
 #ifdef _MSC_VER
