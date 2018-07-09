@@ -143,7 +143,7 @@ protected:
 		ti.timer.async_wait(this->make_handler_error([this, &ti, prev_seq(++ti.seq)](const asio::error_code& ec) {
 #else
 		auto prev_seq = ++ti.seq;
-		ti.timer.async_wait(this->make_handler_error([this, &ti](const asio::error_code& ec) {
+		ti.timer.async_wait(this->make_handler_error([this, &ti, prev_seq](const asio::error_code& ec) {
 #endif
 			if (!ec && ti.call_back(ti.id) && timer_info::TIMER_STARTED == ti.status)
 				this->start_timer(ti);
