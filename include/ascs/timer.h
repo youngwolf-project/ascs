@@ -142,8 +142,23 @@ protected:
 		auto prev_seq = ++ti.seq;
 		ti.timer.async_wait(this->make_handler_error([this, &ti, prev_seq](const asio::error_code& ec) {
 #endif
+#ifdef ASCS_ALIGNED_TIMER
+			auto begin_time = std::chrono::system_clock::now();
+			if (!ec && ti.call_back(ti.id) && timer_info::TIMER_STARTED == ti.status)
+			{
+				auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - begin_time).count();
+				if (elapsed_ms > ti.interval_ms)
+					elapsed_ms %= ti.interval_ms;
+
+				ti.interval_ms -= elapsed_ms;
+				this->start_timer(ti);
+
+				ti.interval_ms += elapsed_ms;
+			}
+#else
 			if (!ec && ti.call_back(ti.id) && timer_info::TIMER_STARTED == ti.status)
 				this->start_timer(ti);
+#endif
 			else if (prev_seq == ti.seq) //exclude a particular situation--start the same timer in call_back and return false
 				ti.status = timer_info::TIMER_CANCELED;
 		}));

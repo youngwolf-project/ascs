@@ -368,7 +368,8 @@
  * FIX:
  *
  * ENHANCEMENTS:
- * The range of timer ID has been expanded from [0, 256) to [0, 65536)
+ * The range of timer ID has been expanded from [0, 256) to [0, 65536).
+ * Add new macro ASCS_ALIGNED_TIMER to align timers.
  *
  * DELETION:
  *
@@ -661,6 +662,11 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 //all messages will be dispatched via on_handle_msg with a variable-length container, this will change the signature of function on_msg_handle,
 //it's very useful if you want to re-dispatch message in your own logic or with very simple message handling (such as echo server).
 //it's your responsibility to remove handled messages from the container (can be part of them).
+
+//#define ASCS_ALIGNED_TIMER
+//for example, start a timer at xx:xx:xx, interval is 10 seconds, the callback will be called at (xx:xx:xx + 10), and suppose that the callback
+//returned at (xx:xx:xx + 11), then the interval will be temporarily changed to 9 seconds to make the next callback to be called at (xx:xx:xx + 20),
+//if you don't define this macro, the next callback will be called at (xx:xx:xx + 21), plase note.
 
 //configurations
 
