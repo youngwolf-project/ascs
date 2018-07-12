@@ -362,7 +362,7 @@
  * The data type of timer ID has been changed from unsigned char to unsigned short.
  *
  * HIGHLIGHT:
- * Support Cygwin.
+ * Support Cygwin and Mingw.
  * Dynamically allocate timers when needed (multithreading releated behaviors kept as before, so we must introduce a mutex for ascs::timer object).
  *
  * FIX:
@@ -395,10 +395,6 @@
 	#define ASCS_SF "%Iu" //format used to print 'size_t'
 	static_assert(_MSC_VER >= 1800, "ascs needs Visual C++ 12.0 (2013) or higher.");
 #elif defined(__GNUC__)
-	#if defined(__MINGW32__) || defined(__MINGW64__)
-		#error ascs does not support MINGW.
-	#endif
-
 	#ifdef __clang__
 		static_assert(__clang_major__ > 3 || (__clang_major__ == 3 && __clang_minor__ >= 1), "ascs needs Clang 3.1 or higher.");
 	#else
