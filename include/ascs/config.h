@@ -406,7 +406,7 @@
 	#endif
 
 	#define ASCS_SF "%zu" //format used to print 'size_t'
-	#ifdef __x86_64__
+	#if defined(__x86_64__) && !defined(__MINGW32__) && !defined(__MINGW64__)
 	#define ASCS_LLF "%lu" //format used to print 'uint_fast64_t'
 	#endif
 #else
