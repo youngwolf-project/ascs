@@ -16,10 +16,10 @@
 
 #define QUIT_COMMAND	"quit"
 #define RESTART_COMMAND	"restart"
-#define REQUEST_FILE	"get"
-#define LIST_ALL_CLIENT	"list_all_client"
-#define STATISTIC		"statistic"
 #define STATUS			"status"
+#define STATISTIC		"statistic"
+#define LIST_ALL_CLIENT	"list all client"
+#define REQUEST_FILE	"get"
 
 int link_num = 1;
 fl_type file_size;

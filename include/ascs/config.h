@@ -375,6 +375,7 @@
  *
  * REFACTORING:
  * Realigned member variables for ascs::socket to save a few memory.
+ * Make demos more easier to use.
  *
  * REPLACEMENTS:
  *
@@ -406,7 +407,7 @@
 	#endif
 
 	#define ASCS_SF "%zu" //format used to print 'size_t'
-	#if defined(__x86_64__) && !defined(__MINGW32__) && !defined(__MINGW64__)
+	#if defined(__x86_64__) && !defined(__MINGW64__) //terrible mingw
 	#define ASCS_LLF "%lu" //format used to print 'uint_fast64_t'
 	#endif
 #else

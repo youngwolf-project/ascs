@@ -25,9 +25,9 @@
 
 #define QUIT_COMMAND	"quit"
 #define RESTART_COMMAND	"restart"
-#define LIST_ALL_CLIENT	"list_all_client"
-#define STATISTIC		"statistic"
 #define STATUS			"status"
+#define STATISTIC		"statistic"
+#define LIST_ALL_CLIENT	"list all client"
 
 int main(int argc, const char* argv[])
 {

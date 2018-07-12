@@ -24,11 +24,11 @@ using namespace ascs::ext::tcp;
 #endif
 
 #define QUIT_COMMAND	"quit"
-#define LIST_ALL_CLIENT	"list_all_client"
-#define STATISTIC		"statistic"
 #define STATUS			"status"
-#define INCREASE_THREAD	"increase_thread"
-#define DECREASE_THREAD	"decrease_thread"
+#define STATISTIC		"statistic"
+#define LIST_ALL_CLIENT	"list all client"
+#define INCREASE_THREAD	"increase thread"
+#define DECREASE_THREAD	"decrease thread"
 
 cpu_timer begin_time;
 std::atomic_ushort completed_session_num;
