@@ -40,9 +40,6 @@ strncmp(msg->msg.cc, "abc", sizeof(msg->msg.cc));
 ...; //初始其它的成员
 client.direct_send_msg(msg); //不能再调用以send_开头的消息了，因为它们需要调用打包器来打包，我们在这里用的是dumm_packer
 
-最后，当你收到消息的时候，在on_msg_handle里面得到的消息类型的ascs::auto_buffer<message>，你调用msg.raw_buffer()
-即得到了一个message对象指针。
-
 5. 解包器是必须要写的
 因为解包器还负责提供接收数据时需要的缓存。好在提供它非常简单，如下：
 class my_unpacker : public ascs::tcp::i_unpacker<auto_buffer<message>>
@@ -52,10 +49,10 @@ public:
 	virtual bool parse_msg(size_t bytes_transferred, container_type& msg_can)
 	{
 		if (bytes_transferred != raw_buff.size())
-		｛
+		{
 			raw_buff.clear();
 			return false;
-		｝
+		}
 
 		msg_can.emplace_back(std::move(raw_buff));
 		return true;
@@ -76,6 +73,9 @@ public:
 private:
 	auto_buffer<message> raw_buff;
 };
+
+最后，当你收到消息的时候，在on_msg_handle里面得到的消息类型是ascs::auto_buffer<message>&，你调用msg.raw_buffer()
+即得到了一个message对象指针。
 
 6. 最后的代码如下：
 class message;
@@ -104,7 +104,3 @@ int main(int argc, const char* argv[])
 	}
 }
 除了main函数，有效代码不超过15行！但注意，大小端未考虑，一般也不需要考虑。
-
-
-
-
