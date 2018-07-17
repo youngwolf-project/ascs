@@ -1,8 +1,4 @@
 
-#if defined(__MINGW32__) || defined(__MINGW64__) //who can tell me why?
-#include <iostream>
-#endif
-
 //configuration
 #define ASCS_SERVER_PORT		5050
 #define ASCS_RESTORE_OBJECT
