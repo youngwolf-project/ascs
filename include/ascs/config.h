@@ -356,7 +356,7 @@
  * REPLACEMENTS:
  *
  * ===============================================================
- * 2018.x.x		version 1.3.1
+ * 2018.8.1		version 1.3.1
  *
  * SPECIAL ATTENTION (incompatible with old editions):
  * The data type of timer ID has been changed from unsigned char to unsigned short.
