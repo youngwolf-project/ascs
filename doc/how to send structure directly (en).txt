@@ -1,0 +1,107 @@
+Suppose you want to introduce ascs to an old project.
+Before, you always sent structures directly, what should you do now after introduced ascs?
+Base on <<ascs development documentation (en).docx>>, we should:
+
+1. You already have a structure:
+struct native_msg
+{
+	char c;
+	short s;
+	int i;
+	long long ll;
+	char cc[100];
+	short ss[100];
+};
+
+2. Implement a class named message (can be any other names):
+class message
+{
+public:
+	char* data() { return (char*) &msg; } //unpacker will use this to directly write msg, and avoid replication for msg
+	const char* data() const { return (const char*) &msg; }
+	size_t size() const { return sizeof(native_msg); }
+	bool empty() const { return false; }
+
+public:
+	native_msg msg;
+};
+
+3. You must have realized that class message doesn't support swap operation, this will introduce memory replication (so we will fail to
+ compile ascs, it's by design), we can use ascs::auto_buffer to wrap message, then all problems gone:
+ascs::auto_buffer<messge> really_used_msg;
+
+4. Should we implement a packer?
+No, because ascs can only see i_packer interface, you cannot make a native_msg object from any function in i_packer, but ascs always need a packer,
+ so we can use dummy_packer:
+#define ASCS_DEFAULT_PACKER ascs::dummy_packer<ascs::auto_buffer<message>>
+
+Then, when we need to send messages:
+ascs::auto_buffer<message> msg(new message);
+strncmp(msg->msg.cc, "abc", sizeof(msg->msg.cc));
+...; //other initializations
+client.direct_send_msg(msg); //cannot call functions whoes name starts with 'send_', because they need packers, here we used dumm_packer
+
+5. unpacker is necessary
+Because unpacker also provide buffers during network data reading:
+class my_unpacker : public ascs::tcp::i_unpacker<auto_buffer<message>>
+{
+public:
+	virtual void reset() { raw_buff.clear(); }
+	virtual bool parse_msg(size_t bytes_transferred, container_type& msg_can)
+	{
+		if (bytes_transferred != raw_buff.size())
+		{
+			raw_buff.clear();
+			return false;
+		}
+
+		msg_can.emplace_back(std::move(raw_buff));
+		return true;
+	}
+
+	virtual size_t completion_condition(const asio::error_code& ec, size_t bytes_transferred)
+	{
+		return ec || bytes_transferred == raw_buff.size() ? 0 : asio::detail::default_max_transfer_size;
+	}
+
+	virtual buffer_type prepare_next_recv()
+	{
+		if (raw_buff.empty())
+			raw_buff.raw_buffer(new message);
+		return asio::buffer(raw_buff.raw_buffer()->data(), raw_buff.size()); //write native_msg object directly
+	}
+
+private:
+	auto_buffer<message> raw_buff;
+};
+
+Finally, when a whole message been received, in on_msg_handle, the type of msg is ascs::auto_buffer<message>&,
+ you call msg.raw_buffer() and get a pointer of message object.
+
+6. The main function should be:
+class message;
+#define ASCS_DEFAULT_PACKER	ascs::dummy_packer<ascs::auto_buffer<message>>
+class my_unpacker;
+#define ASCS_DEFAULT_UNPACKER my_unpacker
+
+int main(int argc, const char* argv[])
+{
+	service_pump sp;
+	single_client client(sp);
+
+	sp.start_service();
+	while(sp.is_running())
+	{
+		std::string str;
+		std::cin >> str;
+
+		if (!str.empty())
+		{
+			ascs::auto_buffer<message> msg(new message);
+			strncmp(msg->msg.cc, str.data(), sizeof(msg->msg.cc));
+			...; //other initializations
+			client.direct_send_msg(msg);
+		}
+	}
+}
+PS. no Big-endian or little-endian been considered.

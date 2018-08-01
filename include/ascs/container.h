@@ -19,8 +19,11 @@ namespace ascs
 {
 
 //ascs requires that container must take one and only one template argument.
-#if defined(_MSC_VER) || defined(__clang__) || __GNUC__ >= 5
+#if defined(_MSC_VER) || defined(__clang__) || (!defined(__CYGWIN__) && !defined(__MINGW32__) && !defined(__MINGW64__) && __GNUC__ >= 5)
 template<typename T> using list = std::list<T>;
+//on cygwin and mingw, even gcc 7 and 8 still have not made list::size() to be O(1) complexity, which also means function size() and empty() are
+// not thread safe, but ascs::queue needs them to be thread safe no matter itself is lockable or dummy lockable (see ascs::queue for more details),
+//so, we must use ascs::list instead of std::list for cygwin and mingw (terrible cygwin and mingw).
 #else
 //a substitute of std::list (before gcc 5), it's size() function has O(1) complexity
 //BTW, the naming rule is not mine, I copied them from std::list in Visual C++ 14.0

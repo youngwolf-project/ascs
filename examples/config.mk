@@ -22,12 +22,21 @@ cflag += -DASIO_STANDALONE -DASIO_NO_DEPRECATED
 
 kernel = ${shell uname -s}
 ifeq (${kernel}, SunOS)
-cflag += -pthreads ${ext_cflag} ${ext_location} -I../../include/
-lflag += -pthreads -lsocket -lnsl ${ext_libs}
+	cflag += -pthreads
+	lflag += -pthreads -lsocket -lnsl
 else
-cflag += -pthread ${ext_cflag} ${ext_location} -I../../include/
-lflag += -pthread ${ext_libs}
+	cflag += -pthread
+	lflag += -pthread
+
+	cygwin = ${findstring CYGWIN, ${kernel}}
+	ifeq (${cygwin}, CYGWIN)
+		cflag += -D__USE_W32_SOCKETS -D_WIN32_WINNT=0x0501
+		lflag += -lws2_32 -lwsock32
+	endif
 endif
+
+cflag += ${ext_cflag} ${ext_location} -I../../include/
+lflag += ${ext_libs}
 
 target = ${dir}/${module}
 sources = ${shell ls *.cpp}

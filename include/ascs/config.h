@@ -355,6 +355,30 @@
  *
  * REPLACEMENTS:
  *
+ * ===============================================================
+ * 2018.8.1		version 1.3.1
+ *
+ * SPECIAL ATTENTION (incompatible with old editions):
+ * The data type of timer ID has been changed from unsigned char to unsigned short.
+ *
+ * HIGHLIGHT:
+ * Support Cygwin and Mingw.
+ * Dynamically allocate timers when needed (multithreading releated behaviors kept as before, so we must introduce a mutex for ascs::timer object).
+ *
+ * FIX:
+ *
+ * ENHANCEMENTS:
+ * The range of timer ID has been expanded from [0, 256) to [0, 65536).
+ * Add new macro ASCS_ALIGNED_TIMER to align timers.
+ *
+ * DELETION:
+ *
+ * REFACTORING:
+ * Realigned member variables for ascs::socket to save a few memory.
+ * Make demos more easier to use.
+ *
+ * REPLACEMENTS:
+ *
  */
 
 #ifndef _ASCS_CONFIG_H_
@@ -364,18 +388,14 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#define ASCS_VER		10300	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.3.0"
+#define ASCS_VER		10301	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.3.1"
 
 //asio and compiler check
 #ifdef _MSC_VER
 	#define ASCS_SF "%Iu" //format used to print 'size_t'
 	static_assert(_MSC_VER >= 1800, "ascs needs Visual C++ 12.0 (2013) or higher.");
 #elif defined(__GNUC__)
-	#define ASCS_SF "%zu" //format used to print 'size_t'
-	#ifdef __x86_64__
-	#define ASCS_LLF "%lu" //format used to print 'uint_fast64_t'
-	#endif
 	#ifdef __clang__
 		static_assert(__clang_major__ > 3 || (__clang_major__ == 3 && __clang_minor__ >= 1), "ascs needs Clang 3.1 or higher.");
 	#else
@@ -384,6 +404,11 @@
 
 	#if !defined(__GXX_EXPERIMENTAL_CXX0X__) && (!defined(__cplusplus) || __cplusplus < 201103L)
 		#error ascs needs c++11 or higher.
+	#endif
+
+	#define ASCS_SF "%zu" //format used to print 'size_t'
+	#if defined(__x86_64__) && !defined(__MINGW64__) //terrible mingw
+	#define ASCS_LLF "%lu" //format used to print 'uint_fast64_t'
 	#endif
 #else
 	#error ascs only support Visual C++, GCC and Clang.
@@ -634,6 +659,11 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 //all messages will be dispatched via on_handle_msg with a variable-length container, this will change the signature of function on_msg_handle,
 //it's very useful if you want to re-dispatch message in your own logic or with very simple message handling (such as echo server).
 //it's your responsibility to remove handled messages from the container (can be part of them).
+
+//#define ASCS_ALIGNED_TIMER
+//for example, start a timer at xx:xx:xx, interval is 10 seconds, the callback will be called at (xx:xx:xx + 10), and suppose that the callback
+//returned at (xx:xx:xx + 11), then the interval will be temporarily changed to 9 seconds to make the next callback to be called at (xx:xx:xx + 20),
+//if you don't define this macro, the next callback will be called at (xx:xx:xx + 21), plase note.
 
 //configurations
 

@@ -13,6 +13,8 @@
 #ifndef _ASCS_EXECUTOR_H_
 #define _ASCS_EXECUTOR_H_
 
+#include <functional>
+
 #include <asio.hpp>
 
 #include "config.h"

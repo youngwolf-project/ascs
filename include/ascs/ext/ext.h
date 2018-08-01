@@ -13,8 +13,6 @@
 #ifndef _ASCS_EXT_H_
 #define _ASCS_EXT_H_
 
-#include <chrono>
-
 #include "../base.h"
 
 //the size of the buffer used when receiving msg, must equal to or larger than the biggest msg size,

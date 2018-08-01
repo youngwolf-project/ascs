@@ -19,11 +19,11 @@ using namespace ascs::ext;
 using namespace ascs::ext::tcp;
 
 #define QUIT_COMMAND	"quit"
-#define LIST_ALL_CLIENT	"list_all_client"
-#define STATISTIC		"statistic"
 #define STATUS			"status"
-#define INCREASE_THREAD	"increase_thread"
-#define DECREASE_THREAD	"decrease_thread"
+#define STATISTIC		"statistic"
+#define LIST_ALL_CLIENT	"list all client"
+#define INCREASE_THREAD	"increase thread"
+#define DECREASE_THREAD	"decrease thread"
 
 class echo_socket : public client_socket
 {
@@ -51,10 +51,10 @@ protected:
 	}
 
 	//msg handling
-	virtual bool on_msg_handle(out_msg_type& msg) {handle_msg(std::move(msg)); return true;}
+	virtual bool on_msg_handle(out_msg_type& msg) {handle_msg(msg); return true;}
 
 private:
-	void handle_msg(out_msg_type&& msg)
+	void handle_msg(out_msg_type& msg)
 	{
 		last_send_time.restart();
 		direct_send_msg(std::move(msg), true);
