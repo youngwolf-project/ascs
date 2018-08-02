@@ -219,7 +219,7 @@ public:
 	//this method has linear complexity, please note.
 	object_type invalid_object_pop()
 	{
-		std::unique_lock<std::mutex> lock(invalid_object_can_mutex);
+		std::lock_guard<std::mutex> lock(invalid_object_can_mutex);
 		for (auto iter = std::begin(invalid_object_can); iter != std::end(invalid_object_can); ++iter)
 			if ((*iter).unique() && (*iter)->obsoleted())
 			{
