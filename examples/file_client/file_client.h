@@ -189,7 +189,7 @@ public:
 private:
 	void get_file()
 	{
-		std::unique_lock<std::mutex> lock(file_list_mutex);
+		std::lock_guard<std::mutex> lock(file_list_mutex);
 
 		if (is_timer(UPDATE_PROGRESS))
 			return;
