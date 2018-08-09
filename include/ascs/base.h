@@ -339,8 +339,7 @@ struct statistic
 			<< "message sum: " << recv_msg_sum << std::endl
 			<< "size in bytes: " << recv_byte_sum
 #ifdef ASCS_FULL_STATISTIC
-			<< std::endl
-			<< "dispatch delay: " << std::chrono::duration_cast<std::chrono::duration<float>>(dispatch_dealy_sum).count() << std::endl
+			<< "\ndispatch delay: " << std::chrono::duration_cast<std::chrono::duration<float>>(dispatch_dealy_sum).count() << std::endl
 			<< "recv idle duration: " << std::chrono::duration_cast<std::chrono::duration<float>>(recv_idle_sum).count() << std::endl
 			<< "on_msg_handle duration: " << std::chrono::duration_cast<std::chrono::duration<float>>(handle_time_sum).count() << std::endl
 			<< "unpack duration: " << std::chrono::duration_cast<std::chrono::duration<float>>(unpack_time_sum).count();
