@@ -342,9 +342,9 @@ struct statistic
 			<< "\ndispatch delay: " << std::chrono::duration_cast<std::chrono::duration<float>>(dispatch_dealy_sum).count() << std::endl
 			<< "recv idle duration: " << std::chrono::duration_cast<std::chrono::duration<float>>(recv_idle_sum).count() << std::endl
 			<< "on_msg_handle duration: " << std::chrono::duration_cast<std::chrono::duration<float>>(handle_time_sum).count() << std::endl
-			<< "unpack duration: " << std::chrono::duration_cast<std::chrono::duration<float>>(unpack_time_sum).count();
+			<< "unpack duration: " << std::chrono::duration_cast<std::chrono::duration<float>>(unpack_time_sum).count()
 #endif
-		return s.str();
+		;return s.str();
 	}
 
 	//send corresponding statistic
