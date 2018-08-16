@@ -103,12 +103,21 @@ public:
 
 	///////////////////////////////////////////////////
 	//msg sending interface
-	UDP_SEND_MSG(send_msg, false) //use the packer with native = false to pack the msgs
-	UDP_SEND_MSG(send_native_msg, true) //use the packer with native = true to pack the msgs
+	UDP_SEND_MSG(send_msg, false, do_direct_send_msg) //use the packer with native = false to pack the msgs
+	UDP_SEND_MSG(send_native_msg, true, do_direct_send_msg) //use the packer with native = true to pack the msgs
 	//guarantee send msg successfully even if can_overflow equal to false
 	//success at here just means put the msg into udp::socket_base's send buffer
 	UDP_SAFE_SEND_MSG(safe_send_msg, send_msg)
 	UDP_SAFE_SEND_MSG(safe_send_native_msg, send_native_msg)
+
+#ifdef ASCS_SYNC_SEND
+	UDP_SEND_MSG(sync_send_msg, false, do_direct_sync_send_msg) //use the packer with native = false to pack the msgs
+	UDP_SEND_MSG(sync_send_native_msg, true, do_direct_sync_send_msg) //use the packer with native = true to pack the msgs
+	//guarantee send msg successfully even if can_overflow equal to false
+	//success at here just means put the msg into tcp::socket_base's send buffer
+	UDP_SAFE_SEND_MSG(sync_safe_send_msg, sync_send_msg)
+	UDP_SAFE_SEND_MSG(sync_safe_send_native_msg, sync_send_native_msg)
+#endif
 	//msg sending interface
 	///////////////////////////////////////////////////
 

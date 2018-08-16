@@ -379,6 +379,27 @@
  *
  * REPLACEMENTS:
  *
+ * ===============================================================
+ * 2018.8.1x	version 1.3.2
+ *
+ * SPECIAL ATTENTION (incompatible with old editions):
+ *
+ * HIGHLIGHT:
+ * Fully support sync message sending, please note that this feature will slightly impact efficiency even if you always use async message sending,
+ *  so only open this feature when realy needed.
+ *
+ * FIX:
+ * Fix race condition when aligning timers, see macro ASCS_ALIGNED_TIMER for more details.
+ *
+ * ENHANCEMENTS:
+ * Add new macro ASCS_SYNC_SEND to support sync message sending.
+ *
+ * DELETION:
+ *
+ * REFACTORING:
+ *
+ * REPLACEMENTS:
+ *
  */
 
 #ifndef _ASCS_CONFIG_H_
@@ -388,8 +409,8 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#define ASCS_VER		10301	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.3.1"
+#define ASCS_VER		10302	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.3.2"
 
 //asio and compiler check
 #ifdef _MSC_VER
@@ -664,6 +685,15 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 //for example, start a timer at xx:xx:xx, interval is 10 seconds, the callback will be called at (xx:xx:xx + 10), and suppose that the callback
 //returned at (xx:xx:xx + 11), then the interval will be temporarily changed to 9 seconds to make the next callback to be called at (xx:xx:xx + 20),
 //if you don't define this macro, the next callback will be called at (xx:xx:xx + 21), plase note.
+
+//#define ASCS_SYNC_SEND
+//define this macro to gain additional series of sync message sending, they are:
+// sync_send_msg
+// sync_send_native_msg
+// sync_safe_send_msg
+// sync_safe_send_native_msg
+//please note that this feature will slightly impact efficiency even if you always use async message sending, so only open this feature when realy needed,
+//and DO NOT call pop_first_pending_send_msg and pop_all_pending_send_msg during sync message sending.
 
 //configurations
 

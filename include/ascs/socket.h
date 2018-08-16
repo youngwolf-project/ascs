@@ -186,6 +186,12 @@ public:
 	bool direct_send_msg(const InMsgType& msg, bool can_overflow = false) {return direct_send_msg(InMsgType(msg), can_overflow);}
 	bool direct_send_msg(InMsgType&& msg, bool can_overflow = false) {return can_overflow || is_send_buffer_available() ? do_direct_send_msg(std::move(msg)) : false;}
 
+#ifdef ASCS_SYNC_SEND
+	//don't use the packer but insert into send buffer directly
+	bool direct_sync_send_msg(const InMsgType& msg, bool can_overflow = false) {return direct_sync_send_msg(InMsgType(msg), can_overflow);}
+	bool direct_sync_send_msg(InMsgType&& msg, bool can_overflow = false) {return can_overflow || is_send_buffer_available() ? do_direct_sync_send_msg(std::move(msg)) : false;}
+#endif
+
 	//how many msgs waiting for sending or dispatching
 	GET_PENDING_MSG_NUM(get_pending_send_msg_num, send_msg_buffer)
 	GET_PENDING_MSG_NUM(get_pending_recv_msg_num, recv_msg_buffer)
@@ -334,6 +340,30 @@ protected:
 		//the packer provider has the responsibility to write detailed reasons down when packing message failed.
 		return true;
 	}
+
+#ifdef ASCS_SYNC_SEND
+	bool do_direct_sync_send_msg(InMsgType&& msg)
+	{
+		if (msg.empty())
+			unified_out::error_out("found an empty message, please check your packer.");
+		else
+		{
+			auto unused = in_msg(std::move(msg), true);
+			auto cv = unused.cv;
+			send_msg_buffer.enqueue(std::move(unused));
+			if (!sending && is_ready())
+				send_msg();
+
+			std::unique_lock<std::mutex> lock(sync_send_mutex);
+			cv->wait(lock);
+		}
+
+		//even if we meet an empty message (because of too big message or insufficient memory, most likely), we still return true, why?
+		//please think about the function safe_send_(native_)msg, if we keep returning false, it will enter a dead loop.
+		//the packer provider has the responsibility to write detailed reasons down when packing message failed.
+		return true;
+	}
+#endif
 
 private:
 	virtual void recv_msg() = 0;
@@ -488,6 +518,10 @@ private:
 
 	std::atomic_flag start_atomic;
 	asio::io_context::strand strand;
+
+#ifdef ASCS_SYNC_SEND
+	std::mutex sync_send_mutex;
+#endif
 
 	unsigned msg_resuming_interval_, msg_handling_interval_;
 };

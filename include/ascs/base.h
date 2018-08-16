@@ -30,6 +30,9 @@
 #include <atomic>
 #include <sstream>
 #include <iomanip>
+#ifdef ASCS_SYNC_SEND
+#include <condition_variable>
+#endif
 
 #include <asio.hpp>
 
@@ -384,13 +387,34 @@ private:
 	statistic::stat_duration& duration;
 };
 
+#ifdef ASCS_SYNC_SEND
+template<typename T>
+struct obj_with_begin_time : public T
+{
+	obj_with_begin_time(bool need_cv = false) { check_and_create_cv(need_cv);}
+	obj_with_begin_time(T&& obj, bool need_cv = false) : T(std::move(obj)) { check_and_create_cv(need_cv);}
+	obj_with_begin_time& operator=(T&& obj) {T::operator=(std::move(obj)); restart(); return *this;}
+	obj_with_begin_time(obj_with_begin_time&& other) : T(std::move(other)), begin_time(std::move(other.begin_time)), cv(std::move(other.cv)) {}
+	obj_with_begin_time& operator=(obj_with_begin_time&& other) {T::operator=(std::move(other)); begin_time = std::move(other.begin_time); cv = std::move(other.cv); return *this;}
+
+	void restart() {restart(statistic::now());}
+	void restart(const typename statistic::stat_time& begin_time_) {begin_time = begin_time_;}
+
+	void check_and_create_cv(bool need_cv) {if (!need_cv) cv.reset(); else if (!cv) cv = std::make_shared<std::condition_variable>();}
+
+	void swap(T& obj, bool need_cv = false) {T::swap(obj); restart(); check_and_create_cv(need_cv);}
+	void swap(obj_with_begin_time& other) {T::swap(other); std::swap(begin_time, other.begin_time); cv.swap(other.cv);}
+
+	typename statistic::stat_time begin_time;
+	std::shared_ptr<std::condition_variable> cv;
+};
+#else
 template<typename T>
 struct obj_with_begin_time : public T
 {
 	obj_with_begin_time() {}
 	obj_with_begin_time(T&& obj) : T(std::move(obj)) {restart();}
 	obj_with_begin_time& operator=(T&& obj) {T::operator=(std::move(obj)); restart(); return *this;}
-	//following two functions are used by concurrent queue only, ascs just use swap
 	obj_with_begin_time(obj_with_begin_time&& other) : T(std::move(other)), begin_time(std::move(other.begin_time)) {}
 	obj_with_begin_time& operator=(obj_with_begin_time&& other) {T::operator=(std::move(other)); begin_time = std::move(other.begin_time); return *this;}
 
@@ -401,6 +425,7 @@ struct obj_with_begin_time : public T
 
 	typename statistic::stat_time begin_time;
 };
+#endif
 
 //free functions, used to do something to any container(except map and multimap) optionally with any mutex
 template<typename _Can, typename _Mutex, typename _Predicate>
@@ -483,7 +508,7 @@ template<typename _Predicate> void NAME(const _Predicate& __pred) const {for (au
 TYPE FUNNAME(const char* pstr, size_t len, bool can_overflow) {return FUNNAME(&pstr, &len, 1, can_overflow);} \
 template<typename Buffer> TYPE FUNNAME(const Buffer& buffer, bool can_overflow) {return FUNNAME(buffer.data(), buffer.size(), can_overflow);}
 
-#define TCP_SEND_MSG(FUNNAME, NATIVE) \
+#define TCP_SEND_MSG(FUNNAME, NATIVE, SEND_FUNNAME) \
 bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow) \
 { \
 	if (!can_overflow && !this->is_send_buffer_available()) \
@@ -491,7 +516,7 @@ bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_
 	auto_duration dur(this->stat.pack_time_sum); \
 	auto msg = this->packer_->pack_msg(pstr, len, num, NATIVE); \
 	dur.end(); \
-	return this->do_direct_send_msg(std::move(msg)); \
+	return this->SEND_FUNNAME(std::move(msg)); \
 } \
 TCP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)
 
@@ -517,14 +542,14 @@ template<typename Buffer> TYPE FUNNAME(const Buffer& buffer, bool can_overflow) 
 template<typename Buffer> TYPE FUNNAME(const asio::ip::udp::endpoint& peer_addr, const Buffer& buffer, bool can_overflow) \
 	{return FUNNAME(peer_addr, buffer.data(), buffer.size(), can_overflow);}
 
-#define UDP_SEND_MSG(FUNNAME, NATIVE) \
+#define UDP_SEND_MSG(FUNNAME, NATIVE, SEND_FUNNAME) \
 bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow) {return FUNNAME(peer_addr, pstr, len, num, can_overflow);} \
 bool FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* const pstr[], const size_t len[], size_t num, bool can_overflow) \
 { \
 	if (!can_overflow && !this->is_send_buffer_available()) \
 		return false; \
 	in_msg_type msg(peer_addr, this->packer_->pack_msg(pstr, len, num, NATIVE)); \
-	return this->do_direct_send_msg(std::move(msg)); \
+	return this->SEND_FUNNAME(std::move(msg)); \
 } \
 UDP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)
 
