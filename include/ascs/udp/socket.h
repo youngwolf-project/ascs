@@ -99,6 +99,32 @@ public:
 	//changing unpacker must before calling ascs::socket::recv_msg, and define ASCS_PASSIVE_RECV macro.
 	void unpacker(const std::shared_ptr<i_unpacker<typename Unpacker::msg_type>>& _unpacker_) {unpacker_ = _unpacker_;}
 	virtual void recv_msg() {if (!this->reading && is_ready()) this->dispatch_strand(strand, [this]() {this->do_recv_msg();});}
+
+	bool sync_recv_msg(typename Unpacker::msg_type& msg)
+	{
+		if (this->reading) //cannot 100% avoid duplicate receiving (include sync and async receiving), it's the user's responsibility.
+			return false;
+
+		auto recv_buff = unpacker_->prepare_next_recv();
+		assert(asio::buffer_size(recv_buff) > 0);
+		if (0 == asio::buffer_size(recv_buff))
+		{
+			unified_out::error_out("The unpacker returned an empty buffer, quit receiving!");
+			return false;
+		}
+
+		this->reading = true;
+		auto bytes_transferred = this->next_layer().receive_from(recv_buff, temp_addr);
+		this->reading = false;
+
+		if (bytes_transferred > 0)
+		{
+			this->stat.last_recv_time = time(nullptr);
+			msg = in_msg_type(temp_addr, unpacker_->parse_msg(bytes_transferred));
+		}
+
+		return true;
+	}
 #endif
 
 	///////////////////////////////////////////////////
@@ -176,23 +202,33 @@ private:
 
 	void recv_handler(const asio::error_code& ec, size_t bytes_transferred)
 	{
-#ifdef ASCS_PASSIVE_RECV
-		this->reading = false; //clear reading flag before call handle_msg() to make sure that recv_msg() can be called successfully in on_msg_handle()
-#endif
 		auto keep_reading = !ec;
-		if (ec)
-		{
-#ifdef _MSC_VER
-			if (asio::error::connection_refused == ec || asio::error::connection_reset == ec)
-				keep_reading = true;
-			else
-#endif
-				on_recv_error(ec);
-		}
-		else if (bytes_transferred > 0)
+		if (!ec && bytes_transferred > 0)
 		{
 			this->stat.last_recv_time = time(nullptr);
-			keep_reading = this->handle_msg(in_msg_type(temp_addr, unpacker_->parse_msg(bytes_transferred))); //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
+
+			in_msg_type temp_msg(temp_addr, unpacker_->parse_msg(bytes_transferred));
+#ifdef ASCS_PASSIVE_RECV
+			this->reading = false; //clear reading flag before call handle_msg() to make sure that recv_msg() can be called successfully in on_msg_handle()
+#endif
+			keep_reading = this->handle_msg(std::move(temp_msg)); //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
+		}
+		else
+		{
+#ifdef ASCS_PASSIVE_RECV
+			this->reading = false; //clear reading flag before call handle_msg() to make sure that recv_msg() can be called successfully in on_msg_handle()
+#endif
+			if (ec)
+#ifndef _MSC_VER
+				on_recv_error(ec);
+#else
+			{
+				if (asio::error::connection_refused == ec || asio::error::connection_reset == ec)
+					keep_reading = true;
+				else
+					on_recv_error(ec);
+			}
+#endif
 		}
 
 #ifndef ASCS_PASSIVE_RECV

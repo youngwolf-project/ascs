@@ -380,13 +380,20 @@
  * REPLACEMENTS:
  *
  * ===============================================================
- * 2018.8.1x	version 1.3.2
+ * 2018.8.2x	version 1.3.2
  *
  * SPECIAL ATTENTION (incompatible with old editions):
+ * If macro ASCS_PASSIVE_RECV been defined, you must call ascs::socket::recv_msg() explicitly include the first one (before, you don't have to do this
+ *  for the first one).
+ * If macro ASCS_PASSIVE_RECV been defined, macro ASCS_AVOID_AUTO_STOP_SERVICE will be defined automatically.
  *
  * HIGHLIGHT:
- * Fully support sync message sending, please note that this feature will slightly impact efficiency even if you always use async message sending,
- *  so only open this feature when realy needed.
+ * Fully support sync message sending (even be able to mix with async message sending without any limitations), please note that this feature will slightly
+ *  impact efficiency even if you always use async message sending, so only open this feature when realy needed.
+ * Support sync message receiving (with some limitations), just need macro ASCS_PASSIVE_RECV to be defined, see macro ASCS_PASSIVE_RECV for details.
+ * We must avoid to do sync message sending and receiving in service threads.
+ * Sync message sending and receiving are not tracked by tracked_executor, please note.
+ * No matter you're doing sync message sending or async message sending, you can do sync message receiving or async message receiving concurrently.
  *
  * FIX:
  * Fix race condition when aligning timers, see macro ASCS_ALIGNED_TIMER for more details.
@@ -546,7 +553,7 @@ static_assert(ASCS_MAX_OBJECT_NUM > 0, "object capacity must be bigger than zero
 #endif
 
 //IO thread number
-//listening, msg sending and receiving, msg handling (on_msg_handle() and on_msg()), all timers(include user timers) and other asynchronous calls (from executor)
+//listening, msg sending and receiving, msg handling (on_msg_handle()), all timers (include user timers) and other asynchronous calls (from executor)
 //keep big enough, no empirical value I can suggest, you must try to find it out in your own environment
 #ifndef ASCS_SERVICE_THREAD_NUM
 #define ASCS_SERVICE_THREAD_NUM	8
@@ -672,9 +679,23 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 //this value can be changed via ascs::socket::msg_handling_interval(size_t) at runtime.
 
 //#define ASCS_PASSIVE_RECV
-//to gain the ability of changing the unpacker at runtime, with this mcro, ascs will not do message receiving automatically (except the firt one),
-//user need to call ascs::socket::recv_msg(), if you need to change the unpacker, do it before recv_msg() invocation, please note.
-//because user can call recv_msg() at any time, it's your responsibility to keep the recv buffer not overflowed, please pay special attention.
+//to gain the ability of changing the unpacker at runtime, with this mcro, ascs will not do message receiving automatically, so user
+// need to manually call recv_msg(), if you need to change the unpacker, do it before recv_msg() invocation, please note.
+//during async message receiving, calling recv_msg() will fail, this is by design to avoid asio::io_context using up all virtual memory.
+//because user can greedily call recv_msg(), it's your responsibility to keep the recv buffer from overflowed, please pay special attention.
+//with this macro, function sync_recv_msg() becomes available, which means you can do sync message receiving, but please follow below principles:
+// 1. sync model, only call sync_recv_msg() after previous sync_recv_msg() returned.
+// 2. async model, on special limitations, just note that recv_msg() may fail (without any logs) if another async receiving is still being performed,
+//     this can only happen with macro ASCS_PASSIVE_RECV, because without macro ASCS_PASSIVE_RECV, recv_msg() is not available.
+// 3. mix model, only call recv_msg() after sync_recv_msg() returned, only call sync_recv_msg() after prior async receiving end (is_reading() returns false).
+// 4. no matter which model you choose, ascs only cares happen-after sequence, so they don't have to be in the same thread.
+//
+//thread safety:
+//it's always safe for distinct ascs::socket objects.
+//for the same ascs::socket object:
+// it's safe for distinct recv_msg() invocation (but may fail).
+// it's unsafe for distinct sync_recv_msg() invocation.
+// it's unsafe between recv_msg() and sync_recv_msg() invocation.
 
 //#define ASCS_DISPATCH_BATCH_MSG
 //all messages will be dispatched via on_handle_msg with a variable-length container, this will change the signature of function on_msg_handle,
