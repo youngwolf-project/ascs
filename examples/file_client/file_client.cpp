@@ -53,6 +53,7 @@ int main(int argc, const char* argv[])
 	}
 
 	sp.start_service();
+	client.do_something_to_all([](file_client::object_ctype& item) {item->recv_msg();}); //see release note of version 1.3.2
 	while(sp.is_running())
 	{
 		std::string str;

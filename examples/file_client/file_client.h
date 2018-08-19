@@ -23,7 +23,9 @@ public:
 	//reset all, be ensure that there's no any operations performed on this file_socket when invoke it
 	virtual void reset() {clear(); client_socket::reset();}
 
+	bool is_idle() const {return TRANS_IDLE == state;}
 	void set_index(int index_) {index = index_;}
+
 	bool get_file(const std::string& file_name)
 	{
 		assert(!file_name.empty());
@@ -83,7 +85,6 @@ protected:
 private:
 	void clear()
 	{
-		state = TRANS_IDLE;
 		if (nullptr != file)
 		{
 			fclose(file);
@@ -91,6 +92,7 @@ private:
 		}
 
 		unpacker(std::make_shared<ASCS_DEFAULT_UNPACKER>());
+		state = TRANS_IDLE;
 	}
 	void trans_end() {clear();}
 
@@ -101,7 +103,7 @@ private:
 			assert(msg.empty());
 
 			auto unp = std::dynamic_pointer_cast<data_unpacker>(unpacker());
-			if (nullptr == unp || unp->is_finished())
+			if (!unp || unp->is_finished())
 				trans_end();
 
 			return;
@@ -239,8 +241,11 @@ private:
 		if (received_size < file_size)
 			return true;
 
-		printf("\r100%%\nend, speed: %f MBps.\n", file_size / begin_time.elapsed() / 1024 / 1024);
+		printf("\r100%%\nend, speed: %f MBps.\n\n", file_size / begin_time.elapsed() / 1024 / 1024);
 		change_timer_status(id, timer_info::TIMER_CANCELED);
+
+		//wait all file_socket to clean up themselves
+		do_something_to_all([](object_ctype& item) {if (!item->is_idle()) std::this_thread::sleep_for(std::chrono::milliseconds(10));});
 		get_file();
 
 		return false;

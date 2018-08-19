@@ -5,6 +5,7 @@
 #define ASCS_DELAY_CLOSE 1 //this demo not used object pool and doesn't need life cycle management,
 						   //so, define this to avoid hooks for async call (and slightly improve efficiency),
 						   //any value which is bigger than zero is okay.
+#define ASCS_PASSIVE_RECV
 //#if defined(_MSC_VER) && _MSC_VER <= 1800
 //#define ASCS_DEFAULT_PACKER replaceable_packer<shared_buffer<i_buffer>>
 //#else
@@ -13,6 +14,7 @@
 //#define ASCS_DEFAULT_UDP_UNPACKER replaceable_udp_unpacker<>
 #define ASCS_HEARTBEAT_INTERVAL 5 //neither udp_unpacker nor replaceable_udp_unpacker support heartbeat message,
 								  //so heartbeat will be treated as normal message.
+#define ASCS_SYNC_SEND
 //configuration
 
 #include <ascs/ext/udp.h>
@@ -21,6 +23,17 @@ using namespace ascs::ext::udp;
 
 #define QUIT_COMMAND	"quit"
 #define RESTART_COMMAND	"restart"
+
+std::thread create_sync_recv_thread(single_service& service)
+{
+	return std::thread([&service]() {
+		typename ASCS_DEFAULT_UDP_UNPACKER::msg_type msg;
+		while (service.sync_recv_msg(msg))
+			if (!msg.empty())
+				printf("sync recv(" ASCS_SF ") : %s\n", msg.size(), msg.data());
+		puts("sync recv end.");
+	});
+}
 
 int main(int argc, const char* argv[])
 {
@@ -45,19 +58,27 @@ int main(int argc, const char* argv[])
 //	service.lowest_layer().open(ASCS_UDP_DEFAULT_IP_VERSION);
 //	service.lowest_layer().set_option(asio::ip::multicast::join_group(asio::ip::address::from_string("x.x.x.x")));
 //	sp.start_service();
+
+	auto t = create_sync_recv_thread(service);
 	while(sp.is_running())
 	{
 		std::string str;
 		std::cin >> str;
 		if (QUIT_COMMAND == str)
+		{
 			sp.stop_service();
+			t.join();
+		}
 		else if (RESTART_COMMAND == str)
 		{
 			sp.stop_service();
+			t.join();
+
 			sp.start_service();
+			t = create_sync_recv_thread(service);
 		}
 		else
-			service.safe_send_native_msg(str, false); //to send to different endpoints, use overloads that take a const asio::ip::udp::endpoint& parameter
+			service.sync_safe_send_native_msg(str, false); //to send to different endpoints, use overloads that take a const asio::ip::udp::endpoint& parameter
 	}
 
 	return 0;
