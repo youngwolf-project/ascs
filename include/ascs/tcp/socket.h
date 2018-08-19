@@ -129,7 +129,7 @@ public:
 		{
 			asio::error_code ec;
 			auto bytes_transferred = asio::read(this->next_layer(), recv_buff,
-				[this](const asio::error_code& ec, size_t bytes_transferred)->size_t {return this->completion_checker(ec, bytes_transferred); }, ec);
+				[this](const asio::error_code& ec, size_t bytes_transferred)->size_t {return this->completion_checker(ec, bytes_transferred);}, ec);
 
 			if (ec)
 				this->on_recv_error(ec);
