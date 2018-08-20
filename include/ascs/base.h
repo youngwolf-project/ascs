@@ -191,35 +191,32 @@ public:
 };
 
 //unpacker concept
-namespace tcp
+template<typename MsgType>
+class i_unpacker
 {
-	template<typename MsgType>
-	class i_unpacker
-	{
-	public:
-		typedef MsgType msg_type;
-		typedef const msg_type msg_ctype;
-		typedef std::list<msg_type> container_type;
-		typedef ASCS_RECV_BUFFER_TYPE buffer_type;
+public:
+	typedef MsgType msg_type;
+	typedef const msg_type msg_ctype;
+	typedef std::list<msg_type> container_type;
+	typedef ASCS_RECV_BUFFER_TYPE buffer_type;
 
-		bool stripped() const {return _stripped;}
-		void stripped(bool stripped_) {_stripped = stripped_;}
+	bool stripped() const {return _stripped;}
+	void stripped(bool stripped_) {_stripped = stripped_;}
 
-	protected:
-		i_unpacker() : _stripped(true) {}
-		virtual ~i_unpacker() {}
+protected:
+	i_unpacker() : _stripped(true) {}
+	virtual ~i_unpacker() {}
 
-	public:
-		virtual void reset() = 0;
-		//heartbeat must not be included in msg_can, otherwise you must handle heartbeat at where you handle normal messges.
-		virtual bool parse_msg(size_t bytes_transferred, container_type& msg_can) = 0;
-		virtual size_t completion_condition(const asio::error_code& ec, size_t bytes_transferred) = 0;
-		virtual buffer_type prepare_next_recv() = 0;
+public:
+	virtual void reset() {};
+	//heartbeat must not be included in msg_can, otherwise you must handle heartbeat at where you handle normal messges.
+	virtual bool parse_msg(size_t bytes_transferred, container_type& msg_can) = 0;
+	virtual size_t completion_condition(const asio::error_code& ec, size_t bytes_transferred) {return 0;}
+	virtual buffer_type prepare_next_recv() = 0;
 
-	private:
-		bool _stripped;
-	};
-} //namespace
+private:
+	bool _stripped;
+};
 
 namespace udp
 {
@@ -242,24 +239,6 @@ namespace udp
 		udp_msg(udp_msg&& other) : MsgType(std::move(other)), peer_addr(std::move(other.peer_addr)) {}
 		udp_msg& operator=(udp_msg&& other) {MsgType::clear(); swap(other); return *this;}
 #endif
-	};
-
-	template<typename MsgType>
-	class i_unpacker
-	{
-	public:
-		typedef MsgType msg_type;
-		typedef const msg_type msg_ctype;
-		typedef ASCS_RECV_BUFFER_TYPE buffer_type;
-
-	protected:
-		virtual ~i_unpacker() {}
-
-	public:
-		virtual void reset() {}
-		//heartbeat must not be returned (use empty message instead), otherwise you must handle heartbeat at where you handle normal messges.
-		virtual msg_type parse_msg(size_t bytes_transferred) = 0;
-		virtual buffer_type prepare_next_recv() = 0;
 	};
 } //namespace
 //unpacker concept
@@ -444,31 +423,6 @@ void do_something_to_one(_Can& __can, _Mutex& __mutex, const _Predicate& __pred)
 
 template<typename _Can, typename _Predicate>
 void do_something_to_one(_Can& __can, const _Predicate& __pred) {for (auto iter = std::begin(__can); iter != std::end(__can); ++iter) if (__pred(*iter)) break;}
-
-template<typename _Can>
-bool splice_helper(_Can& dest_can, _Can& src_can, size_t max_size = ASCS_MAX_MSG_NUM)
-{
-	if (src_can.empty())
-		return false;
-
-	auto size = dest_can.size();
-	if (size >= max_size) //dest_can cannot hold more items.
-		return false;
-
-	size = max_size - size; //maximum items can be handled this time
-	auto left_size = src_can.size();
-	if (left_size > size) //some items left behind
-	{
-		left_size -= size;
-		auto begin_iter = std::begin(src_can);
-		auto end_iter = left_size > size ? std::next(begin_iter, size) : std::prev(std::end(src_can), left_size); //minimize iterator movement
-		dest_can.splice(std::end(dest_can), src_can, begin_iter, end_iter);
-	}
-	else
-		dest_can.splice(std::end(dest_can), src_can);
-
-	return true;
-}
 
 //member functions, used to do something to any member container(except map and multimap) optionally with any member mutex
 #define DO_SOMETHING_TO_ALL_MUTEX(CAN, MUTEX) DO_SOMETHING_TO_ALL_MUTEX_NAME(do_something_to_all, CAN, MUTEX)

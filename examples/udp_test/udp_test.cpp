@@ -5,12 +5,7 @@
 #define ASCS_DELAY_CLOSE 1 //this demo not used object pool and doesn't need life cycle management,
 						   //so, define this to avoid hooks for async call (and slightly improve efficiency),
 						   //any value which is bigger than zero is okay.
-#define ASCS_PASSIVE_RECV
-//#if defined(_MSC_VER) && _MSC_VER <= 1800
-//#define ASCS_DEFAULT_PACKER replaceable_packer<shared_buffer<i_buffer>>
-//#else
-//#define ASCS_DEFAULT_PACKER replaceable_packer<>
-//#endif
+#define ASCS_MAX_SYNC_RECV	1
 //#define ASCS_DEFAULT_UDP_UNPACKER replaceable_udp_unpacker<>
 #define ASCS_HEARTBEAT_INTERVAL 5 //neither udp_unpacker nor replaceable_udp_unpacker support heartbeat message,
 								  //so heartbeat will be treated as normal message.
@@ -27,10 +22,15 @@ using namespace ascs::ext::udp;
 std::thread create_sync_recv_thread(single_service& service)
 {
 	return std::thread([&service]() {
-		typename ASCS_DEFAULT_UDP_UNPACKER::msg_type msg;
-		while (service.sync_recv_msg(msg))
-			if (!msg.empty())
-				printf("sync recv(" ASCS_SF ") : %s\n", msg.size(), msg.data());
+		while (!service.is_ready())
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+		std::list<single_service::out_msg_type> msg_can;
+		while (service.sync_recv_msg(msg_can))
+		{
+			do_something_to_all(msg_can, [](single_service::out_msg_type& msg) {printf("sync recv(" ASCS_SF ") : %s\n", msg.size(), msg.data());});
+			msg_can.clear();
+		}
 		puts("sync recv end.");
 	});
 }

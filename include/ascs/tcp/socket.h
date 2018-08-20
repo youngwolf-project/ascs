@@ -21,7 +21,7 @@ namespace ascs { namespace tcp {
 template <typename Socket, typename Packer, typename Unpacker,
 	template<typename, typename> class InQueue, template<typename> class InContainer,
 	template<typename, typename> class OutQueue, template<typename> class OutContainer>
-class socket_base : public socket<Socket, Packer, Unpacker, typename Packer::msg_type, typename Unpacker::msg_type, InQueue, InContainer, OutQueue, OutContainer>
+class socket_base : public socket<Socket, Packer, typename Packer::msg_type, typename Unpacker::msg_type, InQueue, InContainer, OutQueue, OutContainer>
 {
 public:
 	typedef typename Packer::msg_type in_msg_type;
@@ -30,7 +30,7 @@ public:
 	typedef typename Unpacker::msg_ctype out_msg_ctype;
 
 private:
-	typedef socket<Socket, Packer, Unpacker, in_msg_type, out_msg_type, InQueue, InContainer, OutQueue, OutContainer> super;
+	typedef socket<Socket, Packer, in_msg_type, out_msg_type, InQueue, InContainer, OutQueue, OutContainer> super;
 
 protected:
 	enum link_status {CONNECTED, FORCE_SHUTTING_DOWN, GRACEFUL_SHUTTING_DOWN, BROKEN};
@@ -118,40 +118,6 @@ public:
 	//changing unpacker must before calling ascs::socket::recv_msg, and define ASCS_PASSIVE_RECV macro.
 	void unpacker(const std::shared_ptr<i_unpacker<out_msg_type>>& _unpacker_) {unpacker_ = _unpacker_;}
 	virtual void recv_msg() {if (!this->reading && is_ready()) this->dispatch_strand(strand, [this]() {this->do_recv_msg();});}
-
-	bool sync_recv_msg(typename Unpacker::container_type& msg_can)
-	{
-		auto recv_buff = unpacker_->prepare_next_recv();
-		assert(asio::buffer_size(recv_buff) > 0);
-		if (0 == asio::buffer_size(recv_buff))
-			unified_out::error_out("The unpacker returned an empty buffer, quit receiving!");
-		else
-		{
-			asio::error_code ec;
-			auto bytes_transferred = asio::read(this->next_layer(), recv_buff,
-				[this](const asio::error_code& ec, size_t bytes_transferred)->size_t {return this->completion_checker(ec, bytes_transferred);}, ec);
-
-			if (ec)
-				this->on_recv_error(ec);
-			else if (bytes_transferred > 0)
-			{
-				this->stat.last_recv_time = time(nullptr);
-
-				auto_duration dur(this->stat.unpack_time_sum);
-				auto unpack_ok = unpacker_->parse_msg(bytes_transferred, msg_can);
-				dur.end();
-
-				if (!unpack_ok)
-					on_unpack_error(); //the user will decide whether to reset the unpacker or not in this callback
-
-				return unpack_ok;
-			}
-			else
-				return true;
-		}
-
-		return false;
-	}
 #endif
 
 	///////////////////////////////////////////////////
@@ -265,9 +231,8 @@ private:
 		{
 			this->stat.last_recv_time = time(nullptr);
 
-			typename Unpacker::container_type temp_msg_can;
 			auto_duration dur(this->stat.unpack_time_sum);
-			auto unpack_ok = unpacker_->parse_msg(bytes_transferred, temp_msg_can);
+			auto unpack_ok = unpacker_->parse_msg(bytes_transferred, this->temp_msg_can);
 			dur.end();
 
 			if (!unpack_ok)
@@ -276,7 +241,7 @@ private:
 #ifdef ASCS_PASSIVE_RECV
 			this->reading = false; //clear reading flag before call handle_msg() to make sure that recv_msg() can be called successfully in on_msg_handle()
 #endif
-			if (this->handle_msg(temp_msg_can)) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
+			if (this->handle_msg()) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
 				do_recv_msg(); //receive msg in sequence
 		}
 		else

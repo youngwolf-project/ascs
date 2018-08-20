@@ -21,7 +21,7 @@ namespace ascs { namespace udp {
 template <typename Packer, typename Unpacker, typename Socket = asio::ip::udp::socket,
 	template<typename, typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename, typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
-class socket_base : public socket<Socket, Packer, Unpacker, udp_msg<typename Packer::msg_type>, udp_msg<typename Unpacker::msg_type>, InQueue, InContainer, OutQueue, OutContainer>
+class socket_base : public socket<Socket, Packer, udp_msg<typename Packer::msg_type>, udp_msg<typename Unpacker::msg_type>, InQueue, InContainer, OutQueue, OutContainer>
 {
 public:
 	typedef udp_msg<typename Packer::msg_type> in_msg_type;
@@ -30,7 +30,7 @@ public:
 	typedef const out_msg_type out_msg_ctype;
 
 private:
-	typedef socket<Socket, Packer, Unpacker, in_msg_type, out_msg_type, InQueue, InContainer, OutQueue, OutContainer> super;
+	typedef socket<Socket, Packer, in_msg_type, out_msg_type, InQueue, InContainer, OutQueue, OutContainer> super;
 
 public:
 	socket_base(asio::io_context& io_context_) : super(io_context_), unpacker_(std::make_shared<Unpacker>()), strand(io_context_) {}
@@ -99,38 +99,6 @@ public:
 	//changing unpacker must before calling ascs::socket::recv_msg, and define ASCS_PASSIVE_RECV macro.
 	void unpacker(const std::shared_ptr<i_unpacker<typename Unpacker::msg_type>>& _unpacker_) {unpacker_ = _unpacker_;}
 	virtual void recv_msg() {if (!this->reading && is_ready()) this->dispatch_strand(strand, [this]() {this->do_recv_msg();});}
-
-	bool sync_recv_msg(typename Unpacker::msg_type& msg)
-	{
-		auto recv_buff = unpacker_->prepare_next_recv();
-		assert(asio::buffer_size(recv_buff) > 0);
-		if (0 == asio::buffer_size(recv_buff))
-			unified_out::error_out("The unpacker returned an empty buffer, quit receiving!");
-		else
-		{
-			asio::error_code ec;
-			auto bytes_transferred = this->next_layer().receive_from(recv_buff, temp_addr, 0, ec);
-
-#if defined(_MSC_VER) || defined(__CYGWIN__) || defined(__MINGW32__) || defined(__MINGW64__)
-			if (ec && asio::error::connection_refused != ec && asio::error::connection_reset != ec)
-#else
-			if (ec)
-#endif
-				on_recv_error(ec);
-			else
-			{
-				if (bytes_transferred > 0)
-				{
-					this->stat.last_recv_time = time(nullptr);
-					msg = in_msg_type(temp_addr, unpacker_->parse_msg(bytes_transferred));
-				}
-
-				return true;
-			}
-		}
-
-		return false;
-	}
 #endif
 
 	///////////////////////////////////////////////////
@@ -211,12 +179,15 @@ private:
 		if (!ec && bytes_transferred > 0)
 		{
 			this->stat.last_recv_time = time(nullptr);
-			in_msg_type temp_msg(temp_addr, unpacker_->parse_msg(bytes_transferred));
+
+			typename Unpacker::container_type msg_can;
+			unpacker_->parse_msg(bytes_transferred, msg_can);
 
 #ifdef ASCS_PASSIVE_RECV
 			this->reading = false; //clear reading flag before call handle_msg() to make sure that recv_msg() can be called successfully in on_msg_handle()
 #endif
-			if (this->handle_msg(std::move(temp_msg))) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
+			ascs::do_something_to_all(msg_can, [this](typename Unpacker::msg_type& msg) {this->temp_msg_can.emplace_back(this->temp_addr, std::move(msg));});
+			if (this->handle_msg()) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
 				do_recv_msg(); //receive msg in sequence
 		}
 		else

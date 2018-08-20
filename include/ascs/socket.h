@@ -19,7 +19,7 @@
 namespace ascs
 {
 
-template<typename Socket, typename Packer, typename Unpacker, typename InMsgType, typename OutMsgType,
+template<typename Socket, typename Packer, typename InMsgType, typename OutMsgType,
 	template<typename, typename> class InQueue, template<typename> class InContainer,
 	template<typename, typename> class OutQueue, template<typename> class OutContainer>
 class socket : public timer<tracked_executor>
@@ -183,13 +183,43 @@ public:
 	bool is_recv_buffer_available() const {return recv_msg_buffer.size() < ASCS_MAX_MSG_NUM;}
 
 	//don't use the packer but insert into send buffer directly
-	bool direct_send_msg(const InMsgType& msg, bool can_overflow = false) {return direct_send_msg(InMsgType(msg), can_overflow);}
+	bool direct_send_msg(const InMsgType& msg, bool can_overflow = false)
+		{return can_overflow || is_send_buffer_available() ? do_direct_send_msg(InMsgType(msg)) : false;}
 	bool direct_send_msg(InMsgType&& msg, bool can_overflow = false) {return can_overflow || is_send_buffer_available() ? do_direct_send_msg(std::move(msg)) : false;}
 
 #ifdef ASCS_SYNC_SEND
-	//don't use the packer but insert into send buffer directly
-	bool direct_sync_send_msg(const InMsgType& msg, bool can_overflow = false) {return direct_sync_send_msg(InMsgType(msg), can_overflow);}
+	//don't use the packer but insert into send buffer directly, then wait for the sending to finish.
+	bool direct_sync_send_msg(const InMsgType& msg, bool can_overflow = false)
+		{return can_overflow || is_send_buffer_available() ? do_direct_sync_send_msg(InMsgType(msg)) : false;}
 	bool direct_sync_send_msg(InMsgType&& msg, bool can_overflow = false) {return can_overflow || is_send_buffer_available() ? do_direct_sync_send_msg(std::move(msg)) : false;}
+#endif
+
+#if ASCS_MAX_SYNC_RECV > 0
+	bool sync_recv_msg(std::list<OutMsgType>& msg_can)
+	{
+		if (!is_ready())
+			return false;
+
+		std::shared_ptr<std::condition_variable> cv;
+		{
+			std::lock_guard<std::mutex> lock(cv_list_mutex);
+			if (cv_list.size() >= ASCS_MAX_SYNC_RECV)
+			{
+				unified_out::warning_out("too many sync message receiving.");
+				return false;
+			}
+
+			cv = std::make_shared<std::condition_variable>();
+			cv_list.push_back(cv);
+		}
+
+		std::unique_lock<std::mutex> lock(sync_recv_mutex);
+		cv->wait(lock);
+		msg_can.swap(temp_msg_can);
+		sync_recv_cv.notify_one();
+
+		return true;
+	}
 #endif
 
 	//how many msgs waiting for sending or dispatching
@@ -292,21 +322,31 @@ protected:
 		return true;
 	}
 
-	bool handle_msg(OutMsgType&& temp_msg)
+	bool handle_msg()
 	{
-		if (!temp_msg.empty())
+#if ASCS_MAX_SYNC_RECV > 0
+		std::shared_ptr<std::condition_variable> cv;
 		{
-			++stat.recv_msg_sum;
-			stat.recv_byte_sum += temp_msg.size();
-			recv_msg_buffer.enqueue(out_msg(std::move(temp_msg)));
-			dispatch_msg();
+			std::lock_guard<std::mutex> lock(cv_list_mutex);
+			if (!cv_list.empty())
+			{
+				cv = cv_list.front();
+				cv_list.pop_front();
+			}
 		}
 
-		return handled_msg();
-	}
+		if (cv)
+		{
+			cv->notify_one();
 
-	template<typename T> bool handle_msg(T& temp_msg_can)
-	{
+			std::unique_lock<std::mutex> lock(sync_recv_mutex);
+			sync_recv_cv.wait(lock);
+			temp_msg_can.clear();
+
+			return handled_msg();
+		}
+#endif
+
 		auto msg_num = temp_msg_can.size();
 		if (msg_num > 0)
 		{
@@ -495,6 +535,7 @@ private:
 protected:
 	struct statistic stat;
 	std::shared_ptr<i_packer<typename Packer::msg_type>> packer_;
+	std::list<OutMsgType> temp_msg_can; //used by unpacker's parse_msg().
 
 	in_queue_type send_msg_buffer;
 	volatile bool sending;
@@ -523,6 +564,12 @@ private:
 
 #ifdef ASCS_SYNC_SEND
 	std::mutex sync_send_mutex;
+#endif
+
+#if ASCS_MAX_SYNC_RECV > 0
+	std::mutex sync_recv_mutex, cv_list_mutex;
+	std::condition_variable sync_recv_cv;
+	std::list<std::shared_ptr<std::condition_variable>> cv_list;
 #endif
 
 	unsigned msg_resuming_interval_, msg_handling_interval_;

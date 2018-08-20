@@ -6,7 +6,7 @@
 #define ASCS_DELAY_CLOSE	1 //this demo not used object pool and doesn't need life cycle management,
 							  //so, define this to avoid hooks for async call (and slightly improve efficiency),
 							  //any value which is bigger than zero is okay.
-#define ASCS_PASSIVE_RECV
+#define ASCS_MAX_SYNC_RECV	1
 #define ASCS_DISPATCH_BATCH_MSG
 #define ASCS_ALIGNED_TIMER
 #define ASCS_CUSTOM_LOG
@@ -58,7 +58,7 @@ using namespace ascs::ext::tcp;
 std::thread create_sync_recv_thread(single_client& client)
 {
 	return std::thread([&client]() {
-		while (!client.is_connected())
+		while (!client.is_ready())
 			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
 		typename ASCS_DEFAULT_UNPACKER::container_type msg_can;

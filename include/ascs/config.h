@@ -388,18 +388,19 @@
  * If macro ASCS_PASSIVE_RECV been defined, macro ASCS_AVOID_AUTO_STOP_SERVICE will be defined automatically.
  *
  * HIGHLIGHT:
- * Fully support sync message sending (even be able to mix with async message sending without any limitations), please note that this feature will slightly
- *  impact efficiency even if you always use async message sending, so only open this feature when realy needed.
- * Support sync message receiving (with some limitations), just need macro ASCS_PASSIVE_RECV to be defined, see macro ASCS_PASSIVE_RECV for details.
+ * Fully support sync message sending and receiving (even be able to mix with async message sending and receiving without any limitations), but please note
+ *  that this feature will slightly impact efficiency even if you always use async message sending and receiving, so only open this feature when realy needed.
  * We must avoid to do sync message sending and receiving in service threads.
  * Sync message sending and receiving are not tracked by tracked_executor, please note.
  * No matter you're doing sync message sending or async message sending, you can do sync message receiving or async message receiving concurrently.
  *
  * FIX:
  * Fix race condition when aligning timers, see macro ASCS_ALIGNED_TIMER for more details.
+ * Fix error check for UDP on cygwin and mingw.
+ * Fix bug: demo file_client may not be able to receive all content of the file it required if you get more than one file in a single request.
  *
  * ENHANCEMENTS:
- * Add new macro ASCS_SYNC_SEND to support sync message sending.
+ * Add new macro ASCS_SYNC_SEND and ASCS_MAX_SYNC_RECV to support sync message sending and receiving.
  *
  * DELETION:
  *
@@ -683,19 +684,6 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 // need to manually call recv_msg(), if you need to change the unpacker, do it before recv_msg() invocation, please note.
 //during async message receiving, calling recv_msg() will fail, this is by design to avoid asio::io_context using up all virtual memory.
 //because user can greedily call recv_msg(), it's your responsibility to keep the recv buffer from overflowed, please pay special attention.
-//with this macro, function sync_recv_msg() becomes available, which means you can do sync message receiving, but please follow below principles:
-// 1. sync model, only call sync_recv_msg() after previous sync_recv_msg() returned.
-// 2. async model, on special limitations, just note that recv_msg() may fail (without any logs) if another async receiving is still being performed,
-//     this can only happen with macro ASCS_PASSIVE_RECV, because without macro ASCS_PASSIVE_RECV, recv_msg() is not available.
-// 3. mix model, only call recv_msg() after sync_recv_msg() returned, only call sync_recv_msg() after prior async receiving end (is_reading() returns false).
-// 4. no matter which model you choose, ascs only cares happen-after sequence, so they don't have to be in the same thread.
-//
-//thread safety:
-//it's always safe for distinct ascs::socket objects.
-//for the same ascs::socket object:
-// it's safe for distinct recv_msg() invocation (but may fail).
-// it's unsafe for distinct sync_recv_msg() invocation.
-// it's unsafe between recv_msg() and sync_recv_msg() invocation.
 
 //#define ASCS_DISPATCH_BATCH_MSG
 //all messages will be dispatched via on_handle_msg with a variable-length container, this will change the signature of function on_msg_handle,
@@ -708,13 +696,17 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 //if you don't define this macro, the next callback will be called at (xx:xx:xx + 21), plase note.
 
 //#define ASCS_SYNC_SEND
-//define this macro to gain additional series of sync message sending, they are:
+#ifndef ASCS_MAX_SYNC_RECV
+#define ASCS_MAX_SYNC_RECV	0 //how many sync message receiving can be performed concurrently, <= 0 means close sync message receiving
+#endif
+//define these macro to gain additional series of sync message sending and receiving, they are:
 // sync_send_msg
 // sync_send_native_msg
 // sync_safe_send_msg
 // sync_safe_send_native_msg
-//please note that this feature will slightly impact efficiency even if you always use async message sending, so only open this feature when realy needed,
-//and DO NOT call pop_first_pending_send_msg and pop_all_pending_send_msg during sync message sending.
+// sync_recv_msg
+//please note that this feature will slightly impact efficiency even if you always use async message sending and receiving, so only open
+//this feature when realy needed, and DO NOT call pop_first_pending_send_msg and pop_all_pending_send_msg during sync message sending.
 
 //configurations
 

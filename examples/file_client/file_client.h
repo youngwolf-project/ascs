@@ -245,7 +245,7 @@ private:
 		change_timer_status(id, timer_info::TIMER_CANCELED);
 
 		//wait all file_socket to clean up themselves
-		do_something_to_all([](object_ctype& item) {if (!item->is_idle()) std::this_thread::sleep_for(std::chrono::milliseconds(10));});
+		do_something_to_all([](object_ctype& item) {while (!item->is_idle()) std::this_thread::sleep_for(std::chrono::milliseconds(10));});
 		get_file();
 
 		return false;
