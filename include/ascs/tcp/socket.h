@@ -251,10 +251,8 @@ private:
 #endif
 			if (ec)
 				this->on_recv_error(ec);
-#ifndef ASCS_PASSIVE_RECV
 			else
 				do_recv_msg(); //receive msg in sequence
-#endif
 		}
 	}
 

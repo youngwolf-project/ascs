@@ -48,6 +48,9 @@ protected:
 #ifdef ASCS_PASSIVE_RECV
 		reading = false;
 #endif
+#ifdef ASCS_SYNC_RECV
+		status = sync_recv_status::NOT_REQUESTED;
+#endif
 		started_ = false;
 		dispatching = false;
 		recv_idle_began = false;
@@ -71,6 +74,9 @@ protected:
 		sending = false;
 #ifdef ASCS_PASSIVE_RECV
 		reading = false;
+#endif
+#ifdef ASCS_SYNC_RECV
+		status = sync_recv_status::NOT_REQUESTED;
 #endif
 		dispatching = false;
 		recv_idle_began = false;
@@ -194,31 +200,32 @@ public:
 	bool direct_sync_send_msg(InMsgType&& msg, bool can_overflow = false) {return can_overflow || is_send_buffer_available() ? do_direct_sync_send_msg(std::move(msg)) : false;}
 #endif
 
-#if ASCS_MAX_SYNC_RECV > 0
+#ifdef ASCS_SYNC_RECV
 	bool sync_recv_msg(std::list<OutMsgType>& msg_can)
 	{
-		if (!is_ready())
+		if (stopped())
 			return false;
 
-		std::shared_ptr<std::condition_variable> cv;
-		{
-			std::lock_guard<std::mutex> lock(cv_list_mutex);
-			if (cv_list.size() >= ASCS_MAX_SYNC_RECV)
-			{
-				unified_out::warning_out("too many sync message receiving.");
-				return false;
-			}
-
-			cv = std::make_shared<std::condition_variable>();
-			cv_list.push_back(cv);
-		}
-
 		std::unique_lock<std::mutex> lock(sync_recv_mutex);
-		cv->wait(lock);
-		msg_can.swap(temp_msg_can);
+		if (sync_recv_status::NOT_REQUESTED != status)
+			return false;
+
+#ifdef ASCS_PASSIVE_RECV
+		recv_msg();
+#endif
+		status = sync_recv_status::REQUESTED;
+		sync_recv_cv.wait(lock);
+
+		auto re = sync_recv_status::RESPONDED == status;
+		status = sync_recv_status::NOT_REQUESTED;
+		if (re)
+		{
+			msg_can.clear();
+			msg_can.swap(temp_msg_can);
+		}
 		sync_recv_cv.notify_one();
 
-		return true;
+		return re;
 	}
 #endif
 
@@ -242,9 +249,7 @@ protected:
 #endif
 		assert(is_ready());
 		send_msg(); //send buffer may have msgs, send them
-#ifndef ASCS_PASSIVE_RECV
 		recv_msg();
-#endif
 
 		return true;
 	}
@@ -310,6 +315,9 @@ protected:
 
 		if (stopped())
 		{
+#ifdef ASCS_SYNC_RECV
+			sync_recv_cv.notify_one();
+#endif
 			on_close();
 			after_close();
 		}
@@ -324,29 +332,17 @@ protected:
 
 	bool handle_msg()
 	{
-#if ASCS_MAX_SYNC_RECV > 0
-		std::shared_ptr<std::condition_variable> cv;
+#ifdef ASCS_SYNC_RECV
+		std::unique_lock<std::mutex> lock(sync_recv_mutex);
+		if (sync_recv_status::REQUESTED == status)
 		{
-			std::lock_guard<std::mutex> lock(cv_list_mutex);
-			if (!cv_list.empty())
-			{
-				cv = cv_list.front();
-				cv_list.pop_front();
-			}
-		}
+			status = sync_recv_status::RESPONDED;
+			sync_recv_cv.notify_one();
 
-		if (cv)
-		{
-			cv->notify_one();
-
-			std::unique_lock<std::mutex> lock(sync_recv_mutex);
 			sync_recv_cv.wait(lock);
-			temp_msg_can.clear();
-
-			return handled_msg();
 		}
+		lock.unlock();
 #endif
-
 		auto msg_num = temp_msg_can.size();
 		if (msg_num > 0)
 		{
@@ -358,6 +354,7 @@ protected:
 				stat.recv_byte_sum += iter->size();
 				op_iter->swap(*iter);
 			}
+			temp_msg_can.clear();
 
 			recv_msg_buffer.move_items_in(temp_buffer);
 			dispatch_msg();
@@ -386,23 +383,23 @@ protected:
 #ifdef ASCS_SYNC_SEND
 	bool do_direct_sync_send_msg(InMsgType&& msg)
 	{
-		if (msg.empty())
-			unified_out::error_out("found an empty message, please check your packer.");
-		else
+		if (stopped())
+			return false;
+		else if (msg.empty())
 		{
-			auto unused = in_msg(std::move(msg), true);
-			auto cv = unused.cv;
-			send_msg_buffer.enqueue(std::move(unused));
-			if (!sending && is_ready())
-				send_msg();
-
-			std::unique_lock<std::mutex> lock(sync_send_mutex);
-			cv->wait(lock);
+			unified_out::error_out("found an empty message, please check your packer.");
+			return false;
 		}
 
-		//even if we meet an empty message (because of too big message or insufficient memory, most likely), we still return true, why?
-		//please think about the function safe_send_(native_)msg, if we keep returning false, it will enter a dead loop.
-		//the packer provider has the responsibility to write detailed reasons down when packing message failed.
+		auto unused = in_msg(std::move(msg), true);
+		auto cv = unused.cv;
+		send_msg_buffer.enqueue(std::move(unused));
+		if (!sending && is_ready())
+			send_msg();
+
+		std::unique_lock<std::mutex> lock(sync_send_mutex);
+		cv->wait(lock);
+
 		return true;
 	}
 #endif
@@ -520,6 +517,9 @@ private:
 				lowest_layer().close(ec);
 			}
 			change_timer_status(TIMER_DELAY_CLOSE, timer_info::TIMER_CANCELED);
+#ifdef ASCS_SYNC_RECV
+			sync_recv_cv.notify_one();
+#endif
 			on_close();
 			after_close();
 			set_async_calling(false);
@@ -535,7 +535,7 @@ private:
 protected:
 	struct statistic stat;
 	std::shared_ptr<i_packer<typename Packer::msg_type>> packer_;
-	std::list<OutMsgType> temp_msg_can; //used by unpacker's parse_msg().
+	std::list<OutMsgType> temp_msg_can;
 
 	in_queue_type send_msg_buffer;
 	volatile bool sending;
@@ -566,10 +566,12 @@ private:
 	std::mutex sync_send_mutex;
 #endif
 
-#if ASCS_MAX_SYNC_RECV > 0
-	std::mutex sync_recv_mutex, cv_list_mutex;
+#ifdef ASCS_SYNC_RECV
+	enum sync_recv_status {NOT_REQUESTED, REQUESTED, RESPONDED};
+	volatile sync_recv_status status;
+
+	std::mutex sync_recv_mutex;
 	std::condition_variable sync_recv_cv;
-	std::list<std::shared_ptr<std::condition_variable>> cv_list;
 #endif
 
 	unsigned msg_resuming_interval_, msg_handling_interval_;

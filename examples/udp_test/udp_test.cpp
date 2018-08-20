@@ -5,7 +5,10 @@
 #define ASCS_DELAY_CLOSE 1 //this demo not used object pool and doesn't need life cycle management,
 						   //so, define this to avoid hooks for async call (and slightly improve efficiency),
 						   //any value which is bigger than zero is okay.
-#define ASCS_MAX_SYNC_RECV	1
+#define ASCS_SYNC_RECV
+#define ASCS_PASSIVE_RECV
+//#define ASCS_AVOID_AUTO_STOP_SERVICE //with macro ASCS_PASSIVE_RECV, if we don't open heartbeat (ASCS_HEARTBEAT_INTERVAL),
+									   //we must define this macro to keep service_pump from stopping itself.
 //#define ASCS_DEFAULT_UDP_UNPACKER replaceable_udp_unpacker<>
 #define ASCS_HEARTBEAT_INTERVAL 5 //neither udp_unpacker nor replaceable_udp_unpacker support heartbeat message,
 								  //so heartbeat will be treated as normal message.
@@ -22,9 +25,6 @@ using namespace ascs::ext::udp;
 std::thread create_sync_recv_thread(single_service& service)
 {
 	return std::thread([&service]() {
-		while (!service.is_ready())
-			std::this_thread::sleep_for(std::chrono::milliseconds(10));
-
 		std::list<single_service::out_msg_type> msg_can;
 		while (service.sync_recv_msg(msg_can))
 		{

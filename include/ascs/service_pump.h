@@ -15,10 +15,6 @@
 
 #include "base.h"
 
-#if defined(ASCS_PASSIVE_RECV) && !defined(ASCS_AVOID_AUTO_STOP_SERVICE)
-#define ASCS_AVOID_AUTO_STOP_SERVICE
-#endif
-
 namespace ascs
 {
 

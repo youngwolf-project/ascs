@@ -383,9 +383,6 @@
  * 2018.8.2x	version 1.3.2
  *
  * SPECIAL ATTENTION (incompatible with old editions):
- * If macro ASCS_PASSIVE_RECV been defined, you must call ascs::socket::recv_msg() explicitly include the first one (before, you don't have to do this
- *  for the first one).
- * If macro ASCS_PASSIVE_RECV been defined, macro ASCS_AVOID_AUTO_STOP_SERVICE will be defined automatically.
  *
  * HIGHLIGHT:
  * Fully support sync message sending and receiving (even be able to mix with async message sending and receiving without any limitations), but please note
@@ -400,7 +397,7 @@
  * Fix bug: demo file_client may not be able to receive all content of the file it required if you get more than one file in a single request.
  *
  * ENHANCEMENTS:
- * Add new macro ASCS_SYNC_SEND and ASCS_MAX_SYNC_RECV to support sync message sending and receiving.
+ * Add new macro ASCS_SYNC_SEND and ASCS_SYNC_RECV to support sync message sending and receiving.
  *
  * DELETION:
  *
@@ -680,8 +677,8 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 //this value can be changed via ascs::socket::msg_handling_interval(size_t) at runtime.
 
 //#define ASCS_PASSIVE_RECV
-//to gain the ability of changing the unpacker at runtime, with this mcro, ascs will not do message receiving automatically, so user
-// need to manually call recv_msg(), if you need to change the unpacker, do it before recv_msg() invocation, please note.
+//to gain the ability of changing the unpacker at runtime, with this mcro, ascs will not do message receiving automatically (except the firt one),
+// so you need to manually call recv_msg(), if you need to change the unpacker, do it before recv_msg() invocation, please note.
 //during async message receiving, calling recv_msg() will fail, this is by design to avoid asio::io_context using up all virtual memory.
 //because user can greedily call recv_msg(), it's your responsibility to keep the recv buffer from overflowed, please pay special attention.
 
@@ -696,9 +693,7 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 //if you don't define this macro, the next callback will be called at (xx:xx:xx + 21), plase note.
 
 //#define ASCS_SYNC_SEND
-#ifndef ASCS_MAX_SYNC_RECV
-#define ASCS_MAX_SYNC_RECV	0 //how many sync message receiving can be performed concurrently, <= 0 means close sync message receiving
-#endif
+//#ifndef ASCS_SYNC_RECV
 //define these macro to gain additional series of sync message sending and receiving, they are:
 // sync_send_msg
 // sync_send_native_msg
