@@ -111,7 +111,7 @@ public:
 			asio::error_code ec;
 			auto bytes_transferred = this->next_layer().receive_from(recv_buff, temp_addr, 0, ec);
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(__CYGWIN__) || defined(__MINGW32__) || defined(__MINGW64__)
 			if (ec && asio::error::connection_refused != ec && asio::error::connection_reset != ec)
 #else
 			if (ec)
@@ -224,7 +224,7 @@ private:
 #ifdef ASCS_PASSIVE_RECV
 			this->reading = false; //clear reading flag before call handle_msg() to make sure that recv_msg() can be called successfully in on_msg_handle()
 #endif
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(__CYGWIN__) || defined(__MINGW32__) || defined(__MINGW64__)
 			if (ec && asio::error::connection_refused != ec && asio::error::connection_reset != ec)
 #else
 			if (ec)
