@@ -404,6 +404,7 @@ struct obj_with_begin_time : public T
 
 	void swap(T& obj, bool need_cv = false) {T::swap(obj); restart(); check_and_create_cv(need_cv);}
 	void swap(obj_with_begin_time& other) {T::swap(other); std::swap(begin_time, other.begin_time); cv.swap(other.cv);}
+	void clear() {cv.reset(); T::clear();}
 
 	typename statistic::stat_time begin_time;
 	std::shared_ptr<std::condition_variable> cv;

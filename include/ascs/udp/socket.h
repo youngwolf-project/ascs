@@ -102,28 +102,34 @@ public:
 
 	bool sync_recv_msg(typename Unpacker::msg_type& msg)
 	{
-		if (this->reading) //cannot 100% avoid duplicate receiving (include sync and async receiving), it's the user's responsibility.
-			return false;
-
 		auto recv_buff = unpacker_->prepare_next_recv();
 		assert(asio::buffer_size(recv_buff) > 0);
 		if (0 == asio::buffer_size(recv_buff))
-		{
 			unified_out::error_out("The unpacker returned an empty buffer, quit receiving!");
-			return false;
-		}
-
-		this->reading = true;
-		auto bytes_transferred = this->next_layer().receive_from(recv_buff, temp_addr);
-		this->reading = false;
-
-		if (bytes_transferred > 0)
+		else
 		{
-			this->stat.last_recv_time = time(nullptr);
-			msg = in_msg_type(temp_addr, unpacker_->parse_msg(bytes_transferred));
+			asio::error_code ec;
+			auto bytes_transferred = this->next_layer().receive_from(recv_buff, temp_addr, 0, ec);
+
+#ifdef _MSC_VER
+			if (ec && asio::error::connection_refused != ec && asio::error::connection_reset != ec)
+#else
+			if (ec)
+#endif
+				on_recv_error(ec);
+			else
+			{
+				if (bytes_transferred > 0)
+				{
+					this->stat.last_recv_time = time(nullptr);
+					msg = in_msg_type(temp_addr, unpacker_->parse_msg(bytes_transferred));
+				}
+
+				return true;
+			}
 		}
 
-		return true;
+		return false;
 	}
 #endif
 
@@ -256,20 +262,18 @@ private:
 			this->stat.last_send_time = time(nullptr);
 
 			this->stat.send_byte_sum += bytes_transferred;
+			this->stat.send_time_sum += statistic::now() - last_send_msg.begin_time;
 			++this->stat.send_msg_sum;
-			if (!last_send_msg.empty())
-			{
-				assert(bytes_transferred == last_send_msg.size());
-
-				this->stat.send_time_sum += statistic::now() - last_send_msg.begin_time;
+#ifdef ASCS_SYNC_SEND
+			if (last_send_msg.cv) last_send_msg.cv->notify_one();
+#endif
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
-				this->on_msg_send(last_send_msg);
+			this->on_msg_send(last_send_msg);
 #endif
 #ifdef ASCS_WANT_ALL_MSG_SEND_NOTIFY
-				if (this->send_msg_buffer.empty())
-					this->on_all_msg_send(last_send_msg);
+			if (this->send_msg_buffer.empty())
+				this->on_all_msg_send(last_send_msg);
 #endif
-			}
 		}
 		else
 			this->on_send_error(ec);
