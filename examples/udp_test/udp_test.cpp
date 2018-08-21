@@ -6,9 +6,10 @@
 						   //so, define this to avoid hooks for async call (and slightly improve efficiency),
 						   //any value which is bigger than zero is okay.
 #define ASCS_SYNC_RECV
-#define ASCS_PASSIVE_RECV
-//#define ASCS_AVOID_AUTO_STOP_SERVICE //with macro ASCS_PASSIVE_RECV, if we don't open heartbeat (ASCS_HEARTBEAT_INTERVAL),
-									   //we must define this macro to keep service_pump from stopping itself.
+#define ASCS_PASSIVE_RECV //if you annotate this definition, this demo will use mix model to receive messages, which means
+						  //some messages will be dispatched via on_msg_handle(), some messages will be returned via sync_recv_msg(),
+						  //type more than one messages (separate them by space) in one line with ENTER key to send them,
+						  //you will see them cross together on the receiver's screen.
 //#define ASCS_DEFAULT_UDP_UNPACKER replaceable_udp_unpacker<>
 #define ASCS_HEARTBEAT_INTERVAL 5 //neither udp_unpacker nor replaceable_udp_unpacker support heartbeat message,
 								  //so heartbeat will be treated as normal message.
@@ -28,7 +29,11 @@ std::thread create_sync_recv_thread(single_service& service)
 		std::list<single_service::out_msg_type> msg_can;
 		while (service.sync_recv_msg(msg_can))
 		{
+#ifdef ASCS_PASSIVE_RECV
+			do_something_to_all(msg_can, [](single_service::out_msg_type& msg) {if (!msg.empty()) printf("sync recv(" ASCS_SF ") : %s\n", msg.size(), msg.data());});
+#else
 			do_something_to_all(msg_can, [](single_service::out_msg_type& msg) {printf("sync recv(" ASCS_SF ") : %s\n", msg.size(), msg.data());});
+#endif
 			msg_can.clear();
 		}
 		puts("sync recv end.");

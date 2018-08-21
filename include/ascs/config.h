@@ -348,8 +348,7 @@
  * Not support sync sending mode anymore, so we reduced an atomic object in ascs::socket.
  *
  * REFACTORING:
- * If you want to change unpacker at runtime, first, you must define macro ASCS_PASSIVE_RECV, second, you must call ascs::socket::recv_msg and
- *  guarantee only zero or one recv_msg invocation (include initiating and asynchronous operation, this may need mutex, please carefully design your logic),
+ * If you want to change unpacker at runtime, first, you must define macro ASCS_PASSIVE_RECV, second, you must call ascs::socket::recv_msg,
  *  see file_client for more details.
  * Class object has been split into executor and tracked_executor, object_pool use the former, and ascs::socket use the latter.
  *
@@ -383,6 +382,11 @@
  * 2018.8.2x	version 1.3.2
  *
  * SPECIAL ATTENTION (incompatible with old editions):
+ * If macro ASCS_PASSIVE_RECV been defined, you may receive empty messages in on_msg_handle() and sync_recv_msg(), this makes you always having
+ *  the chance to call recv_msg().
+ * i_unpacker has been moved from namespace ascs::tcp and ascs::udp to namespace ascs, so the signature of ascs::udp::i_unpacker::parse_msg
+ *  has been changed to obey ascs::tcp::i_unpacker::parse_msg, the purpose of this change is to make socket::sync_recv_msg() can be easily
+ *  implemented, otherwise, sync_recv_msg() must be implemented by tcp::socket_base and udp::socket_base respectively.
  *
  * HIGHLIGHT:
  * Fully support sync message sending and receiving (even be able to mix with async message sending and receiving without any limitations), but please note
@@ -654,7 +658,7 @@ static_assert(ASCS_HEARTBEAT_MAX_ABSENCE > 0, "heartbeat absence must be bigger 
 // this seems not a normal procedure, but it works, I believe that asio's defect caused this problem.
 
 //#define ASCS_AVOID_AUTO_STOP_SERVICE
-//wrap service_pump with asio::io_service::work (asio::executor_work_guard), then it will never run out
+//wrap service_pump with asio::io_service::work (asio::executor_work_guard), then it will never run out until you explicitly call stop_service().
 
 //#define ASCS_DECREASE_THREAD_AT_RUNTIME
 //enable decreasing service thread at runtime.
@@ -681,6 +685,8 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 // so you need to manually call recv_msg(), if you need to change the unpacker, do it before recv_msg() invocation, please note.
 //during async message receiving, calling recv_msg() will fail, this is by design to avoid asio::io_context using up all virtual memory.
 //because user can greedily call recv_msg(), it's your responsibility to keep the recv buffer from overflowed, please pay special attention.
+//this macro also makes you to be able to pause message receiving, then, if there's no other tasks (like timers), service_pump will stop itself,
+// to avoid this, please define macro ASCS_AVOID_AUTO_STOP_SERVICE.
 
 //#define ASCS_DISPATCH_BATCH_MSG
 //all messages will be dispatched via on_handle_msg with a variable-length container, this will change the signature of function on_msg_handle,
@@ -701,7 +707,9 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 // sync_safe_send_native_msg
 // sync_recv_msg
 //please note that this feature will slightly impact efficiency even if you always use async message sending and receiving, so only open
-//this feature when realy needed, and DO NOT call pop_first_pending_send_msg and pop_all_pending_send_msg during sync message sending.
+// this feature when realy needed, and DO NOT call pop_first_pending_send_msg and pop_all_pending_send_msg during sync message sending.
+//if prior sync_recv_msg() not returned, the second sync_recv_msg() will return false immediately.
+//with macro ASCS_PASSIVE_RECV, in sync_recv_msg(), recv_msg() will be automatically called.
 
 //configurations
 

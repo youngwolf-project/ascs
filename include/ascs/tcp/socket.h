@@ -251,7 +251,7 @@ private:
 #endif
 			if (ec)
 				this->on_recv_error(ec);
-			else
+			else if (this->handle_msg()) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
 				do_recv_msg(); //receive msg in sequence
 		}
 	}

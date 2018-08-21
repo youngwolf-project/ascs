@@ -53,6 +53,9 @@ protected:
 #endif
 		started_ = false;
 		dispatching = false;
+#ifndef ASCS_DISPATCH_BATCH_MSG
+		dispatched = true;
+#endif
 		recv_idle_began = false;
 		msg_resuming_interval_ = ASCS_MSG_RESUMING_INTERVAL;
 		msg_handling_interval_ = ASCS_MSG_HANDLING_INTERVAL;
@@ -79,6 +82,9 @@ protected:
 		status = sync_recv_status::NOT_REQUESTED;
 #endif
 		dispatching = false;
+#ifndef ASCS_DISPATCH_BATCH_MSG
+		dispatched = true;
+#endif
 		recv_idle_began = false;
 		clear_buffer();
 	}
@@ -332,6 +338,11 @@ protected:
 
 	bool handle_msg()
 	{
+#ifdef ASCS_PASSIVE_RECV
+		if (temp_msg_can.empty())
+			temp_msg_can.emplace_back(); //empty message, makes users always having the chance to call recv_msg().
+#endif
+
 #ifdef ASCS_SYNC_RECV
 		std::unique_lock<std::mutex> lock(sync_recv_mutex);
 		if (sync_recv_status::REQUESTED == status)
@@ -346,11 +357,17 @@ protected:
 		auto msg_num = temp_msg_can.size();
 		if (msg_num > 0)
 		{
+#ifndef ASCS_PASSIVE_RECV
 			stat.recv_msg_sum += msg_num;
+#endif
 			std::list<out_msg> temp_buffer(msg_num);
 			auto op_iter = temp_buffer.begin();
 			for (auto iter = temp_msg_can.begin(); iter != temp_msg_can.end(); ++op_iter, ++iter)
 			{
+#ifdef ASCS_PASSIVE_RECV
+				if (!iter->empty())
+					++stat.recv_msg_sum;
+#endif
 				stat.recv_byte_sum += iter->size();
 				op_iter->swap(*iter);
 			}
@@ -469,7 +486,7 @@ private:
 			else
 			{
 #else
-		if ((dispatching = !last_dispatch_msg.empty() || recv_msg_buffer.try_dequeue(last_dispatch_msg)))
+		if ((dispatching = !dispatched || recv_msg_buffer.try_dequeue(last_dispatch_msg)))
 		{
 			auto begin_time = statistic::now();
 			stat.dispatch_dealy_sum += begin_time - last_dispatch_msg.begin_time;
@@ -484,6 +501,7 @@ private:
 			}
 			else
 			{
+				dispatched = true;
 				last_dispatch_msg.clear();
 #endif
 				dispatching = false;
@@ -546,18 +564,18 @@ protected:
 
 private:
 	bool recv_idle_began;
-	volatile bool dispatching;
 	volatile bool started_; //has started or not
+	volatile bool dispatching;
+#ifndef ASCS_DISPATCH_BATCH_MSG
+	bool dispatched;
+	out_msg last_dispatch_msg;
+#endif
 
 	typename statistic::stat_time recv_idle_begin_time;
 	out_queue_type recv_msg_buffer;
 
 	uint_fast64_t _id;
 	Socket next_layer_;
-
-#ifndef ASCS_DISPATCH_BATCH_MSG
-	out_msg last_dispatch_msg;
-#endif
 
 	std::atomic_flag start_atomic;
 	asio::io_context::strand strand;
