@@ -30,6 +30,9 @@
 #include <atomic>
 #include <sstream>
 #include <iomanip>
+#ifdef ASCS_SYNC_SEND
+#include <condition_variable>
+#endif
 
 #include <asio.hpp>
 
@@ -188,35 +191,32 @@ public:
 };
 
 //unpacker concept
-namespace tcp
+template<typename MsgType>
+class i_unpacker
 {
-	template<typename MsgType>
-	class i_unpacker
-	{
-	public:
-		typedef MsgType msg_type;
-		typedef const msg_type msg_ctype;
-		typedef std::list<msg_type> container_type;
-		typedef ASCS_RECV_BUFFER_TYPE buffer_type;
+public:
+	typedef MsgType msg_type;
+	typedef const msg_type msg_ctype;
+	typedef std::list<msg_type> container_type;
+	typedef ASCS_RECV_BUFFER_TYPE buffer_type;
 
-		bool stripped() const {return _stripped;}
-		void stripped(bool stripped_) {_stripped = stripped_;}
+	bool stripped() const {return _stripped;}
+	void stripped(bool stripped_) {_stripped = stripped_;}
 
-	protected:
-		i_unpacker() : _stripped(true) {}
-		virtual ~i_unpacker() {}
+protected:
+	i_unpacker() : _stripped(true) {}
+	virtual ~i_unpacker() {}
 
-	public:
-		virtual void reset() = 0;
-		//heartbeat must not be included in msg_can, otherwise you must handle heartbeat at where you handle normal messges.
-		virtual bool parse_msg(size_t bytes_transferred, container_type& msg_can) = 0;
-		virtual size_t completion_condition(const asio::error_code& ec, size_t bytes_transferred) = 0;
-		virtual buffer_type prepare_next_recv() = 0;
+public:
+	virtual void reset() {};
+	//heartbeat must not be included in msg_can, otherwise you must handle heartbeat at where you handle normal messges.
+	virtual bool parse_msg(size_t bytes_transferred, container_type& msg_can) = 0;
+	virtual size_t completion_condition(const asio::error_code& ec, size_t bytes_transferred) {return 0;}
+	virtual buffer_type prepare_next_recv() = 0;
 
-	private:
-		bool _stripped;
-	};
-} //namespace
+private:
+	bool _stripped;
+};
 
 namespace udp
 {
@@ -239,24 +239,6 @@ namespace udp
 		udp_msg(udp_msg&& other) : MsgType(std::move(other)), peer_addr(std::move(other.peer_addr)) {}
 		udp_msg& operator=(udp_msg&& other) {MsgType::clear(); swap(other); return *this;}
 #endif
-	};
-
-	template<typename MsgType>
-	class i_unpacker
-	{
-	public:
-		typedef MsgType msg_type;
-		typedef const msg_type msg_ctype;
-		typedef ASCS_RECV_BUFFER_TYPE buffer_type;
-
-	protected:
-		virtual ~i_unpacker() {}
-
-	public:
-		virtual void reset() {}
-		//heartbeat must not be returned (use empty message instead), otherwise you must handle heartbeat at where you handle normal messges.
-		virtual msg_type parse_msg(size_t bytes_transferred) = 0;
-		virtual buffer_type prepare_next_recv() = 0;
 	};
 } //namespace
 //unpacker concept
@@ -327,29 +309,24 @@ struct statistic
 	std::string to_string() const
 	{
 		std::ostringstream s;
-#ifdef ASCS_FULL_STATISTIC
 		s << "send corresponding statistic:\n"
 			<< "message sum: " << send_msg_sum << std::endl
 			<< "size in bytes: " << send_byte_sum << std::endl
+#ifdef ASCS_FULL_STATISTIC
 			<< "send delay: " << std::chrono::duration_cast<std::chrono::duration<float>>(send_delay_sum).count() << std::endl
 			<< "send duration: " << std::chrono::duration_cast<std::chrono::duration<float>>(send_time_sum).count() << std::endl
 			<< "pack duration: " << std::chrono::duration_cast<std::chrono::duration<float>>(pack_time_sum).count() << std::endl
+#endif
 			<< "\nrecv corresponding statistic:\n"
 			<< "message sum: " << recv_msg_sum << std::endl
-			<< "size in bytes: " << recv_byte_sum << std::endl
-			<< "dispatch delay: " << std::chrono::duration_cast<std::chrono::duration<float>>(dispatch_dealy_sum).count() << std::endl
+			<< "size in bytes: " << recv_byte_sum
+#ifdef ASCS_FULL_STATISTIC
+			<< "\ndispatch delay: " << std::chrono::duration_cast<std::chrono::duration<float>>(dispatch_dealy_sum).count() << std::endl
 			<< "recv idle duration: " << std::chrono::duration_cast<std::chrono::duration<float>>(recv_idle_sum).count() << std::endl
 			<< "on_msg_handle duration: " << std::chrono::duration_cast<std::chrono::duration<float>>(handle_time_sum).count() << std::endl
-			<< "unpack duration: " << std::chrono::duration_cast<std::chrono::duration<float>>(unpack_time_sum).count();
-#else
-		s << std::setfill('0') << "send corresponding statistic:\n"
-			<< "message sum: " << send_msg_sum << std::endl
-			<< "size in bytes: " << send_byte_sum << std::endl
-			<< "\nrecv corresponding statistic:\n"
-			<< "message sum: " << recv_msg_sum << std::endl
-			<< "size in bytes: " << recv_byte_sum;
+			<< "unpack duration: " << std::chrono::duration_cast<std::chrono::duration<float>>(unpack_time_sum).count()
 #endif
-		return s.str();
+		;return s.str();
 	}
 
 	//send corresponding statistic
@@ -389,13 +366,35 @@ private:
 	statistic::stat_duration& duration;
 };
 
+#ifdef ASCS_SYNC_SEND
+template<typename T>
+struct obj_with_begin_time : public T
+{
+	obj_with_begin_time(bool need_cv = false) {check_and_create_cv(need_cv);}
+	obj_with_begin_time(T&& obj, bool need_cv = false) : T(std::move(obj)) {check_and_create_cv(need_cv);}
+	obj_with_begin_time& operator=(T&& obj) {T::operator=(std::move(obj)); restart(); return *this;}
+	obj_with_begin_time(obj_with_begin_time&& other) : T(std::move(other)), begin_time(std::move(other.begin_time)), cv(std::move(other.cv)) {}
+	obj_with_begin_time& operator=(obj_with_begin_time&& other) {T::operator=(std::move(other)); begin_time = std::move(other.begin_time); cv = std::move(other.cv); return *this;}
+
+	void restart() {restart(statistic::now());}
+	void restart(const typename statistic::stat_time& begin_time_) {begin_time = begin_time_;}
+
+	void check_and_create_cv(bool need_cv) {if (!need_cv) cv.reset(); else if (!cv) cv = std::make_shared<std::condition_variable>();}
+
+	void swap(T& obj, bool need_cv = false) {T::swap(obj); restart(); check_and_create_cv(need_cv);}
+	void swap(obj_with_begin_time& other) {T::swap(other); std::swap(begin_time, other.begin_time); cv.swap(other.cv);}
+	void clear() {cv.reset(); T::clear();}
+
+	typename statistic::stat_time begin_time;
+	std::shared_ptr<std::condition_variable> cv;
+};
+#else
 template<typename T>
 struct obj_with_begin_time : public T
 {
 	obj_with_begin_time() {}
 	obj_with_begin_time(T&& obj) : T(std::move(obj)) {restart();}
 	obj_with_begin_time& operator=(T&& obj) {T::operator=(std::move(obj)); restart(); return *this;}
-	//following two functions are used by concurrent queue only, ascs just use swap
 	obj_with_begin_time(obj_with_begin_time&& other) : T(std::move(other)), begin_time(std::move(other.begin_time)) {}
 	obj_with_begin_time& operator=(obj_with_begin_time&& other) {T::operator=(std::move(other)); begin_time = std::move(other.begin_time); return *this;}
 
@@ -406,6 +405,7 @@ struct obj_with_begin_time : public T
 
 	typename statistic::stat_time begin_time;
 };
+#endif
 
 //free functions, used to do something to any container(except map and multimap) optionally with any mutex
 template<typename _Can, typename _Mutex, typename _Predicate>
@@ -423,31 +423,6 @@ void do_something_to_one(_Can& __can, _Mutex& __mutex, const _Predicate& __pred)
 
 template<typename _Can, typename _Predicate>
 void do_something_to_one(_Can& __can, const _Predicate& __pred) {for (auto iter = std::begin(__can); iter != std::end(__can); ++iter) if (__pred(*iter)) break;}
-
-template<typename _Can>
-bool splice_helper(_Can& dest_can, _Can& src_can, size_t max_size = ASCS_MAX_MSG_NUM)
-{
-	if (src_can.empty())
-		return false;
-
-	auto size = dest_can.size();
-	if (size >= max_size) //dest_can cannot hold more items.
-		return false;
-
-	size = max_size - size; //maximum items can be handled this time
-	auto left_size = src_can.size();
-	if (left_size > size) //some items left behind
-	{
-		left_size -= size;
-		auto begin_iter = std::begin(src_can);
-		auto end_iter = left_size > size ? std::next(begin_iter, size) : std::prev(std::end(src_can), left_size); //minimize iterator movement
-		dest_can.splice(std::end(dest_can), src_can, begin_iter, end_iter);
-	}
-	else
-		dest_can.splice(std::end(dest_can), src_can);
-
-	return true;
-}
 
 //member functions, used to do something to any member container(except map and multimap) optionally with any member mutex
 #define DO_SOMETHING_TO_ALL_MUTEX(CAN, MUTEX) DO_SOMETHING_TO_ALL_MUTEX_NAME(do_something_to_all, CAN, MUTEX)
@@ -488,7 +463,7 @@ template<typename _Predicate> void NAME(const _Predicate& __pred) const {for (au
 TYPE FUNNAME(const char* pstr, size_t len, bool can_overflow) {return FUNNAME(&pstr, &len, 1, can_overflow);} \
 template<typename Buffer> TYPE FUNNAME(const Buffer& buffer, bool can_overflow) {return FUNNAME(buffer.data(), buffer.size(), can_overflow);}
 
-#define TCP_SEND_MSG(FUNNAME, NATIVE) \
+#define TCP_SEND_MSG(FUNNAME, NATIVE, SEND_FUNNAME) \
 bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow) \
 { \
 	if (!can_overflow && !this->is_send_buffer_available()) \
@@ -496,7 +471,7 @@ bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_
 	auto_duration dur(this->stat.pack_time_sum); \
 	auto msg = this->packer_->pack_msg(pstr, len, num, NATIVE); \
 	dur.end(); \
-	return this->do_direct_send_msg(std::move(msg)); \
+	return this->SEND_FUNNAME(std::move(msg)); \
 } \
 TCP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)
 
@@ -522,14 +497,14 @@ template<typename Buffer> TYPE FUNNAME(const Buffer& buffer, bool can_overflow) 
 template<typename Buffer> TYPE FUNNAME(const asio::ip::udp::endpoint& peer_addr, const Buffer& buffer, bool can_overflow) \
 	{return FUNNAME(peer_addr, buffer.data(), buffer.size(), can_overflow);}
 
-#define UDP_SEND_MSG(FUNNAME, NATIVE) \
+#define UDP_SEND_MSG(FUNNAME, NATIVE, SEND_FUNNAME) \
 bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow) {return FUNNAME(peer_addr, pstr, len, num, can_overflow);} \
 bool FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* const pstr[], const size_t len[], size_t num, bool can_overflow) \
 { \
 	if (!can_overflow && !this->is_send_buffer_available()) \
 		return false; \
 	in_msg_type msg(peer_addr, this->packer_->pack_msg(pstr, len, num, NATIVE)); \
-	return this->do_direct_send_msg(std::move(msg)); \
+	return this->SEND_FUNNAME(std::move(msg)); \
 } \
 UDP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)
 

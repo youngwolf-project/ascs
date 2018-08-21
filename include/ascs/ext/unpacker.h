@@ -20,7 +20,7 @@
 namespace ascs { namespace ext {
 
 //protocol: length + body
-class unpacker : public tcp::i_unpacker<std::string>
+class unpacker : public i_unpacker<std::string>
 {
 public:
 	unpacker() {reset();}
@@ -127,10 +127,11 @@ protected:
 };
 
 //protocol: UDP has message boundary, so we don't need a specific protocol to unpack it.
-class udp_unpacker : public udp::i_unpacker<std::string>
+class udp_unpacker : public i_unpacker<std::string>
 {
 public:
-	virtual msg_type parse_msg(size_t bytes_transferred) {assert(bytes_transferred <= ASCS_MSG_BUFFER_SIZE); return msg_type(raw_buff.data(), bytes_transferred);}
+	virtual bool parse_msg(size_t bytes_transferred, container_type& msg_can)
+		{assert(bytes_transferred <= ASCS_MSG_BUFFER_SIZE); msg_can.emplace_back(raw_buff.data(), bytes_transferred); return true;}
 
 #ifdef ASCS_SCATTERED_RECV_BUFFER
 	//this is just to satisfy the compiler, it's not a real scatter-gather buffer,
@@ -147,10 +148,10 @@ protected:
 //protocol: length + body
 //T can be replaceable_buffer (an alias of auto_buffer) or shared_buffer, the latter makes output messages seemingly copyable,
 template<typename T = replaceable_buffer>
-class replaceable_unpacker : public ascs::tcp::i_unpacker<T>
+class replaceable_unpacker : public ascs::i_unpacker<T>
 {
 private:
-	typedef ascs::tcp::i_unpacker<T> super;
+	typedef ascs::i_unpacker<T> super;
 
 public:
 	virtual void reset() {unpacker_.reset();}
@@ -178,19 +179,20 @@ protected:
 //protocol: UDP has message boundary, so we don't need a specific protocol to unpack it.
 //T can be replaceable_buffer (an alias of auto_buffer) or shared_buffer, the latter makes output messages seemingly copyable.
 template<typename T = replaceable_buffer>
-class replaceable_udp_unpacker : public ascs::udp::i_unpacker<T>
+class replaceable_udp_unpacker : public ascs::i_unpacker<T>
 {
 private:
-	typedef ascs::udp::i_unpacker<T> super;
+	typedef ascs::i_unpacker<T> super;
 
 public:
-	virtual typename super::msg_type parse_msg(size_t bytes_transferred)
+	virtual typename super::msg_type parse_msg(size_t bytes_transferred, typename super::container_type& msg_can)
 	{
 		assert(bytes_transferred <= ASCS_MSG_BUFFER_SIZE);
 
 		auto raw_msg = new string_buffer();
 		raw_msg->assign(raw_buff.data(), bytes_transferred);
-		return typename super::msg_type(raw_msg);
+		msg_can.emplace_back(raw_msg);
+		return true;
 	}
 
 #ifdef ASCS_SCATTERED_RECV_BUFFER
@@ -208,7 +210,7 @@ protected:
 //protocol: length + body
 //this unpacker demonstrate how to forbid memory replication while parsing msgs (let asio write msg directly).
 //not support unstripped messages, please note (you can fix this defect if you like).
-class non_copy_unpacker : public tcp::i_unpacker<basic_buffer>
+class non_copy_unpacker : public i_unpacker<basic_buffer>
 {
 public:
 	non_copy_unpacker() {reset();}
@@ -286,7 +288,7 @@ private:
 
 //protocol: fixed length
 //non-copy
-class fixed_length_unpacker : public tcp::i_unpacker<basic_buffer>
+class fixed_length_unpacker : public i_unpacker<basic_buffer>
 {
 public:
 	fixed_length_unpacker() : _fixed_length(1024) {}
@@ -324,7 +326,7 @@ private:
 };
 
 //protocol: [prefix] + body + suffix
-class prefix_suffix_unpacker : public tcp::i_unpacker<std::string>
+class prefix_suffix_unpacker : public i_unpacker<std::string>
 {
 public:
 	prefix_suffix_unpacker() {reset();}
@@ -440,7 +442,7 @@ private:
 };
 
 //protocol: stream (non-protocol)
-class stream_unpacker : public tcp::i_unpacker<std::string>
+class stream_unpacker : public i_unpacker<std::string>
 {
 public:
 	virtual void reset() {}

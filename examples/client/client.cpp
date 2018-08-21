@@ -6,6 +6,10 @@
 #define ASCS_DELAY_CLOSE	1 //this demo not used object pool and doesn't need life cycle management,
 							  //so, define this to avoid hooks for async call (and slightly improve efficiency),
 							  //any value which is bigger than zero is okay.
+#define ASCS_SYNC_RECV
+//#define ASCS_PASSIVE_RECV //because we not defined this macro, this demo will use mix model to receive messages, which means
+							//some messages will be dispatched via on_msg_handle(), some messages will be returned via sync_recv_msg(),
+							//if the server send messages quickly enough, you will see them cross together.
 #define ASCS_DISPATCH_BATCH_MSG
 #define ASCS_ALIGNED_TIMER
 #define ASCS_CUSTOM_LOG
@@ -46,11 +50,30 @@ public:
 };
 
 #include <ascs/ext/tcp.h>
+using namespace ascs;
+using namespace ascs::ext;
 using namespace ascs::ext::tcp;
 
 #define QUIT_COMMAND	"quit"
 #define RESTART_COMMAND	"restart"
 #define RECONNECT		"reconnect"
+
+std::thread create_sync_recv_thread(single_client& client)
+{
+	return std::thread([&client]() {
+		typename ASCS_DEFAULT_UNPACKER::container_type msg_can;
+		while (client.sync_recv_msg(msg_can))
+		{
+#ifdef ASCS_PASSIVE_RECV
+			do_something_to_all(msg_can, [](single_service::out_msg_type& msg) {if (!msg.empty()) printf("sync recv(" ASCS_SF ") : %s\n", msg.size(), msg.data());});
+#else
+			do_something_to_all(msg_can, [](single_client::out_msg_type& msg) {printf("sync recv(" ASCS_SF ") : %s\n", msg.size(), msg.data());});
+#endif
+			msg_can.clear();
+		}
+		puts("sync recv end.");
+	});
+}
 
 int main(int argc, const char* argv[])
 {
@@ -73,15 +96,23 @@ int main(int argc, const char* argv[])
 		client.set_server_addr(ASCS_SERVER_PORT + 100, ASCS_SERVER_IP);
 
 	sp.start_service();
+	std::this_thread::sleep_for(std::chrono::milliseconds(500)); //to be more efficiently, start the worker thread in tcp::socket_base::on_connect().
+	auto t = create_sync_recv_thread(client);
 	while(sp.is_running())
 	{
 		std::string str;
 		std::cin >> str;
 		if (QUIT_COMMAND == str)
+		{
 			sp.stop_service();
+			t.join();
+		}
 		else if (RESTART_COMMAND == str)
 		{
 			sp.stop_service();
+			t.join();
+
+			t = create_sync_recv_thread(client);
 			sp.start_service();
 		}
 		else if (RECONNECT == str)

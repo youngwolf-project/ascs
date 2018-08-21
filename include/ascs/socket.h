@@ -19,7 +19,7 @@
 namespace ascs
 {
 
-template<typename Socket, typename Packer, typename Unpacker, typename InMsgType, typename OutMsgType,
+template<typename Socket, typename Packer, typename InMsgType, typename OutMsgType,
 	template<typename, typename> class InQueue, template<typename> class InContainer,
 	template<typename, typename> class OutQueue, template<typename> class OutContainer>
 class socket : public timer<tracked_executor>
@@ -48,8 +48,14 @@ protected:
 #ifdef ASCS_PASSIVE_RECV
 		reading = false;
 #endif
+#ifdef ASCS_SYNC_RECV
+		status = sync_recv_status::NOT_REQUESTED;
+#endif
 		started_ = false;
 		dispatching = false;
+#ifndef ASCS_DISPATCH_BATCH_MSG
+		dispatched = true;
+#endif
 		recv_idle_began = false;
 		msg_resuming_interval_ = ASCS_MSG_RESUMING_INTERVAL;
 		msg_handling_interval_ = ASCS_MSG_HANDLING_INTERVAL;
@@ -72,7 +78,13 @@ protected:
 #ifdef ASCS_PASSIVE_RECV
 		reading = false;
 #endif
+#ifdef ASCS_SYNC_RECV
+		status = sync_recv_status::NOT_REQUESTED;
+#endif
 		dispatching = false;
+#ifndef ASCS_DISPATCH_BATCH_MSG
+		dispatched = true;
+#endif
 		recv_idle_began = false;
 		clear_buffer();
 	}
@@ -179,12 +191,49 @@ public:
 	bool is_send_buffer_available() const {return send_msg_buffer.size() < ASCS_MAX_MSG_NUM;}
 
 	//if you define macro ASCS_PASSIVE_RECV and call recv_msg greedily, the receiving buffer may overflow, this can exhaust all virtual memory,
-	//to avoid this problem, call recv_msg only if is_recv_buffer_available returns true.
+	//to avoid this problem, call recv_msg only if is_recv_buffer_available() returns true.
 	bool is_recv_buffer_available() const {return recv_msg_buffer.size() < ASCS_MAX_MSG_NUM;}
 
 	//don't use the packer but insert into send buffer directly
-	bool direct_send_msg(const InMsgType& msg, bool can_overflow = false) {return direct_send_msg(InMsgType(msg), can_overflow);}
+	bool direct_send_msg(const InMsgType& msg, bool can_overflow = false)
+		{return can_overflow || is_send_buffer_available() ? do_direct_send_msg(InMsgType(msg)) : false;}
 	bool direct_send_msg(InMsgType&& msg, bool can_overflow = false) {return can_overflow || is_send_buffer_available() ? do_direct_send_msg(std::move(msg)) : false;}
+
+#ifdef ASCS_SYNC_SEND
+	//don't use the packer but insert into send buffer directly, then wait for the sending to finish.
+	bool direct_sync_send_msg(const InMsgType& msg, bool can_overflow = false)
+		{return can_overflow || is_send_buffer_available() ? do_direct_sync_send_msg(InMsgType(msg)) : false;}
+	bool direct_sync_send_msg(InMsgType&& msg, bool can_overflow = false) {return can_overflow || is_send_buffer_available() ? do_direct_sync_send_msg(std::move(msg)) : false;}
+#endif
+
+#ifdef ASCS_SYNC_RECV
+	bool sync_recv_msg(std::list<OutMsgType>& msg_can)
+	{
+		if (stopped())
+			return false;
+
+		std::unique_lock<std::mutex> lock(sync_recv_mutex);
+		if (sync_recv_status::NOT_REQUESTED != status)
+			return false;
+
+#ifdef ASCS_PASSIVE_RECV
+		recv_msg();
+#endif
+		status = sync_recv_status::REQUESTED;
+		sync_recv_cv.wait(lock);
+
+		auto re = sync_recv_status::RESPONDED == status;
+		status = sync_recv_status::NOT_REQUESTED;
+		if (re)
+		{
+			msg_can.clear();
+			msg_can.swap(temp_msg_can);
+		}
+		sync_recv_cv.notify_one();
+
+		return re;
+	}
+#endif
 
 	//how many msgs waiting for sending or dispatching
 	GET_PENDING_MSG_NUM(get_pending_send_msg_num, send_msg_buffer)
@@ -272,6 +321,9 @@ protected:
 
 		if (stopped())
 		{
+#ifdef ASCS_SYNC_RECV
+			sync_recv_cv.notify_one();
+#endif
 			on_close();
 			after_close();
 		}
@@ -284,32 +336,42 @@ protected:
 		return true;
 	}
 
-	bool handle_msg(OutMsgType&& temp_msg)
+	bool handle_msg()
 	{
-		if (!temp_msg.empty())
+#ifdef ASCS_PASSIVE_RECV
+		if (temp_msg_can.empty())
+			temp_msg_can.emplace_back(); //empty message, makes users always having the chance to call recv_msg().
+#endif
+
+#ifdef ASCS_SYNC_RECV
+		std::unique_lock<std::mutex> lock(sync_recv_mutex);
+		if (sync_recv_status::REQUESTED == status)
 		{
-			++stat.recv_msg_sum;
-			stat.recv_byte_sum += temp_msg.size();
-			recv_msg_buffer.enqueue(out_msg(std::move(temp_msg)));
-			dispatch_msg();
+			status = sync_recv_status::RESPONDED;
+			sync_recv_cv.notify_one();
+
+			sync_recv_cv.wait(lock);
 		}
-
-		return handled_msg();
-	}
-
-	template<typename T> bool handle_msg(T& temp_msg_can)
-	{
+		lock.unlock();
+#endif
 		auto msg_num = temp_msg_can.size();
 		if (msg_num > 0)
 		{
+#ifndef ASCS_PASSIVE_RECV
 			stat.recv_msg_sum += msg_num;
+#endif
 			std::list<out_msg> temp_buffer(msg_num);
 			auto op_iter = temp_buffer.begin();
 			for (auto iter = temp_msg_can.begin(); iter != temp_msg_can.end(); ++op_iter, ++iter)
 			{
+#ifdef ASCS_PASSIVE_RECV
+				if (!iter->empty())
+					++stat.recv_msg_sum;
+#endif
 				stat.recv_byte_sum += iter->size();
 				op_iter->swap(*iter);
 			}
+			temp_msg_can.clear();
 
 			recv_msg_buffer.move_items_in(temp_buffer);
 			dispatch_msg();
@@ -334,6 +396,30 @@ protected:
 		//the packer provider has the responsibility to write detailed reasons down when packing message failed.
 		return true;
 	}
+
+#ifdef ASCS_SYNC_SEND
+	bool do_direct_sync_send_msg(InMsgType&& msg)
+	{
+		if (stopped())
+			return false;
+		else if (msg.empty())
+		{
+			unified_out::error_out("found an empty message, please check your packer.");
+			return false;
+		}
+
+		auto unused = in_msg(std::move(msg), true);
+		auto cv = unused.cv;
+		send_msg_buffer.enqueue(std::move(unused));
+		if (!sending && is_ready())
+			send_msg();
+
+		std::unique_lock<std::mutex> lock(sync_send_mutex);
+		cv->wait(lock);
+
+		return true;
+	}
+#endif
 
 private:
 	virtual void recv_msg() = 0;
@@ -400,7 +486,7 @@ private:
 			else
 			{
 #else
-		if ((dispatching = !last_dispatch_msg.empty() || recv_msg_buffer.try_dequeue(last_dispatch_msg)))
+		if ((dispatching = !dispatched || recv_msg_buffer.try_dequeue(last_dispatch_msg)))
 		{
 			auto begin_time = statistic::now();
 			stat.dispatch_dealy_sum += begin_time - last_dispatch_msg.begin_time;
@@ -415,6 +501,7 @@ private:
 			}
 			else
 			{
+				dispatched = true;
 				last_dispatch_msg.clear();
 #endif
 				dispatching = false;
@@ -448,6 +535,9 @@ private:
 				lowest_layer().close(ec);
 			}
 			change_timer_status(TIMER_DELAY_CLOSE, timer_info::TIMER_CANCELED);
+#ifdef ASCS_SYNC_RECV
+			sync_recv_cv.notify_one();
+#endif
 			on_close();
 			after_close();
 			set_async_calling(false);
@@ -463,6 +553,7 @@ private:
 protected:
 	struct statistic stat;
 	std::shared_ptr<i_packer<typename Packer::msg_type>> packer_;
+	std::list<OutMsgType> temp_msg_can;
 
 	in_queue_type send_msg_buffer;
 	volatile bool sending;
@@ -473,8 +564,12 @@ protected:
 
 private:
 	bool recv_idle_began;
-	volatile bool dispatching;
 	volatile bool started_; //has started or not
+	volatile bool dispatching;
+#ifndef ASCS_DISPATCH_BATCH_MSG
+	bool dispatched;
+	out_msg last_dispatch_msg;
+#endif
 
 	typename statistic::stat_time recv_idle_begin_time;
 	out_queue_type recv_msg_buffer;
@@ -482,12 +577,20 @@ private:
 	uint_fast64_t _id;
 	Socket next_layer_;
 
-#ifndef ASCS_DISPATCH_BATCH_MSG
-	out_msg last_dispatch_msg;
-#endif
-
 	std::atomic_flag start_atomic;
 	asio::io_context::strand strand;
+
+#ifdef ASCS_SYNC_SEND
+	std::mutex sync_send_mutex;
+#endif
+
+#ifdef ASCS_SYNC_RECV
+	enum sync_recv_status {NOT_REQUESTED, REQUESTED, RESPONDED};
+	volatile sync_recv_status status;
+
+	std::mutex sync_recv_mutex;
+	std::condition_variable sync_recv_cv;
+#endif
 
 	unsigned msg_resuming_interval_, msg_handling_interval_;
 };

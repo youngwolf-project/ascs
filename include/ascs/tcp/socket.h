@@ -21,7 +21,7 @@ namespace ascs { namespace tcp {
 template <typename Socket, typename Packer, typename Unpacker,
 	template<typename, typename> class InQueue, template<typename> class InContainer,
 	template<typename, typename> class OutQueue, template<typename> class OutContainer>
-class socket_base : public socket<Socket, Packer, Unpacker, typename Packer::msg_type, typename Unpacker::msg_type, InQueue, InContainer, OutQueue, OutContainer>
+class socket_base : public socket<Socket, Packer, typename Packer::msg_type, typename Unpacker::msg_type, InQueue, InContainer, OutQueue, OutContainer>
 {
 public:
 	typedef typename Packer::msg_type in_msg_type;
@@ -30,7 +30,7 @@ public:
 	typedef typename Unpacker::msg_ctype out_msg_ctype;
 
 private:
-	typedef socket<Socket, Packer, Unpacker, in_msg_type, out_msg_type, InQueue, InContainer, OutQueue, OutContainer> super;
+	typedef socket<Socket, Packer, in_msg_type, out_msg_type, InQueue, InContainer, OutQueue, OutContainer> super;
 
 protected:
 	enum link_status {CONNECTED, FORCE_SHUTTING_DOWN, GRACEFUL_SHUTTING_DOWN, BROKEN};
@@ -122,12 +122,21 @@ public:
 
 	///////////////////////////////////////////////////
 	//msg sending interface
-	TCP_SEND_MSG(send_msg, false) //use the packer with native = false to pack the msgs
-	TCP_SEND_MSG(send_native_msg, true) //use the packer with native = true to pack the msgs
+	TCP_SEND_MSG(send_msg, false, do_direct_send_msg) //use the packer with native = false to pack the msgs
+	TCP_SEND_MSG(send_native_msg, true, do_direct_send_msg) //use the packer with native = true to pack the msgs
 	//guarantee send msg successfully even if can_overflow equal to false
 	//success at here just means put the msg into tcp::socket_base's send buffer
 	TCP_SAFE_SEND_MSG(safe_send_msg, send_msg)
 	TCP_SAFE_SEND_MSG(safe_send_native_msg, send_native_msg)
+
+#ifdef ASCS_SYNC_SEND
+	TCP_SEND_MSG(sync_send_msg, false, do_direct_sync_send_msg) //use the packer with native = false to pack the msgs
+	TCP_SEND_MSG(sync_send_native_msg, true, do_direct_sync_send_msg) //use the packer with native = true to pack the msgs
+	//guarantee send msg successfully even if can_overflow equal to false
+	//success at here just means put the msg into tcp::socket_base's send buffer
+	TCP_SAFE_SEND_MSG(sync_safe_send_msg, sync_send_msg)
+	TCP_SAFE_SEND_MSG(sync_safe_send_native_msg, sync_send_native_msg)
+#endif
 	//msg sending interface
 	///////////////////////////////////////////////////
 
@@ -218,30 +227,33 @@ private:
 
 	void recv_handler(const asio::error_code& ec, size_t bytes_transferred)
 	{
-#ifdef ASCS_PASSIVE_RECV
-		this->reading = false; //clear reading flag before call handle_msg() to make sure that recv_msg() can be called successfully in on_msg_handle()
-#endif
-		if (ec)
-			this->on_recv_error(ec);
-		else if (bytes_transferred > 0)
+		if (!ec && bytes_transferred > 0)
 		{
 			this->stat.last_recv_time = time(nullptr);
 
-			typename Unpacker::container_type temp_msg_can;
 			auto_duration dur(this->stat.unpack_time_sum);
-			auto unpack_ok = unpacker_->parse_msg(bytes_transferred, temp_msg_can);
+			auto unpack_ok = unpacker_->parse_msg(bytes_transferred, this->temp_msg_can);
 			dur.end();
 
 			if (!unpack_ok)
 				on_unpack_error(); //the user will decide whether to reset the unpacker or not in this callback
 
-			if (this->handle_msg(temp_msg_can)) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
+#ifdef ASCS_PASSIVE_RECV
+			this->reading = false; //clear reading flag before call handle_msg() to make sure that recv_msg() can be called successfully in on_msg_handle()
+#endif
+			if (this->handle_msg()) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
 				do_recv_msg(); //receive msg in sequence
 		}
-#ifndef ASCS_PASSIVE_RECV
 		else
-			do_recv_msg(); //receive msg in sequence
+		{
+#ifdef ASCS_PASSIVE_RECV
+			this->reading = false; //clear reading flag before call handle_msg() to make sure that recv_msg() can be called successfully in on_msg_handle()
 #endif
+			if (ec)
+				this->on_recv_error(ec);
+			else if (this->handle_msg()) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
+				do_recv_msg(); //receive msg in sequence
+		}
 	}
 
 	bool do_send_msg(bool in_strand)
@@ -292,6 +304,9 @@ private:
 			this->stat.send_byte_sum += bytes_transferred;
 			this->stat.send_time_sum += statistic::now() - last_send_msg.front().begin_time;
 			this->stat.send_msg_sum += last_send_msg.size();
+#ifdef ASCS_SYNC_SEND
+			ascs::do_something_to_all(last_send_msg, [](typename super::in_msg& item) {if (item.cv) item.cv->notify_one();});
+#endif
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
 			this->on_msg_send(last_send_msg.front());
 #endif

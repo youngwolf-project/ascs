@@ -21,7 +21,7 @@ namespace ascs { namespace udp {
 template <typename Packer, typename Unpacker, typename Socket = asio::ip::udp::socket,
 	template<typename, typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename, typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
-class socket_base : public socket<Socket, Packer, Unpacker, udp_msg<typename Packer::msg_type>, udp_msg<typename Unpacker::msg_type>, InQueue, InContainer, OutQueue, OutContainer>
+class socket_base : public socket<Socket, Packer, udp_msg<typename Packer::msg_type>, udp_msg<typename Unpacker::msg_type>, InQueue, InContainer, OutQueue, OutContainer>
 {
 public:
 	typedef udp_msg<typename Packer::msg_type> in_msg_type;
@@ -30,7 +30,7 @@ public:
 	typedef const out_msg_type out_msg_ctype;
 
 private:
-	typedef socket<Socket, Packer, Unpacker, in_msg_type, out_msg_type, InQueue, InContainer, OutQueue, OutContainer> super;
+	typedef socket<Socket, Packer, in_msg_type, out_msg_type, InQueue, InContainer, OutQueue, OutContainer> super;
 
 public:
 	socket_base(asio::io_context& io_context_) : super(io_context_), unpacker_(std::make_shared<Unpacker>()), strand(io_context_) {}
@@ -103,12 +103,21 @@ public:
 
 	///////////////////////////////////////////////////
 	//msg sending interface
-	UDP_SEND_MSG(send_msg, false) //use the packer with native = false to pack the msgs
-	UDP_SEND_MSG(send_native_msg, true) //use the packer with native = true to pack the msgs
+	UDP_SEND_MSG(send_msg, false, do_direct_send_msg) //use the packer with native = false to pack the msgs
+	UDP_SEND_MSG(send_native_msg, true, do_direct_send_msg) //use the packer with native = true to pack the msgs
 	//guarantee send msg successfully even if can_overflow equal to false
 	//success at here just means put the msg into udp::socket_base's send buffer
 	UDP_SAFE_SEND_MSG(safe_send_msg, send_msg)
 	UDP_SAFE_SEND_MSG(safe_send_native_msg, send_native_msg)
+
+#ifdef ASCS_SYNC_SEND
+	UDP_SEND_MSG(sync_send_msg, false, do_direct_sync_send_msg) //use the packer with native = false to pack the msgs
+	UDP_SEND_MSG(sync_send_native_msg, true, do_direct_sync_send_msg) //use the packer with native = true to pack the msgs
+	//guarantee send msg successfully even if can_overflow equal to false
+	//success at here just means put the msg into tcp::socket_base's send buffer
+	UDP_SAFE_SEND_MSG(sync_safe_send_msg, sync_send_msg)
+	UDP_SAFE_SEND_MSG(sync_safe_send_native_msg, sync_send_native_msg)
+#endif
 	//msg sending interface
 	///////////////////////////////////////////////////
 
@@ -167,29 +176,34 @@ private:
 
 	void recv_handler(const asio::error_code& ec, size_t bytes_transferred)
 	{
-#ifdef ASCS_PASSIVE_RECV
-		this->reading = false; //clear reading flag before call handle_msg() to make sure that recv_msg() can be called successfully in on_msg_handle()
-#endif
-		auto keep_reading = !ec;
-		if (ec)
-		{
-#ifdef _MSC_VER
-			if (asio::error::connection_refused == ec || asio::error::connection_reset == ec)
-				keep_reading = true;
-			else
-#endif
-				on_recv_error(ec);
-		}
-		else if (bytes_transferred > 0)
+		if (!ec && bytes_transferred > 0)
 		{
 			this->stat.last_recv_time = time(nullptr);
-			keep_reading = this->handle_msg(in_msg_type(temp_addr, unpacker_->parse_msg(bytes_transferred))); //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
-		}
 
-#ifndef ASCS_PASSIVE_RECV
-		if (keep_reading)
-			do_recv_msg(); //receive msg in sequence
+			typename Unpacker::container_type msg_can;
+			unpacker_->parse_msg(bytes_transferred, msg_can);
+
+#ifdef ASCS_PASSIVE_RECV
+			this->reading = false; //clear reading flag before call handle_msg() to make sure that recv_msg() can be called successfully in on_msg_handle()
 #endif
+			ascs::do_something_to_all(msg_can, [this](typename Unpacker::msg_type& msg) {this->temp_msg_can.emplace_back(this->temp_addr, std::move(msg));});
+			if (this->handle_msg()) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
+				do_recv_msg(); //receive msg in sequence
+		}
+		else
+		{
+#ifdef ASCS_PASSIVE_RECV
+			this->reading = false; //clear reading flag before call handle_msg() to make sure that recv_msg() can be called successfully in on_msg_handle()
+#endif
+#if defined(_MSC_VER) || defined(__CYGWIN__) || defined(__MINGW32__) || defined(__MINGW64__)
+			if (ec && asio::error::connection_refused != ec && asio::error::connection_reset != ec)
+#else
+			if (ec)
+#endif
+				on_recv_error(ec);
+			else if (this->handle_msg()) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
+				do_recv_msg(); //receive msg in sequence
+		}
 	}
 
 	bool do_send_msg(bool in_strand)
@@ -217,20 +231,18 @@ private:
 			this->stat.last_send_time = time(nullptr);
 
 			this->stat.send_byte_sum += bytes_transferred;
+			this->stat.send_time_sum += statistic::now() - last_send_msg.begin_time;
 			++this->stat.send_msg_sum;
-			if (!last_send_msg.empty())
-			{
-				assert(bytes_transferred == last_send_msg.size());
-
-				this->stat.send_time_sum += statistic::now() - last_send_msg.begin_time;
+#ifdef ASCS_SYNC_SEND
+			if (last_send_msg.cv) last_send_msg.cv->notify_one();
+#endif
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
-				this->on_msg_send(last_send_msg);
+			this->on_msg_send(last_send_msg);
 #endif
 #ifdef ASCS_WANT_ALL_MSG_SEND_NOTIFY
-				if (this->send_msg_buffer.empty())
-					this->on_all_msg_send(last_send_msg);
+			if (this->send_msg_buffer.empty())
+				this->on_all_msg_send(last_send_msg);
 #endif
-			}
 		}
 		else
 			this->on_send_error(ec);

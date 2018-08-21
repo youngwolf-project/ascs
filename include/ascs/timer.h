@@ -123,16 +123,16 @@ public:
 	DO_SOMETHING_TO_ONE_MUTEX(timer_can, timer_can_mutex)
 
 protected:
-	bool start_timer(timer_info& ti)
+	bool start_timer(timer_info& ti, unsigned interval_ms)
 	{
 		if (!ti.call_back)
 			return false;
 
 		ti.status = timer_info::TIMER_STARTED;
 #if ASIO_VERSION >= 101100
-		ti.timer.expires_after(milliseconds(ti.interval_ms));
+		ti.timer.expires_after(milliseconds(interval_ms));
 #else
-		ti.timer.expires_from_now(milliseconds(ti.interval_ms));
+		ti.timer.expires_from_now(milliseconds(interval_ms));
 #endif
 
 		//if timer already started, this will cancel it first
@@ -150,9 +150,7 @@ protected:
 				if (elapsed_ms > ti.interval_ms)
 					elapsed_ms %= ti.interval_ms;
 
-				ti.interval_ms -= elapsed_ms;
-				this->start_timer(ti);
-				ti.interval_ms += elapsed_ms;
+				this->start_timer(ti, ti.interval_ms - elapsed_ms);
 			}
 #else
 			if (!ec && ti.call_back(ti.id) && timer_info::TIMER_STARTED == ti.status)
@@ -164,6 +162,7 @@ protected:
 
 		return true;
 	}
+	bool start_timer(timer_info& ti) {return start_timer(ti, ti.interval_ms);}
 
 	void stop_timer(timer_info& ti)
 	{

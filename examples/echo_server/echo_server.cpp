@@ -8,7 +8,7 @@
 #define ASCS_DISPATCH_BATCH_MSG
 #define ASCS_ENHANCED_STABILITY
 //#define ASCS_FULL_STATISTIC //full statistic will slightly impact efficiency
-//#define ASCS_USE_STEADY_TIMER
+#define ASCS_USE_STEADY_TIMER
 #define ASCS_ALIGNED_TIMER
 #define ASCS_AVOID_AUTO_STOP_SERVICE
 #define ASCS_DECREASE_THREAD_AT_RUNTIME
@@ -196,7 +196,9 @@ int main(int argc, const char* argv[])
 	{
 		std::string str;
 		std::getline(std::cin, str);
-		if (QUIT_COMMAND == str)
+		if (str.empty())
+			;
+		else if (QUIT_COMMAND == str)
 			sp.stop_service();
 		else if (RESTART_COMMAND == str)
 		{
