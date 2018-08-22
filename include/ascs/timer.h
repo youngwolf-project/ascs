@@ -185,4 +185,3 @@ private:
 } //namespace
 
 #endif /* _ASCS_TIMER_H_ */
-

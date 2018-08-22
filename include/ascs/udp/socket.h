@@ -234,7 +234,8 @@ private:
 			this->stat.send_time_sum += statistic::now() - last_send_msg.begin_time;
 			++this->stat.send_msg_sum;
 #ifdef ASCS_SYNC_SEND
-			if (last_send_msg.cv) last_send_msg.cv->notify_one();
+			if (last_send_msg.cv)
+				last_send_msg.cv->notify_one();
 #endif
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
 			this->on_msg_send(last_send_msg);
