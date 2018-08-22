@@ -208,7 +208,7 @@ protected:
 	virtual ~i_unpacker() {}
 
 public:
-	virtual void reset() {};
+	virtual void reset() {}
 	//heartbeat must not be included in msg_can, otherwise you must handle heartbeat at where you handle normal messges.
 	virtual bool parse_msg(size_t bytes_transferred, container_type& msg_can) = 0;
 	virtual size_t completion_condition(const asio::error_code& ec, size_t bytes_transferred) {return 0;}
@@ -371,7 +371,7 @@ template<typename T>
 struct obj_with_begin_time : public T
 {
 	obj_with_begin_time(bool need_cv = false) {check_and_create_cv(need_cv);}
-	obj_with_begin_time(T&& obj, bool need_cv = false) : T(std::move(obj)) {check_and_create_cv(need_cv);}
+	obj_with_begin_time(T&& obj, bool need_cv = false) : T(std::move(obj)) {restart(); check_and_create_cv(need_cv);}
 	obj_with_begin_time& operator=(T&& obj) {T::operator=(std::move(obj)); restart(); return *this;}
 	obj_with_begin_time(obj_with_begin_time&& other) : T(std::move(other)), begin_time(std::move(other.begin_time)), cv(std::move(other.cv)) {}
 	obj_with_begin_time& operator=(obj_with_begin_time&& other) {T::operator=(std::move(other)); begin_time = std::move(other.begin_time); cv = std::move(other.cv); return *this;}

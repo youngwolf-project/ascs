@@ -185,7 +185,7 @@ private:
 	typedef ascs::i_unpacker<T> super;
 
 public:
-	virtual typename super::msg_type parse_msg(size_t bytes_transferred, typename super::container_type& msg_can)
+	virtual bool parse_msg(size_t bytes_transferred, typename super::container_type& msg_can)
 	{
 		assert(bytes_transferred <= ASCS_MSG_BUFFER_SIZE);
 

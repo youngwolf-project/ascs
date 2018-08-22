@@ -6,6 +6,7 @@
 						   //so, define this to avoid hooks for async call (and slightly improve efficiency),
 						   //any value which is bigger than zero is okay.
 #define ASCS_SYNC_RECV
+#define ASCS_SYNC_SEND
 #define ASCS_PASSIVE_RECV //if you annotate this definition, this demo will use mix model to receive messages, which means
 						  //some messages will be dispatched via on_msg_handle(), some messages will be returned via sync_recv_msg(),
 						  //type more than one messages (separate them by space) in one line with ENTER key to send them,
@@ -13,7 +14,6 @@
 //#define ASCS_DEFAULT_UDP_UNPACKER replaceable_udp_unpacker<>
 #define ASCS_HEARTBEAT_INTERVAL 5 //neither udp_unpacker nor replaceable_udp_unpacker support heartbeat message,
 								  //so heartbeat will be treated as normal message.
-#define ASCS_SYNC_SEND
 //configuration
 
 #include <ascs/ext/udp.h>
