@@ -185,8 +185,14 @@ public:
 
 		get_file();
 	}
-
 	void get_file(const std::list<std::string>& files) {get_file(std::list<std::string>(files));}
+
+	bool is_end()
+	{
+		size_t idle_num = 0;
+		do_something_to_all([&](object_ctype& item) {if (item->is_idle()) ++idle_num;});
+		return idle_num == size();
+	}
 
 private:
 	void get_file()
@@ -225,7 +231,15 @@ private:
 		assert(UPDATE_PROGRESS == id);
 
 		if (file_size < 0)
-			return true;
+		{
+			if (!is_end())
+				return true;
+
+			change_timer_status(id, timer_info::TIMER_CANCELED);
+			get_file();
+
+			return false;
+		}
 		else if (file_size > 0)
 		{
 			auto new_percent = (unsigned) (received_size * 100 / file_size);
@@ -239,13 +253,21 @@ private:
 		}
 
 		if (received_size < file_size)
-			return true;
+		{
+			if (!is_end())
+				return true;
+
+			change_timer_status(id, timer_info::TIMER_CANCELED);
+			get_file();
+
+			return false;
+		}
 
 		printf("\r100%%\nend, speed: %f MBps.\n\n", file_size / begin_time.elapsed() / 1024 / 1024);
 		change_timer_status(id, timer_info::TIMER_CANCELED);
 
 		//wait all file_socket to clean up themselves
-		do_something_to_all([](object_ctype& item) {while (!item->is_idle()) std::this_thread::sleep_for(std::chrono::milliseconds(10));});
+		while (!is_end()) std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		get_file();
 
 		return false;
