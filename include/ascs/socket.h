@@ -225,10 +225,7 @@ public:
 		auto re = sync_recv_status::RESPONDED == status;
 		status = sync_recv_status::NOT_REQUESTED;
 		if (re)
-		{
-			msg_can.clear();
-			msg_can.swap(temp_msg_can);
-		}
+			msg_can.splice(std::end(msg_can), temp_msg_can);
 		sync_recv_cv.notify_one();
 
 		return re;
@@ -338,11 +335,6 @@ protected:
 
 	bool handle_msg()
 	{
-#ifdef ASCS_PASSIVE_RECV
-		if (temp_msg_can.empty())
-			temp_msg_can.emplace_back(); //empty message, makes users always having the chance to call recv_msg().
-#endif
-
 #ifdef ASCS_SYNC_RECV
 		std::unique_lock<std::mutex> lock(sync_recv_mutex);
 		if (sync_recv_status::REQUESTED == status)
@@ -351,23 +343,26 @@ protected:
 			sync_recv_cv.notify_one();
 
 			sync_recv_cv.wait(lock);
+			if (sync_recv_status::RESPONDED != status) //sync_recv_msg() has consumed temp_msg_can
+				return handled_msg();
 		}
 		lock.unlock();
 #endif
 		auto msg_num = temp_msg_can.size();
+		stat.recv_msg_sum += msg_num;
+#ifdef ASCS_PASSIVE_RECV
+		if (0 == msg_num)
+		{
+			msg_num = 1;
+			temp_msg_can.emplace_back(); //empty message, let you always having the chance to call recv_msg()
+		}
+#endif
 		if (msg_num > 0)
 		{
-#ifndef ASCS_PASSIVE_RECV
-			stat.recv_msg_sum += msg_num;
-#endif
 			std::list<out_msg> temp_buffer(msg_num);
 			auto op_iter = temp_buffer.begin();
 			for (auto iter = temp_msg_can.begin(); iter != temp_msg_can.end(); ++op_iter, ++iter)
 			{
-#ifdef ASCS_PASSIVE_RECV
-				if (!iter->empty())
-					++stat.recv_msg_sum;
-#endif
 				stat.recv_byte_sum += iter->size();
 				op_iter->swap(*iter);
 			}

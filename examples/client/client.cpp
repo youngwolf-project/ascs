@@ -64,12 +64,8 @@ std::thread create_sync_recv_thread(single_client& client)
 		typename ASCS_DEFAULT_UNPACKER::container_type msg_can;
 		while (client.sync_recv_msg(msg_can))
 		{
-#ifdef ASCS_PASSIVE_RECV
-			do_something_to_all(msg_can, [](single_service::out_msg_type& msg) {if (!msg.empty()) printf("sync recv(" ASCS_SF ") : %s\n", msg.size(), msg.data());});
-#else
 			do_something_to_all(msg_can, [](single_client::out_msg_type& msg) {printf("sync recv(" ASCS_SF ") : %s\n", msg.size(), msg.data());});
-#endif
-			msg_can.clear();
+			msg_can.clear(); //sync_recv_msg just append new messages(s) to msg_can, please note.
 		}
 		puts("sync recv end.");
 	});
