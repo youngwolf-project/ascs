@@ -180,7 +180,7 @@ protected:
 			start_next_accept();
 	}
 
-protected:
+private:
 	asio::ip::tcp::endpoint server_addr;
 	asio::ip::tcp::acceptor acceptor;
 };

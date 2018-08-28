@@ -102,7 +102,7 @@ protected:
 
 	//msg handling: send the original msg back(echo server)
 #ifdef ASCS_DISPATCH_BATCH_MSG
-	virtual size_t on_msg_handle(out_queue_type& can)
+	virtual size_t on_msg_handle(out_queue_type& msg_can)
 	{
 		if (!is_send_buffer_available())
 			return 0;
@@ -111,13 +111,13 @@ protected:
 		//this manner requires the container used by the message queue can be spliced (such as std::list, but not std::vector,
 		// ascs doesn't require this characteristic).
 		//these code can be compiled because we used list as the container of the message queue, see macro ASCS_OUTPUT_CONTAINER for more details
-		//to consume all of messages in can, see echo_client.
-		can.lock();
-		auto begin_iter = std::begin(can);
+		//to consume all messages in msg_can, see echo_client
+		msg_can.lock();
+		auto begin_iter = std::begin(msg_can);
 		//don't be too greedy, here is in a service thread, we should not block this thread for a long time
-		auto end_iter = can.size() > 10 ? std::next(begin_iter, 10) : std::end(can);
-		tmp_can.splice(std::end(tmp_can), can, begin_iter, end_iter);
-		can.unlock();
+		auto end_iter = msg_can.size() > 10 ? std::next(begin_iter, 10) : std::end(msg_can);
+		tmp_can.splice(std::end(tmp_can), msg_can, begin_iter, end_iter);
+		msg_can.unlock();
 
 		ascs::do_something_to_all(tmp_can, [this](out_msg_type& msg) {this->send_msg(msg, true);});
 		return tmp_can.size();

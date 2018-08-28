@@ -51,7 +51,7 @@ public:
 	virtual void send_heartbeat()
 	{
 		auto_duration dur(this->stat.pack_time_sum);
-		auto msg = this->packer_->pack_heartbeat();
+		auto msg = packer_->pack_heartbeat();
 		dur.end();
 		this->do_direct_send_msg(std::move(msg));
 	}
@@ -117,7 +117,7 @@ public:
 #ifdef ASCS_PASSIVE_RECV
 	//changing unpacker must before calling ascs::socket::recv_msg, and define ASCS_PASSIVE_RECV macro.
 	void unpacker(const std::shared_ptr<i_unpacker<out_msg_type>>& _unpacker_) {unpacker_ = _unpacker_;}
-	virtual void recv_msg() {if (!this->reading && is_ready()) this->dispatch_strand(strand, [this]() {this->do_recv_msg();});}
+	virtual void recv_msg() {if (!reading && is_ready()) this->dispatch_strand(strand, [this]() {this->do_recv_msg();});}
 #endif
 
 	///////////////////////////////////////////////////
@@ -173,9 +173,9 @@ protected:
 	virtual bool do_start()
 	{
 		status = link_status::CONNECTED;
-		this->stat.establish_time = time(nullptr);
+		stat.establish_time = time(nullptr);
 
-		on_connect(); //in this virtual function, this->stat.last_recv_time has not been updated (super::do_start will update it), please note
+		on_connect(); //in this virtual function, stat.last_recv_time has not been updated (super::do_start will update it), please note
 		return super::do_start();
 	}
 
@@ -200,14 +200,14 @@ private:
 
 	size_t completion_checker(const asio::error_code& ec, size_t bytes_transferred)
 	{
-		auto_duration dur(this->stat.unpack_time_sum);
+		auto_duration dur(stat.unpack_time_sum);
 		return this->unpacker_->completion_condition(ec, bytes_transferred);
 	}
 
 	void do_recv_msg()
 	{
 #ifdef ASCS_PASSIVE_RECV
-		if (this->reading)
+		if (reading)
 			return;
 #endif
 		auto recv_buff = unpacker_->prepare_next_recv();
@@ -217,7 +217,7 @@ private:
 		else
 		{
 #ifdef ASCS_PASSIVE_RECV
-			this->reading = true;
+			reading = true;
 #endif
 			asio::async_read(this->next_layer(), recv_buff,
 				[this](const asio::error_code& ec, size_t bytes_transferred)->size_t {return this->completion_checker(ec, bytes_transferred);}, make_strand_handler(strand,
@@ -229,17 +229,17 @@ private:
 	{
 		if (!ec && bytes_transferred > 0)
 		{
-			this->stat.last_recv_time = time(nullptr);
+			stat.last_recv_time = time(nullptr);
 
-			auto_duration dur(this->stat.unpack_time_sum);
-			auto unpack_ok = unpacker_->parse_msg(bytes_transferred, this->temp_msg_can);
+			auto_duration dur(stat.unpack_time_sum);
+			auto unpack_ok = unpacker_->parse_msg(bytes_transferred, temp_msg_can);
 			dur.end();
 
 			if (!unpack_ok)
 				on_unpack_error(); //the user will decide whether to reset the unpacker or not in this callback
 
 #ifdef ASCS_PASSIVE_RECV
-			this->reading = false; //clear reading flag before call handle_msg() to make sure that recv_msg() can be called successfully in on_msg_handle()
+			reading = false; //clear reading flag before call handle_msg() to make sure that recv_msg() can be called successfully in on_msg_handle()
 #endif
 			if (this->handle_msg()) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
 				do_recv_msg(); //receive msg in sequence
@@ -247,7 +247,7 @@ private:
 		else
 		{
 #ifdef ASCS_PASSIVE_RECV
-			this->reading = false; //clear reading flag before call handle_msg() to make sure that recv_msg() can be called successfully in on_msg_handle()
+			reading = false; //clear reading flag before call handle_msg() to make sure that recv_msg() can be called successfully in on_msg_handle()
 #endif
 			if (ec)
 				this->on_recv_error(ec);
@@ -258,7 +258,7 @@ private:
 
 	bool do_send_msg(bool in_strand)
 	{
-		if (!in_strand && this->sending)
+		if (!in_strand && sending)
 			return true;
 
 		std::list<asio::const_buffer> bufs;
@@ -272,10 +272,10 @@ private:
 			typename super::in_msg msg;
 			auto end_time = statistic::now();
 
-			typename super::in_queue_type::lock_guard lock(this->send_msg_buffer);
-			while (this->send_msg_buffer.try_dequeue_(msg))
+			typename super::in_queue_type::lock_guard lock(send_msg_buffer);
+			while (send_msg_buffer.try_dequeue_(msg))
 			{
-				this->stat.send_delay_sum += end_time - msg.begin_time;
+				stat.send_delay_sum += end_time - msg.begin_time;
 				size += msg.size();
 				last_send_msg.emplace_back(std::move(msg));
 				bufs.emplace_back(last_send_msg.back().data(), last_send_msg.back().size());
@@ -284,7 +284,7 @@ private:
 			}
 		}
 
-		if ((this->sending = !bufs.empty()))
+		if ((sending = !bufs.empty()))
 		{
 			last_send_msg.front().restart();
 			asio::async_write(this->next_layer(), bufs, make_strand_handler(strand,
@@ -299,11 +299,11 @@ private:
 	{
 		if (!ec)
 		{
-			this->stat.last_send_time = time(nullptr);
+			stat.last_send_time = time(nullptr);
 
-			this->stat.send_byte_sum += bytes_transferred;
-			this->stat.send_time_sum += statistic::now() - last_send_msg.front().begin_time;
-			this->stat.send_msg_sum += last_send_msg.size();
+			stat.send_byte_sum += bytes_transferred;
+			stat.send_time_sum += statistic::now() - last_send_msg.front().begin_time;
+			stat.send_msg_sum += last_send_msg.size();
 #ifdef ASCS_SYNC_SEND
 			ascs::do_something_to_all(last_send_msg, [](typename super::in_msg& item) {if (item.cv) item.cv->notify_one();});
 #endif
@@ -311,11 +311,11 @@ private:
 			this->on_msg_send(last_send_msg.front());
 #endif
 #ifdef ASCS_WANT_ALL_MSG_SEND_NOTIFY
-			if (this->send_msg_buffer.empty())
+			if (send_msg_buffer.empty())
 				this->on_all_msg_send(last_send_msg.back());
 #endif
 			last_send_msg.clear();
-			if (!do_send_msg(true) && !this->send_msg_buffer.empty()) //send msg in sequence
+			if (!do_send_msg(true) && !send_msg_buffer.empty()) //send msg in sequence
 				do_send_msg(true); //just make sure no pending msgs
 		}
 		else
@@ -323,7 +323,7 @@ private:
 			this->on_send_error(ec);
 			last_send_msg.clear(); //clear sending messages after on_send_error, then user can decide how to deal with them in on_send_error
 
-			this->sending = false;
+			sending = false;
 		}
 	}
 
@@ -348,12 +348,22 @@ private:
 	}
 
 protected:
-	list<typename super::in_msg> last_send_msg;
-	std::shared_ptr<i_unpacker<out_msg_type>> unpacker_;
-
 	volatile link_status status;
 
 private:
+	using super::stat;
+	using super::packer_;
+	using super::temp_msg_can;
+
+	using super::send_msg_buffer;
+	using super::sending;
+
+#ifdef ASCS_PASSIVE_RECV
+	using super::reading;
+#endif
+
+	std::shared_ptr<i_unpacker<out_msg_type>> unpacker_;
+	list<typename super::in_msg> last_send_msg;
 	asio::io_context::strand strand;
 };
 

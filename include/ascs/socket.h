@@ -269,18 +269,32 @@ protected:
 	virtual void on_close() {unified_out::info_out("on_close()");}
 	virtual void after_close() {} //a good case for using this is to reconnect to the server, please refer to client_socket_base.
 
-	//return true (or > 0) means msg been handled, false (or 0) means msg cannot be handled right now, and socket will re-dispatch it asynchronously
+#ifdef ASCS_SYNC_DISPATCH
+	//return the number of handled msg, if some msg left behind, socket will re-dispatch them asynchronously
 	//notice: using inconstant is for the convenience of swapping
+	virtual size_t on_msg(std::list<OutMsgType>& msg_can)
+	{
+		//it's always thread safe in this virtual function, because it blocks message receiving
+		ascs::do_something_to_all(msg_can, [](OutMsgType& msg) {unified_out::debug_out("recv(" ASCS_SF "): %s", msg.size(), msg.data());});
+		auto re = msg_can.size();
+		msg_can.clear(); //have handled all messages
+
+		return re;
+	}
+#endif
 #ifdef ASCS_DISPATCH_BATCH_MSG
-	virtual size_t on_msg_handle(out_queue_type& can)
+	//return the number of handled msg, if some msg left behind, socket will re-dispatch them asynchronously
+	//notice: using inconstant is for the convenience of swapping
+	virtual size_t on_msg_handle(out_queue_type& msg_can)
 	{
 		out_container_type tmp_can;
-		can.swap(tmp_can);
+		msg_can.swap(tmp_can); //must be thread safe
 
 		ascs::do_something_to_all(tmp_can, [](OutMsgType& msg) {unified_out::debug_out("recv(" ASCS_SF "): %s", msg.size(), msg.data());});
 		return tmp_can.size();
 	}
 #else
+	//return true means msg been handled, false means msg cannot be handled right now, and socket will re-dispatch it asynchronously
 	virtual bool on_msg_handle(OutMsgType& msg) {unified_out::debug_out("recv(" ASCS_SF "): %s", msg.size(), msg.data()); return true;}
 #endif
 
@@ -350,6 +364,17 @@ protected:
 #endif
 		auto msg_num = temp_msg_can.size();
 		stat.recv_msg_sum += msg_num;
+
+#ifdef ASCS_SYNC_DISPATCH
+#ifdef ASCS_PASSIVE_RECV
+		on_msg(temp_msg_can);
+		if (temp_msg_can.empty())
+			return handled_msg();
+#else
+		if (msg_num > 0)
+			on_msg(temp_msg_can);
+#endif
+#endif
 #ifdef ASCS_PASSIVE_RECV
 		if (0 == msg_num)
 		{
@@ -468,14 +493,22 @@ private:
 		if ((dispatching = !recv_msg_buffer.empty()))
 		{
 			auto begin_time = statistic::now();
-			stat.dispatch_dealy_sum += begin_time - recv_msg_buffer.front().begin_time;
+#ifdef ASCS_FULL_STATISTIC
+			recv_msg_buffer.lock();
+			ascs::do_something_to_all(recv_msg_buffer, [&, this](out_msg& msg) {this->stat.dispatch_dealy_sum += begin_time - msg.begin_time;});
+			recv_msg_buffer.unlock();
+#endif
 			auto re = on_msg_handle(recv_msg_buffer);
 			auto end_time = statistic::now();
 			stat.handle_time_sum += end_time - begin_time;
 
 			if (0 == re) //dispatch failed, re-dispatch
 			{
-				recv_msg_buffer.front().restart(end_time);
+#ifdef ASCS_FULL_STATISTIC
+				recv_msg_buffer.lock();
+				ascs::do_something_to_all(recv_msg_buffer, [&end_time](out_msg& msg) {msg.restart(end_time);});
+				recv_msg_buffer.unlock();
+#endif
 				set_timer(TIMER_DISPATCH_MSG, msg_handling_interval_, [this](tid id)->bool {return this->timer_handler(TIMER_DISPATCH_MSG);}); //hold dispatching
 			}
 			else

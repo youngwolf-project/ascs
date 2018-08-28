@@ -155,7 +155,7 @@ public:
 	typename object_pool::object_type create_object() {return create_object(this->get_service_pump());}
 	template<typename Arg> typename object_pool::object_type create_object(Arg& arg) {return super::create_object(arg, ctx);}
 
-protected:
+private:
 	asio::ssl::context ctx;
 };
 

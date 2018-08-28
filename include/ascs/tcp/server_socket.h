@@ -40,7 +40,7 @@ public:
 	void disconnect() {force_shutdown();}
 	void force_shutdown()
 	{
-		if (super::link_status::FORCE_SHUTTING_DOWN != this->status)
+		if (super::link_status::FORCE_SHUTTING_DOWN != status)
 			this->show_info("server link:", "been shut down.");
 
 		super::force_shutdown();
@@ -73,7 +73,7 @@ protected:
 #ifdef ASCS_CLEAR_OBJECT_INTERVAL
 		force_shutdown();
 #else
-		this->status = super::link_status::BROKEN;
+		status = super::link_status::BROKEN;
 		server.del_socket(this->shared_from_this());
 #endif
 	}
@@ -82,6 +82,8 @@ protected:
 	virtual bool on_heartbeat_error() {this->show_info("server link:", "broke unexpectedly."); force_shutdown(); return false;}
 
 private:
+	using super::status;
+
 	Server& server;
 };
 
