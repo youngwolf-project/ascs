@@ -49,7 +49,7 @@ protected:
 		reading = false;
 #endif
 #ifdef ASCS_SYNC_RECV
-		status = sync_recv_status::NOT_REQUESTED;
+		sr_status = sync_recv_status::NOT_REQUESTED;
 #endif
 		started_ = false;
 		dispatching = false;
@@ -79,7 +79,7 @@ protected:
 		reading = false;
 #endif
 #ifdef ASCS_SYNC_RECV
-		status = sync_recv_status::NOT_REQUESTED;
+		sr_status = sync_recv_status::NOT_REQUESTED;
 #endif
 		dispatching = false;
 #ifndef ASCS_DISPATCH_BATCH_MSG
@@ -213,17 +213,17 @@ public:
 			return false;
 
 		std::unique_lock<std::mutex> lock(sync_recv_mutex);
-		if (sync_recv_status::NOT_REQUESTED != status)
+		if (sync_recv_status::NOT_REQUESTED != sr_status)
 			return false;
 
 #ifdef ASCS_PASSIVE_RECV
 		recv_msg();
 #endif
-		status = sync_recv_status::REQUESTED;
+		sr_status = sync_recv_status::REQUESTED;
 		sync_recv_cv.wait(lock);
 
-		auto re = sync_recv_status::RESPONDED == status;
-		status = sync_recv_status::NOT_REQUESTED;
+		auto re = sync_recv_status::RESPONDED == sr_status;
+		sr_status = sync_recv_status::NOT_REQUESTED;
 		if (re)
 			msg_can.splice(std::end(msg_can), temp_msg_can);
 		sync_recv_cv.notify_one();
@@ -351,13 +351,13 @@ protected:
 	{
 #ifdef ASCS_SYNC_RECV
 		std::unique_lock<std::mutex> lock(sync_recv_mutex);
-		if (sync_recv_status::REQUESTED == status)
+		if (sync_recv_status::REQUESTED == sr_status)
 		{
-			status = sync_recv_status::RESPONDED;
+			sr_status = sync_recv_status::RESPONDED;
 			sync_recv_cv.notify_one();
 
 			sync_recv_cv.wait(lock);
-			if (sync_recv_status::RESPONDED != status) //sync_recv_msg() has consumed temp_msg_can
+			if (sync_recv_status::RESPONDED != sr_status) //sync_recv_msg() has consumed temp_msg_can
 				return handled_msg();
 		}
 		lock.unlock();
@@ -614,7 +614,7 @@ private:
 
 #ifdef ASCS_SYNC_RECV
 	enum sync_recv_status {NOT_REQUESTED, REQUESTED, RESPONDED};
-	volatile sync_recv_status status;
+	volatile sync_recv_status sr_status;
 
 	std::mutex sync_recv_mutex;
 	std::condition_variable sync_recv_cv;
