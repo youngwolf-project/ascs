@@ -91,7 +91,7 @@ int main(int argc, const char* argv[])
 	if (argc > 6)
 		link_num = std::min(ASCS_MAX_OBJECT_NUM, std::max(atoi(argv[6]), 1));
 
-	printf("exec: echo_client with " ASCS_SF " links\n", link_num);
+	printf("exec: concurrent_client with " ASCS_SF " links\n", link_num);
 	///////////////////////////////////////////////////////////
 
 	service_pump sp;

@@ -40,10 +40,11 @@ protected:
 	//msg handling: send the original msg back(echo server)
 	virtual size_t on_msg(std::list<out_msg_type>& msg_can) //must define macro ASCS_SYNC_DISPATCH
 	{
-		//consume all messages, to consume a part of the messages, see on_msg_handle() in demo echo_server
 		ascs::do_something_to_all(msg_can, [this](out_msg_type& msg) {this->direct_send_msg(std::move(msg));});
 		auto re = msg_can.size();
-		msg_can.clear();
+		msg_can.clear(); //if we left behind some messages in msg_can, they will be dispatched via on_msg_handle and disorder messages
+		//here we always consumed all messages, so we can use sync message dispatching, otherwise, we should not use sync message dispatching
+		//except we can bear message disordering.
 
 		return re;
 	}

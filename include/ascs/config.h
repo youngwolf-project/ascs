@@ -414,8 +414,8 @@
  * SPECIAL ATTENTION (incompatible with old editions):
  *
  * HIGHLIGHT:
- * Support sync message dispatching, it's like previous on_msg() callback but with a message container instead of a message, and we also name it on_msg(),
- *  you need to defne macro ASCS_SYNC_DISPATCH to open this feature.
+ * Support sync message dispatching, it's like previous on_msg() callback but with a message container instead of a message (and many other
+ *  differences, see macro ASCS_SYNC_DISPATCH for more details), and we also name it on_msg().
  *
  * FIX:
  * Fix statistics for batch message dispatching.
@@ -425,7 +425,7 @@
  * DELETION:
  *
  * REFACTORING:
- * Hide all member variables for developers.
+ * Hide as many as possible member variables for developers.
  *
  * REPLACEMENTS:
  *
@@ -741,10 +741,11 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 //with this macro, virtual size_t on_msg(std::list<OutMsgType>& msg_can) will be provided, you can rewrite it and handle all or a part of the
 // messages like virtual function on_msg_handle (with macro ASCS_DISPATCH_BATCH_MSG), if your logic is simple enough (like echo or pingpong test),
 // this feature is recommended because it can slightly improve efficiency.
-//now we have three ways to handle messages (sync_recv_msg, on_msg and on_msg_handle), the reponse order is the same as listed, if messages been successfully
+//now we have three ways to handle messages (sync_recv_msg, on_msg and on_msg_handle), the order of handling is the same as listed, if messages been successfully
 // dispatched to sync_recv_msg, then the second two will do nothing, otherwise messages will be dispatched to on_msg, if on_msg only handled a part of (include
-// zero) the messages, then on_msg_handle will continue to dispatch the rest of them.
-//as before, on_msg will block the next receiving but only on current socket.
+// zero) the messages, then on_msg_handle will continue to dispatch the rest of them (asynchronously, this will disorder messages, please note).
+// as before, on_msg will block the next receiving but only on current socket.
+//if you cannot handle all of the messages in on_msg (like echo_server), you should not use sync message dispatching except you can bear message disordering.
 
 //configurations
 

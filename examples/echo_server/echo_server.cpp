@@ -5,7 +5,7 @@
 #define ASCS_SERVER_PORT		9527
 #define ASCS_REUSE_OBJECT //use objects pool
 //#define ASCS_FREE_OBJECT_INTERVAL	60 //it's useless if ASCS_REUSE_OBJECT macro been defined
-#define ASCS_SYNC_DISPATCH
+//#define ASCS_SYNC_DISPATCH //do not open this feature, see below for more details
 #define ASCS_DISPATCH_BATCH_MSG
 #define ASCS_ENHANCED_STABILITY
 //#define ASCS_FULL_STATISTIC //full statistic will slightly impact efficiency
@@ -102,20 +102,26 @@ protected:
 	}
 
 	//msg handling: send the original msg back(echo server)
-#ifdef ASCS_SYNC_DISPATCH
+/*
+#ifdef ASCS_SYNC_DISPATCH //do not open this feature
 	virtual size_t on_msg(std::list<out_msg_type>& msg_can)
 	{
 		if (!is_send_buffer_available())
-			return 0;
+			return 0; //congestion control
+		//here if we cannot handle all messages in msg_can, do not use sync message dispatching except we can bear message disordering,
+		//this is because on_msg_handle will be invoked asynchronously, then disorder messages. and do not try to handle all messages
+		//here (just for echo_server's business logic) because:
+		//1. we can not use safe_send_msg as i said many times, we should not block service threads.
+		//2. if we use true can_overflow to call send_msg, then buffer usage will be out of control, we should not take this risk.
 
-		//consume all messages, to consume a part of the messages, see on_msg_handle()
 		ascs::do_something_to_all(msg_can, [this](out_msg_type& msg) {this->send_msg(msg, true);});
 		auto re = msg_can.size();
-		msg_can.clear(); //if we left behind some messages in msg_can, they will be dispatched via on_msg_handle
+		msg_can.clear(); //if we left behind some messages in msg_can, they will be dispatched via on_msg_handle and disorder messages
 
 		return re;
 	}
 #endif
+*/
 #ifdef ASCS_DISPATCH_BATCH_MSG
 	virtual size_t on_msg_handle(out_queue_type& msg_can)
 	{
@@ -131,7 +137,7 @@ protected:
 		auto begin_iter = std::begin(msg_can);
 		//don't be too greedy, here is in a service thread, we should not block this thread for a long time
 		auto end_iter = msg_can.size() > 10 ? std::next(begin_iter, 10) : std::end(msg_can);
-		tmp_can.splice(std::end(tmp_can), msg_can, begin_iter, end_iter);
+		tmp_can.splice(std::end(tmp_can), msg_can, begin_iter, end_iter); //the rest messages will be dispatched via the next on_msg_handle
 		msg_can.unlock();
 
 		ascs::do_something_to_all(tmp_can, [this](out_msg_type& msg) {this->send_msg(msg, true);});

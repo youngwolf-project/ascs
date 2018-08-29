@@ -54,10 +54,11 @@ protected:
 	//msg handling
 	virtual size_t on_msg(std::list<out_msg_type>& msg_can) //must define macro ASCS_SYNC_DISPATCH
 	{
-		//consume all messages, to consume a part of the messages, see on_msg_handle() in demo echo_server
 		ascs::do_something_to_all(msg_can, [this](out_msg_type& msg) {this->handle_msg(msg);});
 		auto re = msg_can.size();
-		msg_can.clear();
+		msg_can.clear(); //if we left behind some messages in msg_can, they will be dispatched via on_msg_handle and disorder messages
+		//here we always consumed all messages, so we can use sync message dispatching, otherwise, we should not use sync message dispatching
+		//except we can bear message disordering.
 
 		return re;
 	}
@@ -122,7 +123,7 @@ int main(int argc, const char* argv[])
 	if (argc > 4)
 		link_num = std::min(ASCS_MAX_OBJECT_NUM, std::max(atoi(argv[4]), 1));
 
-	printf("exec: echo_client with " ASCS_SF " links\n", link_num);
+	printf("exec: pingpong_client with " ASCS_SF " links\n", link_num);
 	///////////////////////////////////////////////////////////
 
 	service_pump sp;
