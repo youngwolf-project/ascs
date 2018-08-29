@@ -372,7 +372,7 @@ protected:
 			return handled_msg();
 #else
 		if (msg_num > 0)
-			on_msg(temp_msg_can);
+			msg_num -= on_msg(temp_msg_can);
 #endif
 #endif
 #ifdef ASCS_PASSIVE_RECV
