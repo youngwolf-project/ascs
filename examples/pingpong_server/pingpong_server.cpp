@@ -37,8 +37,8 @@ public:
 	echo_socket(i_server& server_) : server_socket(server_) {}
 
 protected:
-	//msg handling: send the original msg back(echo server)
-	virtual size_t on_msg(std::list<out_msg_type>& msg_can) //must define macro ASCS_SYNC_DISPATCH
+	//msg handling: send the original msg back (echo server), must define macro ASCS_SYNC_DISPATCH
+	virtual size_t on_msg(std::list<out_msg_type>& msg_can) //do not hold msg_can for further using, and access msg_can as short as possible
 	{
 		ascs::do_something_to_all(msg_can, [this](out_msg_type& msg) {this->direct_send_msg(std::move(msg));});
 		auto re = msg_can.size();

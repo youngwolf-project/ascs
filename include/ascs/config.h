@@ -673,7 +673,7 @@ static_assert(ASCS_HEARTBEAT_MAX_ABSENCE > 0, "heartbeat absence must be bigger 
 
 //#define ASCS_REUSE_SSL_STREAM
 //if you need ssl::client_socket_base to be able to reconnect the server, or to open object pool in ssl::object_pool, you must define this macro.
-//I tried many ways, onle one way can make asio::ssl::stream reusable, which is:
+//I tried many ways, only one way can make asio::ssl::stream reusable, which is:
 // don't call any shutdown functions of asio::ssl::stream, just call asio::ip::tcp::socket's shutdown function,
 // this seems not a normal procedure, but it works, I believe that asio's defect caused this problem.
 

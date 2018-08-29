@@ -104,7 +104,7 @@ protected:
 	//msg handling: send the original msg back(echo server)
 /*
 #ifdef ASCS_SYNC_DISPATCH //do not open this feature
-	virtual size_t on_msg(std::list<out_msg_type>& msg_can)
+	virtual size_t on_msg(std::list<out_msg_type>& msg_can) //do not hold msg_can for further using, and access msg_can as short as possible
 	{
 		if (!is_send_buffer_available())
 			return 0; //congestion control
@@ -123,7 +123,7 @@ protected:
 #endif
 */
 #ifdef ASCS_DISPATCH_BATCH_MSG
-	virtual size_t on_msg_handle(out_queue_type& msg_can)
+	virtual size_t on_msg_handle(out_queue_type& msg_can) //do not hold msg_can for further using, and access msg_can as short as possible
 	{
 		if (!is_send_buffer_available())
 			return 0;

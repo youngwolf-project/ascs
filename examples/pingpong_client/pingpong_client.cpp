@@ -51,8 +51,8 @@ public:
 protected:
 	virtual void on_connect() {asio::ip::tcp::no_delay option(true); lowest_layer().set_option(option); client_socket::on_connect();}
 
-	//msg handling
-	virtual size_t on_msg(std::list<out_msg_type>& msg_can) //must define macro ASCS_SYNC_DISPATCH
+	//msg handling, must define macro ASCS_SYNC_DISPATCH
+	virtual size_t on_msg(std::list<out_msg_type>& msg_can) //do not hold msg_can for further using, and access msg_can as short as possible
 	{
 		ascs::do_something_to_all(msg_can, [this](out_msg_type& msg) {this->handle_msg(msg);});
 		auto re = msg_can.size();
