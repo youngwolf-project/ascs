@@ -34,7 +34,7 @@ public:
 	size_t valid_size()
 	{
 		size_t size = 0;
-		this->do_something_to_all([&size](typename Pool::object_ctype& item) {if (item->is_connected()) ++size;});
+		this->do_something_to_all([&](typename Pool::object_ctype& item) {if (item->is_connected()) ++size;});
 		return size;
 	}
 
