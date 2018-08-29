@@ -366,16 +366,16 @@ protected:
 		stat.recv_msg_sum += msg_num;
 
 #ifdef ASCS_SYNC_DISPATCH
-#ifdef ASCS_PASSIVE_RECV
-		on_msg(temp_msg_can);
-		if (temp_msg_can.empty())
-			return handled_msg();
-#else
+#ifndef ASCS_PASSIVE_RECV
 		if (msg_num > 0)
-			msg_num -= on_msg(temp_msg_can);
+		{
 #endif
+			on_msg(temp_msg_can);
+			msg_num = temp_msg_can.size();
+#ifndef ASCS_PASSIVE_RECV
+		}
 #endif
-#ifdef ASCS_PASSIVE_RECV
+#elif defined(ASCS_PASSIVE_RECV)
 		if (0 == msg_num)
 		{
 			msg_num = 1;

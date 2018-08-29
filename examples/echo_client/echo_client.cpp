@@ -6,6 +6,7 @@
 //#define ASCS_REUSE_OBJECT //use objects pool
 #define ASCS_DELAY_CLOSE	5 //define this to avoid hooks for async call (and slightly improve efficiency)
 //#define ASCS_CLEAR_OBJECT_INTERVAL 1
+#define ASCS_SYNC_DISPATCH
 #define ASCS_DISPATCH_BATCH_MSG
 //#define ASCS_WANT_MSG_SEND_NOTIFY
 #define ASCS_FULL_STATISTIC //full statistic will slightly impact efficiency
@@ -112,6 +113,17 @@ public:
 
 protected:
 	//msg handling
+#ifdef ASCS_SYNC_DISPATCH
+	virtual size_t on_msg(std::list<out_msg_type>& msg_can)
+	{
+		//consume all messages, to consume a part of the messages, see on_msg_handle() in demo echo_server
+		ascs::do_something_to_all(msg_can, [this](out_msg_type& msg) {this->handle_msg(msg);});
+		auto re = msg_can.size();
+		msg_can.clear(); //if we left behind some messages in msg_can, they will be dispatched via on_msg_handle
+
+		return re;
+	}
+#endif
 #ifdef ASCS_DISPATCH_BATCH_MSG
 	virtual size_t on_msg_handle(out_queue_type& msg_can)
 	{
