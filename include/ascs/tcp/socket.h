@@ -50,7 +50,7 @@ public:
 	virtual bool is_ready() {return is_connected();}
 	virtual void send_heartbeat()
 	{
-		auto_duration dur(this->stat.pack_time_sum);
+		auto_duration dur(stat.pack_time_sum);
 		auto msg = packer_->pack_heartbeat();
 		dur.end();
 		this->do_direct_send_msg(std::move(msg));
@@ -201,7 +201,7 @@ private:
 	size_t completion_checker(const asio::error_code& ec, size_t bytes_transferred)
 	{
 		auto_duration dur(stat.unpack_time_sum);
-		return this->unpacker_->completion_condition(ec, bytes_transferred);
+		return unpacker_->completion_condition(ec, bytes_transferred);
 	}
 
 	void do_recv_msg()

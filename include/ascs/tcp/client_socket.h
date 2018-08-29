@@ -60,7 +60,7 @@ public:
 	void disconnect(bool reconnect = false) {force_shutdown(reconnect);}
 	void force_shutdown(bool reconnect = false)
 	{
-		if (super::link_status::FORCE_SHUTTING_DOWN != status)
+		if (super::link_status::FORCE_SHUTTING_DOWN != this->status)
 			this->show_info("client link:", "been shut down.");
 
 		need_reconnect = reconnect;
@@ -108,7 +108,7 @@ protected:
 		this->show_info("client link:", "broken/been shut down", ec);
 
 		force_shutdown(this->is_shutting_down() ? need_reconnect : prepare_reconnect(ec) >= 0);
-		status = super::link_status::BROKEN;
+		this->status = super::link_status::BROKEN;
 	}
 
 	virtual void on_async_shutdown_error() {force_shutdown(need_reconnect);}
@@ -145,11 +145,11 @@ protected:
 		return false;
 	}
 
-private:
-	using super::status;
-
-	asio::ip::tcp::endpoint server_addr;
+protected:
 	bool need_reconnect;
+
+private:
+	asio::ip::tcp::endpoint server_addr;
 };
 
 }} //namespace
