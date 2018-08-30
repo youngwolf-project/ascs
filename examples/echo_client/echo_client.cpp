@@ -114,7 +114,8 @@ public:
 protected:
 	//msg handling
 #ifdef ASCS_SYNC_DISPATCH
-	virtual size_t on_msg(std::list<out_msg_type>& msg_can) //do not hold msg_can for further using, and access msg_can as short as possible
+	//do not hold msg_can for further using, return from on_msg as quickly as possible
+	virtual size_t on_msg(std::list<out_msg_type>& msg_can)
 	{
 		ascs::do_something_to_all(msg_can, [this](out_msg_type& msg) {this->handle_msg(msg);});
 		auto re = msg_can.size();
@@ -126,7 +127,8 @@ protected:
 	}
 #endif
 #ifdef ASCS_DISPATCH_BATCH_MSG
-	virtual size_t on_msg_handle(out_queue_type& msg_can) //do not hold msg_can for further using, and access msg_can as short as possible
+	//do not hold msg_can for further using, access msg_can and return from on_msg_handle as quickly as possible
+	virtual size_t on_msg_handle(out_queue_type& msg_can)
 	{
 		//to consume a part of the messages in msg_can, see echo_server.
 		out_container_type tmp_can;
