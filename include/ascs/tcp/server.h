@@ -85,6 +85,7 @@ public:
 
 		return false;
 	}
+	virtual std::shared_ptr<tracked_executor> find_socket(uint_fast64_t id) {return find(id);}
 
 	///////////////////////////////////////////////////
 	//msg sending interface

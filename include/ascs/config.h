@@ -421,6 +421,7 @@
  * Fix statistics for batch message dispatching.
  *
  * ENHANCEMENTS:
+ * Add virtual function find_socket to interface i_server.
  *
  * DELETION:
  *
