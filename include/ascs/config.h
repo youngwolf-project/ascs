@@ -416,6 +416,7 @@
  * HIGHLIGHT:
  * Support sync message dispatching, it's like previous on_msg() callback but with a message container instead of a message (and many other
  *  differences, see macro ASCS_SYNC_DISPATCH for more details), and we also name it on_msg().
+ * Support timed waiting when doing sync message sending and receiving.
  *
  * FIX:
  * Fix spurious awakenings when doing sync message sending and receiving.
@@ -433,7 +434,6 @@
  * DELETION:
  *
  * REFACTORING:
- * Hide as many as possible member variables for developers.
  *
  * REPLACEMENTS:
  *

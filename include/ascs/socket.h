@@ -222,18 +222,11 @@ public:
 		recv_msg();
 #endif
 		sr_status = sync_recv_status::REQUESTED;
-		if (!sync_recv_waiting(lock, duration))
-		{
-			sr_status = sync_recv_status::NOT_REQUESTED;
-			return false; //timeout
-		}
-
-		auto re = sync_recv_status::RESPONDED == sr_status;
+		auto re = sync_recv_waiting(lock, duration);
 		if (re)
-		{
 			msg_can.splice(std::end(msg_can), temp_msg_can);
-			sr_status = sync_recv_status::NOT_REQUESTED;
-		}
+
+		sr_status = sync_recv_status::NOT_REQUESTED;
 		sync_recv_cv.notify_one();
 
 		return re;
@@ -341,7 +334,7 @@ protected:
 		if (stopped())
 		{
 #ifdef ASCS_SYNC_RECV
-			sync_recv_cv.notify_one();
+			sync_recv_cv.notify_all();
 #endif
 			on_close();
 			after_close();
@@ -364,8 +357,10 @@ protected:
 			sr_status = sync_recv_status::RESPONDED;
 			sync_recv_cv.notify_one();
 
-			sync_recv_cv.wait(lock, [this]() {return sync_recv_status::RESPONDED != this->sr_status;});
-			if (temp_msg_can.empty())
+			sync_recv_cv.wait(lock, [this]() {return !this->started() || sync_recv_status::RESPONDED != this->sr_status;});
+			if (sync_recv_status::RESPONDED == sr_status) //eliminate race condition on temp_msg_can with sync_recv_msg
+				return false;
+			else if (temp_msg_can.empty())
 				return handled_msg(); //sync_recv_msg() has consumed temp_msg_can
 		}
 		lock.unlock();
@@ -443,9 +438,9 @@ protected:
 			send_msg();
 
 		std::unique_lock<std::mutex> lock(sync_send_mutex);
-		cv->wait(lock);
+		cv->wait(lock, [this, &cv]() {return !this->started() || cv->signaled;});
 
-		return true;
+		return cv->signaled;
 	}
 #endif
 
@@ -462,11 +457,11 @@ private:
 	bool sync_recv_waiting(std::unique_lock<std::mutex>& lock, unsigned duration)
 	{
 		if (0 == duration)
-		{
-			sync_recv_cv.wait(lock, [this]() {return sync_recv_status::REQUESTED != this->sr_status;});
-			return true;
-		}
-		return sync_recv_cv.wait_for(lock, milliseconds(duration), [this]() {return sync_recv_status::REQUESTED != this->sr_status;});
+			sync_recv_cv.wait(lock, [this]() {return !this->started() || sync_recv_status::REQUESTED != this->sr_status;});
+		else if (!sync_recv_cv.wait_for(lock, milliseconds(duration), [this]() {return !this->started() || sync_recv_status::REQUESTED != this->sr_status;}))
+			return false;
+
+		return sync_recv_status::RESPONDED == sr_status;
 	}
 #endif
 
@@ -584,7 +579,7 @@ private:
 			}
 			change_timer_status(TIMER_DELAY_CLOSE, timer_info::TIMER_CANCELED);
 #ifdef ASCS_SYNC_RECV
-			sync_recv_cv.notify_one();
+			sync_recv_cv.notify_all();
 #endif
 			on_close();
 			after_close();
@@ -634,7 +629,7 @@ private:
 
 #ifdef ASCS_SYNC_RECV
 	enum sync_recv_status {NOT_REQUESTED, REQUESTED, RESPONDED};
-	volatile sync_recv_status sr_status;
+	sync_recv_status sr_status;
 
 	std::mutex sync_recv_mutex;
 	std::condition_variable sync_recv_cv;
