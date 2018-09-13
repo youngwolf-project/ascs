@@ -113,7 +113,7 @@ int main(int argc, const char* argv[])
 		else if (RECONNECT == str)
 			client.graceful_shutdown(true);
 		else
-			client.safe_send_msg(str, false);
+			client.safe_send_msg(str);
 	}
 
 	return 0;

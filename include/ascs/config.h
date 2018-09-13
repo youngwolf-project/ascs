@@ -418,10 +418,17 @@
  *  differences, see macro ASCS_SYNC_DISPATCH for more details), and we also name it on_msg().
  *
  * FIX:
+ * Fix spurious awakenings when doing sync message sending and receiving.
  * Fix statistics for batch message dispatching.
  *
  * ENHANCEMENTS:
  * Add virtual function find_socket to interface i_server.
+ * Support timed waiting when doing sync message sending.
+ *  please note that after timeout, the sending can succeed in the future because ascs uses async sending to simulate sync sending,
+ *  and on_msg_send (if macro ASCS_WANT_MSG_SEND_NOTIFY been defined) will not be affected, which means it can be called in the future too. 
+ * Support timed waiting when doing sync message receiving.
+ *  please note that after timeout, the receiving can succeed in the future because ascs uses async receiving to simulate sync receiving,
+ *  and messages will be dispatched via on_msg (if macro ASCS_SYNC_DISPATCH been defined) and / or on_msg_handle.
  *
  * DELETION:
  *
@@ -720,7 +727,7 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 //if you don't define this macro, the next callback will be called at (xx:xx:xx + 21), plase note.
 
 //#define ASCS_SYNC_SEND
-//#ifndef ASCS_SYNC_RECV
+//#define ASCS_SYNC_RECV
 //define these macro to gain additional series of sync message sending and receiving, they are:
 // sync_send_msg
 // sync_send_native_msg

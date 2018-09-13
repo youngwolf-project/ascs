@@ -197,17 +197,19 @@ public:
 	//don't use the packer but insert into send buffer directly
 	bool direct_send_msg(const InMsgType& msg, bool can_overflow = false)
 		{return can_overflow || is_send_buffer_available() ? do_direct_send_msg(InMsgType(msg)) : false;}
-	bool direct_send_msg(InMsgType&& msg, bool can_overflow = false) {return can_overflow || is_send_buffer_available() ? do_direct_send_msg(std::move(msg)) : false;}
+	bool direct_send_msg(InMsgType&& msg, bool can_overflow = false)
+		{return can_overflow || is_send_buffer_available() ? do_direct_send_msg(std::move(msg)) : false;}
 
 #ifdef ASCS_SYNC_SEND
 	//don't use the packer but insert into send buffer directly, then wait for the sending to finish.
-	bool direct_sync_send_msg(const InMsgType& msg, bool can_overflow = false)
-		{return can_overflow || is_send_buffer_available() ? do_direct_sync_send_msg(InMsgType(msg)) : false;}
-	bool direct_sync_send_msg(InMsgType&& msg, bool can_overflow = false) {return can_overflow || is_send_buffer_available() ? do_direct_sync_send_msg(std::move(msg)) : false;}
+	bool direct_sync_send_msg(const InMsgType& msg, unsigned duration = 0, bool can_overflow = false) //unit is millisecond, 0 means wait infinitely
+		{return can_overflow || is_send_buffer_available() ? do_direct_sync_send_msg(InMsgType(msg), duration) : false;}
+	bool direct_sync_send_msg(InMsgType&& msg, unsigned duration = 0, bool can_overflow = false) //unit is millisecond, 0 means wait infinitely
+		{return can_overflow || is_send_buffer_available() ? do_direct_sync_send_msg(std::move(msg), duration) : false;}
 #endif
 
 #ifdef ASCS_SYNC_RECV
-	bool sync_recv_msg(std::list<OutMsgType>& msg_can)
+	bool sync_recv_msg(std::list<OutMsgType>& msg_can, unsigned duration = 0) //unit is millisecond, 0 means wait infinitely
 	{
 		if (stopped())
 			return false;
@@ -220,12 +222,18 @@ public:
 		recv_msg();
 #endif
 		sr_status = sync_recv_status::REQUESTED;
-		sync_recv_cv.wait(lock);
+		if (!sync_recv_waiting(lock, duration))
+		{
+			sr_status = sync_recv_status::NOT_REQUESTED;
+			return false; //timeout
+		}
 
 		auto re = sync_recv_status::RESPONDED == sr_status;
-		sr_status = sync_recv_status::NOT_REQUESTED;
 		if (re)
+		{
 			msg_can.splice(std::end(msg_can), temp_msg_can);
+			sr_status = sync_recv_status::NOT_REQUESTED;
+		}
 		sync_recv_cv.notify_one();
 
 		return re;
@@ -356,9 +364,9 @@ protected:
 			sr_status = sync_recv_status::RESPONDED;
 			sync_recv_cv.notify_one();
 
-			sync_recv_cv.wait(lock);
-			if (sync_recv_status::RESPONDED != sr_status) //sync_recv_msg() has consumed temp_msg_can
-				return handled_msg();
+			sync_recv_cv.wait(lock, [this]() {return sync_recv_status::RESPONDED != this->sr_status;});
+			if (temp_msg_can.empty())
+				return handled_msg(); //sync_recv_msg() has consumed temp_msg_can
 		}
 		lock.unlock();
 #endif
@@ -418,7 +426,7 @@ protected:
 	}
 
 #ifdef ASCS_SYNC_SEND
-	bool do_direct_sync_send_msg(InMsgType&& msg)
+	bool do_direct_sync_send_msg(InMsgType&& msg, unsigned duration = 0)
 	{
 		if (stopped())
 			return false;
@@ -449,6 +457,18 @@ private:
 	//it should only be used by object_pool when reusing or creating new socket.
 	template<typename Object> friend class object_pool;
 	void id(uint_fast64_t id) {_id = id;}
+
+#ifdef ASCS_SYNC_RECV
+	bool sync_recv_waiting(std::unique_lock<std::mutex>& lock, unsigned duration)
+	{
+		if (0 == duration)
+		{
+			sync_recv_cv.wait(lock, [this]() {return sync_recv_status::REQUESTED != this->sr_status;});
+			return true;
+		}
+		return sync_recv_cv.wait_for(lock, milliseconds(duration), [this]() {return sync_recv_status::REQUESTED != this->sr_status;});
+	}
+#endif
 
 	bool check_receiving(bool raise_recv)
 	{
