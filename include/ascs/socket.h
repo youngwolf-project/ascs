@@ -438,9 +438,7 @@ protected:
 			send_msg();
 
 		std::unique_lock<std::mutex> lock(sync_send_mutex);
-		cv->wait(lock, [this, &cv]() {return !this->started() || cv->signaled;});
-
-		return cv->signaled;
+		return sync_send_waiting(lock, cv, duration);
 	}
 #endif
 
@@ -462,6 +460,18 @@ private:
 			return false;
 
 		return sync_recv_status::RESPONDED == sr_status;
+	}
+#endif
+
+#ifdef ASCS_SYNC_SEND
+	bool sync_send_waiting(std::unique_lock<std::mutex>& lock, std::shared_ptr<condition_variable>& cv, unsigned duration)
+	{
+		if (0 == duration)
+			cv->wait(lock, [this, &cv]() {return !this->started() || cv->signaled;});
+		else if (!sync_recv_cv.wait_for(lock, milliseconds(duration), [this, &cv]() {return !this->started() || cv->signaled;}))
+			return false;
+
+		return cv->signaled;
 	}
 #endif
 

@@ -6,6 +6,7 @@
 #define ASCS_DELAY_CLOSE	1 //this demo not used object pool and doesn't need life cycle management,
 							  //so, define this to avoid hooks for async call (and slightly improve efficiency),
 							  //any value which is bigger than zero is okay.
+#define ASCS_SYNC_SEND
 #define ASCS_SYNC_RECV
 //#define ASCS_PASSIVE_RECV //because we not defined this macro, this demo will use mix model to receive messages, which means
 							//some messages will be dispatched via on_msg_handle(), some messages will be returned via sync_recv_msg(),
@@ -113,7 +114,8 @@ int main(int argc, const char* argv[])
 		else if (RECONNECT == str)
 			client.graceful_shutdown(true);
 		else
-			client.safe_send_msg(str);
+			client.sync_safe_send_msg(str, 100);
+			//client.safe_send_msg(str);
 	}
 
 	return 0;
