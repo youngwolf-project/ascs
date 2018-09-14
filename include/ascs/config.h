@@ -434,6 +434,7 @@
  * DELETION:
  *
  * REFACTORING:
+ * Hide member variables as many as possible for developers.
  *
  * REPLACEMENTS:
  *

@@ -197,8 +197,7 @@ public:
 	//don't use the packer but insert into send buffer directly
 	bool direct_send_msg(const InMsgType& msg, bool can_overflow = false)
 		{return can_overflow || is_send_buffer_available() ? do_direct_send_msg(InMsgType(msg)) : false;}
-	bool direct_send_msg(InMsgType&& msg, bool can_overflow = false)
-		{return can_overflow || is_send_buffer_available() ? do_direct_send_msg(std::move(msg)) : false;}
+	bool direct_send_msg(InMsgType&& msg, bool can_overflow = false) {return can_overflow || is_send_buffer_available() ? do_direct_send_msg(std::move(msg)) : false;}
 
 #ifdef ASCS_SYNC_SEND
 	//don't use the packer but insert into send buffer directly, then wait for the sending to finish.
@@ -454,9 +453,10 @@ private:
 #ifdef ASCS_SYNC_RECV
 	bool sync_recv_waiting(std::unique_lock<std::mutex>& lock, unsigned duration)
 	{
+		auto pred = [this]() {return !this->started() || sync_recv_status::REQUESTED != this->sr_status;};
 		if (0 == duration)
-			sync_recv_cv.wait(lock, [this]() {return !this->started() || sync_recv_status::REQUESTED != this->sr_status;});
-		else if (!sync_recv_cv.wait_for(lock, milliseconds(duration), [this]() {return !this->started() || sync_recv_status::REQUESTED != this->sr_status;}))
+			sync_recv_cv.wait(lock, std::move(pred));
+		else if (!sync_recv_cv.wait_for(lock, milliseconds(duration), std::move(pred)))
 			return false;
 
 		return sync_recv_status::RESPONDED == sr_status;
@@ -466,9 +466,10 @@ private:
 #ifdef ASCS_SYNC_SEND
 	bool sync_send_waiting(std::unique_lock<std::mutex>& lock, std::shared_ptr<condition_variable>& cv, unsigned duration)
 	{
+		auto pred = [this, &cv]() {return !this->started() || cv->signaled;};
 		if (0 == duration)
-			cv->wait(lock, [this, &cv]() {return !this->started() || cv->signaled;});
-		else if (!sync_recv_cv.wait_for(lock, milliseconds(duration), [this, &cv]() {return !this->started() || cv->signaled;}))
+			cv->wait(lock, std::move(pred));
+		else if (!sync_recv_cv.wait_for(lock, milliseconds(duration), std::move(pred)))
 			return false;
 
 		return cv->signaled;

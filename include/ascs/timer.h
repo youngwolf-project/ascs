@@ -146,7 +146,7 @@ protected:
 			auto begin_time = std::chrono::system_clock::now();
 			if (!ec && ti.call_back(ti.id) && timer_info::TIMER_STARTED == ti.status)
 			{
-				auto elapsed_ms = (unsigned) std::chrono::duration_cast<milliseconds>(std::chrono::system_clock::now() - begin_time).count();
+				auto elapsed_ms = (unsigned) std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - begin_time).count();
 				if (elapsed_ms > ti.interval_ms)
 					elapsed_ms %= ti.interval_ms;
 
