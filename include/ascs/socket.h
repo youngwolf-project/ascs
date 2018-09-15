@@ -356,7 +356,7 @@ protected:
 			sr_status = sync_recv_status::RESPONDED;
 			sync_recv_cv.notify_one();
 
-			sync_recv_cv.wait(lock, [this]() {return !this->started() || sync_recv_status::RESPONDED != this->sr_status;});
+			sync_recv_cv.wait(lock, [this]() {return !this->started_ || sync_recv_status::RESPONDED != this->sr_status;});
 			if (sync_recv_status::RESPONDED == sr_status) //eliminate race condition on temp_msg_can with sync_recv_msg
 				return false;
 			else if (temp_msg_can.empty())
@@ -453,7 +453,7 @@ private:
 #ifdef ASCS_SYNC_RECV
 	bool sync_recv_waiting(std::unique_lock<std::mutex>& lock, unsigned duration)
 	{
-		auto pred = [this]() {return !this->started() || sync_recv_status::REQUESTED != this->sr_status;};
+		auto pred = [this]() {return !this->started_ || sync_recv_status::REQUESTED != this->sr_status;};
 		if (0 == duration)
 			sync_recv_cv.wait(lock, std::move(pred));
 		else if (!sync_recv_cv.wait_for(lock, milliseconds(duration), std::move(pred)))
@@ -466,10 +466,10 @@ private:
 #ifdef ASCS_SYNC_SEND
 	bool sync_send_waiting(std::unique_lock<std::mutex>& lock, std::shared_ptr<condition_variable>& cv, unsigned duration)
 	{
-		auto pred = [this, &cv]() {return !this->started() || cv->signaled;};
+		auto pred = [this, &cv]() {return !this->started_ || cv->signaled;};
 		if (0 == duration)
 			cv->wait(lock, std::move(pred));
-		else if (!sync_recv_cv.wait_for(lock, milliseconds(duration), std::move(pred)))
+		else if (!cv->wait_for(lock, milliseconds(duration), std::move(pred)))
 			return false;
 
 		return cv->signaled;
