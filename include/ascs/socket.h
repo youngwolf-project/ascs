@@ -456,7 +456,7 @@ private:
 		auto pred = [this]() {return !this->started_ || sync_recv_status::REQUESTED != this->sr_status;};
 		if (0 == duration)
 			sync_recv_cv.wait(lock, std::move(pred));
-		else if (!sync_recv_cv.wait_for(lock, milliseconds(duration), std::move(pred)))
+		else if (!sync_recv_cv.wait_for(lock, std::chrono::milliseconds(duration), std::move(pred)))
 			return false;
 
 		return sync_recv_status::RESPONDED == sr_status;
@@ -469,7 +469,7 @@ private:
 		auto pred = [this, &cv]() {return !this->started_ || cv->signaled;};
 		if (0 == duration)
 			cv->wait(lock, std::move(pred));
-		else if (!cv->wait_for(lock, milliseconds(duration), std::move(pred)))
+		else if (!cv->wait_for(lock, std::chrono::milliseconds(duration), std::move(pred)))
 			return false;
 
 		return cv->signaled;
