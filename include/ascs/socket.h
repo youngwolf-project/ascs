@@ -106,6 +106,8 @@ public:
 	typedef InQueue<in_msg, in_container_type> in_queue_type;
 	typedef OutQueue<out_msg, out_container_type> out_queue_type;
 
+	enum sync_call_result {SUCCESS, NOT_APPLICABLE, DUPLICATE, TIMEOUT};
+
 	uint_fast64_t id() const {return _id;}
 	bool is_equal_to(uint_fast64_t id) const {return _id == id;}
 
@@ -201,28 +203,28 @@ public:
 
 #ifdef ASCS_SYNC_SEND
 	//don't use the packer but insert into send buffer directly, then wait for the sending to finish.
-	bool direct_sync_send_msg(const InMsgType& msg, unsigned duration = 0, bool can_overflow = false) //unit is millisecond, 0 means wait infinitely
+	sync_call_result direct_sync_send_msg(const InMsgType& msg, unsigned duration = 0, bool can_overflow = false) //unit is millisecond, 0 means wait infinitely
 		{return can_overflow || is_send_buffer_available() ? do_direct_sync_send_msg(InMsgType(msg), duration) : false;}
-	bool direct_sync_send_msg(InMsgType&& msg, unsigned duration = 0, bool can_overflow = false) //unit is millisecond, 0 means wait infinitely
+	sync_call_result direct_sync_send_msg(InMsgType&& msg, unsigned duration = 0, bool can_overflow = false) //unit is millisecond, 0 means wait infinitely
 		{return can_overflow || is_send_buffer_available() ? do_direct_sync_send_msg(std::move(msg), duration) : false;}
 #endif
 
 #ifdef ASCS_SYNC_RECV
-	bool sync_recv_msg(std::list<OutMsgType>& msg_can, unsigned duration = 0) //unit is millisecond, 0 means wait infinitely
+	sync_call_result sync_recv_msg(std::list<OutMsgType>& msg_can, unsigned duration = 0) //unit is millisecond, 0 means wait infinitely
 	{
 		if (stopped())
-			return false;
+			return sync_call_result::NOT_APPLICABLE;
 
 		std::unique_lock<std::mutex> lock(sync_recv_mutex);
 		if (sync_recv_status::NOT_REQUESTED != sr_status)
-			return false;
+			return sync_call_result::DUPLICATE;
 
 #ifdef ASCS_PASSIVE_RECV
 		recv_msg();
 #endif
 		sr_status = sync_recv_status::REQUESTED;
 		auto re = sync_recv_waiting(lock, duration);
-		if (re)
+		if (sync_call_result::SUCCESS == re)
 			msg_can.splice(std::end(msg_can), temp_msg_can);
 
 		sr_status = sync_recv_status::NOT_REQUESTED;
@@ -420,14 +422,14 @@ protected:
 	}
 
 #ifdef ASCS_SYNC_SEND
-	bool do_direct_sync_send_msg(InMsgType&& msg, unsigned duration = 0)
+	sync_call_result do_direct_sync_send_msg(InMsgType&& msg, unsigned duration = 0)
 	{
 		if (stopped())
-			return false;
+			return sync_call_result::NOT_APPLICABLE;
 		else if (msg.empty())
 		{
 			unified_out::error_out("found an empty message, please check your packer.");
-			return false;
+			return sync_call_result::SUCCESS;
 		}
 
 		auto unused = in_msg(std::move(msg), true);
@@ -451,28 +453,28 @@ private:
 	void id(uint_fast64_t id) {_id = id;}
 
 #ifdef ASCS_SYNC_RECV
-	bool sync_recv_waiting(std::unique_lock<std::mutex>& lock, unsigned duration)
+	sync_call_result sync_recv_waiting(std::unique_lock<std::mutex>& lock, unsigned duration)
 	{
 		auto pred = [this]() {return !this->started_ || sync_recv_status::REQUESTED != this->sr_status;};
 		if (0 == duration)
 			sync_recv_cv.wait(lock, std::move(pred));
 		else if (!sync_recv_cv.wait_for(lock, std::chrono::milliseconds(duration), std::move(pred)))
-			return false;
+			return sync_call_result::TIMEOUT;
 
-		return sync_recv_status::RESPONDED == sr_status;
+		return sync_recv_status::RESPONDED == sr_status ? sync_call_result::SUCCESS : sync_call_result::NOT_APPLICABLE;
 	}
 #endif
 
 #ifdef ASCS_SYNC_SEND
-	bool sync_send_waiting(std::unique_lock<std::mutex>& lock, std::shared_ptr<condition_variable>& cv, unsigned duration)
+	sync_call_result sync_send_waiting(std::unique_lock<std::mutex>& lock, std::shared_ptr<condition_variable>& cv, unsigned duration)
 	{
 		auto pred = [this, &cv]() {return !this->started_ || cv->signaled;};
 		if (0 == duration)
 			cv->wait(lock, std::move(pred));
 		else if (!cv->wait_for(lock, std::chrono::milliseconds(duration), std::move(pred)))
-			return false;
+			return sync_call_result::TIMEOUT;
 
-		return cv->signaled;
+		return cv->signaled ? sync_call_result::SUCCESS : sync_call_result::NOT_APPLICABLE;
 	}
 #endif
 

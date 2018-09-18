@@ -62,11 +62,16 @@ std::thread create_sync_recv_thread(single_client& client)
 {
 	return std::thread([&client]() {
 		typename ASCS_DEFAULT_UNPACKER::container_type msg_can;
-		while (client.sync_recv_msg(msg_can)) //ascs will not maintain messages in msg_can anymore after sync_recv_msg return, please note.
+		typename single_client::sync_call_result re = single_client::sync_call_result::SUCCESS;
+		do
 		{
-			do_something_to_all(msg_can, [](single_client::out_msg_type& msg) {printf("sync recv(" ASCS_SF ") : %s\n", msg.size(), msg.data());});
-			msg_can.clear(); //sync_recv_msg just append new messages(s) to msg_can, please note.
-		}
+			re = client.sync_recv_msg(msg_can, 50); //ascs will not maintain messages in msg_can anymore after sync_recv_msg return, please note.
+			if (single_client::sync_call_result::SUCCESS == re)
+			{
+				do_something_to_all(msg_can, [](single_client::out_msg_type& msg) {printf("sync recv(" ASCS_SF ") : %s\n", msg.size(), msg.data());});
+				msg_can.clear(); //sync_recv_msg just append new messages(s) to msg_can, please note.
+			}
+		} while (single_client::sync_call_result::SUCCESS == re || single_client::sync_call_result::TIMEOUT == re);
 		puts("sync recv end.");
 	});
 }
@@ -92,7 +97,6 @@ int main(int argc, const char* argv[])
 		client.set_server_addr(ASCS_SERVER_PORT + 100, ASCS_SERVER_IP);
 
 	sp.start_service();
-	std::this_thread::sleep_for(std::chrono::milliseconds(500)); //to be more efficiently, start the worker thread in tcp::socket_base::on_connect().
 	auto t = create_sync_recv_thread(client);
 	while(sp.is_running())
 	{
