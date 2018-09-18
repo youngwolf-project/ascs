@@ -374,8 +374,7 @@ struct condition_variable : public std::condition_variable
 	condition_variable() : signaled(false) {}
 };
 
-template<typename T>
-struct obj_with_begin_time : public T
+template<typename T> struct obj_with_begin_time : public T
 {
 	obj_with_begin_time(bool need_cv = false) {check_and_create_cv(need_cv);}
 	obj_with_begin_time(T&& obj, bool need_cv = false) : T(std::move(obj)) {restart(); check_and_create_cv(need_cv);}
@@ -396,8 +395,7 @@ struct obj_with_begin_time : public T
 	std::shared_ptr<condition_variable> cv;
 };
 #else
-template<typename T>
-struct obj_with_begin_time : public T
+template<typename T> struct obj_with_begin_time : public T
 {
 	obj_with_begin_time() {}
 	obj_with_begin_time(T&& obj) : T(std::move(obj)) {restart();}
