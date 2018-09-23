@@ -94,12 +94,17 @@ protected:
 #ifndef ASCS_DISPATCH_BATCH_MSG
 		last_dispatch_msg.clear();
 #endif
-		send_msg_buffer.clear();
+		in_container_type can;
+		pop_all_pending_send_msg(can);
 		recv_msg_buffer.clear();
 	}
 
 public:
+#ifdef ASCS_SYNC_SEND
+	typedef obj_with_begin_time_cv<InMsgType> in_msg;
+#else
 	typedef obj_with_begin_time<InMsgType> in_msg;
+#endif
 	typedef obj_with_begin_time<OutMsgType> out_msg;
 	typedef InContainer<in_msg> in_container_type;
 	typedef OutContainer<out_msg> out_container_type;
@@ -238,11 +243,15 @@ public:
 	GET_PENDING_MSG_NUM(get_pending_send_msg_num, send_msg_buffer)
 	GET_PENDING_MSG_NUM(get_pending_recv_msg_num, recv_msg_buffer)
 
+#ifdef ASCS_SYNC_SEND
+	POP_FIRST_PENDING_MSG_CV(pop_first_pending_send_msg, send_msg_buffer, in_msg)
+	POP_ALL_PENDING_MSG_CV(pop_all_pending_send_msg, send_msg_buffer, in_container_type)
+#else
 	POP_FIRST_PENDING_MSG(pop_first_pending_send_msg, send_msg_buffer, in_msg)
-	POP_FIRST_PENDING_MSG(pop_first_pending_recv_msg, recv_msg_buffer, out_msg)
-
-	//clear all pending msgs
 	POP_ALL_PENDING_MSG(pop_all_pending_send_msg, send_msg_buffer, in_container_type)
+#endif
+
+	POP_FIRST_PENDING_MSG(pop_first_pending_recv_msg, recv_msg_buffer, out_msg)
 	POP_ALL_PENDING_MSG(pop_all_pending_recv_msg, recv_msg_buffer, out_container_type)
 
 protected:
@@ -322,6 +331,9 @@ protected:
 			return false;
 
 		started_ = false;
+#ifdef ASCS_SYNC_RECV
+		sync_recv_cv.notify_all();
+#endif
 		stop_all_timer();
 
 		if (lowest_layer().is_open())
@@ -334,9 +346,6 @@ protected:
 
 		if (stopped())
 		{
-#ifdef ASCS_SYNC_RECV
-			sync_recv_cv.notify_all();
-#endif
 			on_close();
 			after_close();
 		}
@@ -591,9 +600,6 @@ private:
 				lowest_layer().close(ec);
 			}
 			change_timer_status(TIMER_DELAY_CLOSE, timer_info::TIMER_CANCELED);
-#ifdef ASCS_SYNC_RECV
-			sync_recv_cv.notify_all();
-#endif
 			on_close();
 			after_close();
 			set_async_calling(false);

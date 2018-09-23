@@ -179,6 +179,10 @@ protected:
 		return super::do_start();
 	}
 
+#ifdef ASCS_SYNC_SEND
+	virtual void on_close() {ascs::do_something_to_all(last_send_msg, [](typename super::in_msg& msg) {if (msg.cv) msg.cv->notify_all();}); super::on_close();}
+#endif
+
 	virtual void on_connect() {}
 	//msg can not be unpacked
 	//the socket is still available, so don't need to shutdown this tcp::socket_base

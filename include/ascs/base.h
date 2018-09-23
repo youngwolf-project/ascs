@@ -367,34 +367,12 @@ private:
 	statistic::stat_duration& duration;
 };
 
-#ifdef ASCS_SYNC_SEND
 struct condition_variable : public std::condition_variable
 {
 	bool signaled;
 	condition_variable() : signaled(false) {}
 };
 
-template<typename T> struct obj_with_begin_time : public T
-{
-	obj_with_begin_time(bool need_cv = false) {check_and_create_cv(need_cv);}
-	obj_with_begin_time(T&& obj, bool need_cv = false) : T(std::move(obj)) {restart(); check_and_create_cv(need_cv);}
-	obj_with_begin_time& operator=(T&& obj) {T::operator=(std::move(obj)); restart(); return *this;}
-	obj_with_begin_time(obj_with_begin_time&& other) : T(std::move(other)), begin_time(std::move(other.begin_time)), cv(std::move(other.cv)) {}
-	obj_with_begin_time& operator=(obj_with_begin_time&& other) {T::operator=(std::move(other)); begin_time = std::move(other.begin_time); cv = std::move(other.cv); return *this;}
-
-	void restart() {restart(statistic::now());}
-	void restart(const typename statistic::stat_time& begin_time_) {begin_time = begin_time_;}
-
-	void check_and_create_cv(bool need_cv) {if (!need_cv) cv.reset(); else if (!cv) cv = std::make_shared<condition_variable>();}
-
-	void swap(T& obj, bool need_cv = false) {T::swap(obj); restart(); check_and_create_cv(need_cv);}
-	void swap(obj_with_begin_time& other) {T::swap(other); std::swap(begin_time, other.begin_time); cv.swap(other.cv);}
-	void clear() {cv.reset(); T::clear();}
-
-	typename statistic::stat_time begin_time;
-	std::shared_ptr<condition_variable> cv;
-};
-#else
 template<typename T> struct obj_with_begin_time : public T
 {
 	obj_with_begin_time() {}
@@ -410,7 +388,22 @@ template<typename T> struct obj_with_begin_time : public T
 
 	typename statistic::stat_time begin_time;
 };
-#endif
+
+template<typename T> struct obj_with_begin_time_cv : public obj_with_begin_time<T>
+{
+	obj_with_begin_time_cv(bool need_cv = false) {check_and_create_cv(need_cv);}
+	obj_with_begin_time_cv(T&& obj, bool need_cv = false) : obj_with_begin_time(std::move(obj)) {check_and_create_cv(need_cv);}
+	obj_with_begin_time_cv(obj_with_begin_time_cv&& other) : obj_with_begin_time(std::move(other)), cv(std::move(other.cv)) {}
+	obj_with_begin_time_cv& operator=(obj_with_begin_time_cv&& other) {obj_with_begin_time::operator=(std::move(other)); cv = std::move(other.cv); return *this;}
+
+	void swap(T& obj, bool need_cv = false) {obj_with_begin_time::swap(obj); check_and_create_cv(need_cv);}
+	void swap(obj_with_begin_time_cv& other) {obj_with_begin_time::swap(other); cv.swap(other.cv);}
+
+	void clear() {cv.reset(); T::clear();}
+	void check_and_create_cv(bool need_cv) {if (!need_cv) cv.reset(); else if (!cv) cv = std::make_shared<condition_variable>();}
+
+	std::shared_ptr<condition_variable> cv;
+};
 
 //free functions, used to do something to any container(except map and multimap) optionally with any mutex
 template<typename _Can, typename _Mutex, typename _Predicate>
@@ -460,7 +453,10 @@ template<typename _Predicate> void NAME(const _Predicate& __pred) const {for (au
 
 #define GET_PENDING_MSG_NUM(FUNNAME, CAN) size_t FUNNAME() const {return CAN.size();}
 #define POP_FIRST_PENDING_MSG(FUNNAME, CAN, MSGTYPE) void FUNNAME(MSGTYPE& msg) {msg.clear(); CAN.try_dequeue(msg);}
+#define POP_FIRST_PENDING_MSG_CV(FUNNAME, CAN, MSGTYPE) void FUNNAME(MSGTYPE& msg) {msg.clear(); if (CAN.try_dequeue(msg) && msg.cv) msg.cv->notify_all();}
 #define POP_ALL_PENDING_MSG(FUNNAME, CAN, CANTYPE) void FUNNAME(CANTYPE& can) {can.clear(); CAN.swap(can);}
+#define POP_ALL_PENDING_MSG_CV(FUNNAME, CAN, CANTYPE) void FUNNAME(CANTYPE& can) { \
+	can.clear(); CAN.swap(can); ascs::do_something_to_all(can, [](decltype(CAN.front()) msg) {if (msg.cv) msg.cv->notify_all();});}
 
 ///////////////////////////////////////////////////
 //TCP msg sending interface

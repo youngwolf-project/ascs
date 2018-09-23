@@ -135,6 +135,10 @@ protected:
 		return true;
 	}
 
+#ifdef ASCS_SYNC_SEND
+	virtual void on_close() {if (last_send_msg.cv) last_send_msg.cv->notify_all(); super::on_close();}
+#endif
+
 private:
 #ifndef ASCS_PASSIVE_RECV
 	virtual void recv_msg() {this->dispatch_strand(strand, [this]() {this->do_recv_msg();});}
