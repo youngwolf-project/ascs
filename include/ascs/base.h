@@ -392,12 +392,12 @@ template<typename T> struct obj_with_begin_time : public T
 template<typename T> struct obj_with_begin_time_cv : public obj_with_begin_time<T>
 {
 	obj_with_begin_time_cv(bool need_cv = false) {check_and_create_cv(need_cv);}
-	obj_with_begin_time_cv(T&& obj, bool need_cv = false) : obj_with_begin_time(std::move(obj)) {check_and_create_cv(need_cv);}
-	obj_with_begin_time_cv(obj_with_begin_time_cv&& other) : obj_with_begin_time(std::move(other)), cv(std::move(other.cv)) {}
-	obj_with_begin_time_cv& operator=(obj_with_begin_time_cv&& other) {obj_with_begin_time::operator=(std::move(other)); cv = std::move(other.cv); return *this;}
+	obj_with_begin_time_cv(T&& obj, bool need_cv = false) : obj_with_begin_time<T>(std::move(obj)) {check_and_create_cv(need_cv);}
+	obj_with_begin_time_cv(obj_with_begin_time_cv&& other) : obj_with_begin_time<T>(std::move(other)), cv(std::move(other.cv)) {}
+	obj_with_begin_time_cv& operator=(obj_with_begin_time_cv&& other) {obj_with_begin_time<T>::operator=(std::move(other)); cv = std::move(other.cv); return *this;}
 
-	void swap(T& obj, bool need_cv = false) {obj_with_begin_time::swap(obj); check_and_create_cv(need_cv);}
-	void swap(obj_with_begin_time_cv& other) {obj_with_begin_time::swap(other); cv.swap(other.cv);}
+	void swap(T& obj, bool need_cv = false) {obj_with_begin_time<T>::swap(obj); check_and_create_cv(need_cv);}
+	void swap(obj_with_begin_time_cv& other) {obj_with_begin_time<T>::swap(other); cv.swap(other.cv);}
 
 	void clear() {cv.reset(); T::clear();}
 	void check_and_create_cv(bool need_cv) {if (!need_cv) cv.reset(); else if (!cv) cv = std::make_shared<condition_variable>();}
