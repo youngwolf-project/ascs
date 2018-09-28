@@ -23,7 +23,7 @@ public:
 	native_msg msg;
 };
 
-3. 大家看到，message里面用的是不支持swap的对象（native_msg），这样会造成内存拷贝（所以ascs会编译出错的，这是我故意的），
+3. 大家看到，message里面用的是不支持swap的对象（native_msg），这样会造成内存拷贝（所以会造成编译出错，这是我故意的），
 那么我们只需要用ascs::auto_buffer来包装message，一切问题都解决了，如下：
 ascs::auto_buffer<messge> really_used_msg;
 当然你也可以让message支持swap，不过当你实现了之后，你会发现，你实现的跟auto_buffer大同小异。
@@ -38,7 +38,7 @@ ascs::auto_buffer<messge> really_used_msg;
 ascs::auto_buffer<message> msg(new message);
 strncmp(msg->msg.cc, "abc", sizeof(msg->msg.cc));
 ...; //初始其它的成员
-client.direct_send_msg(msg); //不能再调用以send_开头的消息了，因为它们需要调用打包器来打包，我们在这里用的是dumm_packer
+client.direct_send_msg(msg); //不能再调用以send_开头的消息了，因为它们需要调用打包器来打包，我们在这里用的是dummy_packer
 
 5. 解包器是必须要写的
 因为解包器还负责提供接收数据时需要的缓存。好在提供它非常简单，如下：

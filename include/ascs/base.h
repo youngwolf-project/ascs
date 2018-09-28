@@ -388,16 +388,16 @@ template<typename T> struct obj_with_begin_time : public T
 #ifdef ASCS_SYNC_SEND
 template<typename T> struct obj_with_begin_time_promise : public obj_with_begin_time<T>
 {
-	obj_with_begin_time_promise(bool need_promise = false) {check_and_create_future(need_promise);}
-	obj_with_begin_time_promise(T&& obj, bool need_promise = false) : obj_with_begin_time<T>(std::move(obj)) {check_and_create_future(need_promise);}
+	obj_with_begin_time_promise(bool need_promise = false) {check_and_create_promise(need_promise);}
+	obj_with_begin_time_promise(T&& obj, bool need_promise = false) : obj_with_begin_time<T>(std::move(obj)) {check_and_create_promise(need_promise);}
 	obj_with_begin_time_promise(obj_with_begin_time_promise&& other) : obj_with_begin_time<T>(std::move(other)), p(std::move(other.p)) {}
 	obj_with_begin_time_promise& operator=(obj_with_begin_time_promise&& other) {obj_with_begin_time<T>::operator=(std::move(other)); p = std::move(other.p); return *this;}
 
-	void swap(T& obj, bool need_promise = false) {obj_with_begin_time<T>::swap(obj); check_and_create_future(need_promise);}
+	void swap(T& obj, bool need_promise = false) {obj_with_begin_time<T>::swap(obj); check_and_create_promise(need_promise);}
 	void swap(obj_with_begin_time_promise& other) {obj_with_begin_time<T>::swap(other); p.swap(other.p);}
 
 	void clear() {p.reset(); T::clear();}
-	void check_and_create_future(bool need_promise) {if (!need_promise) p.reset(); else if (!p) p = std::make_shared<std::promise<sync_call_result>>();}
+	void check_and_create_promise(bool need_promise) {if (!need_promise) p.reset(); else if (!p) p = std::make_shared<std::promise<sync_call_result>>();}
 
 	std::shared_ptr<std::promise<sync_call_result>> p;
 };
