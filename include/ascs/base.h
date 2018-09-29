@@ -30,8 +30,8 @@
 #include <atomic>
 #include <sstream>
 #include <iomanip>
-#ifdef ASCS_SYNC_SEND
-#include <future>
+#if defined(ASCS_SYNC_SEND) || defined(ASCS_SYNC_RECV)
+#include <condition_variable>
 #endif
 
 #include <asio.hpp>
@@ -367,8 +367,6 @@ private:
 	statistic::stat_duration& duration;
 };
 
-enum sync_call_result {SUCCESS, NOT_APPLICABLE, DUPLICATE, TIMEOUT};
-
 template<typename T> struct obj_with_begin_time : public T
 {
 	obj_with_begin_time() {}
@@ -386,20 +384,26 @@ template<typename T> struct obj_with_begin_time : public T
 };
 
 #ifdef ASCS_SYNC_SEND
-template<typename T> struct obj_with_begin_time_promise : public obj_with_begin_time<T>
+struct condition_variable : public std::condition_variable
 {
-	obj_with_begin_time_promise(bool need_promise = false) {check_and_create_promise(need_promise);}
-	obj_with_begin_time_promise(T&& obj, bool need_promise = false) : obj_with_begin_time<T>(std::move(obj)) {check_and_create_promise(need_promise);}
-	obj_with_begin_time_promise(obj_with_begin_time_promise&& other) : obj_with_begin_time<T>(std::move(other)), p(std::move(other.p)) {}
-	obj_with_begin_time_promise& operator=(obj_with_begin_time_promise&& other) {obj_with_begin_time<T>::operator=(std::move(other)); p = std::move(other.p); return *this;}
+	bool signaled;
+	condition_variable() : signaled(false) {}
+};
 
-	void swap(T& obj, bool need_promise = false) {obj_with_begin_time<T>::swap(obj); check_and_create_promise(need_promise);}
-	void swap(obj_with_begin_time_promise& other) {obj_with_begin_time<T>::swap(other); p.swap(other.p);}
+template<typename T> struct obj_with_begin_time_cv : public obj_with_begin_time<T>
+{
+	obj_with_begin_time_cv(bool need_cv = false) {check_and_create_cv(need_cv);}
+	obj_with_begin_time_cv(T&& obj, bool need_cv = false) : obj_with_begin_time<T>(std::move(obj)) {check_and_create_cv(need_cv);}
+	obj_with_begin_time_cv(obj_with_begin_time_cv&& other) : obj_with_begin_time<T>(std::move(other)), cv(std::move(other.cv)) {}
+	obj_with_begin_time_cv& operator=(obj_with_begin_time_cv&& other) {obj_with_begin_time<T>::operator=(std::move(other)); cv = std::move(other.cv); return *this;}
 
-	void clear() {p.reset(); T::clear();}
-	void check_and_create_promise(bool need_promise) {if (!need_promise) p.reset(); else if (!p) p = std::make_shared<std::promise<sync_call_result>>();}
+	void swap(T& obj, bool need_cv = false) {obj_with_begin_time<T>::swap(obj); check_and_create_cv(need_cv);}
+	void swap(obj_with_begin_time_cv& other) {obj_with_begin_time<T>::swap(other); cv.swap(other.cv);}
 
-	std::shared_ptr<std::promise<sync_call_result>> p;
+	void clear() {cv.reset(); T::clear();}
+	void check_and_create_cv(bool need_cv) {if (!need_cv) cv.reset(); else if (!cv) cv = std::make_shared<condition_variable>();}
+
+	std::shared_ptr<condition_variable> cv;
 };
 #endif
 
@@ -451,11 +455,10 @@ template<typename _Predicate> void NAME(const _Predicate& __pred) const {for (au
 
 #define GET_PENDING_MSG_NUM(FUNNAME, CAN) size_t FUNNAME() const {return CAN.size();}
 #define POP_FIRST_PENDING_MSG(FUNNAME, CAN, MSGTYPE) void FUNNAME(MSGTYPE& msg) {msg.clear(); CAN.try_dequeue(msg);}
-#define POP_FIRST_PENDING_MSG_NOTIFY(FUNNAME, CAN, MSGTYPE) void FUNNAME(MSGTYPE& msg) \
-	{msg.clear(); if (CAN.try_dequeue(msg) && msg.p) msg.p->set_value(sync_call_result::NOT_APPLICABLE);}
+#define POP_FIRST_PENDING_MSG_CV(FUNNAME, CAN, MSGTYPE) void FUNNAME(MSGTYPE& msg) {msg.clear(); if (CAN.try_dequeue(msg) && msg.cv) msg.cv->notify_all();}
 #define POP_ALL_PENDING_MSG(FUNNAME, CAN, CANTYPE) void FUNNAME(CANTYPE& can) {can.clear(); CAN.swap(can);}
-#define POP_ALL_PENDING_MSG_NOTIFY(FUNNAME, CAN, CANTYPE) void FUNNAME(CANTYPE& can) { \
-	can.clear(); CAN.swap(can); ascs::do_something_to_all(can, [](decltype(can.front()) msg) {if (msg.p) msg.p->set_value(sync_call_result::NOT_APPLICABLE);});}
+#define POP_ALL_PENDING_MSG_CV(FUNNAME, CAN, CANTYPE) void FUNNAME(CANTYPE& can) { \
+	can.clear(); CAN.swap(can); ascs::do_something_to_all(can, [](decltype(can.front()) msg) {if (msg.cv) msg.cv->notify_all();});}
 
 ///////////////////////////////////////////////////
 //TCP msg sending interface
@@ -498,24 +501,24 @@ template<typename Buffer> TYPE FUNNAME(const Buffer& buffer, unsigned duration =
 	{return FUNNAME(buffer.data(), buffer.size(), duration, can_overflow);}
 
 #define TCP_SYNC_SEND_MSG(FUNNAME, NATIVE, SEND_FUNNAME) \
-sync_call_result FUNNAME(const char* const pstr[], const size_t len[], size_t num, unsigned duration = 0, bool can_overflow = false) \
+typename super::sync_call_result FUNNAME(const char* const pstr[], const size_t len[], size_t num, unsigned duration = 0, bool can_overflow = false) \
 { \
 	if (!can_overflow && !this->is_send_buffer_available()) \
-		return sync_call_result::NOT_APPLICABLE; \
+		return super::sync_call_result::NOT_APPLICABLE; \
 	auto_duration dur(this->stat.pack_time_sum); \
 	auto msg = this->packer_->pack_msg(pstr, len, num, NATIVE); \
 	dur.end(); \
 	return this->SEND_FUNNAME(std::move(msg), duration); \
 } \
-TCP_SYNC_SEND_MSG_CALL_SWITCH(FUNNAME, sync_call_result)
+TCP_SYNC_SEND_MSG_CALL_SWITCH(FUNNAME, typename super::sync_call_result)
 
 //guarantee send msg successfully even if can_overflow equal to false, success at here just means putting the msg into tcp::socket_base's send buffer successfully
 //if can_overflow equal to false and the buffer is not available, will wait until it becomes available
 #define TCP_SYNC_SAFE_SEND_MSG(FUNNAME, SEND_FUNNAME) \
- sync_call_result FUNNAME(const char* const pstr[], const size_t len[], size_t num, unsigned duration = 0, bool can_overflow = false) \
-	{while (sync_call_result::SUCCESS != SEND_FUNNAME(pstr, len, num, duration, can_overflow)) \
-		SAFE_SEND_MSG_CHECK(sync_call_result::NOT_APPLICABLE) return sync_call_result::SUCCESS;} \
-TCP_SYNC_SEND_MSG_CALL_SWITCH(FUNNAME, sync_call_result)
+typename super::sync_call_result FUNNAME(const char* const pstr[], const size_t len[], size_t num, unsigned duration = 0, bool can_overflow = false) \
+	{while (super::sync_call_result::SUCCESS != SEND_FUNNAME(pstr, len, num, duration, can_overflow)) \
+		SAFE_SEND_MSG_CHECK(super::sync_call_result::NOT_APPLICABLE) return super::sync_call_result::SUCCESS;} \
+TCP_SYNC_SEND_MSG_CALL_SWITCH(FUNNAME, typename super::sync_call_result)
 //TCP sync msg sending interface
 ///////////////////////////////////////////////////
 #endif
@@ -562,28 +565,28 @@ template<typename Buffer> TYPE FUNNAME(const asio::ip::udp::endpoint& peer_addr,
 	{return FUNNAME(peer_addr, buffer.data(), buffer.size(), duration, can_overflow);}
 
 #define UDP_SYNC_SEND_MSG(FUNNAME, NATIVE, SEND_FUNNAME) \
-sync_call_result FUNNAME(const char* const pstr[], const size_t len[], size_t num, unsigned duration = 0, bool can_overflow = false) \
+typename super::sync_call_result FUNNAME(const char* const pstr[], const size_t len[], size_t num, unsigned duration = 0, bool can_overflow = false) \
 	{return FUNNAME(peer_addr, pstr, len, num, duration, can_overflow);} \
-sync_call_result FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* const pstr[], const size_t len[], size_t num, \
+typename super::sync_call_result FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* const pstr[], const size_t len[], size_t num, \
 	unsigned duration = 0, bool can_overflow = false) \
 { \
 	if (!can_overflow && !this->is_send_buffer_available()) \
-		return sync_call_result::NOT_APPLICABLE; \
+		return super::sync_call_result::NOT_APPLICABLE; \
 	in_msg_type msg(peer_addr, this->packer_->pack_msg(pstr, len, num, NATIVE)); \
 	return this->SEND_FUNNAME(std::move(msg), duration); \
 } \
-UDP_SYNC_SEND_MSG_CALL_SWITCH(FUNNAME, sync_call_result)
+UDP_SYNC_SEND_MSG_CALL_SWITCH(FUNNAME, typename super::sync_call_result)
 
 //guarantee send msg successfully even if can_overflow equal to false, success at here just means putting the msg into udp::socket_base's send buffer successfully
 //if can_overflow equal to false and the buffer is not available, will wait until it becomes available
 #define UDP_SYNC_SAFE_SEND_MSG(FUNNAME, SEND_FUNNAME) \
-sync_call_result FUNNAME(const char* const pstr[], const size_t len[], size_t num, unsigned duration = 0, bool can_overflow = false) \
+typename super::sync_call_result FUNNAME(const char* const pstr[], const size_t len[], size_t num, unsigned duration = 0, bool can_overflow = false) \
 	{return FUNNAME(peer_addr, pstr, len, num, duration, can_overflow);} \
-sync_call_result FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* const pstr[], const size_t len[], size_t num, \
+typename super::sync_call_result FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* const pstr[], const size_t len[], size_t num, \
 	unsigned duration = 0, bool can_overflow = false) \
-	{while (sync_call_result::SUCCESS != SEND_FUNNAME(peer_addr, pstr, len, num, duration, can_overflow)) \
-		SAFE_SEND_MSG_CHECK(sync_call_result::NOT_APPLICABLE) return sync_call_result::SUCCESS;} \
-UDP_SYNC_SEND_MSG_CALL_SWITCH(FUNNAME, sync_call_result)
+	{while (super::sync_call_result::SUCCESS != SEND_FUNNAME(peer_addr, pstr, len, num, duration, can_overflow)) \
+		SAFE_SEND_MSG_CHECK(super::sync_call_result::NOT_APPLICABLE) return super::sync_call_result::SUCCESS;} \
+UDP_SYNC_SEND_MSG_CALL_SWITCH(FUNNAME, typename super::sync_call_result)
 //UDP sync msg sending interface
 ///////////////////////////////////////////////////
 #endif

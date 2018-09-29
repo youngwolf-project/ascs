@@ -62,16 +62,16 @@ std::thread create_sync_recv_thread(single_client& client)
 {
 	return std::thread([&client]() {
 		typename ASCS_DEFAULT_UNPACKER::container_type msg_can;
-		sync_call_result re = sync_call_result::SUCCESS;
+		single_client::sync_call_result re = single_client::sync_call_result::SUCCESS;
 		do
 		{
 			re = client.sync_recv_msg(msg_can, 50); //ascs will not maintain messages in msg_can anymore after sync_recv_msg return, please note.
-			if (sync_call_result::SUCCESS == re)
+			if (single_client::sync_call_result::SUCCESS == re)
 			{
 				do_something_to_all(msg_can, [](single_client::out_msg_type& msg) {printf("sync recv(" ASCS_SF ") : %s\n", msg.size(), msg.data());});
 				msg_can.clear(); //sync_recv_msg just append new message(s) to msg_can, please note.
 			}
-		} while (sync_call_result::SUCCESS == re || sync_call_result::TIMEOUT == re);
+		} while (single_client::sync_call_result::SUCCESS == re || single_client::sync_call_result::TIMEOUT == re);
 		puts("sync recv end.");
 	});
 }

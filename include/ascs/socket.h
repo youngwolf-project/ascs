@@ -13,10 +13,6 @@
 #ifndef _ASCS_SOCKET_H_
 #define _ASCS_SOCKET_H_
 
-#ifdef ASCS_SYNC_RECV
-#include <condition_variable>
-#endif
-
 #include "tracked_executor.h"
 #include "timer.h"
 
@@ -105,7 +101,7 @@ protected:
 
 public:
 #ifdef ASCS_SYNC_SEND
-	typedef obj_with_begin_time_promise<InMsgType> in_msg;
+	typedef obj_with_begin_time_cv<InMsgType> in_msg;
 #else
 	typedef obj_with_begin_time<InMsgType> in_msg;
 #endif
@@ -114,6 +110,8 @@ public:
 	typedef OutContainer<out_msg> out_container_type;
 	typedef InQueue<in_msg, in_container_type> in_queue_type;
 	typedef OutQueue<out_msg, out_container_type> out_queue_type;
+
+	enum sync_call_result {SUCCESS, NOT_APPLICABLE, DUPLICATE, TIMEOUT};
 
 	uint_fast64_t id() const {return _id;}
 	bool is_equal_to(uint_fast64_t id) const {return _id == id;}
@@ -246,8 +244,8 @@ public:
 	GET_PENDING_MSG_NUM(get_pending_recv_msg_num, recv_msg_buffer)
 
 #ifdef ASCS_SYNC_SEND
-	POP_FIRST_PENDING_MSG_NOTIFY(pop_first_pending_send_msg, send_msg_buffer, in_msg)
-	POP_ALL_PENDING_MSG_NOTIFY(pop_all_pending_send_msg, send_msg_buffer, in_container_type)
+	POP_FIRST_PENDING_MSG_CV(pop_first_pending_send_msg, send_msg_buffer, in_msg)
+	POP_ALL_PENDING_MSG_CV(pop_all_pending_send_msg, send_msg_buffer, in_container_type)
 #else
 	POP_FIRST_PENDING_MSG(pop_first_pending_send_msg, send_msg_buffer, in_msg)
 	POP_ALL_PENDING_MSG(pop_all_pending_send_msg, send_msg_buffer, in_container_type)
@@ -444,12 +442,13 @@ protected:
 		}
 
 		auto unused = in_msg(std::move(msg), true);
-		auto f = unused.p->get_future();
+		auto cv = unused.cv;
 		send_msg_buffer.enqueue(std::move(unused));
 		if (!sending && is_ready())
 			send_msg();
 
-		return 0 == duration || std::future_status::ready == f.wait_for(std::chrono::milliseconds(duration)) ? f.get() : sync_call_result::TIMEOUT;
+		std::unique_lock<std::mutex> lock(sync_send_mutex);
+		return sync_send_waiting(lock, cv, duration);
 	}
 #endif
 
@@ -472,6 +471,19 @@ private:
 			return sync_call_result::TIMEOUT;
 
 		return sync_recv_status::RESPONDED == sr_status ? sync_call_result::SUCCESS : sync_call_result::NOT_APPLICABLE;
+	}
+#endif
+
+#ifdef ASCS_SYNC_SEND
+	sync_call_result sync_send_waiting(std::unique_lock<std::mutex>& lock, std::shared_ptr<condition_variable>& cv, unsigned duration)
+	{
+		auto pred = [this, &cv]() {return !this->started_ || cv->signaled;};
+		if (0 == duration)
+			cv->wait(lock, std::move(pred));
+		else if (!cv->wait_for(lock, std::chrono::milliseconds(duration), std::move(pred)))
+			return sync_call_result::TIMEOUT;
+
+		return cv->signaled ? sync_call_result::SUCCESS : sync_call_result::NOT_APPLICABLE;
 	}
 #endif
 
@@ -629,6 +641,10 @@ private:
 
 	std::atomic_flag start_atomic;
 	asio::io_context::strand strand;
+
+#ifdef ASCS_SYNC_SEND
+	std::mutex sync_send_mutex;
+#endif
 
 #ifdef ASCS_SYNC_RECV
 	enum sync_recv_status {NOT_REQUESTED, REQUESTED, RESPONDED};
