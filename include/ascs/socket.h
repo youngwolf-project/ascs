@@ -475,7 +475,7 @@ private:
 #endif
 
 #ifdef ASCS_SYNC_SEND
-	sync_call_result sync_send_waiting(std::unique_lock<std::mutex>& lock, std::shared_ptr<condition_variable>& cv, unsigned duration)
+	sync_call_result sync_send_waiting(std::unique_lock<std::mutex>& lock, const std::shared_ptr<condition_variable>& cv, unsigned duration)
 	{
 		auto pred = [this, &cv]() {return !this->started_ || cv->signaled;};
 		if (0 == duration)
