@@ -49,7 +49,7 @@ protected:
 		reading = false;
 #endif
 #ifdef ASCS_SYNC_RECV
-		status = sync_recv_status::NOT_REQUESTED;
+		sr_status = sync_recv_status::NOT_REQUESTED;
 #endif
 		started_ = false;
 		dispatching = false;
@@ -79,7 +79,7 @@ protected:
 		reading = false;
 #endif
 #ifdef ASCS_SYNC_RECV
-		status = sync_recv_status::NOT_REQUESTED;
+		sr_status = sync_recv_status::NOT_REQUESTED;
 #endif
 		dispatching = false;
 #ifndef ASCS_DISPATCH_BATCH_MSG
@@ -94,17 +94,24 @@ protected:
 #ifndef ASCS_DISPATCH_BATCH_MSG
 		last_dispatch_msg.clear();
 #endif
-		send_msg_buffer.clear();
+		in_container_type can;
+		pop_all_pending_send_msg(can);
 		recv_msg_buffer.clear();
 	}
 
 public:
+#ifdef ASCS_SYNC_SEND
+	typedef obj_with_begin_time_cv<InMsgType> in_msg;
+#else
 	typedef obj_with_begin_time<InMsgType> in_msg;
+#endif
 	typedef obj_with_begin_time<OutMsgType> out_msg;
 	typedef InContainer<in_msg> in_container_type;
 	typedef OutContainer<out_msg> out_container_type;
 	typedef InQueue<in_msg, in_container_type> in_queue_type;
 	typedef OutQueue<out_msg, out_container_type> out_queue_type;
+
+	enum sync_call_result {SUCCESS, NOT_APPLICABLE, DUPLICATE, TIMEOUT};
 
 	uint_fast64_t id() const {return _id;}
 	bool is_equal_to(uint_fast64_t id) const {return _id == id;}
@@ -138,8 +145,8 @@ public:
 	}
 
 	//interval's unit is second
-	//if macro ST_ASIO_HEARTBEAT_INTERVAL been defined and is bigger than zero, start_heartbeat will be called automatically with interval equal to ST_ASIO_HEARTBEAT_INTERVAL,
-	//and max_absence equal to ST_ASIO_HEARTBEAT_MAX_ABSENCE (so check_heartbeat will be called regularly). otherwise, you can call check_heartbeat with you own logic.
+	//if macro ASCS_HEARTBEAT_INTERVAL been defined and is bigger than zero, start_heartbeat will be called automatically with interval equal to ASCS_HEARTBEAT_INTERVAL,
+	//and max_absence equal to ASCS_HEARTBEAT_MAX_ABSENCE (so check_heartbeat will be called regularly). otherwise, you can call check_heartbeat with you own logic.
 	//return false for timeout (timeout check will only be performed on valid links), otherwise true (even the link has not established yet).
 	bool check_heartbeat(int interval, int max_absence = ASCS_HEARTBEAT_MAX_ABSENCE)
 	{
@@ -201,34 +208,31 @@ public:
 
 #ifdef ASCS_SYNC_SEND
 	//don't use the packer but insert into send buffer directly, then wait for the sending to finish.
-	bool direct_sync_send_msg(const InMsgType& msg, bool can_overflow = false)
-		{return can_overflow || is_send_buffer_available() ? do_direct_sync_send_msg(InMsgType(msg)) : false;}
-	bool direct_sync_send_msg(InMsgType&& msg, bool can_overflow = false) {return can_overflow || is_send_buffer_available() ? do_direct_sync_send_msg(std::move(msg)) : false;}
+	sync_call_result direct_sync_send_msg(const InMsgType& msg, unsigned duration = 0, bool can_overflow = false) //unit is millisecond, 0 means wait infinitely
+		{return can_overflow || is_send_buffer_available() ? do_direct_sync_send_msg(InMsgType(msg), duration) : sync_call_result::NOT_APPLICABLE;}
+	sync_call_result direct_sync_send_msg(InMsgType&& msg, unsigned duration = 0, bool can_overflow = false) //unit is millisecond, 0 means wait infinitely
+		{return can_overflow || is_send_buffer_available() ? do_direct_sync_send_msg(std::move(msg), duration) : sync_call_result::NOT_APPLICABLE;}
 #endif
 
 #ifdef ASCS_SYNC_RECV
-	bool sync_recv_msg(std::list<OutMsgType>& msg_can)
+	sync_call_result sync_recv_msg(std::list<OutMsgType>& msg_can, unsigned duration = 0) //unit is millisecond, 0 means wait infinitely
 	{
 		if (stopped())
-			return false;
+			return sync_call_result::NOT_APPLICABLE;
 
 		std::unique_lock<std::mutex> lock(sync_recv_mutex);
-		if (sync_recv_status::NOT_REQUESTED != status)
-			return false;
+		if (sync_recv_status::NOT_REQUESTED != sr_status)
+			return sync_call_result::DUPLICATE;
 
 #ifdef ASCS_PASSIVE_RECV
 		recv_msg();
 #endif
-		status = sync_recv_status::REQUESTED;
-		sync_recv_cv.wait(lock);
+		sr_status = sync_recv_status::REQUESTED;
+		auto re = sync_recv_waiting(lock, duration);
+		if (sync_call_result::SUCCESS == re)
+			msg_can.splice(std::end(msg_can), temp_msg_can);
 
-		auto re = sync_recv_status::RESPONDED == status;
-		status = sync_recv_status::NOT_REQUESTED;
-		if (re)
-		{
-			msg_can.clear();
-			msg_can.swap(temp_msg_can);
-		}
+		sr_status = sync_recv_status::NOT_REQUESTED;
 		sync_recv_cv.notify_one();
 
 		return re;
@@ -239,11 +243,15 @@ public:
 	GET_PENDING_MSG_NUM(get_pending_send_msg_num, send_msg_buffer)
 	GET_PENDING_MSG_NUM(get_pending_recv_msg_num, recv_msg_buffer)
 
+#ifdef ASCS_SYNC_SEND
+	POP_FIRST_PENDING_MSG_CV(pop_first_pending_send_msg, send_msg_buffer, in_msg)
+	POP_ALL_PENDING_MSG_CV(pop_all_pending_send_msg, send_msg_buffer, in_container_type)
+#else
 	POP_FIRST_PENDING_MSG(pop_first_pending_send_msg, send_msg_buffer, in_msg)
-	POP_FIRST_PENDING_MSG(pop_first_pending_recv_msg, recv_msg_buffer, out_msg)
-
-	//clear all pending msgs
 	POP_ALL_PENDING_MSG(pop_all_pending_send_msg, send_msg_buffer, in_container_type)
+#endif
+
+	POP_FIRST_PENDING_MSG(pop_first_pending_recv_msg, recv_msg_buffer, out_msg)
 	POP_ALL_PENDING_MSG(pop_all_pending_recv_msg, recv_msg_buffer, out_container_type)
 
 protected:
@@ -272,18 +280,32 @@ protected:
 	virtual void on_close() {unified_out::info_out("on_close()");}
 	virtual void after_close() {} //a good case for using this is to reconnect to the server, please refer to client_socket_base.
 
-	//return true (or > 0) means msg been handled, false (or 0) means msg cannot be handled right now, and socket will re-dispatch it asynchronously
+#ifdef ASCS_SYNC_DISPATCH
+	//return the number of handled msg, if some msg left behind, socket will re-dispatch them asynchronously
 	//notice: using inconstant is for the convenience of swapping
+	virtual size_t on_msg(std::list<OutMsgType>& msg_can)
+	{
+		//it's always thread safe in this virtual function, because it blocks message receiving
+		ascs::do_something_to_all(msg_can, [](OutMsgType& msg) {unified_out::debug_out("recv(" ASCS_SF "): %s", msg.size(), msg.data());});
+		auto re = msg_can.size();
+		msg_can.clear(); //have handled all messages
+
+		return re;
+	}
+#endif
 #ifdef ASCS_DISPATCH_BATCH_MSG
-	virtual size_t on_msg_handle(out_queue_type& can)
+	//return the number of handled msg, if some msg left behind, socket will re-dispatch them asynchronously
+	//notice: using inconstant is for the convenience of swapping
+	virtual size_t on_msg_handle(out_queue_type& msg_can)
 	{
 		out_container_type tmp_can;
-		can.swap(tmp_can);
+		msg_can.swap(tmp_can); //must be thread safe
 
 		ascs::do_something_to_all(tmp_can, [](OutMsgType& msg) {unified_out::debug_out("recv(" ASCS_SF "): %s", msg.size(), msg.data());});
 		return tmp_can.size();
 	}
 #else
+	//return true means msg been handled, false means msg cannot be handled right now, and socket will re-dispatch it asynchronously
 	virtual bool on_msg_handle(OutMsgType& msg) {unified_out::debug_out("recv(" ASCS_SF "): %s", msg.size(), msg.data()); return true;}
 #endif
 
@@ -309,6 +331,9 @@ protected:
 			return false;
 
 		started_ = false;
+#ifdef ASCS_SYNC_RECV
+		sync_recv_cv.notify_all();
+#endif
 		stop_all_timer();
 
 		if (lowest_layer().is_open())
@@ -321,9 +346,6 @@ protected:
 
 		if (stopped())
 		{
-#ifdef ASCS_SYNC_RECV
-			sync_recv_cv.notify_one();
-#endif
 			on_close();
 			after_close();
 		}
@@ -338,36 +360,47 @@ protected:
 
 	bool handle_msg()
 	{
-#ifdef ASCS_PASSIVE_RECV
-		if (temp_msg_can.empty())
-			temp_msg_can.emplace_back(); //empty message, makes users always having the chance to call recv_msg().
-#endif
-
 #ifdef ASCS_SYNC_RECV
 		std::unique_lock<std::mutex> lock(sync_recv_mutex);
-		if (sync_recv_status::REQUESTED == status)
+		if (sync_recv_status::REQUESTED == sr_status)
 		{
-			status = sync_recv_status::RESPONDED;
+			sr_status = sync_recv_status::RESPONDED;
 			sync_recv_cv.notify_one();
 
-			sync_recv_cv.wait(lock);
+			sync_recv_cv.wait(lock, [this]() {return !this->started_ || sync_recv_status::RESPONDED != this->sr_status;});
+			if (sync_recv_status::RESPONDED == sr_status) //eliminate race condition on temp_msg_can with sync_recv_msg
+				return false;
+			else if (temp_msg_can.empty())
+				return handled_msg(); //sync_recv_msg() has consumed temp_msg_can
 		}
 		lock.unlock();
 #endif
 		auto msg_num = temp_msg_can.size();
+		stat.recv_msg_sum += msg_num;
+
+#ifdef ASCS_SYNC_DISPATCH
+#ifndef ASCS_PASSIVE_RECV
 		if (msg_num > 0)
 		{
-#ifndef ASCS_PASSIVE_RECV
-			stat.recv_msg_sum += msg_num;
 #endif
+			on_msg(temp_msg_can);
+			msg_num = temp_msg_can.size();
+#ifndef ASCS_PASSIVE_RECV
+		}
+#endif
+#elif defined(ASCS_PASSIVE_RECV)
+		if (0 == msg_num)
+		{
+			msg_num = 1;
+			temp_msg_can.emplace_back(); //empty message, let you always having the chance to call recv_msg()
+		}
+#endif
+		if (msg_num > 0)
+		{
 			std::list<out_msg> temp_buffer(msg_num);
 			auto op_iter = temp_buffer.begin();
 			for (auto iter = temp_msg_can.begin(); iter != temp_msg_can.end(); ++op_iter, ++iter)
 			{
-#ifdef ASCS_PASSIVE_RECV
-				if (!iter->empty())
-					++stat.recv_msg_sum;
-#endif
 				stat.recv_byte_sum += iter->size();
 				op_iter->swap(*iter);
 			}
@@ -398,14 +431,14 @@ protected:
 	}
 
 #ifdef ASCS_SYNC_SEND
-	bool do_direct_sync_send_msg(InMsgType&& msg)
+	sync_call_result do_direct_sync_send_msg(InMsgType&& msg, unsigned duration = 0)
 	{
 		if (stopped())
-			return false;
+			return sync_call_result::NOT_APPLICABLE;
 		else if (msg.empty())
 		{
 			unified_out::error_out("found an empty message, please check your packer.");
-			return false;
+			return sync_call_result::SUCCESS;
 		}
 
 		auto unused = in_msg(std::move(msg), true);
@@ -415,9 +448,7 @@ protected:
 			send_msg();
 
 		std::unique_lock<std::mutex> lock(sync_send_mutex);
-		cv->wait(lock);
-
-		return true;
+		return sync_send_waiting(lock, cv, duration);
 	}
 #endif
 
@@ -429,6 +460,32 @@ private:
 	//it should only be used by object_pool when reusing or creating new socket.
 	template<typename Object> friend class object_pool;
 	void id(uint_fast64_t id) {_id = id;}
+
+#ifdef ASCS_SYNC_RECV
+	sync_call_result sync_recv_waiting(std::unique_lock<std::mutex>& lock, unsigned duration)
+	{
+		auto pred = [this]() {return !this->started_ || sync_recv_status::REQUESTED != this->sr_status;};
+		if (0 == duration)
+			sync_recv_cv.wait(lock, std::move(pred));
+		else if (!sync_recv_cv.wait_for(lock, std::chrono::milliseconds(duration), std::move(pred)))
+			return sync_call_result::TIMEOUT;
+
+		return sync_recv_status::RESPONDED == sr_status ? sync_call_result::SUCCESS : sync_call_result::NOT_APPLICABLE;
+	}
+#endif
+
+#ifdef ASCS_SYNC_SEND
+	sync_call_result sync_send_waiting(std::unique_lock<std::mutex>& lock, const std::shared_ptr<condition_variable>& cv, unsigned duration)
+	{
+		auto pred = [this, &cv]() {return !this->started_ || cv->signaled;};
+		if (0 == duration)
+			cv->wait(lock, std::move(pred));
+		else if (!cv->wait_for(lock, std::chrono::milliseconds(duration), std::move(pred)))
+			return sync_call_result::TIMEOUT;
+
+		return cv->signaled ? sync_call_result::SUCCESS : sync_call_result::NOT_APPLICABLE;
+	}
+#endif
 
 	bool check_receiving(bool raise_recv)
 	{
@@ -473,14 +530,22 @@ private:
 		if ((dispatching = !recv_msg_buffer.empty()))
 		{
 			auto begin_time = statistic::now();
-			stat.dispatch_dealy_sum += begin_time - recv_msg_buffer.front().begin_time;
+#ifdef ASCS_FULL_STATISTIC
+			recv_msg_buffer.lock();
+			ascs::do_something_to_all(recv_msg_buffer, [&, this](out_msg& msg) {this->stat.dispatch_dealy_sum += begin_time - msg.begin_time;});
+			recv_msg_buffer.unlock();
+#endif
 			auto re = on_msg_handle(recv_msg_buffer);
 			auto end_time = statistic::now();
 			stat.handle_time_sum += end_time - begin_time;
 
 			if (0 == re) //dispatch failed, re-dispatch
 			{
-				recv_msg_buffer.front().restart(end_time);
+#ifdef ASCS_FULL_STATISTIC
+				recv_msg_buffer.lock();
+				ascs::do_something_to_all(recv_msg_buffer, [&end_time](out_msg& msg) {msg.restart(end_time);});
+				recv_msg_buffer.unlock();
+#endif
 				set_timer(TIMER_DISPATCH_MSG, msg_handling_interval_, [this](tid id)->bool {return this->timer_handler(TIMER_DISPATCH_MSG);}); //hold dispatching
 			}
 			else
@@ -535,9 +600,6 @@ private:
 				lowest_layer().close(ec);
 			}
 			change_timer_status(TIMER_DELAY_CLOSE, timer_info::TIMER_CANCELED);
-#ifdef ASCS_SYNC_RECV
-			sync_recv_cv.notify_one();
-#endif
 			on_close();
 			after_close();
 			set_async_calling(false);
@@ -586,7 +648,7 @@ private:
 
 #ifdef ASCS_SYNC_RECV
 	enum sync_recv_status {NOT_REQUESTED, REQUESTED, RESPONDED};
-	volatile sync_recv_status status;
+	sync_recv_status sr_status;
 
 	std::mutex sync_recv_mutex;
 	std::condition_variable sync_recv_cv;

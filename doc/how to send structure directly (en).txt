@@ -26,8 +26,8 @@ public:
 	native_msg msg;
 };
 
-3. You must have realized that class message doesn't support swap operation, this will introduce memory replication (so we will fail to
- compile ascs, it's by design), we can use ascs::auto_buffer to wrap message, then all problems gone:
+3. You must have realized that class message doesn't support swap operation, this will introduce memory replication (and you will fail to
+ compile it, it's by design), we can use ascs::auto_buffer to wrap message, then all problems gone:
 ascs::auto_buffer<messge> really_used_msg;
 
 4. Should we implement a packer?
@@ -39,7 +39,7 @@ Then, when we need to send messages:
 ascs::auto_buffer<message> msg(new message);
 strncmp(msg->msg.cc, "abc", sizeof(msg->msg.cc));
 ...; //other initializations
-client.direct_send_msg(msg); //cannot call functions whoes name starts with 'send_', because they need packers, here we used dumm_packer
+client.direct_send_msg(msg); //cannot call functions whoes name starts with 'send_', because they need packers, here we used dummy_packer
 
 5. unpacker is necessary
 Because unpacker also provide buffers during network data reading:

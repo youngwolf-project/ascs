@@ -146,8 +146,10 @@ protected:
 	}
 
 protected:
-	asio::ip::tcp::endpoint server_addr;
 	bool need_reconnect;
+
+private:
+	asio::ip::tcp::endpoint server_addr;
 };
 
 }} //namespace

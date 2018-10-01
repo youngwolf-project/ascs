@@ -37,7 +37,6 @@ template<typename Executor>
 class timer : public Executor
 {
 public:
-	typedef std::chrono::milliseconds milliseconds;
 #ifdef ASCS_USE_STEADY_TIMER
 	typedef asio::steady_timer timer_type;
 #else
@@ -130,9 +129,9 @@ protected:
 
 		ti.status = timer_info::TIMER_STARTED;
 #if ASIO_VERSION >= 101100
-		ti.timer.expires_after(milliseconds(interval_ms));
+		ti.timer.expires_after(std::chrono::milliseconds(interval_ms));
 #else
-		ti.timer.expires_from_now(milliseconds(interval_ms));
+		ti.timer.expires_from_now(std::chrono::milliseconds(interval_ms));
 #endif
 
 		//if timer already started, this will cancel it first

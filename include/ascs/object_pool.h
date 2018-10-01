@@ -300,7 +300,7 @@ public:
 	template<typename _Predicate> void do_something_to_one(const _Predicate& __pred)
 		{std::lock_guard<std::mutex> lock(object_can_mutex); for (auto iter = std::begin(object_can); iter != std::end(object_can); ++iter) if (__pred(iter->second)) break;}
 
-protected:
+private:
 	std::atomic_uint_fast64_t cur_id;
 
 	container_type object_can;

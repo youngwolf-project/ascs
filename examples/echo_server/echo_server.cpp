@@ -5,6 +5,7 @@
 #define ASCS_SERVER_PORT		9527
 #define ASCS_REUSE_OBJECT //use objects pool
 //#define ASCS_FREE_OBJECT_INTERVAL	60 //it's useless if ASCS_REUSE_OBJECT macro been defined
+//#define ASCS_SYNC_DISPATCH //do not open this feature, see below for more details
 #define ASCS_DISPATCH_BATCH_MSG
 #define ASCS_ENHANCED_STABILITY
 //#define ASCS_FULL_STATISTIC //full statistic will slightly impact efficiency
@@ -101,8 +102,30 @@ protected:
 	}
 
 	//msg handling: send the original msg back(echo server)
+/*
+#ifdef ASCS_SYNC_DISPATCH //do not open this feature
+	//do not hold msg_can for further using, return from on_msg as quickly as possible
+	virtual size_t on_msg(std::list<out_msg_type>& msg_can)
+	{
+		if (!is_send_buffer_available())
+			return 0; //congestion control
+		//here if we cannot handle all messages in msg_can, do not use sync message dispatching except we can bear message disordering,
+		//this is because on_msg_handle can be invoked concurrently with the next on_msg (new messages arrived) and then disorder messages.
+		//and do not try to handle all messages here (just for echo_server's business logic) because:
+		//1. we can not use safe_send_msg as i said many times, we should not block service threads.
+		//2. if we use true can_overflow to call send_msg, then buffer usage will be out of control, we should not take this risk.
+
+		ascs::do_something_to_all(msg_can, [this](out_msg_type& msg) {this->send_msg(msg, true);});
+		auto re = msg_can.size();
+		msg_can.clear();
+
+		return re;
+	}
+#endif
+*/
 #ifdef ASCS_DISPATCH_BATCH_MSG
-	virtual size_t on_msg_handle(out_queue_type& can)
+	//do not hold msg_can for further using, access msg_can and return from on_msg_handle as quickly as possible
+	virtual size_t on_msg_handle(out_queue_type& msg_can)
 	{
 		if (!is_send_buffer_available())
 			return 0;
@@ -111,19 +134,19 @@ protected:
 		//this manner requires the container used by the message queue can be spliced (such as std::list, but not std::vector,
 		// ascs doesn't require this characteristic).
 		//these code can be compiled because we used list as the container of the message queue, see macro ASCS_OUTPUT_CONTAINER for more details
-		//to consume all of messages in can, see echo_client.
-		can.lock();
-		auto begin_iter = std::begin(can);
+		//to consume all messages in msg_can, see echo_client
+		msg_can.lock();
+		auto begin_iter = std::begin(msg_can);
 		//don't be too greedy, here is in a service thread, we should not block this thread for a long time
-		auto end_iter = can.size() > 10 ? std::next(begin_iter, 10) : std::end(can);
-		tmp_can.splice(std::end(tmp_can), can, begin_iter, end_iter);
-		can.unlock();
+		auto end_iter = msg_can.size() > 10 ? std::next(begin_iter, 10) : std::end(msg_can);
+		tmp_can.splice(std::end(tmp_can), msg_can, begin_iter, end_iter); //the rest messages will be dispatched via the next on_msg_handle
+		msg_can.unlock();
 
 		ascs::do_something_to_all(tmp_can, [this](out_msg_type& msg) {this->send_msg(msg, true);});
 		return tmp_can.size();
 	}
 #else
-	virtual bool on_msg_handle(out_msg_type& msg) {return send_msg(msg, false);}
+	virtual bool on_msg_handle(out_msg_type& msg) {return send_msg(msg);}
 #endif
 	//msg handling end
 };

@@ -27,15 +27,16 @@ std::thread create_sync_recv_thread(single_service& service)
 {
 	return std::thread([&service]() {
 		std::list<single_service::out_msg_type> msg_can;
-		while (service.sync_recv_msg(msg_can))
+		single_service::sync_call_result re = single_service::sync_call_result::SUCCESS;
+		do
 		{
-#ifdef ASCS_PASSIVE_RECV
-			do_something_to_all(msg_can, [](single_service::out_msg_type& msg) {if (!msg.empty()) printf("sync recv(" ASCS_SF ") : %s\n", msg.size(), msg.data());});
-#else
-			do_something_to_all(msg_can, [](single_service::out_msg_type& msg) {printf("sync recv(" ASCS_SF ") : %s\n", msg.size(), msg.data());});
-#endif
-			msg_can.clear();
-		}
+			re = service.sync_recv_msg(msg_can, 50); //ascs will not maintain messages in msg_can anymore after sync_recv_msg return, please note.
+			if (single_service::sync_call_result::SUCCESS == re)
+			{
+				do_something_to_all(msg_can, [](single_service::out_msg_type& msg) {printf("sync recv(" ASCS_SF ") : %s\n", msg.size(), msg.data());});
+				msg_can.clear(); //sync_recv_msg just append new message(s) to msg_can, please note.
+			}
+		} while (single_service::sync_call_result::SUCCESS == re || single_service::sync_call_result::TIMEOUT == re);
 		puts("sync recv end.");
 	});
 }
@@ -83,7 +84,7 @@ int main(int argc, const char* argv[])
 			t = create_sync_recv_thread(service);
 		}
 		else
-			service.sync_safe_send_native_msg(str, false); //to send to different endpoints, use overloads that take a const asio::ip::udp::endpoint& parameter
+			service.sync_safe_send_native_msg(str); //to send to different endpoints, use overloads that take a const asio::ip::udp::endpoint& parameter
 	}
 
 	return 0;

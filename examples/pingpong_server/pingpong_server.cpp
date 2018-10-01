@@ -5,6 +5,7 @@
 #define ASCS_SERVER_PORT		9527
 #define ASCS_REUSE_OBJECT //use objects pool
 #define ASCS_DELAY_CLOSE		5 //define this to avoid hooks for async call (and slightly improve efficiency)
+#define ASCS_SYNC_DISPATCH
 #define ASCS_MSG_BUFFER_SIZE	65536
 #define ASCS_INPUT_QUEUE non_lock_queue
 #define ASCS_INPUT_CONTAINER list
@@ -36,8 +37,19 @@ public:
 	echo_socket(i_server& server_) : server_socket(server_) {}
 
 protected:
-	//msg handling: send the original msg back(echo server)
-	virtual bool on_msg_handle(out_msg_type& msg) {return direct_send_msg(std::move(msg));}
+	//msg handling: send the original msg back (echo server), must define macro ASCS_SYNC_DISPATCH
+	//do not hold msg_can for further using, access msg_can and return from on_msg as quickly as possible
+	virtual size_t on_msg(std::list<out_msg_type>& msg_can)
+	{
+		ascs::do_something_to_all(msg_can, [this](out_msg_type& msg) {this->direct_send_msg(std::move(msg));});
+		auto re = msg_can.size();
+		msg_can.clear(); //if we left behind some messages in msg_can, they will be dispatched via on_msg_handle asynchronously, which means it's
+		//possible that on_msg_handle be invoked concurrently with the next on_msg (new messages arrived) and then disorder messages.
+		//here we always consumed all messages, so we can use sync message dispatching, otherwise, we should not use sync message dispatching
+		//except we can bear message disordering.
+
+		return re;
+	}
 	//msg handling end
 };
 

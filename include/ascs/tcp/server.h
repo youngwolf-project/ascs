@@ -85,6 +85,7 @@ public:
 
 		return false;
 	}
+	virtual std::shared_ptr<tracked_executor> find_socket(uint_fast64_t id) {return this->find(id);}
 
 	///////////////////////////////////////////////////
 	//msg sending interface
@@ -180,7 +181,7 @@ protected:
 			start_next_accept();
 	}
 
-protected:
+private:
 	asio::ip::tcp::endpoint server_addr;
 	asio::ip::tcp::acceptor acceptor;
 };

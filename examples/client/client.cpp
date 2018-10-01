@@ -6,11 +6,11 @@
 #define ASCS_DELAY_CLOSE	1 //this demo not used object pool and doesn't need life cycle management,
 							  //so, define this to avoid hooks for async call (and slightly improve efficiency),
 							  //any value which is bigger than zero is okay.
+#define ASCS_SYNC_SEND
 #define ASCS_SYNC_RECV
 //#define ASCS_PASSIVE_RECV //because we not defined this macro, this demo will use mix model to receive messages, which means
 							//some messages will be dispatched via on_msg_handle(), some messages will be returned via sync_recv_msg(),
 							//if the server send messages quickly enough, you will see them cross together.
-#define ASCS_DISPATCH_BATCH_MSG
 #define ASCS_ALIGNED_TIMER
 #define ASCS_CUSTOM_LOG
 #define ASCS_DEFAULT_UNPACKER	non_copy_unpacker
@@ -62,15 +62,16 @@ std::thread create_sync_recv_thread(single_client& client)
 {
 	return std::thread([&client]() {
 		typename ASCS_DEFAULT_UNPACKER::container_type msg_can;
-		while (client.sync_recv_msg(msg_can))
+		single_client::sync_call_result re = single_client::sync_call_result::SUCCESS;
+		do
 		{
-#ifdef ASCS_PASSIVE_RECV
-			do_something_to_all(msg_can, [](single_service::out_msg_type& msg) {if (!msg.empty()) printf("sync recv(" ASCS_SF ") : %s\n", msg.size(), msg.data());});
-#else
-			do_something_to_all(msg_can, [](single_client::out_msg_type& msg) {printf("sync recv(" ASCS_SF ") : %s\n", msg.size(), msg.data());});
-#endif
-			msg_can.clear();
-		}
+			re = client.sync_recv_msg(msg_can, 50); //ascs will not maintain messages in msg_can anymore after sync_recv_msg return, please note.
+			if (single_client::sync_call_result::SUCCESS == re)
+			{
+				do_something_to_all(msg_can, [](single_client::out_msg_type& msg) {printf("sync recv(" ASCS_SF ") : %s\n", msg.size(), msg.data());});
+				msg_can.clear(); //sync_recv_msg just append new message(s) to msg_can, please note.
+			}
+		} while (single_client::sync_call_result::SUCCESS == re || single_client::sync_call_result::TIMEOUT == re);
 		puts("sync recv end.");
 	});
 }
@@ -96,7 +97,6 @@ int main(int argc, const char* argv[])
 		client.set_server_addr(ASCS_SERVER_PORT + 100, ASCS_SERVER_IP);
 
 	sp.start_service();
-	std::this_thread::sleep_for(std::chrono::milliseconds(500)); //to be more efficiently, start the worker thread in tcp::socket_base::on_connect().
 	auto t = create_sync_recv_thread(client);
 	while(sp.is_running())
 	{
@@ -118,7 +118,8 @@ int main(int argc, const char* argv[])
 		else if (RECONNECT == str)
 			client.graceful_shutdown(true);
 		else
-			client.safe_send_msg(str, false);
+			client.sync_safe_send_msg(str, 100);
+			//client.safe_send_msg(str);
 	}
 
 	return 0;

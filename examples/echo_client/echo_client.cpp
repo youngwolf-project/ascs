@@ -6,6 +6,7 @@
 //#define ASCS_REUSE_OBJECT //use objects pool
 #define ASCS_DELAY_CLOSE	5 //define this to avoid hooks for async call (and slightly improve efficiency)
 //#define ASCS_CLEAR_OBJECT_INTERVAL 1
+#define ASCS_SYNC_DISPATCH
 #define ASCS_DISPATCH_BATCH_MSG
 //#define ASCS_WANT_MSG_SEND_NOTIFY
 #define ASCS_FULL_STATISTIC //full statistic will slightly impact efficiency
@@ -112,12 +113,27 @@ public:
 
 protected:
 	//msg handling
-#ifdef ASCS_DISPATCH_BATCH_MSG
-	virtual size_t on_msg_handle(out_queue_type& can)
+#ifdef ASCS_SYNC_DISPATCH
+	//do not hold msg_can for further using, return from on_msg as quickly as possible
+	virtual size_t on_msg(std::list<out_msg_type>& msg_can)
 	{
-		//to consume part of messages in can, see echo_server.
+		ascs::do_something_to_all(msg_can, [this](out_msg_type& msg) {this->handle_msg(msg);});
+		auto re = msg_can.size();
+		msg_can.clear(); //if we left behind some messages in msg_can, they will be dispatched via on_msg_handle asynchronously, which means it's
+		//possible that on_msg_handle be invoked concurrently with the next on_msg (new messages arrived) and then disorder messages.
+		//here we always consumed all messages, so we can use sync message dispatching, otherwise, we should not use sync message dispatching
+		//except we can bear message disordering.
+
+		return re;
+	}
+#endif
+#ifdef ASCS_DISPATCH_BATCH_MSG
+	//do not hold msg_can for further using, access msg_can and return from on_msg_handle as quickly as possible
+	virtual size_t on_msg_handle(out_queue_type& msg_can)
+	{
+		//to consume a part of the messages in msg_can, see echo_server.
 		out_container_type tmp_can;
-		can.swap(tmp_can);
+		msg_can.swap(tmp_can); //must be thread safe
 
 		ascs::do_something_to_all(tmp_can, [this](out_msg_type& msg) {this->handle_msg(msg);});
 		return tmp_can.size();

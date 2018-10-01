@@ -382,7 +382,7 @@
  * 2018.8.21	version 1.3.2
  *
  * SPECIAL ATTENTION (incompatible with old editions):
- * If macro ASCS_PASSIVE_RECV been defined, you may receive empty messages in on_msg_handle() and sync_recv_msg(), this makes you always having
+ * If macro ASCS_PASSIVE_RECV been defined, you may receive empty messages in on_msg() or on_msg_handle() and sync_recv_msg(), this makes you always having
  *  the chance to call recv_msg().
  * i_unpacker has been moved from namespace ascs::tcp and ascs::udp to namespace ascs, and the signature of ascs::udp::i_unpacker::parse_msg
  *  has been changed to obey ascs::tcp::i_unpacker::parse_msg.
@@ -408,6 +408,37 @@
  *
  * REPLACEMENTS:
  *
+ * ===============================================================
+ * 2018.10.1	version 1.3.3
+ *
+ * SPECIAL ATTENTION (incompatible with old editions):
+ * With sync message sending, if you rewrite virtual function on_close, you must also call super class' on_close.
+ *
+ * HIGHLIGHT:
+ * Support sync message dispatching, it's like previous on_msg() callback but with a message container instead of a message (and many other
+ *  differences, see macro ASCS_SYNC_DISPATCH for more details), and we also name it on_msg().
+ * Support timed waiting when doing sync message sending and receiving.
+ *
+ * FIX:
+ * Fix spurious awakenings when doing sync message sending and receiving.
+ * Fix statistics for batch message dispatching.
+ *
+ * ENHANCEMENTS:
+ * Add virtual function find_socket to interface i_server.
+ * Support timed waiting when doing sync message sending.
+ *  please note that after timeout, the sending can succeed in the future because ascs uses async sending to simulate sync sending,
+ *  and on_msg_send (if macro ASCS_WANT_MSG_SEND_NOTIFY been defined) will not be affected, which means it can be called in the future too. 
+ * Support timed waiting when doing sync message receiving.
+ *  please note that after timeout, the receiving can succeed in the future because ascs uses async receiving to simulate sync receiving,
+ *  and messages will be dispatched via on_msg (if macro ASCS_SYNC_DISPATCH been defined) and / or on_msg_handle.
+ *
+ * DELETION:
+ *
+ * REFACTORING:
+ * Hide member variables as many as possible for developers.
+ *
+ * REPLACEMENTS:
+ *
  */
 
 #ifndef _ASCS_CONFIG_H_
@@ -417,8 +448,8 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#define ASCS_VER		10302	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.3.2"
+#define ASCS_VER		10303	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.3.3"
 
 //asio and compiler check
 #ifdef _MSC_VER
@@ -554,7 +585,7 @@ static_assert(ASCS_MAX_OBJECT_NUM > 0, "object capacity must be bigger than zero
 #endif
 
 //IO thread number
-//listening, msg sending and receiving, msg handling (on_msg_handle()), all timers (include user timers) and other asynchronous calls (from executor)
+//listening, msg sending and receiving, msg handling (on_msg() and on_msg_handle()), all timers (include user timers) and other asynchronous calls (from executor)
 //keep big enough, no empirical value I can suggest, you must try to find it out in your own environment
 #ifndef ASCS_SERVICE_THREAD_NUM
 #define ASCS_SERVICE_THREAD_NUM	8
@@ -652,7 +683,7 @@ static_assert(ASCS_HEARTBEAT_MAX_ABSENCE > 0, "heartbeat absence must be bigger 
 
 //#define ASCS_REUSE_SSL_STREAM
 //if you need ssl::client_socket_base to be able to reconnect the server, or to open object pool in ssl::object_pool, you must define this macro.
-//I tried many ways, onle one way can make asio::ssl::stream reusable, which is:
+//I tried many ways, only one way can make asio::ssl::stream reusable, which is:
 // don't call any shutdown functions of asio::ssl::stream, just call asio::ip::tcp::socket's shutdown function,
 // this seems not a normal procedure, but it works, I believe that asio's defect caused this problem.
 
@@ -690,7 +721,7 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 //#define ASCS_DISPATCH_BATCH_MSG
 //all messages will be dispatched via on_handle_msg with a variable-length container, this will change the signature of function on_msg_handle,
 //it's very useful if you want to re-dispatch message in your own logic or with very simple message handling (such as echo server).
-//it's your responsibility to remove handled messages from the container (can be part of them).
+//it's your responsibility to remove handled messages from the container (can be a part of them).
 
 //#define ASCS_ALIGNED_TIMER
 //for example, start a timer at xx:xx:xx, interval is 10 seconds, the callback will be called at (xx:xx:xx + 10), and suppose that the callback
@@ -698,7 +729,7 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 //if you don't define this macro, the next callback will be called at (xx:xx:xx + 21), plase note.
 
 //#define ASCS_SYNC_SEND
-//#ifndef ASCS_SYNC_RECV
+//#define ASCS_SYNC_RECV
 //define these macro to gain additional series of sync message sending and receiving, they are:
 // sync_send_msg
 // sync_send_native_msg
@@ -706,14 +737,25 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 // sync_safe_send_native_msg
 // sync_recv_msg
 //please note that:
-// this feature will slightly impact efficiency even if you always use async message sending and receiving, so only open this feature
-//  when realy needed, and DO NOT call pop_first_pending_send_msg and pop_all_pending_send_msg during sync message sending.
+// this feature will slightly impact efficiency even if you always use async message sending and receiving, so only open this feature when realy needed.
 // we must avoid to do sync message sending and receiving in service threads.
 // if prior sync_recv_msg() not returned, the second sync_recv_msg() will return false immediately.
 // with macro ASCS_PASSIVE_RECV, in sync_recv_msg(), recv_msg() will be automatically called.
+// after returned from sync_recv_msg(), ascs will not maintain those messages that have been output.
 
 //Sync message sending and receiving are not tracked by tracked_executor, please note.
 //No matter you're doing sync message sending or async message sending, you can do sync message receiving or async message receiving concurrently.
+
+//#define ASCS_SYNC_DISPATCH
+//with this macro, virtual size_t on_msg(std::list<OutMsgType>& msg_can) will be provided, you can rewrite it and handle all or a part of the
+// messages like virtual function on_msg_handle (with macro ASCS_DISPATCH_BATCH_MSG), if your logic is simple enough (like echo or pingpong test),
+// this feature is recommended because it can slightly improve efficiency.
+//now we have three ways to handle messages (sync_recv_msg, on_msg and on_msg_handle), the invocation order is the same as listed, if messages been successfully
+// dispatched to sync_recv_msg, then the second two will not be called, otherwise messages will be dispatched to on_msg, if on_msg only handled a part of (include
+// zero) the messages, then on_msg_handle will continue to dispatch the rest of them asynchronously, this will disorder messages because on_msg_handle and the next
+// on_msg (new messages arrived) can be invoked concurrently, please note. as before, on_msg will block the next receiving but only on current socket.
+//if you cannot handle all of the messages in on_msg (like echo_server), you should not use sync message dispatching except you can bear message disordering.
+
 //configurations
 
 #endif /* _ASCS_CONFIG_H_ */

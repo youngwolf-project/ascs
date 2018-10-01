@@ -165,8 +165,12 @@ private:
 // enqueue(const T& item)
 // enqueue(T&& item)
 // try_dequeue(T& item)
-template<typename T, typename Container>
-class lock_free_queue : public Container, public dummy_lockable //thread safety depends on Container
+template<typename T, typename Container> //thread safety depends on Container
+#ifdef ASCS_DISPATCH_BATCH_MSG
+class lock_free_queue : public Container, public dummy_lockable
+#else
+class lock_free_queue : protected Container, public dummy_lockable
+#endif
 {
 public:
 	typedef T data_type;
@@ -199,8 +203,13 @@ public:
 // splice(Container::const_iterator, std::list<T>&), after this, std::list<T> must be empty
 // front
 // pop_front
+// end
 template<typename T, typename Container, typename Lockable> //thread safety depends on Container or Lockable
+#ifdef ASCS_DISPATCH_BATCH_MSG
 class queue : public Container, public Lockable
+#else
+class queue : protected Container, public Lockable
+#endif
 {
 public:
 	typedef T data_type;
@@ -225,7 +234,7 @@ public:
 		{try {this->emplace_back(item);} catch (const std::exception& e) {unified_out::error_out("cannot hold more objects (%s)", e.what()); return false;} return true;}
 	bool enqueue_(T&& item)
 		{try {this->emplace_back(std::move(item));} catch (const std::exception& e) {unified_out::error_out("cannot hold more objects (%s)", e.what()); return false;} return true;}
-	void move_items_in_(std::list<T>& can) {this->splice(std::end(*this), can);}
+	void move_items_in_(std::list<T>& can) {this->splice(this->end(), can);}
 	bool try_dequeue_(T& item) {if (this->empty()) return false; item.swap(this->front()); this->pop_front(); return true;}
 };
 

@@ -5,6 +5,7 @@
 #define ASCS_SERVER_PORT	9527
 #define ASCS_REUSE_OBJECT //use objects pool
 #define ASCS_DELAY_CLOSE	5 //define this to avoid hooks for async call (and slightly improve efficiency)
+#define ASCS_SYNC_DISPATCH
 //#define ASCS_WANT_MSG_SEND_NOTIFY
 #define ASCS_MSG_BUFFER_SIZE 65536
 #define ASCS_INPUT_QUEUE non_lock_queue //we will never operate sending buffer concurrently, so need no locks
@@ -50,8 +51,20 @@ public:
 protected:
 	virtual void on_connect() {asio::ip::tcp::no_delay option(true); lowest_layer().set_option(option); client_socket::on_connect();}
 
-	//msg handling
-	virtual bool on_msg_handle(out_msg_type& msg) {handle_msg(msg); return true;}
+	//msg handling, must define macro ASCS_SYNC_DISPATCH
+	//do not hold msg_can for further using, access msg_can and return from on_msg as quickly as possible
+	virtual size_t on_msg(std::list<out_msg_type>& msg_can)
+	{
+		ascs::do_something_to_all(msg_can, [this](out_msg_type& msg) {this->handle_msg(msg);});
+		auto re = msg_can.size();
+		msg_can.clear(); //if we left behind some messages in msg_can, they will be dispatched via on_msg_handle asynchronously, which means it's
+		//possible that on_msg_handle be invoked concurrently with the next on_msg (new messages arrived) and then disorder messages.
+		//here we always consumed all messages, so we can use sync message dispatching, otherwise, we should not use sync message dispatching
+		//except we can bear message disordering.
+
+		return re;
+	}
+	//msg handling end
 
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
 	virtual void on_msg_send(in_msg_type& msg)
@@ -112,7 +125,7 @@ int main(int argc, const char* argv[])
 	if (argc > 4)
 		link_num = std::min(ASCS_MAX_OBJECT_NUM, std::max(atoi(argv[4]), 1));
 
-	printf("exec: echo_client with " ASCS_SF " links\n", link_num);
+	printf("exec: pingpong_client with " ASCS_SF " links\n", link_num);
 	///////////////////////////////////////////////////////////
 
 	service_pump sp;
