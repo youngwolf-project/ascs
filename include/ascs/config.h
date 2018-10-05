@@ -9,10 +9,10 @@
  *
  * ascs top header file.
  *
- * license: http://think-async.com/ (the current is www.boost.org/LICENSE_1_0.txt)
+ * license: http://think-async.com/ (current is www.boost.org/LICENSE_1_0.txt)
  *
  * Known issues:
- * 1. since 1.1.0, concurrentqueue is not a FIFO queue (it is by design), navigate to the following links for more deatils:
+ * 1. since 1.1.0 until 1.3, concurrentqueue is not a FIFO queue (it is by design), navigate to the following links for more deatils:
  *  https://github.com/cameron314/concurrentqueue/issues/6
  *  https://github.com/cameron314/concurrentqueue/issues/52
  *  if you're using concurrentqueue, please play attention, this is by design.
@@ -232,7 +232,7 @@
  *
  * SPECIAL ATTENTION (incompatible with old editions):
  * Function object_pool::invalid_object_pop only pop obsoleted objects with no additional reference.
- * socket::stat.last_recv_time will not be updated before tcp::socket_base::on_connect anymore.
+ * socket::stat.last_recv_time will not be updated before tcp::socket_base::on_connect any more.
  * For ssl socket, on_handshake will be invoked before on_connect (before, on_connect is before on_handshake).
  *
  * HIGHLIGHT:
@@ -309,10 +309,11 @@
  * 2018.5.20	version 1.3.0
  *
  * SPECIAL ATTENTION (incompatible with old editions):
- * Not support sync sending mode anymore.
+ * Not support concurrent queue any more.
+ * Not support sync sending mode any more.
  * Explicitly need macro ASCS_PASSIVE_RECV to gain the ability of changing the unpacker at runtime.
  * Function disconnect, force_shutdown and graceful_shutdown in udp::socket_base will now be performed asynchronously.
- * Not support macro ASCS_FORCE_TO_USE_MSG_RECV_BUFFER anymore, which means now we have the behavior as this macro always defined,
+ * Not support macro ASCS_FORCE_TO_USE_MSG_RECV_BUFFER any more, which means now we have the behavior as this macro always defined,
  *  thus, virtual function ascs::socket::on_msg() is useless and also has been deleted.
  * statistic.handle_time_2_sum has been renamed to handle_time_sum.
  * Macro ASCS_MSG_HANDLING_INTERVAL_STEP1 has been renamed to ASCS_MSG_RESUMING_INTERVAL.
@@ -331,7 +332,7 @@
  * Introduced macro ASCS_DISPATCH_BATCH_MSG, then all messages will be dispatched via on_handle_msg with a variable-length contianer.
  *
  * FIX:
- * Wiped race condition between async_read and async_write on the same ascs::socket, so sync sending mode will not be supported anymore.
+ * Wiped race condition between async_read and async_write on the same ascs::socket, so sync sending mode will not be supported any more.
  *
  * ENHANCEMENTS:
  * Explicitly define macro ASCS_PASSIVE_RECV to gain the ability of changing the unpacker at runtime.
@@ -345,7 +346,7 @@
  * DELETION:
  * Deleted macro ASCS_SEND_BUFFER_TYPE.
  * Deleted virtual function bool ascs::socket::on_msg().
- * Not support sync sending mode anymore, so we reduced an atomic object in ascs::socket.
+ * Not support sync sending mode any more, so we reduced an atomic object in ascs::socket.
  *
  * REFACTORING:
  * If you want to change unpacker at runtime, first, you must define macro ASCS_PASSIVE_RECV, second, you must call ascs::socket::recv_msg,
@@ -430,6 +431,7 @@
  *  macro ASCS_SYNC_DISPATCH been defined) and / or on_msg_handle.
  *
  * DELETION:
+ * Not support concurrent queue any more, so delete macro ASCS_HAS_CONCURRENT_QUEUE and class lock_free_queue.
  *
  * REFACTORING:
  * Hide member variables as many as possible for developers.
@@ -619,36 +621,17 @@ static_assert(ASCS_ASYNC_ACCEPT_NUM > 0, "async accept number must be bigger tha
 //close port reuse
 //#define ASCS_NOT_REUSE_ADDRESS
 
-//ConcurrentQueue is lock-free, please refer to https://github.com/cameron314/concurrentqueue
-#ifdef ASCS_HAS_CONCURRENT_QUEUE
-	#include <concurrentqueue.h>
-	template<typename T> using concurrent_queue = moodycamel::ConcurrentQueue<T>;
-
-	#ifndef ASCS_INPUT_QUEUE
-	#define ASCS_INPUT_QUEUE lock_free_queue
-	#endif
-	#ifndef ASCS_INPUT_CONTAINER
-	#define ASCS_INPUT_CONTAINER concurrent_queue
-	#endif
-	#ifndef ASCS_OUTPUT_QUEUE
-	#define ASCS_OUTPUT_QUEUE lock_free_queue
-	#endif
-	#ifndef ASCS_OUTPUT_CONTAINER
-	#define ASCS_OUTPUT_CONTAINER concurrent_queue
-	#endif
-#else
-	#ifndef ASCS_INPUT_QUEUE
-	#define ASCS_INPUT_QUEUE lock_queue
-	#endif
-	#ifndef ASCS_INPUT_CONTAINER
-	#define ASCS_INPUT_CONTAINER list
-	#endif
-	#ifndef ASCS_OUTPUT_QUEUE
-	#define ASCS_OUTPUT_QUEUE lock_queue
-	#endif
-	#ifndef ASCS_OUTPUT_CONTAINER
-	#define ASCS_OUTPUT_CONTAINER list
-	#endif
+#ifndef ASCS_INPUT_QUEUE
+#define ASCS_INPUT_QUEUE lock_queue
+#endif
+#ifndef ASCS_INPUT_CONTAINER
+#define ASCS_INPUT_CONTAINER list
+#endif
+#ifndef ASCS_OUTPUT_QUEUE
+#define ASCS_OUTPUT_QUEUE lock_queue
+#endif
+#ifndef ASCS_OUTPUT_CONTAINER
+#define ASCS_OUTPUT_CONTAINER list
 #endif
 //we also can control the queues (and their containers) via template parameters on calss 'client_socket_base'
 //'server_socket_base', 'ssl::client_socket_base' and 'ssl::server_socket_base'.
