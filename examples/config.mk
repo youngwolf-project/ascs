@@ -1,6 +1,6 @@
 
 # If your compiler cannot find asio, please specify it explicitly like this:
-#ext_location = -I/path of asio/
+#asio_dir = -I/path of asio/
 # asio.hpp and asio directory should be available in this place.
 
 # If possible, -std=c++14 or -std=c++1y would be better.
@@ -14,11 +14,6 @@ else
 	dir = release
 endif
 cflag += -DASIO_STANDALONE -DASIO_NO_DEPRECATED
-
-# If you used concurrent queue (https://github.com/cameron314/concurrentqueue), please define ASCS_HAS_CONCURRENT_QUEUE macro:
-#cflag += -DASCS_HAS_CONCURRENT_QUEUE
-# And guarantee header file concurrentqueue.h is reachable, for example, add its path to ext_location:
-#ext_location += -I/path of concurrent queue/
 
 kernel = ${shell uname -s}
 ifeq (${kernel}, SunOS)
@@ -35,7 +30,7 @@ else
 	endif
 endif
 
-cflag += ${ext_cflag} ${ext_location} -I../../include/
+cflag += ${ext_cflag} ${asio_dir} -I../../include/
 lflag += ${ext_libs}
 
 target = ${dir}/${module}
