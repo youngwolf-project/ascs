@@ -180,7 +180,8 @@ protected:
 	}
 
 #ifdef ASCS_SYNC_SEND
-	virtual void on_close() {ascs::do_something_to_all(last_send_msg, [](typename super::in_msg& msg) {if (msg.cv) msg.cv->notify_all();}); super::on_close();}
+	virtual void on_close() {ascs::do_something_to_all(last_send_msg,
+		[](typename super::in_msg& msg) {if (msg.p) msg.p->set_value(sync_call_result::NOT_APPLICABLE);}); super::on_close();}
 #endif
 
 	virtual void on_connect() {}
@@ -309,7 +310,7 @@ private:
 			stat.send_time_sum += statistic::now() - last_send_msg.front().begin_time;
 			stat.send_msg_sum += last_send_msg.size();
 #ifdef ASCS_SYNC_SEND
-			ascs::do_something_to_all(last_send_msg, [](typename super::in_msg& item) {if (item.cv) {item.cv->signaled = true; item.cv->notify_one();}});
+			ascs::do_something_to_all(last_send_msg, [](typename super::in_msg& item) {if (item.p) {item.p->set_value(sync_call_result::SUCCESS);}});
 #endif
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
 			this->on_msg_send(last_send_msg.front());
