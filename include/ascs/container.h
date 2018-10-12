@@ -159,13 +159,13 @@ private:
 
 //Container must at least has the following functions (like list):
 // Container() and Container(size_t) constructor
-// size (must be thread safe, but doesn't have to be coherent, std::list before gcc 5 doesn't meet this requirement, ascs::list does)
-// empty (must be thread safe, but doesn't have to be coherent)
+// size (must be thread safe, but doesn't have to be consistent, std::list before gcc 5 doesn't meet this requirement, ascs::list does)
+// empty (must be thread safe, but doesn't have to be consistent)
 // clear
 // swap
 // emplace_back(const T& item)
 // emplace_back(T&& item)
-// splice(Container::const_iterator, std::list<T>&), after this, std::list<T> must be empty
+// splice(decltype(Container::end()), std::list<T>&), after this, std::list<T> must be empty
 // front
 // pop_front
 // end

@@ -85,7 +85,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>C:\Users\wolf\Documents\GitHub\concurrentqueue\;C:\Users\wolf\Documents\GitHub\asio\asio\include\;C:\Users\wolf\Documents\GitHub\ascs\include\;$(IncludePath)</IncludePath>
+    <IncludePath>C:\Users\wolf\Documents\GitHub\asio\asio\include\;C:\Users\wolf\Documents\GitHub\ascs\include\;$(IncludePath)</IncludePath>
     <LibraryPath>$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
