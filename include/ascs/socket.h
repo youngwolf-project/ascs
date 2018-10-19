@@ -501,7 +501,7 @@ private:
 		if (check_receiving(false))
 			return true;
 
-		set_timer(TIMER_CHECK_RECV, msg_resuming_interval_, [this](tid id)->bool {return this->timer_handler(TIMER_CHECK_RECV);});
+		set_timer(TIMER_CHECK_RECV, msg_resuming_interval_, [this](tid id)->bool {return !this->check_receiving(true);});
 #endif
 		return false;
 	}
@@ -565,9 +565,6 @@ private:
 	{
 		switch (id)
 		{
-		case TIMER_CHECK_RECV:
-			return !check_receiving(true);
-			break;
 		case TIMER_DISPATCH_MSG:
 			dispatching = false;
 			dispatch_msg();
