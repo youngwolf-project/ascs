@@ -98,7 +98,7 @@ static_assert(ASCS_MAX_OBJECT_NUM > 0, "object capacity must be bigger than zero
 		#error free object interval must be bigger than zero.
 	#endif
 #endif
-如果未开启对象池，将自动开启一个定时器，用于定时释放（从内存中删除）失效的对象（失效对象是指obsoleted()返回true,
+如果未开启对象池，库将自动开启一个定时器，用于定时释放（从内存中删除）失效的对象（失效对象是指obsoleted()返回true,
 智能指针只有一个引用并且无任何异步调用的对象。
 
 //define ASCS_CLEAR_OBJECT_INTERVAL macro to let object_pool to invoke clear_obsoleted_object() automatically and periodically
@@ -227,6 +227,7 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 
 //#define ASCS_DISPATCH_BATCH_MSG
 是否批量派发消息，如果你的消息处理很简单（比如echo server，或者你有自己的消息派发逻辑，在on_msg_handle里面只需要将消息push到另外一个队列），推荐定义该宏。
+在批量派发的情况下，你仍然可以每次只消费一条或者零条消息，剩余的将继续派发，这就退化成了原来的单消息派发了。
 
 //#define ASCS_ALIGNED_TIMER
 对齐定时器，比如一个定时器在xx:xx:xx开启，interval 是 10 秒，回调将会在 xx:xx:xx + 10 被调用，假设回调在 xx:xx:xx + 11 返回，那么下一次定时器的间隔将被
@@ -237,9 +238,15 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 static_assert(ASIO_HAS_STD_FUTURE == 1, "sync message sending needs std::future.");
 #endif
 //#define ASCS_SYNC_RECV
-是否支持同步数据收发，同步发需要std::future支持。
+是否支持同步数据收发，同步发需要std::future支持。注意同步收发会轻微影响性能，即便你只做异步收发，所以在不需要的情况下要关闭这两个宏。
 
 //#define ASCS_SYNC_DISPATCH
 是否支持同步派发消息，派发的次序为 sync_recv_msg（如果有调用的话），on_msg（如果定义该宏的话）和 on_msg_handle。
+同步派发的情况下，虽然你也可以像批量派发一样只消费一条或者零条消息，但剩余的消息将通过on_msg_handle异步派发而非on_msg同步派发，这会造成消息乱序，
+比如消息持续的到达，上一次on_msg未消费完的消息通过on_msg_handle异步派发时，会与下一次on_msg并发进行，从而让消息乱序。
+所以在开启这个功能之前，一定要清楚两点，一是能不能在on_msg里面消费掉所有消息，如果能则不需要考虑第二点，二是能不能忍受消息乱序。
+具体还可参考echo_server（不能在on_msg里面消费掉所有消息，也不能忍受消息乱序，所以不能开启这个功能）和echo_client（满足条件一）
+另外，在逻辑非常简单的情况下（比如echo_server），上面说了，定义ASCS_DISPATCH_BATCH_MSG宏是推荐的，可以提高一些效率，如果你的逻辑还满足这里说的条件（
+echo_client，pingpong_server和pingpong_client就满足），那么定义宏ASCS_SYNC_DISPATCH还可以进一步提高效率。
 
 //configurations
