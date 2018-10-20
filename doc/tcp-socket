@@ -5,7 +5,7 @@ tcp套接字类，实现tcp数据的收发
 template <typename Socket, typename Packer, typename Unpacker,
 	template<typename, typename> class InQueue, template<typename> class InContainer,
 	template<typename, typename> class OutQueue, template<typename> class OutContainer>
-class socket_base : public socket<Socket, Packer, Unpacker, typename Packer::msg_type, typename Unpacker::msg_type, InQueue, InContainer, OutQueue, OutContainer>
+class socket_base : public socket<Socket, Packer, typename Packer::msg_type, typename Unpacker::msg_type, InQueue, InContainer, OutQueue, OutContainer>
 {
 public:
 	typedef typename Packer::msg_type in_msg_type;
@@ -13,18 +13,24 @@ public:
 	typedef typename Unpacker::msg_type out_msg_type;
 	typedef typename Unpacker::msg_ctype out_msg_ctype;
 
-protected:
-	enum shutdown_states {NONE, FORCE, GRACEFUL};
+private:
+	typedef socket<Socket, Packer, in_msg_type, out_msg_type, InQueue, InContainer, OutQueue, OutContainer> super;
 
-	socket_base(asio::io_service& io_service_);
-	template<typename Arg>
-	socket_base(asio::io_service& io_service_, Arg& arg);
+protected:
+	enum link_status {CONNECTED, FORCE_SHUTTING_DOWN, GRACEFUL_SHUTTING_DOWN, BROKEN};
+
+	socket_base(asio::io_context& io_context_);
+	template<typename Arg> socket_base(asio::io_context& io_context_, Arg& arg);
 ssl使用。
 
 	void first_init();
 构造时调用，仅仅是为了节省代码量而已，因为我们有两个构造函数都将调用它。
 
 public:
+	static const typename super::tid TIMER_BEGIN = super::TIMER_END;
+	static const typename super::tid TIMER_ASYNC_SHUTDOWN = TIMER_BEGIN;
+	static const typename super::tid TIMER_END = TIMER_BEGIN + 5;
+
 	virtual bool obsoleted();
 在调用父类同名函数的基础上，增加了对是否正在关闭连接的判断，如果是，则返回假。
 
@@ -35,22 +41,30 @@ public:
 发送一个心跳包。
 
 	void reset();
-重置所有（reset_state加clear_buffer，后者由父类实现）。
+重置所有并调用同类同名函数。
 
 	bool is_broken() const;
 连接是否已经断开。
 	bool is_connected() const;
 连接是否已经建立。
 	bool is_shutting_down() const;
-是否正在优雅关闭套接字，此时不再发送消息（如果发送则会出错，因为已经关闭了自己的数据发送），但继续接收消息。
+是否正在优雅关闭套接字，此时不再发送消息（如果发送则会出错，因为已经关闭了自己的数据发送通道），但继续接收消息。
+
+	void show_info(const char* head, const char* tail) const;
+	void show_info(const char* head, const char* tail, const asio::error_code& ec) const;
+	void show_status() const;
 
 	std::shared_ptr<i_unpacker<out_msg_type>> unpacker();
 	std::shared_ptr<const i_unpacker<out_msg_type>> unpacker() const;
 #ifdef ASCS_PASSIVE_RECV
 	void unpacker(const std::shared_ptr<i_unpacker<out_msg_type>>& _unpacker_) {unpacker_ = _unpacker_;}
 获取／修改解包器。
-注意，运行时修改解包器是非线程安全的，而且只能在构造函数、子类的reset函数（虚的那个）和on_msg里面修改。不支持多线程一是为了
-效率，二是支持了也必须要在前面说的那三个地方修改，而这三个地方不会有多线程问题，三是这个功能用得很少。
+注意，运行时修改解包器是非线程安全的，只能在如下几个地方修改，切记：
+1. 构造函数；
+2. 子类的reset函数（虚的那个）；
+3. on_msg（需要定义ASCS_SYNC_DISPATCH宏）；
+4. 定义ASCS_PASSIVE_RECV宏，并在调用(sync_)recv_msg之前修改。
+不支持多线程一是为了效率，二是这个功能用得很少，三是可以通过在unpacker里面加标志位来达到同步的目的。
 
 	virtual void recv_msg();
 post一个异步调用到do_recv_msg()。
@@ -77,6 +91,10 @@ safe系列函数，在on_msg和om_msg_handle里面调用时需要特别谨慎，
 	bool safe_send_native_msg(const char* const pstr[], const size_t len[], size_t num, bool can_overflow);
 同上，只是以native为true调用i_packer::pack_msg接口。
 
+以上所有函数都有对应的一个以sync_开头的版本，表示同步发送，同时带一个超时间隔，为0则永远等待直到发送成功。
+注意超时返回不代表是错误，库用异步写来模拟同步写，超时返回之后，消息仍然可以在将来的某个时候被成功发送，此时on_msg_send仍然会
+被调用（如果定义了相应的宏的话）。
+
 protected:
 	void force_shutdown();
 	void graceful_shutdown(bool sync);
@@ -87,6 +105,11 @@ protected:
 virtual bool do_start();
 实现“开始”逻辑并调用父类同名函数。
 
+#ifdef ASCS_SYNC_SEND
+	virtual void on_close();
+#endif
+通知所有同步发送结束。
+
 	virtual void on_connect();
 连接建立后回调。
 
@@ -95,9 +118,6 @@ virtual bool do_start();
 
 	virtual void on_async_shutdown_error() = 0;
 异步关闭连接失败时架设。
-
-	virtual bool on_msg_handle(msg_type& msg, bool link_down);
-重写ascs::socket的on_msg_handle，功能是打印消息到控制台，使用者重写这个函数以处理消息。
 
 private:
 #ifndef ASCS_PASSIVE_RECV
@@ -108,34 +128,43 @@ post一个异步调用到do_recv_msg()。
 post一个异步调用到do_send_msg()。
 
 	void shutdown();
-关闭套接字，停止所有定时器，最后启动一个定时器，如果定义了ASCS_ENHANCED_STABILITY宏，则这个将周期性的检测
-当前套接字是否可以安全地被重用或释放，如果未定义，则简单的在ASCS_DELAY_CLOSE秒后认为当前套接字可被安全地重用或释放。
+做一些简单的标记之后，调用父类的close()。
 
 	size_t completion_checker(const boost::system::error_code& ec, size_t bytes_transferred);
 统计解包时间。
 
-void do_recv_msg();
+	void do_recv_msg();
 调用async_read。
 
 	void recv_handler(const error_code& ec, size_t bytes_transferred);
-收到数据时后asio回调。
+收到数据后asio回调。
 
-bool do_send_msg(bool in_strand);
+	bool do_send_msg(bool in_strand);
 调用async_write。
 
 	void send_handler(const error_code& ec, size_t bytes_transferred);
 成功发送消息（写入底层套接字）后由asio回调。
 
-	bool async_shutdown_handler(st_timer::tid id, size_t loop_num);
-异步关闭连接的回调函数。
+	bool async_shutdown_handler(size_t loop_num);
+异步关闭连接定时器的回调函数。
 
 protected:
-	list<typename super::in_msg> last_send_msg;
-	std::shared_ptr<i_unpacker<out_msg_type>> unpacker_;
-
 	volatile link_status status;
 
 private:
+	using super::stat;
+	using super::packer_;
+	using super::temp_msg_can;
+
+	using super::send_msg_buffer;
+	using super::sending;
+
+#ifdef ASCS_PASSIVE_RECV
+	using super::reading;
+#endif
+
+	std::shared_ptr<i_unpacker<out_msg_type>> unpacker_;
+	list<typename super::in_msg> last_send_msg;
 	asio::io_context::strand strand;
 };
 

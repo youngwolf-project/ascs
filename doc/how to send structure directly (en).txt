@@ -38,7 +38,7 @@ No, because ascs can only see i_packer interface, you cannot make a native_msg o
 Then, when we need to send messages:
 ascs::auto_buffer<message> msg(new message);
 strncmp(msg->msg.cc, "abc", sizeof(msg->msg.cc));
-...; //other initializations
+...; //other initializations, actually this implemented a packer
 client.direct_send_msg(msg); //cannot call functions whoes name starts with 'send_', because they need packers, here we used dummy_packer
 
 5. unpacker is necessary
@@ -99,7 +99,7 @@ int main(int argc, const char* argv[])
 		{
 			ascs::auto_buffer<message> msg(new message);
 			strncmp(msg->msg.cc, str.data(), sizeof(msg->msg.cc));
-			...; //other initializations
+			...; //other initializations, actually this implemented a packer
 			client.direct_send_msg(msg);
 		}
 	}

@@ -11,12 +11,7 @@ dummy_lockable：
 实现了lock()和unlock()接口，但什么也不做。
 
 lockable：
-实现了lock()和unlock()接口，分别对std::shared_mutex执行加锁和解锁操作。
-
-template<typename T, typename Container>
-class lock_free_queue : public Container, public dummy_lockable
-一个lock-free队列，其容器必须是concurrent queue (https://github.com/cameron314/concurrentqueue)，或者是有相同接口的自定义容器，
-必须保证无锁且线程安全。
+实现了lock()和unlock()接口，分别对std::mutex执行加锁和解锁操作。
 
 template<typename T, typename Container, typename Lockable>
 class queue : public Container, public Lockable

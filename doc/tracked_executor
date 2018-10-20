@@ -5,7 +5,7 @@ asio::async_write(socket, buffer, [this](const auto& ec, auto bytes_transferred)
 那么look之后应该是这样的：
 asio::async_write(socket, buffer, this->make_handler_error_size([this](const auto& ec, auto bytes_transferred) {this->send_handler(ec, bytes_transferred);}));
 
-post，defer，dispatch,post_strand，defer_strand和dispatch_strand都将被hook。
+post，defer，dispatch，post_strand，defer_strand和dispatch_strand都将被hook，ascs::socket的timer继承自tracked_executor，所以定时器也是被hook的。
 
 注意，hook需要宏ASCS_DELAY_CLOSE等于0（默认），影响范围局限于ascs::socket及其继承者。
 

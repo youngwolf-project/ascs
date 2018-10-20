@@ -14,7 +14,7 @@ public:
 	typedef const out_msg_type out_msg_ctype;
 
 public:
-	socket_base(asio::io_service& io_service_);
+	socket_base(asio::io_context& io_context_);
 
 public:
 	virtual bool is_ready();
@@ -39,13 +39,20 @@ public:
 	void graceful_close();
 调用clean_up，这三个函数功能完全一样，为了与tcp::socket_base在接口上保持一致才设计成三个。
 
+	void show_info(const char* head, const char* tail) const;
+	void show_status() const;
+
 	std::shared_ptr<i_unpacker<typename Packer::msg_type>> unpacker();
 	std::shared_ptr<const i_unpacker<typename Unpacker::msg_type>> unpacker() const;
 #ifdef ASCS_PASSIVE_RECV
 	void unpacker(const std::shared_ptr<i_unpacker<typename Unpacker::msg_type>>& _unpacker_) {unpacker_ = _unpacker_;}
 获取／修改解包器。
-注意，运行时修改解包器是非线程安全的，而且只能在构造函数、子类的reset函数（虚的那个）和on_msg里面修改。不支持多线程一是为了
-效率，二是支持了也必须要在前面说的那三个地方修改，而这三个地方不会有多线程问题，三是这个功能用得很少。
+注意，运行时修改解包器是非线程安全的，只能在如下几个地方修改，切记：
+1. 构造函数；
+2. 子类的reset函数（虚的那个）；
+3. on_msg（需要定义ASCS_SYNC_DISPATCH宏）；
+4. 定义ASCS_PASSIVE_RECV宏，并在调用(sync_)recv_msg之前修改。
+不支持多线程一是为了效率，二是这个功能用得很少，三是可以通过在unpacker里面加标志位来达到同步的目的。
 
 	virtual void recv_msg();
 post一个异步调用到do_recv_msg()。
@@ -73,9 +80,7 @@ safe系列函数，在on_msg和om_msg_handle里面调用时需要特别谨慎，
 同上，只是以native为true调用i_packer::pack_msg接口。
 
 注，以上12个函数都还有一个重载版本，不需要提供peer_addr，但必须在之前调用过set_peer_addr函数。
-
-	void show_info(const char* head, const char* tail);
-打印日志，在head和tail中间加上本端ip和端口。
+以上所有函数都有同步发送版本，请参考tcp::socket_base。
 
 protected:
 	virtual void on_recv_error(const error_code& ec);
@@ -83,6 +88,11 @@ protected:
 
 	virtual bool on_heartbeat_error();
 心跳包超时时架设。
+
+#ifdef ASCS_SYNC_SEND
+	virtual void on_close();
+#endif
+通知所有同步发送结束。
 
 private:
 #ifndef ASCS_PASSIVE_RECV
@@ -110,14 +120,27 @@ post一个异步调用到do_send_msg()。
 	bool set_addr(boost::asio::ip::udp::endpoint& endpoint, unsigned short port, const std::string& ip);
 设置地址，内部使用。
 
-protected:
+private:
+	using super::stat;
+	using super::packer_;
+	using super::temp_msg_can;
+
+	using super::send_msg_buffer;
+	using super::sending;
+
+#ifdef ASCS_PASSIVE_RECV
+	using super::reading;
+#endif
+
 	typename super::in_msg last_send_msg;
-	std::shared_ptr<i_unpacker<typename Packer::msg_type>> unpacker_;
-	asio::ip::udp::endpoint local_addr, temp_addr, peer_addr;
+	std::shared_ptr<i_unpacker<typename Unpacker::msg_type>> unpacker_;
+	asio::ip::udp::endpoint local_addr;
+	asio::ip::udp::endpoint temp_addr; //used when receiving messages
+	asio::ip::udp::endpoint peer_addr;
 异步接收udp消息时，asio需要一个endpoint，在整个异步接收过程中，这个endpoint必须有效，所以它是一个成员变量（temp_addr），
 它只代表上一次接收udp消息时的对端地址，对于已经接收到的udp消息，对端地址保存在out_msg_type里面。
+如果发送消息时不指定对端地址，则使用peer_addr。
 
-private:
 	asio::io_context::strand strand;
 };
 

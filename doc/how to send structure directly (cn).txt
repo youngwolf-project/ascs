@@ -1,4 +1,4 @@
-假设你想在现有工程里面引入ascs库，之前你一直是直接发送结构体，那么现在（基于《ascs开发文档.docx》里面的demo）：
+假设你想在现有工程里面引入ascs库，之前你一直是直接发送结构体，那么现在（基于《ascs development documentation (cn).docx》里面的demo）：
 1. 你已经有了一个结构体：
 struct native_msg
 {
@@ -37,7 +37,7 @@ ascs::auto_buffer<messge> really_used_msg;
 然后需要发送消息的时候：
 ascs::auto_buffer<message> msg(new message);
 strncmp(msg->msg.cc, "abc", sizeof(msg->msg.cc));
-...; //初始其它的成员
+...; //初始其它的成员，这里其实就是实现打包器功能
 client.direct_send_msg(msg); //不能再调用以send_开头的消息了，因为它们需要调用打包器来打包，我们在这里用的是dummy_packer
 
 5. 解包器是必须要写的
@@ -98,7 +98,7 @@ int main(int argc, const char* argv[])
 		{
 			ascs::auto_buffer<message> msg(new message);
 			strncmp(msg->msg.cc, str.data(), sizeof(msg->msg.cc)); //这里需要考虑内在越界
-			//这里还应该组装message中的其它成员
+			//这里还应该组装message中的其它成员，这其实就是实现打包器功能
 			client.direct_send_msg(msg);
 		}
 	}
