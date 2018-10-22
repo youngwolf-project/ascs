@@ -37,13 +37,13 @@ public:
 	
 protected:
 	virtual bool do_start();
-开始，这里开始的意义是建立连接据。
+发起异步连接。
 
 	virtual void connect_handler(const asio::error_code& ec);
-异步连接回调函数。
+异步连接回调函数，如果失败则调用prepare_next_reconnect()，成功则调用父类do_start()。
 
 	virtual int prepare_reconnect(const asio::error_code& ec);
-	连接失败时回调，返回大于等于零则继续在相应毫秒之后重试，返回负数则放弃。
+返回ASCS_RECONNECT_INTERVAL，用户重写该函数可决定是否重连接及重连接间隔。
 
 	virtual void on_connect();
 连接成功时回调，用户重写它以得到连接成功事件。

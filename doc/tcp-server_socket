@@ -31,12 +31,6 @@ ssl使用。
 优雅关闭————调用父类的同名函数。
 在on_msg中，请以sync为false调用该函数，在其它所有service线程中，推荐也用sync为false调用该函数。
 
-	void show_info(const char* head, const char* tail) const;
-在head和tail中间，显示对方的地址（IP加端口）。
-
-	void show_info(const char* head, const char* tail, const asio::error_code& ec) const;
-同上，但加上了显示ec.message.data()的内容。
-
 protected:
 	Server& get_server();
 	const Server& get_server() const;

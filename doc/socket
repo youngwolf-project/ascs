@@ -66,17 +66,16 @@ asio::ssl::stream<asio::ip::tcp::socket>对象及其从它们继承的对象。
 发送心跳包，由子类实现。
 
 	bool started() const;
-是否已经开始，已经开始意思是已经调用过start()了，多次调用start()会有严重的包乱顺问题，好在我在某个版本
-增加了防止多次调用start()的功能，之前靠用户保证，现在ascs库可以保证，即使用户多次调用也没问题。
+是否已经开始，已经开始意思是已经调用过start()了。
 
 	void start();
-开始，开始的动作由子类实现，本函数只是简单的判断start是否已经被调用过了，如果没有，则调用do_start函数（纯虚）。
+开始，在多线程保护的情况下，调用do_start函数。
 
 	void start_heartbeat(int interval, int max_absence = ASCS_HEARTBEAT_MAX_ABSENCE);
-开始定时发检测和送心跳包（未超时时）。
+开始定时器调用check_heartbeat。
 
 	bool check_heartbeat(int interval, int max_absence = ASCS_HEARTBEAT_MAX_ABSENCE);
-检测心跳包，如果未超时的话将发送一个心跳包。
+检测心跳，如果未超时的话将发送一个心跳包。
 
 	bool is_sending() const;
 是否正在发送数据。
@@ -90,7 +89,7 @@ asio::ssl::stream<asio::ip::tcp::socket>对象及其从它们继承的对象。
 是否正在派发数据。
 
 	bool is_recv_idle() const;
-是否暂停了消息接收，因为接收缓存满（等到缓存可用时自动恢复）。
+是否暂停了消息接收（因为接收缓存满，等到缓存可用时自动恢复）。
 
 	void msg_resuming_interval(size_t interval);
 	size_t msg_resuming_interval() const;
@@ -137,7 +136,8 @@ on_msg_handle返回false或者0时，延时多久重新派发消息。
 同步接收消息，使用者必须消费掉所有从msg_can返回的消息，库不再维护它们。
 注意库只是append操作msg_can容器，duration参数表示等待时间，0为永远等待直到成功接收到至少一条消息，超时返回不代表是错误，库用异步读
 来模拟同步读，超时返回之后，库仍然可以在将来某个时刻成功的接收到消息，此时如果使用者已经发起了另一个同步读请求，则消息将通过另一个
-sync_recv_msg返回，如果没有，则消息将通过on_msg同步派发（如果定义了相应宏的话），最后如果还有剩余消息，将通过on_msg_handle异步派发。
+sync_recv_msg返回且不再继承尝试on_msg和on_msg_handle，如果没有，则消息将通过on_msg同步派发（如果定义了相应宏的话），最后如果还有剩余
+消息的话，将通过on_msg_handle异步派发。
 
 	size_t get_pending_send_msg_num();
 	size_t get_pending_recv_msg_num();
@@ -145,15 +145,16 @@ sync_recv_msg返回，如果没有，则消息将通过on_msg同步派发（如�
 
 	void pop_first_pending_send_msg(in_msg& msg);
 	void pop_first_pending_recv_msg(out_msg& msg);
-弹出缓存中第一个包，如果得到一个空包（msg.empty()等于true），则说明缓存里面没有消息。
+弹出缓存中第一个包，如果得到一个空包（msg.empty()等于true），则说明缓存里面没有消息。当前正在发送或者异步派发的消息不在队列里面，
+所以无法弹出。
 
 	void pop_all_pending_send_msg(in_container_type& can);
 	void pop_all_pending_recv_msg(out_container_type& can);
-弹出缓存中所有包，相当于清空了缓存。
+弹出缓存中所有包，相当于清空了缓存。当前正在发送或者异步派发的消息不在队列里面，所以无法清空。
 
 protected:
 	virtual bool do_start();
-记录上次开启接收消息的时间，调用start_heartbeat，开启收发消息。
+记录上次开始接收消息的时间，调用start_heartbeat（如果需要心跳的话），开始收发消息。
 
 	virtual void on_send_error(const error_code& ec);
 	virtual void on_recv_error(const asio::error_code& ec) = 0;
@@ -163,7 +164,7 @@ protected:
 心跳包超时时回调。
 
 	virtual void on_close();
-当对象真正被close之前，会调用这个回调，用户可以在这里面释放资源，在这之后，对象可能会被重用或者被释放。
+当对象真正被close之前，会调用这个回调，用户可以在这里面释放资源（除了socket自身），在这之后，对象可能会被重用或者被释放。
 
 	virtual void after_close();
 重写这个函数的最好的例子就是客户端做重连接。
@@ -171,9 +172,9 @@ protected:
 #ifdef ASCS_SYNC_DISPATCH
 	virtual size_t on_msg(std::list<OutMsgType>& msg_can);
 #endif
-同步派发消息，在on_msg返回之后，本套接字上的数据接收暂停，如果使用者不能消费掉所有msg_can里面的消息，则剩余的消息进入异步派发模式（通过
-on_msg_handle派发），这就带来一个消息乱序的问题，on_msg_handle将和on_msg（下次收到消息时调用）并发的被调用，所以如果使用者不能消费掉所有
-消息，则不能开启这个功能，在简单的数据往返业务中（如类似乒乓测试一样的业务逻辑），这个功能会提高效率。
+同步派发消息，在on_msg返回之后，本套接字上的数据接收暂停，如果使用者不能消费掉所有msg_can里面的消息，则剩余的消息将进入异步派发
+模式（通过on_msg_handle派发），这就带来一个消息乱序的问题，on_msg_handle将和on_msg（下次收到消息时调用）并发的被调用，所以如果
+使用者不能消费掉所有消息，则不能开启这个功能，在简单的数据往返业务中（如类似乒乓测试一样的业务逻辑），这个功能会提高效率。
 
 #ifdef ASCS_DISPATCH_BATCH_MSG
 	virtual size_t on_msg_handle(out_queue_type& can);
@@ -204,12 +205,12 @@ on_msg_handle派发），这就带来一个消息乱序的问题，on_msg_handle
 接收缓存，然后调用dispatch_msg。
 
 	bool do_direct_send_msg(InMsgType&& msg);
-将消息插入发送队列，内部使用。
+将消息插入发送队列并开始异步发送数据（如果当前没有异步发送的话），内部使用。
 
 #ifdef ASCS_SYNC_SEND
 	sync_call_result do_direct_sync_send_msg(InMsgType&& msg, unsigned duration = 0);
 #endif
-将消息插入发送队列并等待发送结束，内部使用。
+将消息插入发送队列并开始异步发送数据（如果当前没有异步发送的话），然后等待发送结束，内部使用。
 
 private:
 	virtual void recv_msg() = 0;

@@ -103,7 +103,7 @@ protected:
 优雅关闭将在后台继承进行，当回调到on_recv_error的时候，关闭结束（有可能优雅关闭成功，有可能超时被强制关闭，超时由ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION宏决定）。
 
 virtual bool do_start();
-实现“开始”逻辑并调用父类同名函数。
+记录连接建立时间，更新连接状态为已连接，调用on_connect()，调用父类同名函数。
 
 #ifdef ASCS_SYNC_SEND
 	virtual void on_close();
