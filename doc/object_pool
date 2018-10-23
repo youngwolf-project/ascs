@@ -12,6 +12,11 @@ public:
 	typedef const object_type object_ctype;
 	typedef std::unordered::unordered_map<uint_fast64_t, object_type> container_type;
 
+	static const tid TIMER_BEGIN = timer<executor>::TIMER_END;
+	static const tid TIMER_FREE_SOCKET = TIMER_BEGIN;
+	static const tid TIMER_CLEAR_SOCKET = TIMER_BEGIN + 1;
+	static const tid TIMER_END = TIMER_BEGIN + 10;
+
 protected:
 	object_pool(service_pump& service_pump_);
 
@@ -44,10 +49,8 @@ protected:
  3. 对象的obsoleted函数必须返回true。
 #endif
 
-	template<typename Arg>
-	object_type create_object(Arg& arg);
-	template<typename Arg1, typename Arg2>
-	object_type create_object(Arg1& arg1, Arg2& arg2);
+	template<typename Arg> object_type create_object(Arg& arg);
+	template<typename Arg1, typename Arg2> object_type create_object(Arg1& arg1, Arg2& arg2);
 如果定义了ASCS_REUSE_OBJECT宏，则先调用reuse_object尝试重用对象，如果没有对象可被重用，
 则创建一个新的，最后都是调用init_object。
 
@@ -102,12 +105,12 @@ protected:
 当前已经分配到哪个id了，用于为每一个通过object_pool::create_object创建的对象分配一个唯一的id。
 
 	container_type object_can;
-	std::shared_mutex object_can_mutex;
+	std::mutex object_can_mutex;
 	size_t max_size_;
 存放有效对象（hash表）。
 
 	std::list<invalid_object> invalid_object_can;
-	std::shared_mutex invalid_object_can_mutex;
+	std::mutex invalid_object_can_mutex;
 存放无效对象（对象池，双向链表）。
 };
 

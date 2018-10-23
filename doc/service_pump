@@ -53,6 +53,7 @@ public:
 	typedef std::list<object_type> container_type;
 
 	service_pump();
+	~service_pump();
 
 	i_service* find(int id);
 根据id查找service。
@@ -87,7 +88,13 @@ run_service同start_service，但是会阻塞，直到所有线程（调用io_se
 是否已经调用过了start_service(int thread_num)。
 
 	void add_service_thread(int thread_num);
-运行时增加service线程，注意只能增加不能减少。
+运行时增加service线程。
+
+#ifdef ASCS_DECREASE_THREAD_AT_RUNTIME
+	void del_service_thread(int thread_num) {if (thread_num > 0) {del_thread_num += thread_num;}}
+	int service_thread_num() const {return real_thread_num;}
+#endif
+运行时减少service线程，获取当前service线程数量。
 
 protected:
 	void do_service(int thread_num);
@@ -116,11 +123,24 @@ private:
 	void add(object_type i_service_);
 添加一个service，由i_service使用。
 
-protected:
-	container_type service_can;
-	std::shared_mutex service_can_mutex;
-	std::thread_group service_threads;
+private:
 	bool started;
+	container_type service_can;
+	std::mutex service_can_mutex;
+	std::list<std::thread> service_threads;
+
+#ifdef ASCS_DECREASE_THREAD_AT_RUNTIME
+	std::atomic_int_fast32_t real_thread_num;
+	std::atomic_int_fast32_t del_thread_num;
+#endif
+
+#ifdef ASCS_AVOID_AUTO_STOP_SERVICE
+#if ASIO_VERSION >= 101100
+	asio::executor_work_guard<executor_type> work;
+#else
+	std::shared_ptr<asio::io_service::work> work;
+#endif
+#endif
 };
 
 } //namespace

@@ -34,19 +34,16 @@ public:
 	void graceful_shutdown(bool reconnect = false, bool sync = true);
 优雅关闭，调用父类的graceful_shutdown函数，reconnect参数的意义同上，sync参数直接传递给父类。
 在on_msg中，请以sync为false调用该函数，在其它所有service线程中，推荐也用sync为false调用该函数。
-
-	void show_info(const char* head, const char* tail) const;
-在head和tail中间，显示自己的地址（IP加端口）。
-
-	void show_info(const char* head, const char* tail, const asio::error_code& ec) const;
-同上，但加上了显示ec.message.data()的内容。
 	
 protected:
 	virtual bool do_start();
-开始，这里开始的意义是，如果连接未成功，则开始连接服务器，如果连接已经成功，则开始接收数据。
+发起异步连接。
 
-virtual int prepare_reconnect(const asio::error_code& ec);
-	连接失败时回调，返回大于等于零则继续在相应毫秒之后重试，返回负数则放弃。
+	virtual void connect_handler(const asio::error_code& ec);
+异步连接回调函数，如果失败则调用prepare_next_reconnect()，成功则调用父类do_start()。
+
+	virtual int prepare_reconnect(const asio::error_code& ec);
+返回ASCS_RECONNECT_INTERVAL，用户重写该函数可决定是否重连接及重连接间隔。
 
 	virtual void on_connect();
 连接成功时回调，用户重写它以得到连接成功事件。
@@ -63,29 +60,20 @@ virtual int prepare_reconnect(const asio::error_code& ec);
 	virtual bool on_heartbeat_error();
 心跳检测超时时回调。
 
-	virtual void on_close();
-如果需要重连接，则执行重连接，所以用户在重写它的时候，如果需要重连接逻辑，还得调用client_socket_base::on_close，
-要么就得自己实现。
+	virtual void after_close();
+如果需要重连接，则执行重连接。
 
 	bool prepare_next_reconnect(const asio::error_code& ec);
-如果允许（io_service仍然在运行且prepare_reconnect返回大于等于0），启动定时器以延时一小段时间之后重新连接服务器。
-
-	bool check_heartbeat(int interval);
-发送和读取心跳包，将做断线检测。
-如果定义了ASCS_HEARTBEAT_INTERVAL，将自动调用这个函数，否则你也可以以自己的逻辑来调用它。
-
-private:
-	bool async_shutdown_handler(timer::tid id, ssize_t loop_num);
-异步优雅关闭（shutdown）超时定时器。
-
-	void connect_handler(const error_code& ec);
-连接成功或者失败后由asio回调。
+如果允许（io_context仍然在运行且prepare_reconnect返回大于等于0），启动定时器以延时一小段时间之后重新连接服务器。
 
 protected:
-	asio::ip::tcp::endpoint server_addr;
-服务器地址。
 	bool need_reconnect;
 是否重新连接（当连接断开后）。
+
+private:
+	asio::ip::tcp::endpoint server_addr;
+服务器地址。
+
 };
 
 }} //namespace

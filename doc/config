@@ -1,12 +1,8 @@
 ﻿
 宏定义以及编译器版本，asio版本检查等。
 
-#define ASCS_VER		10100	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.1.0"
-
-#if !defined(__clang__) && defined(__GNUC__) && __GNUC__ > 5
-#define ASCS_HAS_STD_SHARED_MUTEX
-#endif
+#define ASCS_VER		10303	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.3.3"
 
 //configurations
 #ifndef ASCS_SERVER_IP
@@ -42,10 +38,8 @@ static_assert(ASCS_MAX_MSG_NUM > 0, "message capacity must be bigger than zero."
 //if defined, service_pump will catch exceptions for asio::io_service::run(), and all function objects in asynchronous calls
 //will be hooked by ascs::object, this can avoid the object been freed during asynchronous call.
 //#define ASCS_ENHANCED_STABILITY
-增加安全性，如果定义，将：
-1. 为asio::io_service::run()捕捉异常，捕捉到后，会回调ascs::service_pump::on_exception，如果返回true，则再次调用asio::io_service::run；
-2. 所有用于异步回调的函数对象都将被hook，这样将保证对对象重用或释放的绝对安全；
-3. ASCS_DELAY_CLOSE宏将恒定为0。
+增加安全性，如果定义，将为asio::io_service::run()捕捉异常，捕捉到后，会回调ascs::service_pump::on_exception，如果返回true，
+则再次调用asio::io_service::run。
 
 //if defined, asio::steady_timer will be used in ascs::timer, otherwise, asio::system_timer will be used.
 //#define ASCS_USE_STEADY_TIMER
@@ -70,9 +64,6 @@ static_assert(ASCS_DELAY_CLOSE >= 0, "delay close duration must be bigger than o
 //after sending buffer became empty, call ascs::socket::on_all_msg_send()
 //#define ASCS_WANT_ALL_MSG_SEND_NOTIFY
 
-//when link down, msgs in receiving buffer (already unpacked) will be discarded.
-//#define ASCS_DISCARD_MSG_WHEN_LINK_DOWN
-
 //max number of objects object_pool can hold.
 #ifndef ASCS_MAX_OBJECT_NUM
 #define ASCS_MAX_OBJECT_NUM	4096
@@ -82,17 +73,32 @@ static_assert(ASCS_MAX_OBJECT_NUM > 0, "object capacity must be bigger than zero
 //if defined, objects will never be freed, but remain in object_pool waiting for reuse.
 //#define ASCS_REUSE_OBJECT
 
-//define ASCS_REUSE_OBJECT macro will enable object pool, all objects in invalid_object_can will never be freed, but kept for reuse,
-//otherwise, object_pool will free objects in invalid_object_can automatically and periodically, ASCS_FREE_OBJECT_INTERVAL means the interval, unit is second,
-//see invalid_object_can at the end of object_pool class for more details.
-#ifndef ASCS_REUSE_OBJECT
+//this macro has the same effects as macro ASCS_REUSE_OBJECT (it will overwrite the latter), except:
+//reuse will not happen when create new connections, but just happen when invoke i_server::restore_socket.
+//you may ask, for what purpose we introduced this feature?
+//consider following situation:
+//if a specific link is down, and the client has reconnected to the server, on the server side, how does the new server_socket_base
+//restore all user data (because you don't want to nor need to reestablish them) and keep its id?
+//before this feature been introduced, it's almost impossible.
+//according to above explanation, we know that:
+//1. like object pool, only objects in invalid_object_can can be restored;
+//2. client need to inform server_socket_base the former id (or something else which can be used to calculate the former id
+//   on the server side) after reconnected to the server;
+//3. this feature needs user's support (send former id to server side on client side, invoke i_server::restore_socket in server_socket_base);
+//4. do not define this macro on client side nor for UDP.
+//#define ASCS_RESTORE_OBJECT
+
+//define ASCS_REUSE_OBJECT or ASCS_RESTORE_OBJECT macro will enable object pool, all objects in invalid_object_can will
+// never be freed, but kept for reuse, otherwise, object_pool will free objects in invalid_object_can automatically and periodically,
+//ASCS_FREE_OBJECT_INTERVAL means the interval, unit is second, see invalid_object_can in object_pool class for more details.
+#if !defined(ASCS_REUSE_OBJECT) && !defined(ASCS_RESTORE_OBJECT)
 	#ifndef ASCS_FREE_OBJECT_INTERVAL
 	#define ASCS_FREE_OBJECT_INTERVAL	60 //seconds
-	#elif ST_ASIO_FREE_OBJECT_INTERVAL <= 0
+	#elif ASCS_FREE_OBJECT_INTERVAL <= 0
 		#error free object interval must be bigger than zero.
 	#endif
 #endif
-如果未开启对象池，将自动开启一个定时器，用于定时释放（从内存中删除）失效的对象（失效对象是指obsoleted()返回true,
+如果未开启对象池，库将自动开启一个定时器，用于定时释放（从内存中删除）失效的对象（失效对象是指obsoleted()返回true,
 智能指针只有一个引用并且无任何异步调用的对象。
 
 //define ASCS_CLEAR_OBJECT_INTERVAL macro to let object_pool to invoke clear_obsoleted_object() automatically and periodically
@@ -150,48 +156,25 @@ static_assert(ASCS_ASYNC_ACCEPT_NUM > 0, "async accept number must be bigger tha
 //close port reuse
 //#define ASCS_NOT_REUSE_ADDRESS
 
-//If your compiler detected duplicated 'shared_mutex' definition, please define this macro.
-#ifndef ASCS_HAS_STD_SHARED_MUTEX
-namespace std {typedef shared_timed_mutex shared_mutex;}
+#ifndef ASCS_INPUT_QUEUE
+#define ASCS_INPUT_QUEUE lock_queue
 #endif
-
-//ConcurrentQueue is lock-free, please refer to https://github.com/cameron314/concurrentqueue
-#ifdef ASCS_HAS_CONCURRENT_QUEUE
-#include <concurrentqueue.h>
-template<typename T> using concurrent_queue = moodycamel::ConcurrentQueue<T>;
-	#ifndef ASCS_INPUT_QUEUE
-	#define ASCS_INPUT_QUEUE lock_free_queue
-	#endif
-	#ifndef ASCS_INPUT_CONTAINER
-	#define ASCS_INPUT_CONTAINER concurrent_queue
-	#endif
-	#ifndef ASCS_OUTPUT_QUEUE
-	#define ASCS_OUTPUT_QUEUE lock_free_queue
-	#endif
-	#ifndef ASCS_OUTPUT_CONTAINER
-	#define ASCS_OUTPUT_CONTAINER concurrent_queue
-	#endif
-#else
-	#ifndef ASCS_INPUT_QUEUE
-	#define ASCS_INPUT_QUEUE lock_queue
-	#endif
-	#ifndef ASCS_INPUT_CONTAINER
-	#define ASCS_INPUT_CONTAINER list
-	#endif
-	#ifndef ASCS_OUTPUT_QUEUE
-	#define ASCS_OUTPUT_QUEUE lock_queue
-	#endif
-	#ifndef ASCS_OUTPUT_CONTAINER
-	#define ASCS_OUTPUT_CONTAINER list
-	#endif
+#ifndef ASCS_INPUT_CONTAINER
+#define ASCS_INPUT_CONTAINER list
 #endif
-ascs默认提供了三种消息队列供你选择，一是concurrent queue，它是无锁线程安全的，具体请参看https://github.com/cameron314/concurrentqueue；
-二是普通的带锁消息队列，基于ascs::list加上std::shared_mutex实现；三是无锁线程不安全队列，也是基于ascs::list实现。
+#ifndef ASCS_OUTPUT_QUEUE
+#define ASCS_OUTPUT_QUEUE lock_queue
+#endif
+#ifndef ASCS_OUTPUT_CONTAINER
+#define ASCS_OUTPUT_CONTAINER list
+#endif
+ascs默认提供了两种消息队列供你选择，一是普通的带锁消息队列，基于ascs::list加上std::mutex实现，二是无锁线程不安全队列，
+也是基于ascs::list实现。
 使用无锁线程不安全队列时，一定要仔细审查你的业务，并不是所有业务都可以使用无锁线程不安全队列的，具有用法请看demo。
-队列及其内部所使用的容器都是可以通过宏或者模板参数来指定的，所以这就自然而然的支持了自定义队列（及容器），至于如何实现自定义队列（及容器），
-可以参看ascs::lock_free_queue，ascs::non_lock_queue及ascs::lock_queue，需要支持两个模板参数。
-容器需要实现一些特定的接口（队列需要调用），可以参看moodycamel::ConcurrentQueue以及ascs::list，需要支持一个模板参数，至于确切的需要实现哪些接口，
-因不同的队列而不同，最好的办法就是编译，让编译器告诉你缺少哪些接口，接口从名称上就可以看出其作用，非常清晰。
+队列及其内部所使用的容器都是可以通过宏或者模板参数来指定的，所以这就自然而然的支持了自定义队列（及容器），至于如何实现自定
+义队列（及容器），可以参看ascs::non_lock_queue及ascs::lock_queue，需要支持两个模板参数。
+容器需要实现一些特定的接口（队列需要调用），可以参看ascs::list，需要支持一个模板参数，至于确切的需要实现哪些接口，因不同
+的队列而不同，最好的办法就是编译，让编译器告诉你缺少哪些接口，接口从名称上就可以看出其作用，非常清晰。
 
 #ifndef ASCS_RECV_BUFFER_TYPE
 	#if ASIO_VERSION >= 101100
@@ -201,16 +184,6 @@ ascs默认提供了三种消息队列供你选择，一是concurrent queue，它
 	#endif
 #endif
 unpacker的prepare_next_recv返回的数据类型的定义。
-
-#ifdef ASCS_SEND_BUFFER_TYPE
-	#error macro ASCS_SEND_BUFFER_TYPE is just used internally.
-#endif
-#if ASIO_VERSION >= 101100
-#define ASCS_SEND_BUFFER_TYPE asio::const_buffer
-#else
-#define ASCS_SEND_BUFFER_TYPE asio::const_buffers_1
-#endif
-内部使用，不要定义
 
 #ifndef ASCS_HEARTBEAT_INTERVAL
 #define ASCS_HEARTBEAT_INTERVAL	0 //second(s)
@@ -254,5 +227,26 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 
 //#define ASCS_DISPATCH_BATCH_MSG
 是否批量派发消息，如果你的消息处理很简单（比如echo server，或者你有自己的消息派发逻辑，在on_msg_handle里面只需要将消息push到另外一个队列），推荐定义该宏。
+在批量派发的情况下，你仍然可以每次只消费一条或者零条消息，剩余的将继续派发，这就退化成了原来的单消息派发了。
+
+//#define ASCS_ALIGNED_TIMER
+对齐定时器，比如一个定时器在xx:xx:xx开启，interval 是 10 秒，回调将会在 xx:xx:xx + 10 被调用，假设回调在 xx:xx:xx + 11 返回，那么下一次定时器的间隔将被
+临时地改为9秒以保证下次回调发生在 xx:xx:xx + 20 ，如果不定义该宏，那么下次回调将发生在 xx:xx:xx + 21 。
+
+//#define ASCS_SYNC_SEND
+#ifdef ASCS_SYNC_SEND
+static_assert(ASIO_HAS_STD_FUTURE == 1, "sync message sending needs std::future.");
+#endif
+//#define ASCS_SYNC_RECV
+是否支持同步数据收发，同步发需要std::future支持。注意同步收发会轻微影响性能，即便你只做异步收发，所以在不需要的情况下要关闭这两个宏。
+
+//#define ASCS_SYNC_DISPATCH
+是否支持同步派发消息，派发的次序为 sync_recv_msg（如果有调用的话），on_msg（如果定义该宏的话）和 on_msg_handle。
+同步派发的情况下，虽然你也可以像批量派发一样只消费一条或者零条消息，但剩余的消息将通过on_msg_handle异步派发而非on_msg同步派发，这会造成消息乱序，
+比如消息持续的到达，上一次on_msg未消费完的消息通过on_msg_handle异步派发时，会与下一次on_msg并发进行，从而让消息乱序。
+所以在开启这个功能之前，一定要清楚两点，一是能不能在on_msg里面消费掉所有消息，如果能则不需要考虑第二点，二是能不能忍受消息乱序。
+具体还可参考echo_server（不能在on_msg里面消费掉所有消息，也不能忍受消息乱序，所以不能开启这个功能）和echo_client（满足条件一）
+另外，在逻辑非常简单的情况下（比如echo_server），上面说了，定义ASCS_DISPATCH_BATCH_MSG宏是推荐的，可以提高一些效率，如果你的逻辑还满足这里说的条件（
+echo_client，pingpong_server和pingpong_client就满足），那么定义宏ASCS_SYNC_DISPATCH还可以进一步提高效率。
 
 //configurations
