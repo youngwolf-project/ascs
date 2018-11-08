@@ -28,11 +28,8 @@ using namespace ascs::ext::tcp;
 class echo_socket : public server_socket
 {
 public:
-	echo_socket(i_server& server_) : server_socket(server_)
-	{
-		unpacker()->stripped(false);
-		//other heavy things can be done at here too, because we pre-created ASCS_ASYNC_ACCEPT_NUM echo_socket objects
-	}
+	echo_socket(i_server& server_) : server_socket(server_) {unpacker()->stripped(false);}
+	//other heavy things can be done in the constructor too, because we pre-created ASCS_ASYNC_ACCEPT_NUM echo_socket objects
 
 protected:
 	//msg handling: send the original msg back (echo server)
@@ -43,28 +40,18 @@ protected:
 class echo_server : public server_base<echo_socket>
 {
 public:
-	echo_server(service_pump& service_pump_) : server_base<echo_socket>(service_pump_), accepted_link_num(0) {}
+	echo_server(service_pump& service_pump_) : server_base<echo_socket>(service_pump_) {}
 
 protected:
-	virtual bool on_accept(object_ctype& socket_ptr)
-	{
-		asio::ip::tcp::no_delay option(true); socket_ptr->lowest_layer().set_option(option);
-		++accepted_link_num;
-
-		return true;
-	}
-
+	virtual bool on_accept(object_ctype& socket_ptr) {asio::ip::tcp::no_delay option(true); socket_ptr->lowest_layer().set_option(option); return true;}
 	virtual void start_next_accept()
 	{
 		//after we accepted ASCS_ASYNC_ACCEPT_NUM - 10 connections, we start to create new echo_socket objects (one echo_socket per one accepting)
-		if (accepted_link_num.load() + 10 >= ASCS_ASYNC_ACCEPT_NUM) //only left 10 async accepting operations
+		if (size() + 10 >= ASCS_ASYNC_ACCEPT_NUM) //only left 10 async accepting operations
 			server_base<echo_socket>::start_next_accept();
 		else
 			puts("stopped one async accepting.");
 	}
-
-private:
-	std::atomic_uint_fast32_t accepted_link_num;
 };
 
 int main(int argc, const char* argv[])
