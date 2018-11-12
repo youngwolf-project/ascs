@@ -107,6 +107,7 @@ public:
 	void graceful_shutdown() {this->do_something_to_all([](typename Pool::object_ctype& item) {item->graceful_shutdown();});} //parameter sync must be false (the default value), or dead lock will occur.
 
 protected:
+	virtual int async_accept_num() {return ASCS_ASYNC_ACCEPT_NUM;}
 	virtual bool init()
 	{
 		asio::error_code ec;
@@ -116,6 +117,27 @@ protected:
 #endif
 		acceptor.bind(server_addr, ec); assert(!ec);
 		if (ec) {get_service_pump().stop(); unified_out::error_out("bind failed."); return false;}
+
+		auto num = async_accept_num();
+		assert(num > 0);
+		if (num <= 0)
+			num = 16;
+
+		std::list<typename Pool::object_type> sockets;
+		unified_out::info_out("begin to pre-create %d server socket...", num);
+		while (--num >= 0)
+		{
+			auto socket_ptr(this->create_object(*this));
+			if (!socket_ptr)
+				break;
+
+			sockets.push_back(std::move(socket_ptr));
+		}
+		if (num >= 0)
+			unified_out::info_out("finished pre-creating server sockets, but failed %d time(s).", num + 1);
+		else
+			unified_out::info_out("finished pre-creating server sockets.");
+
 #if ASIO_VERSION >= 101100
 		acceptor.listen(asio::ip::tcp::acceptor::max_listen_connections, ec); assert(!ec);
 #else
@@ -123,19 +145,19 @@ protected:
 #endif
 		if (ec) {get_service_pump().stop(); unified_out::error_out("listen failed."); return false;}
 
+		ascs::do_something_to_all(sockets, [this](typename Pool::object_ctype& item) {this->do_async_accept(item);});
 		this->start();
-
-		for (auto i = 0; i < ASCS_ASYNC_ACCEPT_NUM; ++i)
-			start_next_accept();
 
 		return true;
 	}
 	virtual void uninit() {this->stop(); stop_listen(); force_shutdown();} //if you wanna graceful shutdown, call graceful_shutdown before service_pump::stop_service invocation.
+
 	virtual bool on_accept(typename Pool::object_ctype& socket_ptr) {return true;}
+	virtual void start_next_accept() {do_async_accept(this->create_object(*this));}
 
 	//if you want to ignore this error and continue to accept new connections immediately, return true in this virtual function;
 	//if you want to ignore this error and continue to accept new connections after a specific delay, start a timer immediately and return false (don't call stop_listen()),
-	// when the timer ends up, call start_next_accept() in the callback function.
+	// after the timer exhausts, call start_next_accept() in the callback function.
 	//otherwise, don't rewrite this virtual function or call server_base::on_accept_error() directly after your code.
 	virtual bool on_accept_error(const asio::error_code& ec, typename Pool::object_ctype& socket_ptr)
 	{
@@ -146,12 +168,6 @@ protected:
 		}
 
 		return false;
-	}
-
-	virtual void start_next_accept()
-	{
-		auto socket_ptr = this->create_object(*this);
-		acceptor.async_accept(socket_ptr->lowest_layer(), [=](const asio::error_code& ec) {this->accept_handler(ec, socket_ptr);});
 	}
 
 protected:
@@ -180,6 +196,10 @@ protected:
 		else if (on_accept_error(ec, socket_ptr))
 			start_next_accept();
 	}
+
+private:
+	void do_async_accept(typename Pool::object_ctype& socket_ptr)
+		{if (socket_ptr) acceptor.async_accept(socket_ptr->lowest_layer(), [=](const asio::error_code& ec) {this->accept_handler(ec, socket_ptr);});}
 
 private:
 	asio::ip::tcp::endpoint server_addr;

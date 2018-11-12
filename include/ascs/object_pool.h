@@ -54,10 +54,9 @@ protected:
 
 	bool add_object(object_ctype& object_ptr)
 	{
-		assert(object_ptr && !object_ptr->is_equal_to(-1));
-
 		if (!object_ptr)
 			return false;
+		assert(!object_ptr->is_equal_to(-1));
 
 		std::lock_guard<std::mutex> lock(object_can_mutex);
 		return object_can.size() < max_size_ ? object_can.emplace(object_ptr->id(), object_ptr).second : false;

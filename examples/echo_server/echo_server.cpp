@@ -270,8 +270,7 @@ int main(int argc, const char* argv[])
 			*/
 			/*
 			//if demo client is using stream_unpacker
-			if (!str.empty())
-				server_.do_something_to_all([&str](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(str);});
+			server_.do_something_to_all([&str](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(str);});
 			*/
 		}
 	}
