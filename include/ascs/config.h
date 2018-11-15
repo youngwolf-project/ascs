@@ -441,6 +441,26 @@
  *
  * REPLACEMENTS:
  *
+ * ===============================================================
+ * 2019.1.1		version 1.3.4
+ *
+ * SPECIAL ATTENTION (incompatible with old editions):
+ * The virtual function socket::on_send_error has been moved to tcp::socket_base and udp::socket_base.
+ * The signature of virtual function socket::on_send_error has been changed, user must provide a container to hold the messages that were failed to send
+ *  no matter you need them or not.
+ *
+ * HIGHLIGHT:
+ *
+ * FIX:
+ *
+ * ENHANCEMENTS:
+ *
+ * DELETION:
+ *
+ * REFACTORING:
+ *
+ * REPLACEMENTS:
+ *
  */
 
 #ifndef _ASCS_CONFIG_H_
@@ -450,8 +470,8 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#define ASCS_VER		10303	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.3.3"
+#define ASCS_VER		10304	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.3.4"
 
 //asio and compiler check
 #ifdef _MSC_VER
