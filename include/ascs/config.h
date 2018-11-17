@@ -446,8 +446,7 @@
  *
  * SPECIAL ATTENTION (incompatible with old editions):
  * The virtual function socket::on_send_error has been moved to tcp::socket_base and udp::socket_base.
- * The signature of virtual function socket::on_send_error has been changed, user must provide a container to hold the messages that were failed to send
- *  no matter you need them or not.
+ * The signature of virtual function socket::on_send_error has been changed, a container holding messages that were failed to send will be provided.
  *
  * HIGHLIGHT:
  *
