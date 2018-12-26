@@ -25,6 +25,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "concurrent_client", "concur
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "concurrent_server", "concurrent_server\concurrent_server.vcxproj", "{827343A9-D15E-4070-909D-2DFCC7CA8574}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "socket_management", "socket_management\socket_management.vcxproj", "{6CCBD6A3-D5BF-4568-9ED5-860D19B6A2C7}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -121,6 +123,14 @@ Global
 		{827343A9-D15E-4070-909D-2DFCC7CA8574}.Release|Win32.Build.0 = Release|Win32
 		{827343A9-D15E-4070-909D-2DFCC7CA8574}.Release|x64.ActiveCfg = Release|x64
 		{827343A9-D15E-4070-909D-2DFCC7CA8574}.Release|x64.Build.0 = Release|x64
+		{6CCBD6A3-D5BF-4568-9ED5-860D19B6A2C7}.Debug|Win32.ActiveCfg = Debug|Win32
+		{6CCBD6A3-D5BF-4568-9ED5-860D19B6A2C7}.Debug|Win32.Build.0 = Debug|Win32
+		{6CCBD6A3-D5BF-4568-9ED5-860D19B6A2C7}.Debug|x64.ActiveCfg = Debug|x64
+		{6CCBD6A3-D5BF-4568-9ED5-860D19B6A2C7}.Debug|x64.Build.0 = Debug|x64
+		{6CCBD6A3-D5BF-4568-9ED5-860D19B6A2C7}.Release|Win32.ActiveCfg = Release|Win32
+		{6CCBD6A3-D5BF-4568-9ED5-860D19B6A2C7}.Release|Win32.Build.0 = Release|Win32
+		{6CCBD6A3-D5BF-4568-9ED5-860D19B6A2C7}.Release|x64.ActiveCfg = Release|x64
+		{6CCBD6A3-D5BF-4568-9ED5-860D19B6A2C7}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
