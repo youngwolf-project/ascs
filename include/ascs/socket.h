@@ -274,7 +274,7 @@ protected:
 	// in this socket except this socket itself, because this socket maybe is being maintained by object_pool.
 	//otherwise (bigger than zero), socket simply call this callback ASCS_DELAY_CLOSE seconds later after link down, no any guarantees.
 	virtual void on_close() {unified_out::info_out("on_close()");}
-	virtual void after_close() {} //a good case for using this is to reconnect to the server, please refer to client_socket_base.
+	virtual void after_close() {} //a good case for using this is to reconnect the server, please refer to client_socket_base.
 
 #ifdef ASCS_SYNC_DISPATCH
 	//return the number of handled msg, if some msg left behind, socket will re-dispatch them asynchronously

@@ -289,7 +289,7 @@
  * 2018.4.10	version 1.2.6
  *
  * SPECIAL ATTENTION (incompatible with old editions):
- * Do reconnecting in client_socket_base::after_close rather in client_socket_base::on_close.
+ * Do reconnecting in client_socket_base::after_close rather than in client_socket_base::on_close.
  *
  * HIGHLIGHT:
  *
@@ -297,7 +297,7 @@
  * Reconnecting may happen in ascs::socket::reset, it's not a right behavior.
  *
  * ENHANCEMENTS:
- * Add ascs::socket::after_close virtual function, a good case for using it is to reconnect to the server in client_socket_base.
+ * Add ascs::socket::after_close virtual function, a good case for using it is to reconnect the server in client_socket_base.
  *
  * DELETION:
  *
@@ -448,6 +448,7 @@
  * The virtual function socket::on_send_error has been moved to tcp::socket_base and udp::socket_base.
  * The signature of virtual function socket::on_send_error has been changed, a container holding messages that were failed to send will be provided.
  * Failure of binding or listening in server_base will not stop the service_pump any more.
+ * Virtual function client_socket_base::prepare_reconnect() now only control the retry times and delay time after reconnecting failed.
  *
  * HIGHLIGHT:
  *
@@ -456,7 +457,8 @@
  * ENHANCEMENTS:
  * Expose server_base's acceptor via next_layer().
  * Prefix suffix packer and unpacker support heartbeat.
- * New demo socket_management to demonstrate how to manage sockets if you use other keys rather than the original id.
+ * New demo socket_management demonstrates how to manage sockets if you use other keys rather than the original id.
+ * Control reconnecting more flexibly, see function client_socket_base::open_reconnect and client_socket_base::close_reconnect for more details.
  *
  * DELETION:
  *

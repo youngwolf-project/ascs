@@ -34,11 +34,9 @@ public:
 	template<typename Arg>
 	client_socket_base(asio::io_context& io_context_, Arg& arg) : super(io_context_, arg), need_reconnect(true) {set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
 
-	//reset all, be ensure that there's no any operations performed on this socket when invoke it
-	//subclass must re-write this function to initialize itself, and then do not forget to invoke superclass' reset function too
-	//notice, when reusing this socket, object_pool will invoke this function
+	//reset all, be ensure that no operations performed on this socket when invoke it, subclass must rewrite this function to initialize itself, and then
+	// call superclass' reset function, before reusing this socket, object_pool will invoke this function
 	virtual void reset() {need_reconnect = true; super::reset();}
-	virtual bool obsoleted() {return !need_reconnect && super::obsoleted();}
 
 	bool set_server_addr(unsigned short port, const std::string& ip = ASCS_SERVER_IP)
 	{
@@ -56,7 +54,14 @@ public:
 	}
 	const asio::ip::tcp::endpoint& get_server_addr() const {return server_addr;}
 
-	//if the connection is broken unexpectedly, client_socket_base will try to reconnect to the server automatically.
+	//if you don't want to reconnect to the server after link broken, call close_reconnect() or rewrite after_close() virtual function and do nothing in it,
+	//if you want to control the retry times and delay time after reconnecting failed, rewrite prepare_reconnect virtual function.
+	//disconnect(bool), force_shutdown(bool) and graceful_shutdown(bool, bool) can overwrite reconnecting behavior, please note.
+	//reset() virtual function will open reconnecting, please note.
+	void open_reconnect() {need_reconnect = true;}
+	void close_reconnect() {need_reconnect = false;}
+
+	//if the connection is broken unexpectedly, client_socket_base will try to reconnect to the server automatically (if need_reconnect is true).
 	void disconnect(bool reconnect = false) {force_shutdown(reconnect);}
 	void force_shutdown(bool reconnect = false)
 	{
@@ -95,11 +100,11 @@ protected:
 	{
 		if (!ec) //already started, so cannot call start()
 			super::do_start();
-		else
+		else if (need_reconnect)
 			prepare_next_reconnect(ec);
 	}
 
-	//after how much time(ms), client_socket_base will try to reconnect to the server, negative value means give up.
+	//after how much time (ms), client_socket_base will try to reconnect the server, negative value means give up.
 	virtual int prepare_reconnect(const asio::error_code& ec) {return ASCS_RECONNECT_INTERVAL;}
 	virtual void on_connect() {unified_out::info_out("connecting success.");}
 	virtual void on_unpack_error() {unified_out::info_out("can not unpack msg."); force_shutdown();}
@@ -107,7 +112,7 @@ protected:
 	{
 		this->show_info("client link:", "broken/been shut down", ec);
 
-		force_shutdown(this->is_shutting_down() ? need_reconnect : prepare_reconnect(ec) >= 0);
+		force_shutdown(need_reconnect);
 		this->status = super::link_status::BROKEN;
 	}
 
@@ -115,16 +120,19 @@ protected:
 	virtual bool on_heartbeat_error()
 	{
 		this->show_info("client link:", "broke unexpectedly.");
-		force_shutdown(this->is_shutting_down() ? need_reconnect : prepare_reconnect(asio::error_code(asio::error::network_down)) >= 0);
+
+		force_shutdown(need_reconnect);
 		return false;
 	}
 
-	//reconnect at here rather than in on_recv_error to make sure that there's no any async invocations performed on this socket before reconnecting
+	//reconnect at here rather than in on_recv_error to make sure no async invocations performed on this socket before reconnecting.
+	//if you don't want to reconnect the server after link broken, rewrite this virtual function and do nothing in it or call close_reconnt().
+	//if you want to control the retry times and delay time after reconnecting failed, rewrite prepare_reconnect virtual function.
 	virtual void after_close() {if (need_reconnect) this->start();}
 
 	bool prepare_next_reconnect(const asio::error_code& ec)
 	{
-		if (this->started() && (asio::error::operation_aborted != ec || need_reconnect) && !this->stopped())
+		if (this->started() && !this->stopped())
 		{
 #ifdef _WIN32
 			if (asio::error::connection_refused != ec && asio::error::network_unreachable != ec && asio::error::timed_out != ec)
