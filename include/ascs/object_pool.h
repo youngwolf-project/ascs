@@ -96,8 +96,8 @@ protected:
 
 	//change object_ptr's id to id, and reinsert it into object_can.
 	//there MUST exist an object in invalid_object_can whose id is equal to id to guarantee the id has been abandoned
-	// (checking existence of such object in object_can is NOT enough, because there're some sockets used by async
-	// acception, they don't exist in object_can nor invalid_object_can), further more, the invalid object MUST be
+	// (checking existence of such object in object_can is NOT enough, because there are some sockets used by async
+	// acceptance, they don't exist in object_can nor invalid_object_can), further more, the invalid object MUST be
 	//obsoleted and has no additional reference.
 	//return the invalid object (null means failure), please note that the invalid object has been removed from invalid_object_can.
 	object_type change_object_id(object_ctype& object_ptr, uint_fast64_t id)
@@ -314,11 +314,11 @@ private:
 	std::mutex object_can_mutex;
 	size_t max_size_;
 
-	//because all objects are dynamic created and stored in object_can, maybe when receiving error occur
-	//(you are recommended to delete the object from object_can, for example via i_server::del_socket), some other asynchronous calls are still queued in asio::io_context,
-	//and will be dequeued in the future, we must guarantee these objects not be freed from the heap or reused, so we move these objects from object_can to invalid_object_can,
-	//and free them from the heap or reuse them in the near future.
-	//if ASCS_CLEAR_OBJECT_INTERVAL been defined, clear_obsoleted_object() will be invoked automatically and periodically to move all invalid objects into invalid_object_can.
+	//because all objects are dynamic created and stored in object_can, after receiving error occurred (you are recommended to delete the object from object_can,
+	//for example via i_server::del_socket), maybe some other asynchronous calls are still queued in asio::io_context, and will be dequeued in the future,
+	//we must guarantee these objects not be freed from the heap or reused, so we move these objects from object_can to invalid_object_can, and free them
+	//from the heap or reuse them in the near future. if ASCS_CLEAR_OBJECT_INTERVAL been defined, clear_obsoleted_object() will be invoked automatically and
+	//periodically to move all invalid objects into invalid_object_can.
 	list<object_type> invalid_object_can;
 	std::mutex invalid_object_can_mutex;
 };

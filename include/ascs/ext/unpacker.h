@@ -394,11 +394,14 @@ public:
 		auto min_len = _prefix.size() + _suffix.size();
 		while (0 == peek_msg(remain_len, pnext) && (size_t) -1 != cur_msg_len && 0 != cur_msg_len)
 		{
-			assert(cur_msg_len > min_len);
-			if (stripped())
-				msg_can.emplace_back(std::next(pnext, _prefix.size()), cur_msg_len - min_len);
-			else
-				msg_can.emplace_back(pnext, cur_msg_len);
+			assert(cur_msg_len >= min_len);
+			if (cur_msg_len > min_len) //exclude heartbeat
+			{
+				if (stripped())
+					msg_can.emplace_back(std::next(pnext, _prefix.size()), cur_msg_len - min_len);
+				else
+					msg_can.emplace_back(pnext, cur_msg_len);
+			}
 			remain_len -= cur_msg_len;
 			std::advance(pnext, cur_msg_len);
 			cur_msg_len = -1;

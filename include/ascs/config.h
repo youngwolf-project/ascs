@@ -12,14 +12,14 @@
  * license: http://think-async.com/ (current is www.boost.org/LICENSE_1_0.txt)
  *
  * Known issues:
- * 1. since 1.1.0 until 1.3, concurrentqueue is not a FIFO queue (it is by design), navigate to the following links for more deatils:
+ * 1. since 1.1.0 until 1.3, concurrentqueue is not a FIFO queue (it is by design), navigate to the following links for more details:
  *  https://github.com/cameron314/concurrentqueue/issues/6
  *  https://github.com/cameron314/concurrentqueue/issues/52
  *  if you're using concurrentqueue, please play attention, this is by design.
  * 2. since 1.1.5 until 1.2, heartbeat function cannot work properly between windows (at least win-10) and Ubuntu (at least Ubuntu-16.04).
  * 3. since 1.1.5 until 1.2, UDP doesn't support heartbeat because UDP doesn't support OOB data.
  * 4. since 1.1.5 until 1.2, SSL doesn't support heartbeat because SSL doesn't support OOB data.
- * 5. with old openssl (at least 0.9.7), ssl::client_socket_base and ssl_server_socket_base are not reuable, i'm not sure in which version,
+ * 5. with old openssl (at least 0.9.7), ssl::client_socket_base and ssl_server_socket_base are not reusable, I'm not sure in which version,
  *    they became available, seems it's 1.0.0.
  *
  * 2016.9.25	version 1.0.0
@@ -97,7 +97,7 @@
  * SPECIAL ATTENTION (incompatible with old editions):
  * Virtual function reset_state in i_packer and i_unpacker have been renamed to reset.
  * Virtual function is_send_allowed has been renamed to is_ready, it also means ready to receive messages
- *  since message sending is not suspendable any more.
+ *  since message sending cannot be suspended any more.
  * Virtual function on_msg_handle has been changed, the link_down variable will not be presented any more.
  * Interface i_server::del_client has been renamed to i_server::del_socket.
  * Function inner_packer and inner_unpacker have been renamed to packer and unpacker.
@@ -239,7 +239,7 @@
  *
  * FIX:
  * If start the same timer and return false in the timer's call_back, its status will be set to TIMER_CANCELED (the right value should be TIMER_OK).
- * In old compilers (for example gcc 4.7), std::list::splice needs a non-const iterator as the insert point.
+ * In old compilers (for example gcc 4.7), std::list::splice needs a non-constant iterator as the insert point.
  * If call stop_service after service_pump stopped, timer TIMER_DELAY_CLOSE will be left behind and be triggered after the next start_service,
  *  this will bring disorders to ascs::socket.
  *
@@ -257,7 +257,7 @@
  * Drop useless variables which need macro ASCS_DECREASE_THREAD_AT_RUNTIME to be defined.
  *
  * REFACTORING:
- * Move variable last_send_time and last_recv_time from ascs::socket to ascs::socet::stat (a statistic object).
+ * Move variable last_send_time and last_recv_time from ascs::socket to ascs::socket::stat (a statistic object).
  * Move common operations in client_socket_base::do_start and server_socket_base::do_start to tcp::socket_base::do_start and socket::do_start.
  *
  * REPLACEMENTS:
@@ -289,15 +289,15 @@
  * 2018.4.10	version 1.2.6
  *
  * SPECIAL ATTENTION (incompatible with old editions):
- * Do reconnecting in client_socket_base::after_close rather in client_socket_base::on_close.
+ * Do reconnecting in client_socket_base::after_close rather than in client_socket_base::on_close.
  *
  * HIGHLIGHT:
  *
  * FIX:
- * Reconnectiong may happen in ascs::socket::reset, it's not a right behavior.
+ * Reconnecting may happen in ascs::socket::reset, it's not a right behavior.
  *
  * ENHANCEMENTS:
- * Add ascs::socket::after_close virtual function, a good case for using it is to reconnect to the server in client_socket_base.
+ * Add ascs::socket::after_close virtual function, a good case for using it is to reconnect the server in client_socket_base.
  *
  * DELETION:
  *
@@ -329,7 +329,7 @@
  *
  * HIGHLIGHT:
  * After introduced asio::io_context::strand (which is required, see FIX section for more details), we wiped two atomic in ascs::socket.
- * Introduced macro ASCS_DISPATCH_BATCH_MSG, then all messages will be dispatched via on_handle_msg with a variable-length contianer.
+ * Introduced macro ASCS_DISPATCH_BATCH_MSG, then all messages will be dispatched via on_handle_msg with a variable-length container.
  *
  * FIX:
  * Wiped race condition between async_read and async_write on the same ascs::socket, so sync sending mode will not be supported any more.
@@ -363,7 +363,7 @@
  *
  * HIGHLIGHT:
  * Support Cygwin and Mingw.
- * Dynamically allocate timers when needed (multithreading releated behaviors kept as before, so we must introduce a mutex for ascs::timer object).
+ * Dynamically allocate timers when needed (multi-threading related behaviors kept as before, so we must introduce a mutex for ascs::timer object).
  *
  * FIX:
  *
@@ -390,7 +390,7 @@
  *
  * HIGHLIGHT:
  * Fully support sync message sending and receiving (even be able to mix with async message sending and receiving without any limitations), but please note
- *  that this feature will slightly impact efficiency even if you always use async message sending and receiving, so only open this feature when realy needed.
+ *  that this feature will slightly impact efficiency even if you always use async message sending and receiving, so only open this feature when really needed.
  *
  * FIX:
  * Fix race condition when aligning timers, see macro ASCS_ALIGNED_TIMER for more details.
@@ -441,6 +441,31 @@
  *
  * REPLACEMENTS:
  *
+ * ===============================================================
+ * 2019.1.1		version 1.3.4
+ *
+ * SPECIAL ATTENTION (incompatible with old editions):
+ * The virtual function socket::on_send_error has been moved to tcp::socket_base and udp::socket_base.
+ * The signature of virtual function socket::on_send_error has been changed, a container holding messages that were failed to send will be provided.
+ * Failure of binding or listening in server_base will not stop the service_pump any more.
+ * Virtual function client_socket_base::prepare_reconnect() now only control the retry times and delay time after reconnecting failed.
+ *
+ * HIGHLIGHT:
+ *
+ * FIX:
+ *
+ * ENHANCEMENTS:
+ * Expose server_base's acceptor via next_layer().
+ * Prefix suffix packer and unpacker support heartbeat.
+ * New demo socket_management demonstrates how to manage sockets if you use other keys rather than the original id.
+ * Control reconnecting more flexibly, see function client_socket_base::open_reconnect and client_socket_base::close_reconnect for more details.
+ *
+ * DELETION:
+ *
+ * REFACTORING:
+ *
+ * REPLACEMENTS:
+ *
  */
 
 #ifndef _ASCS_CONFIG_H_
@@ -450,8 +475,8 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#define ASCS_VER		10303	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.3.3"
+#define ASCS_VER		10304	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.3.4"
 
 //asio and compiler check
 #ifdef _MSC_VER
@@ -649,7 +674,7 @@ static_assert(ASCS_ASYNC_ACCEPT_NUM > 0, "async accept number must be bigger tha
 #ifndef ASCS_OUTPUT_CONTAINER
 #define ASCS_OUTPUT_CONTAINER list
 #endif
-//we also can control the queues (and their containers) via template parameters on calss 'client_socket_base'
+//we also can control the queues (and their containers) via template parameters on class 'client_socket_base'
 //'server_socket_base', 'ssl::client_socket_base' and 'ssl::server_socket_base'.
 //we even can let a socket to use different queue (and / or different container) for input and output via template parameters.
 
@@ -707,7 +732,7 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 //this value can be changed via ascs::socket::msg_handling_interval(size_t) at runtime.
 
 //#define ASCS_PASSIVE_RECV
-//to gain the ability of changing the unpacker at runtime, with this mcro, ascs will not do message receiving automatically (except the firt one),
+//to gain the ability of changing the unpacker at runtime, with this macro, ascs will not do message receiving automatically (except the first one),
 // so you need to manually call recv_msg(), if you need to change the unpacker, do it before recv_msg() invocation, please note.
 //during async message receiving, calling recv_msg() will fail, this is by design to avoid asio::io_context using up all virtual memory.
 //because user can greedily call recv_msg(), it's your responsibility to keep the recv buffer from overflowed, please pay special attention.
@@ -722,7 +747,7 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 //#define ASCS_ALIGNED_TIMER
 //for example, start a timer at xx:xx:xx, interval is 10 seconds, the callback will be called at (xx:xx:xx + 10), and suppose that the callback
 //returned at (xx:xx:xx + 11), then the interval will be temporarily changed to 9 seconds to make the next callback to be called at (xx:xx:xx + 20),
-//if you don't define this macro, the next callback will be called at (xx:xx:xx + 21), plase note.
+//if you don't define this macro, the next callback will be called at (xx:xx:xx + 21), please note.
 
 //#define ASCS_SYNC_SEND
 #ifdef ASCS_SYNC_SEND
@@ -736,7 +761,7 @@ static_assert(ASIO_HAS_STD_FUTURE == 1, "sync message sending needs std::future.
 // sync_safe_send_native_msg
 // sync_recv_msg
 //please note that:
-// this feature will slightly impact efficiency even if you always use async message sending and receiving, so only open this feature when realy needed.
+// this feature will slightly impact efficiency even if you always use async message sending and receiving, so only open this feature when really needed.
 // we must avoid to do sync message sending and receiving in service threads.
 // if prior sync_recv_msg() not returned, the second sync_recv_msg() will return false immediately.
 // with macro ASCS_PASSIVE_RECV, in sync_recv_msg(), recv_msg() will be automatically called.

@@ -277,8 +277,12 @@ private:
 	{
 		assert(nullptr != i_service_);
 
-		std::lock_guard<std::mutex> lock(service_can_mutex);
+		std::unique_lock<std::mutex> lock(service_can_mutex);
 		service_can.emplace_back(i_service_);
+		lock.unlock();
+
+		if (is_service_started())
+			unified_out::warning_out("service been added, please remember to call start_service for it!");
 	}
 
 private:

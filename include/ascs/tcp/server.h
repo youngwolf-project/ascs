@@ -50,6 +50,9 @@ public:
 	void stop_listen() {asio::error_code ec; acceptor.cancel(ec); acceptor.close(ec);}
 	bool is_listening() const {return acceptor.is_open();}
 
+	asio::ip::tcp::acceptor& next_layer() {return acceptor;}
+	const asio::ip::tcp::acceptor& next_layer() const {return acceptor;}
+
 	//implement i_server's pure virtual functions
 	virtual service_pump& get_service_pump() {return Pool::get_service_pump();}
 	virtual const service_pump& get_service_pump() const {return Pool::get_service_pump();}
@@ -63,7 +66,7 @@ public:
 		return this->del_object(raw_socket_ptr);
 	}
 	//restore the invalid socket whose id is equal to id, if successful, socket_ptr's take_over function will be invoked,
-	//you can restore the invalid socket to socket_ptr, everything is restorable except socket::next_layer_ (on the other
+	//you can restore the invalid socket to socket_ptr, everything can be restored except socket::next_layer_ (on the other
 	//hand, restore socket::next_layer_ doesn't make any sense).
 	virtual bool restore_socket(const std::shared_ptr<tracked_executor>& socket_ptr, uint_fast64_t id)
 	{
@@ -116,7 +119,7 @@ protected:
 		acceptor.set_option(asio::ip::tcp::acceptor::reuse_address(true), ec); assert(!ec);
 #endif
 		acceptor.bind(server_addr, ec); assert(!ec);
-		if (ec) {get_service_pump().stop(); unified_out::error_out("bind failed."); return false;}
+		if (ec) {unified_out::error_out("bind failed."); return false;}
 
 		auto num = async_accept_num();
 		assert(num > 0);
@@ -143,7 +146,7 @@ protected:
 #else
 		acceptor.listen(asio::ip::tcp::acceptor::max_connections, ec); assert(!ec);
 #endif
-		if (ec) {get_service_pump().stop(); unified_out::error_out("listen failed."); return false;}
+		if (ec) {unified_out::error_out("listen failed."); return false;}
 
 		ascs::do_something_to_all(sockets, [this](typename Pool::object_ctype& item) {this->do_async_accept(item);});
 		this->start();
