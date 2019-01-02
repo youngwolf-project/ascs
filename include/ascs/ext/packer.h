@@ -172,7 +172,7 @@ public:
 		return msg;
 	}
 
-	virtual msg_type pack_heartbeat() {return msg_type(1, '\n');}
+	virtual msg_type pack_heartbeat() {return _prefix + _suffix;}
 	virtual char* raw_data(msg_type& msg) const {return const_cast<char*>(std::next(msg.data(), _prefix.size()));}
 	virtual const char* raw_data(msg_ctype& msg) const {return std::next(msg.data(), _prefix.size());}
 	virtual size_t raw_data_len(msg_ctype& msg) const {return msg.size() - _prefix.size() - _suffix.size();}
