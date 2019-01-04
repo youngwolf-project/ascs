@@ -39,7 +39,7 @@ public:
 	virtual void send_heartbeat()
 	{
 		in_msg_type msg(peer_addr, packer_->pack_heartbeat());
-		this->do_direct_send_msg(std::move(msg));
+		do_direct_send_msg(std::move(msg));
 	}
 
 	//reset all, be ensure that there's no any operations performed on this socket when invoke it
@@ -150,10 +150,17 @@ private:
 #endif
 	virtual void send_msg() {this->dispatch_strand(strand, [this]() {this->do_send_msg(false);});}
 
+	using super::close;
+	using super::handle_msg;
+	using super::do_direct_send_msg;
+#ifdef ASCS_SYNC_SEND
+	using super::do_direct_sync_send_msg;
+#endif
+
 	void shutdown()
 	{
 		this->stop_all_timer();
-		this->close();
+		close();
 
 		if (this->lowest_layer().is_open())
 		{
@@ -196,7 +203,7 @@ private:
 			reading = false; //clear reading flag before call handle_msg() to make sure that recv_msg() can be called successfully in on_msg_handle()
 #endif
 			ascs::do_something_to_all(msg_can, [this](typename Unpacker::msg_type& msg) {temp_msg_can.emplace_back(this->temp_addr, std::move(msg));});
-			if (this->handle_msg()) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
+			if (handle_msg()) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
 				do_recv_msg(); //receive msg in sequence
 		}
 		else
@@ -210,7 +217,7 @@ private:
 			if (ec)
 #endif
 				on_recv_error(ec);
-			else if (this->handle_msg()) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
+			else if (handle_msg()) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
 				do_recv_msg(); //receive msg in sequence
 		}
 	}

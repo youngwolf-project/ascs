@@ -110,8 +110,7 @@ public:
 		if (reconnect)
 			unified_out::error_out("reconnecting mechanism is not available, please define macro ASCS_REUSE_SSL_STREAM");
 
-		this->need_reconnect = false; //ignore reconnect parameter
-		this->shutdown_ssl(sync);
+		shutdown_ssl(sync);
 	}
 #endif
 
@@ -126,14 +125,19 @@ protected:
 
 #ifndef ASCS_REUSE_SSL_STREAM
 	virtual int prepare_reconnect(const asio::error_code& ec) {return -1;}
-	virtual void on_recv_error(const asio::error_code& ec) {this->need_reconnect = false; super::on_recv_error(ec);}
 #endif
 	virtual void on_unpack_error() {unified_out::info_out("can not unpack msg."); this->force_shutdown();}
 
 private:
+	using super::shutdown_ssl;
+
 	void handle_handshake(const asio::error_code& ec)
 	{
 		this->on_handshake(ec);
+
+#ifndef ASCS_REUSE_SSL_STREAM
+		this->close_reconnect();
+#endif
 
 		if (!ec)
 			super::connect_handler(ec); //return to tcp::client_socket_base::connect_handler
@@ -173,7 +177,7 @@ public:
 #ifndef ASCS_REUSE_SSL_STREAM
 	void disconnect() {force_shutdown();}
 	void force_shutdown() {graceful_shutdown();} //must with async mode (the default value), because server_base::uninit will call this function
-	void graceful_shutdown(bool sync = false) {this->shutdown_ssl(sync);}
+	void graceful_shutdown(bool sync = false) {shutdown_ssl(sync);}
 #endif
 
 protected:
@@ -186,6 +190,8 @@ protected:
 	virtual void on_unpack_error() {unified_out::info_out("can not unpack msg."); this->force_shutdown();}
 
 private:
+	using super::shutdown_ssl;
+
 	void handle_handshake(const asio::error_code& ec)
 	{
 		this->on_handshake(ec);

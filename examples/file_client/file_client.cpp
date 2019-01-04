@@ -68,8 +68,7 @@ int main(int argc, const char* argv[])
 		}
 		else if (STATISTIC == str)
 		{
-			printf("link #: " ASCS_SF ", valid links: " ASCS_SF ", invalid links: " ASCS_SF "\n", client.size(), client.valid_size(), client.invalid_object_size());
-			puts("");
+			printf("link #: " ASCS_SF ", valid links: " ASCS_SF ", invalid links: " ASCS_SF "\n\n", client.size(), client.valid_size(), client.invalid_object_size());
 			puts(client.get_statistic().to_string().data());
 		}
 		else if (STATUS == str)
