@@ -40,7 +40,7 @@ protected:
 #ifndef ASCS_REUSE_SSL_STREAM
 		if (this->is_ready())
 		{
-			this->status = Socket::link_status::GRACEFUL_SHUTTING_DOWN;
+			status = Socket::link_status::GRACEFUL_SHUTTING_DOWN;
 			this->show_info("ssl link:", "been shut down.");
 			asio::error_code ec;
 			this->next_layer().shutdown(ec);
@@ -69,7 +69,7 @@ protected:
 			return;
 		}
 
-		this->status = Socket::link_status::GRACEFUL_SHUTTING_DOWN;
+		status = Socket::link_status::GRACEFUL_SHUTTING_DOWN;
 
 		if (!sync)
 		{
@@ -89,6 +89,9 @@ protected:
 				unified_out::info_out("shutdown ssl link failed (maybe intentionally because of reusing)");
 		}
 	}
+
+private:
+	using Socket::status;
 };
 
 template <typename Packer, typename Unpacker, typename Socket = asio::ssl::stream<asio::ip::tcp::socket>,
