@@ -115,9 +115,15 @@ public:
 
 		shutdown_ssl(sync);
 	}
-#endif
 
 protected:
+	virtual int prepare_reconnect(const asio::error_code& ec) {return -1;}
+#else
+protected:
+#endif
+	virtual void on_unpack_error() {unified_out::info_out("can not unpack msg."); this->force_shutdown();}
+
+private:
 	virtual void connect_handler(const asio::error_code& ec) //intercept tcp::client_socket_base::connect_handler
 	{
 		if (!ec)
@@ -125,14 +131,6 @@ protected:
 		else
 			super::connect_handler(ec);
 	}
-
-#ifndef ASCS_REUSE_SSL_STREAM
-	virtual int prepare_reconnect(const asio::error_code& ec) {return -1;}
-#endif
-	virtual void on_unpack_error() {unified_out::info_out("can not unpack msg."); this->force_shutdown();}
-
-private:
-	using super::shutdown_ssl;
 
 	void handle_handshake(const asio::error_code& ec)
 	{
@@ -147,6 +145,8 @@ private:
 		else
 			this->force_shutdown();
 	}
+
+	using super::shutdown_ssl;
 };
 
 template<typename Object>
@@ -193,8 +193,6 @@ protected:
 	virtual void on_unpack_error() {unified_out::info_out("can not unpack msg."); this->force_shutdown();}
 
 private:
-	using super::shutdown_ssl;
-
 	void handle_handshake(const asio::error_code& ec)
 	{
 		this->on_handshake(ec);
@@ -204,6 +202,8 @@ private:
 		else
 			this->get_server().del_socket(this->shared_from_this());
 	}
+
+	using super::shutdown_ssl;
 };
 
 template<typename Socket, typename Pool = object_pool<Socket>, typename Server = tcp::i_server> using server_base = tcp::server_base<Socket, Pool, Server>;
