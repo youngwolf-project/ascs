@@ -33,13 +33,13 @@ private:
 	typedef socket<Socket, Packer, in_msg_type, out_msg_type, InQueue, InContainer, OutQueue, OutContainer> super;
 
 public:
-	socket_base(asio::io_context& io_context_) : super(io_context_), unpacker_(std::make_shared<Unpacker>()), strand(io_context_) {}
+	socket_base(asio::io_context& io_context_) : super(io_context_), has_bound(false), unpacker_(std::make_shared<Unpacker>()), strand(io_context_) {}
 
-	virtual bool is_ready() {return this->lowest_layer().is_open();}
+	virtual bool is_ready() {return has_bound;}
 	virtual void send_heartbeat()
 	{
 		in_msg_type msg(peer_addr, packer_->pack_heartbeat());
-		this->do_direct_send_msg(std::move(msg));
+		do_direct_send_msg(std::move(msg));
 	}
 
 	//reset all, be ensure that there's no any operations performed on this socket when invoke it
@@ -47,14 +47,19 @@ public:
 	//notice, when reusing this socket, object_pool will invoke this function
 	virtual void reset()
 	{
+		has_bound = false;
+
 		asio::error_code ec;
 		if (!this->lowest_layer().is_open()) {this->lowest_layer().open(local_addr.protocol(), ec); assert(!ec);} //user maybe has opened this socket (to set options for example)
+		if (this->lowest_layer().is_open())
+		{
 #ifndef ASCS_NOT_REUSE_ADDRESS
-		this->lowest_layer().set_option(asio::socket_base::reuse_address(true), ec); assert(!ec);
+			this->lowest_layer().set_option(asio::socket_base::reuse_address(true), ec); assert(!ec);
 #endif
-		this->lowest_layer().bind(local_addr, ec); assert(!ec);
-		if (ec)
-			unified_out::error_out("bind failed.");
+			this->lowest_layer().bind(local_addr, ec); assert(!ec);
+			if (!(has_bound = !ec))
+				unified_out::error_out("bind failed.");
+		}
 
 		last_send_msg.clear();
 		unpacker_->reset();
@@ -122,6 +127,8 @@ public:
 	///////////////////////////////////////////////////
 
 protected:
+	virtual bool do_start() {return has_bound ? super::do_start() : false;}
+
 	//msg was failed to send and udp::socket_base will not hold it any more, if you want to re-send it in the future,
 	// you must take over it and re-send (at any time) it via direct_send_msg.
 	//DO NOT hold msg for future using, just swap its content with your own message in this virtual function.
@@ -150,10 +157,17 @@ private:
 #endif
 	virtual void send_msg() {this->dispatch_strand(strand, [this]() {this->do_send_msg(false);});}
 
+	using super::close;
+	using super::handle_msg;
+	using super::do_direct_send_msg;
+#ifdef ASCS_SYNC_SEND
+	using super::do_direct_sync_send_msg;
+#endif
+
 	void shutdown()
 	{
 		this->stop_all_timer();
-		this->close();
+		close();
 
 		if (this->lowest_layer().is_open())
 		{
@@ -196,7 +210,7 @@ private:
 			reading = false; //clear reading flag before call handle_msg() to make sure that recv_msg() can be called successfully in on_msg_handle()
 #endif
 			ascs::do_something_to_all(msg_can, [this](typename Unpacker::msg_type& msg) {temp_msg_can.emplace_back(this->temp_addr, std::move(msg));});
-			if (this->handle_msg()) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
+			if (handle_msg()) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
 				do_recv_msg(); //receive msg in sequence
 		}
 		else
@@ -210,7 +224,7 @@ private:
 			if (ec)
 #endif
 				on_recv_error(ec);
-			else if (this->handle_msg()) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
+			else if (handle_msg()) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
 				do_recv_msg(); //receive msg in sequence
 		}
 	}
@@ -301,6 +315,7 @@ private:
 	using super::reading;
 #endif
 
+	bool has_bound;
 	typename super::in_msg last_send_msg;
 	std::shared_ptr<i_unpacker<typename Unpacker::msg_type>> unpacker_;
 	asio::ip::udp::endpoint local_addr;

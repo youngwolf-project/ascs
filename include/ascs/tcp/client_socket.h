@@ -130,6 +130,7 @@ protected:
 	//if you want to control the retry times and delay time after reconnecting failed, rewrite prepare_reconnect virtual function.
 	virtual void after_close() {if (need_reconnect) this->start();}
 
+private:
 	bool prepare_next_reconnect(const asio::error_code& ec)
 	{
 		if (this->started() && !this->stopped())
@@ -153,10 +154,8 @@ protected:
 		return false;
 	}
 
-protected:
-	bool need_reconnect;
-
 private:
+	bool need_reconnect;
 	asio::ip::tcp::endpoint server_addr;
 };
 

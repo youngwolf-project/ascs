@@ -62,8 +62,7 @@ int main(int argc, const char* argv[])
 		}
 		else if (STATISTIC == str)
 		{
-			printf("link #: " ASCS_SF ", invalid links: " ASCS_SF "\n", file_server_.size(), file_server_.invalid_object_size());
-			puts("");
+			printf("link #: " ASCS_SF ", invalid links: " ASCS_SF "\n\n", file_server_.size(), file_server_.invalid_object_size());
 			puts(file_server_.get_statistic().to_string().data());
 		}
 		else if (STATUS == str)

@@ -473,7 +473,7 @@ bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_
 	auto_duration dur(this->stat.pack_time_sum); \
 	auto msg = this->packer_->pack_msg(pstr, len, num, NATIVE); \
 	dur.end(); \
-	return this->SEND_FUNNAME(std::move(msg)); \
+	return SEND_FUNNAME(std::move(msg)); \
 } \
 TCP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)
 
@@ -507,7 +507,7 @@ sync_call_result FUNNAME(const char* const pstr[], const size_t len[], size_t nu
 	auto_duration dur(this->stat.pack_time_sum); \
 	auto msg = this->packer_->pack_msg(pstr, len, num, NATIVE); \
 	dur.end(); \
-	return this->SEND_FUNNAME(std::move(msg), duration); \
+	return SEND_FUNNAME(std::move(msg), duration); \
 } \
 TCP_SYNC_SEND_MSG_CALL_SWITCH(FUNNAME, sync_call_result)
 
@@ -538,7 +538,7 @@ bool FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* const pstr[],
 	if (!can_overflow && !this->is_send_buffer_available()) \
 		return false; \
 	in_msg_type msg(peer_addr, this->packer_->pack_msg(pstr, len, num, NATIVE)); \
-	return this->SEND_FUNNAME(std::move(msg)); \
+	return SEND_FUNNAME(std::move(msg)); \
 } \
 UDP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)
 
@@ -572,7 +572,7 @@ sync_call_result FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* c
 	if (!can_overflow && !this->is_send_buffer_available()) \
 		return sync_call_result::NOT_APPLICABLE; \
 	in_msg_type msg(peer_addr, this->packer_->pack_msg(pstr, len, num, NATIVE)); \
-	return this->SEND_FUNNAME(std::move(msg), duration); \
+	return SEND_FUNNAME(std::move(msg), duration); \
 } \
 UDP_SYNC_SEND_MSG_CALL_SWITCH(FUNNAME, sync_call_result)
 
