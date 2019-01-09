@@ -176,6 +176,39 @@ protected:
 };
 #endif
 
+class short_connection : public server_socket_base<packer, unpacker>
+{
+public:
+	short_connection(i_server& server_) : server_socket_base(server_) {}
+
+protected:
+	//msg handling
+#ifdef ASCS_SYNC_DISPATCH
+	//do not hold msg_can for further using, return from on_msg as quickly as possible
+	virtual size_t on_msg(std::list<out_msg_type>& msg_can)
+	{
+		auto re = server_socket_base::on_msg(msg_can);
+		force_shutdown();
+
+		return re;
+	}
+#endif
+
+#ifdef ASCS_DISPATCH_BATCH_MSG
+	//do not hold msg_can for further using, access msg_can and return from on_msg_handle as quickly as possible
+	virtual size_t on_msg_handle(out_queue_type& msg_can)
+	{
+		auto re = server_socket_base::on_msg_handle(msg_can);
+		force_shutdown();
+
+		return re;
+	}
+#else
+	virtual bool on_msg_handle(out_msg_type& msg) {auto re = server_socket_base::on_msg_handle(msg); force_shutdown(); return re;}
+#endif
+	//msg handling end
+};
+
 int main(int argc, const char* argv[])
 {
 	printf("usage: %s [<service thread number=1> [<port=%d> [ip=0.0.0.0]]]\n", argv[0], ASCS_SERVER_PORT);
@@ -190,21 +223,27 @@ int main(int argc, const char* argv[])
 	//this server cannot support fixed_length_packer/fixed_length_unpacker and prefix_suffix_packer/prefix_suffix_unpacker,
 	//the reason is these packer and unpacker need additional initializations that normal_socket not implemented,
 	//see echo_socket's constructor for more details.
-	server_base<normal_socket> server_(sp);
+	server_base<normal_socket> normal_server(sp);
+	server_base<short_connection> short_server(sp);
 	echo_server echo_server_(sp); //echo server
 
 	if (argc > 3)
 	{
-		server_.set_server_addr(atoi(argv[2]) + 100, argv[3]);
+		normal_server.set_server_addr(atoi(argv[2]) + 100, argv[3]);
+		short_server.set_server_addr(atoi(argv[2]) + 101, argv[3]);
 		echo_server_.set_server_addr(atoi(argv[2]), argv[3]);
 	}
 	else if (argc > 2)
 	{
-		server_.set_server_addr(atoi(argv[2]) + 100);
+		normal_server.set_server_addr(atoi(argv[2]) + 100);
+		short_server.set_server_addr(atoi(argv[2]) + 101);
 		echo_server_.set_server_addr(atoi(argv[2]));
 	}
 	else
-		server_.set_server_addr(ASCS_SERVER_PORT + 100);
+	{
+		normal_server.set_server_addr(ASCS_SERVER_PORT + 100);
+		short_server.set_server_addr(ASCS_SERVER_PORT + 101);
+	}
 
 	auto thread_num = 1;
 	if (argc > 1)
@@ -230,19 +269,19 @@ int main(int argc, const char* argv[])
 		}
 		else if (STATISTIC == str)
 		{
-			printf("normal server, link #: " ASCS_SF ", invalid links: " ASCS_SF "\n", server_.size(), server_.invalid_object_size());
+			printf("normal server, link #: " ASCS_SF ", invalid links: " ASCS_SF "\n", normal_server.size(), normal_server.invalid_object_size());
 			printf("echo server, link #: " ASCS_SF ", invalid links: " ASCS_SF "\n\n", echo_server_.size(), echo_server_.invalid_object_size());
 			puts(echo_server_.get_statistic().to_string().data());
 		}
 		else if (STATUS == str)
 		{
-			server_.list_all_status();
+			normal_server.list_all_status();
 			echo_server_.list_all_status();
 		}
 		else if (LIST_ALL_CLIENT == str)
 		{
 			puts("clients from normal server:");
-			server_.list_all_object();
+			normal_server.list_all_object();
 			puts("clients from echo server:");
 			echo_server_.list_all_object();
 		}
@@ -254,7 +293,7 @@ int main(int argc, const char* argv[])
 		{
 //			/*
 			//broadcast series functions call pack_msg for each client respectively, because clients may used different protocols(so different type of packers, of course)
-			server_.broadcast_msg(str.data(), str.size() + 1, false);
+			normal_server.broadcast_msg(str.data(), str.size() + 1, false);
 			//send \0 character too, because demo client used basic_buffer as its msg type, it will not append \0 character automatically as std::string does,
 			//so need \0 character when printing it.
 //			*/
@@ -265,11 +304,11 @@ int main(int argc, const char* argv[])
 			//send \0 character too, because demo client used basic_buffer as its msg type, it will not append \0 character automatically as std::string does,
 			//so need \0 character when printing it.
 			if (!msg.empty())
-				server_.do_something_to_all([&msg](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(msg);});
+				normal_server.do_something_to_all([&msg](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(msg);});
 			*/
 			/*
 			//if demo client is using stream_unpacker
-			server_.do_something_to_all([&str](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(str);});
+			normal_server.do_something_to_all([&str](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(str);});
 			*/
 		}
 	}
