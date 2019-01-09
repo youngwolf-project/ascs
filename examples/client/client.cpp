@@ -92,10 +92,15 @@ class short_client : public multi_client_base<short_connection>, protected i_con
 public:
 	short_client(service_pump& service_pump_) : multi_client_base<short_connection>(service_pump_) {}
 
+	void set_server_addr(unsigned short _port, const std::string& _ip = ASCS_SERVER_IP)
+	{
+		port = _port;
+		ip = _ip;
+	}
+
 	bool send_msg(const std::string& msg)
 	{
-		auto socket_ptr = add_socket(ASCS_SERVER_PORT + 101, ASCS_SERVER_IP);
-		//if the user changed server address via command line, here needs some changes accordingly, please refer to the other client (single_client) in main function
+		auto socket_ptr = add_socket(port, ip);
 		if (socket_ptr)
 		{
 			socket_ptr->set_controller(this);
@@ -107,6 +112,10 @@ public:
 
 protected:
 	virtual void on_all_msg_send(uint_fast64_t id) {}
+
+private:
+	unsigned short port;
+	std::string ip;
 };
 
 std::thread create_sync_recv_thread(single_client& client)
@@ -141,12 +150,23 @@ int main(int argc, const char* argv[])
 
 //	argv[2] = "::1" //ipv6
 //	argv[2] = "127.0.0.1" //ipv4
+	unsigned short port = ASCS_SERVER_PORT + 100;
+	std::string ip;
+	if (argc > 1)
+		port = (unsigned short) atoi(argv[1]);
 	if (argc > 2)
-		client.set_server_addr(atoi(argv[1]), argv[2]);
-	else if (argc > 1)
-		client.set_server_addr(atoi(argv[1]), ASCS_SERVER_IP);
+		ip = argv[2];
+
+	if (!ip.empty())
+	{
+		client.set_server_addr(port, ip);
+		client2.set_server_addr(port + 1, ip);
+	}
 	else
-		client.set_server_addr(ASCS_SERVER_PORT + 100, ASCS_SERVER_IP);
+	{
+		client.set_server_addr(port);
+		client2.set_server_addr(port + 1);
+	}
 
 	sp.start_service();
 	auto t = create_sync_recv_thread(client);
