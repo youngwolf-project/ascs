@@ -185,24 +185,12 @@ protected:
 	//msg handling
 #ifdef ASCS_SYNC_DISPATCH
 	//do not hold msg_can for further using, return from on_msg as quickly as possible
-	virtual size_t on_msg(std::list<out_msg_type>& msg_can)
-	{
-		auto re = server_socket_base::on_msg(msg_can);
-		force_shutdown();
-
-		return re;
-	}
+	virtual size_t on_msg(std::list<out_msg_type>& msg_can) {auto re = server_socket_base::on_msg(msg_can); force_shutdown(); return re;}
 #endif
 
 #ifdef ASCS_DISPATCH_BATCH_MSG
 	//do not hold msg_can for further using, access msg_can and return from on_msg_handle as quickly as possible
-	virtual size_t on_msg_handle(out_queue_type& msg_can)
-	{
-		auto re = server_socket_base::on_msg_handle(msg_can);
-		force_shutdown();
-
-		return re;
-	}
+	virtual size_t on_msg_handle(out_queue_type& msg_can) {auto re = server_socket_base::on_msg_handle(msg_can); force_shutdown(); return re;}
 #else
 	virtual bool on_msg_handle(out_msg_type& msg) {auto re = server_socket_base::on_msg_handle(msg); force_shutdown(); return re;}
 #endif
@@ -227,23 +215,16 @@ int main(int argc, const char* argv[])
 	server_base<short_connection> short_server(sp);
 	echo_server echo_server_(sp); //echo server
 
+	unsigned short port = ASCS_SERVER_PORT;
+	std::string ip;
+	if (argc > 2)
+		port = (unsigned short) atoi(argv[2]);
 	if (argc > 3)
-	{
-		normal_server.set_server_addr(atoi(argv[2]) + 100, argv[3]);
-		short_server.set_server_addr(atoi(argv[2]) + 101, argv[3]);
-		echo_server_.set_server_addr(atoi(argv[2]), argv[3]);
-	}
-	else if (argc > 2)
-	{
-		normal_server.set_server_addr(atoi(argv[2]) + 100);
-		short_server.set_server_addr(atoi(argv[2]) + 101);
-		echo_server_.set_server_addr(atoi(argv[2]));
-	}
-	else
-	{
-		normal_server.set_server_addr(ASCS_SERVER_PORT + 100);
-		short_server.set_server_addr(ASCS_SERVER_PORT + 101);
-	}
+		ip = argv[3];
+
+	normal_server.set_server_addr(port + 100, ip);
+	short_server.set_server_addr(port + 101, ip);
+	echo_server_.set_server_addr(port, ip);
 
 	auto thread_num = 1;
 	if (argc > 1)

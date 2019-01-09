@@ -90,24 +90,13 @@ private:
 class short_client : public multi_client_base<short_connection>, protected i_controller
 {
 public:
-	short_client(service_pump& service_pump_) : multi_client_base<short_connection>(service_pump_) {}
+	short_client(service_pump& service_pump_) : multi_client_base(service_pump_) {}
 
-	void set_server_addr(unsigned short _port, const std::string& _ip = ASCS_SERVER_IP)
-	{
-		port = _port;
-		ip = _ip;
-	}
-
+	void set_server_addr(unsigned short _port, const std::string& _ip = ASCS_SERVER_IP) {port = _port; ip = _ip;}
 	bool send_msg(const std::string& msg)
 	{
 		auto socket_ptr = add_socket(port, ip);
-		if (socket_ptr)
-		{
-			socket_ptr->set_controller(this);
-			return socket_ptr->send_msg(msg);
-		}
-
-		return false;
+		return socket_ptr ? socket_ptr->set_controller(this), socket_ptr->send_msg(msg) : false;
 	}
 
 protected:
@@ -151,22 +140,14 @@ int main(int argc, const char* argv[])
 //	argv[2] = "::1" //ipv6
 //	argv[2] = "127.0.0.1" //ipv4
 	unsigned short port = ASCS_SERVER_PORT + 100;
-	std::string ip;
+	std::string ip = ASCS_SERVER_IP;
 	if (argc > 1)
 		port = (unsigned short) atoi(argv[1]);
 	if (argc > 2)
 		ip = argv[2];
 
-	if (!ip.empty())
-	{
-		client.set_server_addr(port, ip);
-		client2.set_server_addr(port + 1, ip);
-	}
-	else
-	{
-		client.set_server_addr(port);
-		client2.set_server_addr(port + 1);
-	}
+	client.set_server_addr(port, ip);
+	client2.set_server_addr(port + 1, ip);
 
 	sp.start_service();
 	auto t = create_sync_recv_thread(client);
