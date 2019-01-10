@@ -170,7 +170,7 @@ public:
 	normal_socket(i_server& server_) : server_socket_base(server_) {}
 
 protected:
-	//demo client needs heartbeat (macro ASCS_HEARTBEAT_INTERVAL been defined), pleae note that the interval (here is 5) must be equal to
+	//demo client needs heartbeat (macro ASCS_HEARTBEAT_INTERVAL been defined), please note that the interval (here is 5) must be equal to
 	//macro ASCS_HEARTBEAT_INTERVAL defined in demo client, and macro ASCS_HEARTBEAT_MAX_ABSENCE must has the same value as demo client's.
 	virtual void on_connect() {start_heartbeat(5);}
 };
