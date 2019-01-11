@@ -33,9 +33,9 @@ private:
 	typedef socket<Socket, Packer, in_msg_type, out_msg_type, InQueue, InContainer, OutQueue, OutContainer> super;
 
 public:
-	socket_base(asio::io_context& io_context_) : super(io_context_), has_bound(false), unpacker_(std::make_shared<Unpacker>()), strand(io_context_) {}
+	socket_base(asio::io_context& io_context_) : super(io_context_), unpacker_(std::make_shared<Unpacker>()), strand(io_context_) {}
 
-	virtual bool is_ready() {return has_bound;}
+	virtual bool is_ready() {return this->lowest_layer().is_open();}
 	virtual void send_heartbeat()
 	{
 		in_msg_type msg(peer_addr, packer_->pack_heartbeat());
@@ -47,20 +47,6 @@ public:
 	//notice, when reusing this socket, object_pool will invoke this function
 	virtual void reset()
 	{
-		has_bound = false;
-
-		asio::error_code ec;
-		if (!this->lowest_layer().is_open()) {this->lowest_layer().open(local_addr.protocol(), ec); assert(!ec);} //user maybe has opened this socket (to set options for example)
-		if (this->lowest_layer().is_open())
-		{
-#ifndef ASCS_NOT_REUSE_ADDRESS
-			this->lowest_layer().set_option(asio::socket_base::reuse_address(true), ec); assert(!ec);
-#endif
-			this->lowest_layer().bind(local_addr, ec); assert(!ec);
-			if (!(has_bound = !ec))
-				unified_out::error_out("bind failed.");
-		}
-
 		last_send_msg.clear();
 		unpacker_->reset();
 		super::reset();
@@ -127,7 +113,35 @@ public:
 	///////////////////////////////////////////////////
 
 protected:
-	virtual bool do_start() {return has_bound ? super::do_start() : false;}
+	virtual bool do_start()
+	{
+		auto& lowest_object = this->lowest_layer();
+
+		asio::error_code ec;
+		if (!lowest_object.is_open()) //user maybe has opened this socket (to set options for example)
+		{
+			lowest_object.open(local_addr.protocol(), ec); assert(!ec);
+			if (ec) return false;
+
+#ifndef ASCS_NOT_REUSE_ADDRESS
+			lowest_object.set_option(asio::socket_base::reuse_address(true), ec); assert(!ec);
+#endif
+		}
+
+		if (0 != local_addr.port() || !local_addr.address().is_unspecified())
+		{
+			lowest_object.bind(local_addr, ec); assert(!ec);
+			if (ec)
+			{
+				unified_out::error_out("bind failed.");
+				lowest_object.close(ec); assert(!ec);
+
+				return false;
+			}
+		}
+
+		return super::do_start();
+	}
 
 	//msg was failed to send and udp::socket_base will not hold it any more, if you want to re-send it in the future,
 	// you must take over it and re-send (at any time) it via direct_send_msg.
@@ -169,11 +183,12 @@ private:
 		this->stop_all_timer();
 		close();
 
-		if (this->lowest_layer().is_open())
+		auto& lowest_object = this->lowest_layer();
+		if (lowest_object.is_open())
 		{
 			asio::error_code ec;
-			this->lowest_layer().shutdown(asio::ip::udp::socket::shutdown_both, ec);
-			this->lowest_layer().close(ec);
+			lowest_object.shutdown(asio::ip::udp::socket::shutdown_both, ec);
+			lowest_object.close(ec);
 		}
 	}
 
@@ -315,7 +330,6 @@ private:
 	using super::reading;
 #endif
 
-	bool has_bound;
 	typename super::in_msg last_send_msg;
 	std::shared_ptr<i_unpacker<typename Unpacker::msg_type>> unpacker_;
 	asio::ip::udp::endpoint local_addr;
