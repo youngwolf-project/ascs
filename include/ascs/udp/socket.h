@@ -305,12 +305,15 @@ private:
 		{
 			asio::error_code ec;
 #if ASIO_VERSION >= 101100
-			auto addr = asio::ip::make_address(ip, ec);
+			auto addr = asio::ip::make_address(ip, ec); assert(!ec);
 #else
-			auto addr = asio::ip::address::from_string(ip, ec);
+			auto addr = asio::ip::address::from_string(ip, ec); assert(!ec);
 #endif
 			if (ec)
+			{
+				unified_out::error_out("invalid IP address %s.", ip.data());
 				return false;
+			}
 
 			endpoint = asio::ip::udp::endpoint(addr, port);
 		}
