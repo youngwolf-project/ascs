@@ -13,6 +13,7 @@
 							//if the server send messages quickly enough, you will see them cross together.
 #define ASCS_ALIGNED_TIMER
 #define ASCS_CUSTOM_LOG
+#define ASCS_WANT_ALL_MSG_SEND_NOTIFY
 #define ASCS_DEFAULT_UNPACKER	non_copy_unpacker
 //#define ASCS_DEFAULT_UNPACKER	stream_unpacker
 
@@ -51,12 +52,62 @@ public:
 
 #include <ascs/ext/tcp.h>
 using namespace ascs;
+using namespace ascs::tcp;
 using namespace ascs::ext;
 using namespace ascs::ext::tcp;
 
 #define QUIT_COMMAND	"quit"
 #define RESTART_COMMAND	"restart"
 #define RECONNECT		"reconnect"
+
+//demonstrates how to access client in client_socket (just like access server in server_socket)
+class i_controller
+{
+public:
+	virtual void on_all_msg_send(uint_fast64_t id) = 0;
+	//add more interfaces if needed
+};
+
+class short_connection : public client_socket
+{
+public:
+	short_connection(asio::io_context& io_context_) : client_socket(io_context_), controller(nullptr) {}
+
+	void set_controller(i_controller* _controller) {controller = _controller;}
+	i_controller* get_controller() const {return controller;}
+
+protected:
+	virtual void on_connect() {close_reconnect();}
+
+#ifdef ASCS_WANT_ALL_MSG_SEND_NOTIFY
+	virtual void on_all_msg_send(in_msg_type& msg) {controller->on_all_msg_send(id());}
+#endif
+
+private:
+	i_controller* controller;
+};
+
+class short_client : public multi_client_base<short_connection>, protected i_controller
+{
+public:
+	short_client(service_pump& service_pump_) : multi_client_base(service_pump_) {}
+
+	void set_server_addr(unsigned short _port, const std::string& _ip = ASCS_SERVER_IP) {port = _port; ip = _ip;}
+
+	bool send_msg(const std::string& msg) {return send_msg(msg, port, ip);}
+	bool send_msg(const std::string& msg, unsigned short port, const std::string& ip)
+	{
+		auto socket_ptr = add_socket(port, ip);
+		return socket_ptr ? socket_ptr->set_controller(this), socket_ptr->send_msg(msg) : false;
+	}
+
+protected:
+	virtual void on_all_msg_send(uint_fast64_t id) {}
+
+private:
+	unsigned short port;
+	std::string ip;
+};
 
 std::thread create_sync_recv_thread(single_client& client)
 {
@@ -86,15 +137,19 @@ int main(int argc, const char* argv[])
 
 	service_pump sp;
 	single_client client(sp);
+	short_client client2(sp); //without single_client, we need to define ASCS_AVOID_AUTO_STOP_SERVICE macro to forbid service_pump stopping services automatically
 
 //	argv[2] = "::1" //ipv6
 //	argv[2] = "127.0.0.1" //ipv4
+	unsigned short port = ASCS_SERVER_PORT + 100;
+	std::string ip = ASCS_SERVER_IP;
+	if (argc > 1)
+		port = (unsigned short) atoi(argv[1]);
 	if (argc > 2)
-		client.set_server_addr(atoi(argv[1]), argv[2]);
-	else if (argc > 1)
-		client.set_server_addr(atoi(argv[1]), ASCS_SERVER_IP);
-	else
-		client.set_server_addr(ASCS_SERVER_PORT + 100, ASCS_SERVER_IP);
+		ip = argv[2];
+
+	client.set_server_addr(port, ip);
+	client2.set_server_addr(port + 1, ip);
 
 	sp.start_service();
 	auto t = create_sync_recv_thread(client);
@@ -118,8 +173,12 @@ int main(int argc, const char* argv[])
 		else if (RECONNECT == str)
 			client.graceful_shutdown(true);
 		else
-			client.sync_safe_send_msg(str, 100);
-			//client.safe_send_msg(str);
+		{
+			client.sync_safe_send_msg(str + " (from normal client)", 100);
+			//client.safe_send_msg(str + " (from normal client)");
+
+			client2.send_msg(str + " (from short client)");
+		}
 	}
 
 	return 0;

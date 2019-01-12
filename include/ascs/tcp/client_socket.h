@@ -38,21 +38,10 @@ public:
 	// call superclass' reset function, before reusing this socket, object_pool will invoke this function
 	virtual void reset() {need_reconnect = true; super::reset();}
 
-	bool set_server_addr(unsigned short port, const std::string& ip = ASCS_SERVER_IP)
-	{
-		asio::error_code ec;
-#if ASIO_VERSION >= 101100
-		auto addr = asio::ip::make_address(ip, ec);
-#else
-		auto addr = asio::ip::address::from_string(ip, ec);
-#endif
-		if (ec)
-			return false;
-
-		server_addr = asio::ip::tcp::endpoint(addr, port);
-		return true;
-	}
+	bool set_server_addr(unsigned short port, const std::string& ip = ASCS_SERVER_IP) {return set_addr(server_addr, port, ip);}
 	const asio::ip::tcp::endpoint& get_server_addr() const {return server_addr;}
+	bool set_local_addr(unsigned short port, const std::string& ip = std::string()) {return set_addr(local_addr, port, ip);}
+	const asio::ip::tcp::endpoint& get_local_addr() const {return local_addr;}
 
 	//if you don't want to reconnect to the server after link broken, call close_reconnect() or rewrite after_close() virtual function and do nothing in it,
 	//if you want to control the retry times and delay time after reconnecting failed, rewrite prepare_reconnect virtual function.
@@ -92,7 +81,29 @@ protected:
 	{
 		assert(!this->is_connected());
 
-		this->lowest_layer().async_connect(server_addr, this->make_handler_error([this](const asio::error_code& ec) {this->connect_handler(ec);}));
+		auto& lowest_object = this->lowest_layer();
+		if (0 != local_addr.port() || !local_addr.address().is_unspecified())
+		{
+			asio::error_code ec;
+			if (!lowest_object.is_open()) //user maybe has opened this socket (to set options for example)
+			{
+				lowest_object.open(local_addr.protocol(), ec); assert(!ec);
+				if (ec)
+				{
+					unified_out::error_out("cannot create socket: %s", ec.message().data());
+					return false;
+				}
+			}
+
+			lowest_object.bind(local_addr, ec); assert(!ec);
+			if (ec)
+			{
+				unified_out::error_out("cannot bind socket: %s", ec.message().data());
+				return false;
+			}
+		}
+
+		lowest_object.async_connect(server_addr, this->make_handler_error([this](const asio::error_code& ec) {this->connect_handler(ec);}));
 		return true;
 	}
 
@@ -154,9 +165,34 @@ private:
 		return false;
 	}
 
+	bool set_addr(asio::ip::tcp::endpoint& endpoint, unsigned short port, const std::string& ip)
+	{
+		if (ip.empty())
+			endpoint = asio::ip::tcp::endpoint(ASCS_TCP_DEFAULT_IP_VERSION, port);
+		else
+		{
+			asio::error_code ec;
+#if ASIO_VERSION >= 101100
+			auto addr = asio::ip::make_address(ip, ec); assert(!ec);
+#else
+			auto addr = asio::ip::address::from_string(ip, ec); assert(!ec);
+#endif
+			if (ec)
+			{
+				unified_out::error_out("invalid IP address %s.", ip.data());
+				return false;
+			}
+
+			endpoint = asio::ip::tcp::endpoint(addr, port);
+		}
+
+		return true;
+	}
+
 private:
 	bool need_reconnect;
 	asio::ip::tcp::endpoint server_addr;
+	asio::ip::tcp::endpoint local_addr;
 };
 
 }} //namespace
