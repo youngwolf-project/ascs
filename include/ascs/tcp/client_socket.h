@@ -95,8 +95,8 @@ protected:
 				}
 			}
 
-			lowest_object.bind(local_addr, ec); assert(!ec);
-			if (ec)
+			lowest_object.bind(local_addr, ec);
+			if (ec && asio::error::invalid_argument != ec)
 			{
 				unified_out::error_out("cannot bind socket: %s", ec.message().data());
 				return false;
@@ -111,7 +111,7 @@ protected:
 	{
 		if (!ec) //already started, so cannot call start()
 			super::do_start();
-		else if (need_reconnect)
+		else
 			prepare_next_reconnect(ec);
 	}
 
@@ -144,7 +144,7 @@ protected:
 private:
 	bool prepare_next_reconnect(const asio::error_code& ec)
 	{
-		if (this->started() && !this->stopped())
+		if (need_reconnect && this->started() && !this->stopped())
 		{
 #ifdef _WIN32
 			if (asio::error::connection_refused != ec && asio::error::network_unreachable != ec && asio::error::timed_out != ec)
@@ -162,6 +162,7 @@ private:
 			}
 		}
 
+		super::force_shutdown();
 		return false;
 	}
 
