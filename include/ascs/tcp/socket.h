@@ -185,10 +185,14 @@ protected:
 	//DO NOT hold msg_can for future using, just swap its content with your own container in this virtual function.
 	virtual void on_send_error(const asio::error_code& ec, list<typename super::in_msg>& msg_can) {unified_out::error_out("send msg error (%d %s)", ec.value(), ec.message().data());}
 
+	virtual void on_close()
+	{
 #ifdef ASCS_SYNC_SEND
-	virtual void on_close() {ascs::do_something_to_all(last_send_msg,
-		[](typename super::in_msg& msg) {if (msg.p) msg.p->set_value(sync_call_result::NOT_APPLICABLE);}); super::on_close();}
+		ascs::do_something_to_all(last_send_msg, [](typename super::in_msg& msg) {if (msg.p) msg.p->set_value(sync_call_result::NOT_APPLICABLE);});
 #endif
+		status = link_status::BROKEN;
+		super::on_close();
+	}
 
 	virtual void on_connect() {}
 	//msg can not be unpacked

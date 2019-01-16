@@ -136,8 +136,8 @@ protected:
 		if (0 != local_addr.port() || !local_addr.address().is_unspecified())
 		{
 			asio::error_code ec;
-			lowest_object.bind(local_addr, ec); assert(!ec);
-			if (ec)
+			lowest_object.bind(local_addr, ec);
+			if (ec && asio::error::invalid_argument != ec)
 			{
 				unified_out::error_out("cannot bind socket: %s", ec.message().data());
 				return (has_bound = false);

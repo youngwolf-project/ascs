@@ -48,12 +48,20 @@ public:
 	{
 		auto socket_ptr(this->create_object());
 		if (!socket_ptr)
-			return typename Pool::object_type();
-		else
-		{
-			socket_ptr->set_server_addr(port, ip);
-			return this->add_socket(socket_ptr, false) ? socket_ptr : typename Pool::object_type();
-		}
+			return socket_ptr;
+
+		socket_ptr->set_server_addr(port, ip);
+		return this->add_socket(socket_ptr, false) ? socket_ptr : typename Pool::object_type();
+	}
+	typename Pool::object_type add_socket(unsigned short port, unsigned short local_port, const std::string& ip = ASCS_SERVER_IP, const std::string& local_ip = std::string())
+	{
+		auto socket_ptr(this->create_object());
+		if (!socket_ptr)
+			return socket_ptr;
+
+		socket_ptr->set_server_addr(port, ip);
+		socket_ptr->set_local_addr(local_port, local_ip);
+		return this->add_socket(socket_ptr, false) ? socket_ptr : typename Pool::object_type();
 	}
 
 	///////////////////////////////////////////////////
