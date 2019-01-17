@@ -13,10 +13,6 @@
 #ifndef _ASCS_BASE_H_
 #define _ASCS_BASE_H_
 
-#if defined(__MINGW32__) || defined(__MINGW64__) //terrible Mingw
-#include <bits/c++config.h> //for printf in stdio.h, it needs macro __USE_MINGW_ANSI_STDIO
-#include <pthread.h> //for ctime_r in time.h, it needs macro _POSIX_THREAD_SAFE_FUNCTIONS
-#endif
 #include <stdio.h>
 #include <stdarg.h>
 
