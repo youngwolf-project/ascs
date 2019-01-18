@@ -620,7 +620,7 @@ public:
 		if (len >= buff_len)
 			*std::next(buff, buff_len - 1) = '\0';
 		else
-#if defined(_MSC_VER) && _MSC_VER >= 1400
+#ifdef _MSC_VER
 			vsnprintf_s(std::next(buff, len), buff_len - len, _TRUNCATE, fmt, ap);
 #else
 			vsnprintf(std::next(buff, len), buff_len - len, fmt, ap);
