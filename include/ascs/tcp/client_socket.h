@@ -17,7 +17,7 @@
 
 namespace ascs { namespace tcp {
 
-template <typename Packer, typename Unpacker, typename Socket = asio::ip::tcp::socket,
+template <typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = asio::ip::tcp::socket,
 	template<typename, typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename, typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
 class client_socket_base : public socket_base<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer>
@@ -30,9 +30,11 @@ public:
 	static const typename super::tid TIMER_CONNECT = TIMER_BEGIN;
 	static const typename super::tid TIMER_END = TIMER_BEGIN + 5;
 
-	client_socket_base(asio::io_context& io_context_) : super(io_context_), need_reconnect(true) {set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
-	template<typename Arg>
-	client_socket_base(asio::io_context& io_context_, Arg& arg) : super(io_context_, arg), need_reconnect(true) {set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
+	client_socket_base(asio::io_context& io_context_) : super(io_context_) {first_init();}
+	template<typename Arg> client_socket_base(asio::io_context& io_context_, Arg& arg) : super(io_context_, arg) {first_init();}
+
+	client_socket_base(Matrix* matrix_) : super(matrix_->get_service_pump()) {first_init(matrix_);}
+	template<typename Arg> client_socket_base(Matrix* matrix_, Arg& arg) : super(matrix_->get_service_pump(), arg) {first_init(matrix_);}
 
 	//reset all, be ensure that no operations performed on this socket when invoke it, subclass must rewrite this function to initialize itself, and then
 	// call superclass' reset function, before reusing this socket, object_pool will invoke this function
@@ -77,6 +79,12 @@ public:
 	}
 
 protected:
+	//helper function, just call it in constructor
+	void first_init(Matrix* matrix_ = nullptr) {need_reconnect = true; matrix = matrix_; set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
+
+	Matrix* get_matrix() {return matrix;}
+	const Matrix* get_matrix() const {return matrix;}
+
 	virtual bool do_start() //connect
 	{
 		assert(!this->is_connected());
@@ -194,6 +202,8 @@ private:
 	bool need_reconnect;
 	asio::ip::tcp::endpoint server_addr;
 	asio::ip::tcp::endpoint local_addr;
+
+	Matrix* matrix;
 };
 
 }} //namespace

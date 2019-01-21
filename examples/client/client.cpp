@@ -60,49 +60,43 @@ using namespace ascs::ext::tcp;
 #define RESTART_COMMAND	"restart"
 #define RECONNECT		"reconnect"
 
-//demonstrates how to access client in client_socket (just like access server in server_socket)
-class i_controller
+//demonstrates how to call multi_client_base in client_socket_base (just like server_socket_base call server_base)
+class i_my_matrix : public i_matrix
 {
 public:
-	virtual void on_all_msg_send(uint_fast64_t id) = 0;
+	virtual void test(uint_fast64_t id) = 0;
 	//add more interfaces if needed
 };
 
-class short_connection : public client_socket
+class short_connection : public client_socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UNPACKER, i_my_matrix>
 {
 public:
-	short_connection(asio::io_context& io_context_) : client_socket(io_context_), controller(nullptr) {}
-
-	void set_controller(i_controller* _controller) {controller = _controller;}
-	i_controller* get_controller() const {return controller;}
+	short_connection(i_my_matrix* matrix_) : client_socket_base(matrix_) {}
 
 protected:
 	virtual void on_connect() {close_reconnect();}
 
 #ifdef ASCS_WANT_ALL_MSG_SEND_NOTIFY
-	virtual void on_all_msg_send(in_msg_type& msg) {controller->on_all_msg_send(id());}
+	virtual void on_all_msg_send(in_msg_type& msg) {get_matrix()->test(id());}
 #endif
-
-private:
-	i_controller* controller;
 };
 
-class short_client : public multi_client_base<short_connection>, protected i_controller
+class short_client : public multi_client_base<short_connection, object_pool<short_connection>, i_my_matrix>
 {
 public:
 	short_client(service_pump& service_pump_) : multi_client_base(service_pump_) {}
 
 	void set_server_addr(unsigned short _port, const std::string& _ip = ASCS_SERVER_IP) {port = _port; ip = _ip;}
-
 	bool send_msg(const std::string& msg) {return send_msg(msg, port, ip);}
 	bool send_msg(const std::string& msg, unsigned short port, const std::string& ip)
 	{
 		auto socket_ptr = add_socket(port, ip);
-		return socket_ptr ? socket_ptr->set_controller(this), socket_ptr->send_msg(msg) : false;
+		return socket_ptr ? socket_ptr->send_msg(msg) : false;
 	}
 
 protected:
-	virtual void on_all_msg_send(uint_fast64_t id) {}
+	//from i_my_matrix, pure virtual function, we must implement it.
+	virtual void test(uint_fast64_t id) {}
 
 private:
 	unsigned short port;

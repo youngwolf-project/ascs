@@ -31,8 +31,8 @@ class socket : public Socket
 #endif
 
 public:
-	template<typename Arg>
-	socket(Arg& arg, asio::ssl::context& ctx) : Socket(arg, ctx) {}
+	template<typename Arg> socket(Arg& arg, asio::ssl::context& ctx) : Socket(arg, ctx) {}
+	template<typename Arg> socket(Arg* arg, asio::ssl::context& ctx) : Socket(arg, ctx) {}
 
 protected:
 	virtual void on_recv_error(const asio::error_code& ec)
@@ -94,16 +94,17 @@ private:
 	using Socket::status;
 };
 
-template <typename Packer, typename Unpacker, typename Socket = asio::ssl::stream<asio::ip::tcp::socket>,
+template <typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = asio::ssl::stream<asio::ip::tcp::socket>,
 	template<typename, typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename, typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
-class client_socket_base : public socket<tcp::client_socket_base<Packer, Unpacker, Socket, InQueue, InContainer, OutQueue, OutContainer>>
+class client_socket_base : public socket<tcp::client_socket_base<Packer, Unpacker, Matrix, Socket, InQueue, InContainer, OutQueue, OutContainer>>
 {
 private:
-	typedef socket<tcp::client_socket_base<Packer, Unpacker, Socket, InQueue, InContainer, OutQueue, OutContainer>> super;
+	typedef socket<tcp::client_socket_base<Packer, Unpacker, Matrix, Socket, InQueue, InContainer, OutQueue, OutContainer>> super;
 
 public:
 	client_socket_base(asio::io_context& io_context_, asio::ssl::context& ctx) : super(io_context_, ctx) {}
+	client_socket_base(Matrix* matrix_, asio::ssl::context& ctx) : super(matrix_, ctx) {}
 
 #ifndef ASCS_REUSE_SSL_STREAM
 	void disconnect(bool reconnect = false) {force_shutdown(reconnect);}
@@ -159,8 +160,8 @@ public:
 	object_pool(service_pump& service_pump_, const asio::ssl::context::method& m) : super(service_pump_), ctx(m) {}
 	asio::ssl::context& context() {return ctx;}
 
-	typename object_pool::object_type create_object() {return create_object(this->get_service_pump());}
 	template<typename Arg> typename object_pool::object_type create_object(Arg& arg) {return super::create_object(arg, ctx);}
+	template<typename Arg> typename object_pool::object_type create_object(Arg* arg) {return super::create_object(arg, ctx);}
 
 private:
 	asio::ssl::context ctx;

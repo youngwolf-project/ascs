@@ -9,7 +9,7 @@ extern uint_fast64_t find_and_del_link(const std::string& name);
 class my_client_socket : public client_socket
 {
 public:
-	my_client_socket(asio::io_context& io_context_) : client_socket(io_context_)
+	my_client_socket(i_matrix* matrix_) : client_socket(matrix_)
 	{
 		std::dynamic_pointer_cast<prefix_suffix_packer>(packer())->prefix_suffix("", "\n");
 		std::dynamic_pointer_cast<prefix_suffix_unpacker>(unpacker())->prefix_suffix("", "\n");

@@ -469,6 +469,27 @@
  *
  * REPLACEMENTS:
  *
+ * ===============================================================
+ * 2019.3.x		version 1.3.5
+ *
+ * SPECIAL ATTENTION (incompatible with old editions):
+ * Socket used by tcp::multi_client_base, ssl::multi_client_base and udp::multi_socket_service needs to provide a constructor which accept
+ *  a raw pointer of i_matrix instead of a reference of asio::io_context.
+ *
+ * HIGHLIGHT:
+ * Make client_socket_base be able to call multi_client_base (via i_matrix) like server_socket_base call server_base (via i_server),
+ *  and so does ssl::client_socket_base and udp::socket_base.
+ *
+ * FIX:
+ *
+ * ENHANCEMENTS:
+ *
+ * DELETION:
+ *
+ * REFACTORING:
+ *
+ * REPLACEMENTS:
+ *
  */
 
 #ifndef _ASCS_CONFIG_H_
@@ -478,8 +499,8 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#define ASCS_VER		10304	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.3.4"
+#define ASCS_VER		10305	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.3.5"
 
 //asio and compiler check
 #ifdef _MSC_VER
