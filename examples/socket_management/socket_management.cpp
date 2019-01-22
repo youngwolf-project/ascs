@@ -19,51 +19,6 @@ using namespace ascs::ext::tcp;
 #include "server.h"
 #include "client.h"
 
-static std::map<std::string, uint_fast64_t> link_map;
-static std::mutex link_map_mutex;
-
-bool add_link(const std::string& name, uint_fast64_t id)
-{
-	std::lock_guard<std::mutex> lock(link_map_mutex);
-	if (link_map.count(name) > 0)
-	{
-		printf("%s already exists.\n", name.data());
-		return false;
-	}
-
-	printf("add socket %s.\n", name.data());
-	link_map[name] = id;
-	return true;
-}
-
-bool del_link(const std::string& name)
-{
-	std::lock_guard<std::mutex> lock(link_map_mutex);
-	return link_map.erase(name) > 0;
-}
-
-uint_fast64_t find_link(const std::string& name)
-{
-	std::lock_guard<std::mutex> lock(link_map_mutex);
-	auto iter = link_map.find(name);
-	return iter != std::end(link_map) ? iter->second : -1;
-}
-
-uint_fast64_t find_and_del_link(const std::string& name)
-{
-	uint_fast64_t id = -1;
-
-	std::lock_guard<std::mutex> lock(link_map_mutex);
-	auto iter = link_map.find(name);
-	if (iter != std::end(link_map))
-	{
-		id = iter->second;
-		link_map.erase(iter);
-	}
-
-	return id;
-}
-
 int main(int argc, const char* argv[])
 {
 	service_pump sp;
@@ -96,7 +51,7 @@ int main(int argc, const char* argv[])
 			{
 				++iter;
 				if (iter != std::end(parameters))
-					client.del_link(*iter);
+					client.shutdown_link(*iter);
 			}
 			else
 			{
