@@ -26,8 +26,17 @@ namespace ascs { namespace ssl {
 template <typename Socket>
 class socket : public Socket
 {
-#if defined(ASCS_REUSE_OBJECT) && !defined(ASCS_REUSE_SSL_STREAM)
-	#error please define ASCS_REUSE_SSL_STREAM macro explicitly if you need asio::ssl::stream to be reusable!
+#ifndef ASCS_REUSE_SSL_STREAM
+	#ifdef ASCS_REUSE_OBJECT
+		#error please define ASCS_REUSE_SSL_STREAM macro explicitly if you need asio::ssl::stream to be reusable!
+	#endif
+	#if ASCS_RECONNECT_SWITCH
+		#ifdef _MSC_VER
+			#pragma message("without macro ASCS_REUSE_SSL_STREAM, ssl::client_socket_base is not able to reconnect the server.")
+		#else
+			#warning without macro ASCS_REUSE_SSL_STREAM, ssl::client_socket_base is not able to reconnect the server.
+		#endif
+	#endif
 #endif
 
 public:
@@ -137,7 +146,7 @@ private:
 	{
 		this->on_handshake(ec);
 
-#ifndef ASCS_REUSE_SSL_STREAM
+#if ASCS_RECONNECT_SWITCH && !defined(ASCS_REUSE_SSL_STREAM)
 		this->close_reconnect();
 #endif
 

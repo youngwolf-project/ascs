@@ -6,6 +6,7 @@
 #define ASCS_REUSE_OBJECT		//use objects pool
 #define ASCS_HEARTBEAT_INTERVAL	5
 #define ASCS_AVOID_AUTO_STOP_SERVICE
+#define ASCS_RECONNECT_SWITCH	false
 #define ASCS_DEFAULT_PACKER		prefix_suffix_packer
 #define ASCS_DEFAULT_UNPACKER	prefix_suffix_unpacker
 //configuration

@@ -13,7 +13,6 @@
 							//if the server send messages quickly enough, you will see them cross together.
 #define ASCS_ALIGNED_TIMER
 #define ASCS_CUSTOM_LOG
-#define ASCS_WANT_ALL_MSG_SEND_NOTIFY
 #define ASCS_DEFAULT_UNPACKER	non_copy_unpacker
 //#define ASCS_DEFAULT_UNPACKER	stream_unpacker
 
@@ -60,28 +59,17 @@ using namespace ascs::ext::tcp;
 #define RESTART_COMMAND	"restart"
 #define RECONNECT		"reconnect"
 
-//demonstrates how to call multi_client_base in client_socket_base (just like server_socket_base call server_base)
-class i_my_matrix : public i_matrix
+//we only want close reconnecting mechanism on this socket, so we don't define macro ASCS_RECONNECT_SWITCH
+class short_connection : public client_socket
 {
 public:
-	virtual void test(uint_fast64_t id) = 0;
-	//add more interfaces if needed
-};
-
-class short_connection : public client_socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UNPACKER, i_my_matrix>
-{
-public:
-	short_connection(i_my_matrix* matrix_) : client_socket_base(matrix_) {}
+	short_connection(i_matrix* matrix_) : client_socket(matrix_) {}
 
 protected:
-	virtual void on_connect() {close_reconnect();}
-
-#ifdef ASCS_WANT_ALL_MSG_SEND_NOTIFY
-	virtual void on_all_msg_send(in_msg_type& msg) {get_matrix()->test(id());}
-#endif
+	virtual void on_connect() {close_reconnect();} //close reconnecting mechanism
 };
 
-class short_client : public multi_client_base<short_connection, object_pool<short_connection>, i_my_matrix>
+class short_client : public multi_client_base<short_connection>
 {
 public:
 	short_client(service_pump& service_pump_) : multi_client_base(service_pump_) {}
@@ -93,10 +81,6 @@ public:
 		auto socket_ptr = add_socket(port, ip);
 		return socket_ptr ? socket_ptr->send_msg(msg) : false;
 	}
-
-protected:
-	//from i_my_matrix, pure virtual function, we must implement it.
-	virtual void test(uint_fast64_t id) {}
 
 private:
 	unsigned short port;

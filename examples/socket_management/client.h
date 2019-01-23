@@ -1,6 +1,7 @@
 #ifndef _CLIENT_H_
 #define _CLIENT_H_
 
+//demonstrates how to call multi_client_base in client_socket_base (just like server_socket_base call server_base)
 class my_matrix : public i_matrix
 {
 public:
@@ -20,11 +21,6 @@ public:
 	const std::string& name() const {return _name;}
 
 protected:
-	//disable reconnecting
-	//disconnect(bool), force_shutdown(bool) and graceful_shutdown(bool, bool) can overwrite reconnecting behavior, and reset() virtual function will
-	// open reconnecting too, so we close reconnecting repeatedly at here. you also can rewrite after_close() virtual function and do nothing in it.
-	virtual void on_connect() {close_reconnect();}
-
 	//msg handling
 	virtual bool on_msg_handle(out_msg_type& msg) {printf("received: %s, I'm %s\n", msg.data(), _name.data()); return true;}
 	//msg handling end

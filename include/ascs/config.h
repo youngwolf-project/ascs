@@ -483,6 +483,7 @@
  * FIX:
  *
  * ENHANCEMENTS:
+ * Introduce macro ASCS_RECONNECT_SWITCH to control the reconnecting mechanism.
  *
  * DELETION:
  *
@@ -653,6 +654,12 @@ static_assert(ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION > 0, "graceful shutdown durati
 //you can also rewrite tcp::client_socket_base::prepare_reconnect(), and return a negative value.
 #ifndef ASCS_RECONNECT_INTERVAL
 #define ASCS_RECONNECT_INTERVAL	500 //millisecond(s)
+#endif
+
+//define ASCS_RECONNECT_SWITCH macro to false, then no reconnecting will be performed after the link broken passively.
+//if proactively shutdown the link, reconnect or not depends on the reconnect parameter passed via disconnect, force_shutdown and graceful_shutdown.
+#ifndef ASCS_RECONNECT_SWITCH
+#define ASCS_RECONNECT_SWITCH	true
 #endif
 
 //how many async_accept delivery concurrently, an equivalent way is to rewrite virtual function server_socket_base::async_accept_num().
