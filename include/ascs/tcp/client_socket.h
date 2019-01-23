@@ -38,18 +38,18 @@ public:
 
 	//reset all, be ensure that no operations performed on this socket when invoke it, subclass must rewrite this function to initialize itself, and then
 	// call superclass' reset function, before reusing this socket, object_pool will invoke this function
-	virtual void reset() {need_reconnect = ASCS_RECONNECT_SWITCH; super::reset();}
+	virtual void reset() {need_reconnect = ASCS_RECONNECT; super::reset();}
 
 	bool set_server_addr(unsigned short port, const std::string& ip = ASCS_SERVER_IP) {return set_addr(server_addr, port, ip);}
 	const asio::ip::tcp::endpoint& get_server_addr() const {return server_addr;}
 	bool set_local_addr(unsigned short port, const std::string& ip = std::string()) {return set_addr(local_addr, port, ip);}
 	const asio::ip::tcp::endpoint& get_local_addr() const {return local_addr;}
 
-	//if you don't want to reconnect to the server after link broken, define macro ASCS_RECONNECT_SWITCH as false, call close_reconnect() in on_connect()
+	//if you don't want to reconnect to the server after link broken, define macro ASCS_RECONNECT as false, call close_reconnect() in on_connect()
 	// or rewrite after_close() virtual function and do nothing in it.
 	//if you want to control the retry times and delay time after reconnecting failed, rewrite prepare_reconnect virtual function.
 	//disconnect(bool), force_shutdown(bool) and graceful_shutdown(bool, bool) can overwrite reconnecting behavior, please note.
-	//reset() virtual function will set reconnecting behavior according to macro ASCS_RECONNECT_SWITCH, please note.
+	//reset() virtual function will set reconnecting behavior according to macro ASCS_RECONNECT, please note.
 	void open_reconnect() {need_reconnect = true;}
 	void close_reconnect() {need_reconnect = false;}
 
@@ -81,7 +81,7 @@ public:
 
 protected:
 	//helper function, just call it in constructor
-	void first_init(Matrix* matrix_ = nullptr) {need_reconnect = ASCS_RECONNECT_SWITCH; matrix = matrix_; set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
+	void first_init(Matrix* matrix_ = nullptr) {need_reconnect = ASCS_RECONNECT; matrix = matrix_; set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
 
 	Matrix* get_matrix() {return matrix;}
 	const Matrix* get_matrix() const {return matrix;}

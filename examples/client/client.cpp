@@ -59,7 +59,7 @@ using namespace ascs::ext::tcp;
 #define RESTART_COMMAND	"restart"
 #define RECONNECT		"reconnect"
 
-//we only want close reconnecting mechanism on this socket, so we don't define macro ASCS_RECONNECT_SWITCH
+//we only want close reconnecting mechanism on this socket, so we don't define macro ASCS_RECONNECT
 class short_connection : public client_socket
 {
 public:
