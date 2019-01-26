@@ -41,7 +41,6 @@ class socket : public Socket
 
 public:
 	template<typename Arg> socket(Arg& arg, asio::ssl::context& ctx) : Socket(arg, ctx) {}
-	template<typename Arg> socket(Arg* arg, asio::ssl::context& ctx) : Socket(arg, ctx) {}
 
 protected:
 	virtual void on_recv_error(const asio::error_code& ec)
