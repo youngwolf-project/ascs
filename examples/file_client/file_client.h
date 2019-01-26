@@ -17,7 +17,7 @@ extern std::atomic_int_fast64_t received_size;
 class file_socket : public base_socket, public client_socket
 {
 public:
-	file_socket(i_matrix* matrix_) : client_socket(matrix_), index(-1) {}
+	file_socket(i_matrix& matrix_) : client_socket(matrix_), index(-1) {}
 	virtual ~file_socket() {clear();}
 
 	//reset all, be ensure that there's no any operations performed on this file_socket when invoke it

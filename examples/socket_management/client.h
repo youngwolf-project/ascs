@@ -11,7 +11,7 @@ public:
 class my_client_socket : public client_socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UNPACKER, my_matrix>
 {
 public:
-	my_client_socket(my_matrix* matrix_) : client_socket_base(matrix_)
+	my_client_socket(my_matrix& matrix_) : client_socket_base(matrix_)
 	{
 		std::dynamic_pointer_cast<prefix_suffix_packer>(packer())->prefix_suffix("", "\n");
 		std::dynamic_pointer_cast<prefix_suffix_unpacker>(unpacker())->prefix_suffix("", "\n");

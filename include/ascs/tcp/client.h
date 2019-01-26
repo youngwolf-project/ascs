@@ -38,7 +38,8 @@ public:
 		return size;
 	}
 
-	typename Pool::object_type create_object() {return super::create_object(this);}
+	typename Pool::object_type create_object() {return Pool::create_object(*this);}
+	template<typename Arg> typename Pool::object_type create_object(Arg& arg) {return Pool::create_object(*this, arg);}
 
 	using super::add_socket;
 	typename Pool::object_type add_socket()
