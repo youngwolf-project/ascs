@@ -7,6 +7,8 @@
 #define ASCS_HEARTBEAT_INTERVAL	5
 #define ASCS_AVOID_AUTO_STOP_SERVICE
 #define ASCS_RECONNECT			false
+//#define ASCS_SHARED_MUTEX_TYPE std::shared_mutex	//we search objects frequently, defining this can promote performance, otherwise (or std::shared_mutex
+//#define ASCS_SHARED_LOCK_TYPE	std::shared_lock	//is unavailable), you should not define these two macro and ascs will use std::mutex instead.
 #define ASCS_DEFAULT_PACKER		prefix_suffix_packer
 #define ASCS_DEFAULT_UNPACKER	prefix_suffix_unpacker
 //configuration
