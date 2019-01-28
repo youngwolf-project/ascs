@@ -484,9 +484,9 @@
  *
  * ENHANCEMENTS:
  * Introduce macro ASCS_RECONNECT to control the reconnecting mechanism.
- * Introduce macro ASCS_SHARED_MUTEX_TYPE and ASCS_SHARED_LOCK_TYPE, they're used during searching objects in object_pool, if you search
- *  objects frequently and shared_mutex is available, use shared_mutex and shared_lock instead of mutex and unique_lock will promote performance,
- *  if you almost don't search objects, do not define these two macros (so they will be mutex and unique_lock by default).
+ * Introduce macro ASCS_SHARED_MUTEX_TYPE and ASCS_SHARED_LOCK_TYPE, they're used during searching or traversing (via do_something_to_all or do_something_to_one)
+ *  objects in object_pool, if you search or traverse objects frequently and shared_mutex is available, use shared_mutex and shared_lock instead of mutex and unique_lock
+ *  will promote performance, otherwise, do not define these two macros (so they will be mutex and unique_lock by default).
  *
  * DELETION:
  *
@@ -816,8 +816,8 @@ static_assert(ASIO_HAS_STD_FUTURE == 1, "sync message sending needs std::future.
 // on_msg (new messages arrived) can be invoked concurrently, please note. as before, on_msg will block the next receiving but only on current socket.
 //if you cannot handle all of the messages in on_msg (like echo_server), you should not use sync message dispatching except you can bear message disordering.
 
-//if you search objects frequently and shared_mutex is available, use shared_mutex and shared_lock instead of mutex and unique_lock will promote performance,
-//if you almost don't search objects, do not define these two macros (so they will be mutex and unique_lock by default).
+//if you search or traverse (via do_something_to_all or do_something_to_one) objects in object_pool frequently and shared_mutex is available, use shared_mutex and
+// shared_lock instead of mutex and unique_lock will promote performance, otherwise, do not define these two macros(so they will be mutex and unique_lock by default).
 #ifndef ASCS_SHARED_MUTEX_TYPE
 #define ASCS_SHARED_MUTEX_TYPE	std::mutex
 #endif
