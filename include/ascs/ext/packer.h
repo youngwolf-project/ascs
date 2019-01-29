@@ -56,9 +56,7 @@ public:
 		msg_type msg;
 		auto pre_len = native ? 0 : ASCS_HEAD_LEN;
 		auto total_len = packer_helper::msg_size_check(pre_len, pstr, len, num);
-		if ((size_t) -1 == total_len)
-			return msg;
-		else if (total_len > pre_len)
+		if ((size_t) -1 != total_len && total_len > pre_len)
 		{
 			if (!native)
 			{
@@ -155,9 +153,7 @@ public:
 		msg_type msg;
 		auto pre_len = native ? 0 : _prefix.size() + _suffix.size();
 		auto total_len = packer_helper::msg_size_check(pre_len, pstr, len, num);
-		if ((size_t) -1 == total_len)
-			return msg;
-		else if (total_len > pre_len)
+		if ((size_t) -1 != total_len && total_len > pre_len)
 		{
 			msg.reserve(total_len);
 			if (!native)

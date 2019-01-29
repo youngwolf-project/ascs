@@ -470,11 +470,13 @@
  * REPLACEMENTS:
  *
  * ===============================================================
- * 2019.3.x		version 1.3.5
+ * 2019.3.x		version 1.4.0
  *
  * SPECIAL ATTENTION (incompatible with old editions):
  * Socket used by tcp::multi_client_base, ssl::multi_client_base and udp::multi_socket_service needs to provide a constructor which accept
  *  a reference of i_matrix instead of a reference of asio::io_context.
+ * Macro ASCS_MAX_MSG_NUM been renamed to ASCS_MAX_SEND_BUF and ASCS_MAX_RECV_BUF, unit been changed to byte.
+ * Introduce virtual function pack_header to i_packer, it just pack headers.
  *
  * HIGHLIGHT:
  * Make client_socket_base be able to call multi_client_base (via i_matrix) like server_socket_base call server_base (via i_server),
@@ -487,8 +489,12 @@
  * Introduce macro ASCS_SHARED_MUTEX_TYPE and ASCS_SHARED_LOCK_TYPE, they're used during searching or traversing (via do_something_to_all or do_something_to_one)
  *  objects in object_pool, if you search or traverse objects frequently and shared_mutex is available, use shared_mutex and shared_lock instead of mutex and unique_lock
  *  will promote performance, otherwise, do not define these two macros (so they will be mutex and unique_lock by default).
+ * Add an overload to send_(native_)msg, safe_send_(native_)msg, sync_send_(native_)msg and sync_safe_send_(native_)msg respectively, it accepts a in_msg_type&& parameter,
+ *  this will reduce one memory replication (needs i_packer::pack_header).
+ * Control send and recv buffer accurately rather than just message number before, see macro ASCS_MAX_SEND_BUF and ASCS_MAX_RECV_BUF for more details.
  *
  * DELETION:
+ * Drop ascs::list which was implemented by ascs before, just simply use std::list, which means list::size() will not be called any more.
  *
  * REFACTORING:
  *
@@ -503,8 +509,8 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#define ASCS_VER		10305	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.3.5"
+#define ASCS_VER		10400	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.4.0"
 
 //asio and compiler check
 #ifdef _MSC_VER
@@ -553,11 +559,25 @@ namespace asio {typedef io_service io_context;}
 #endif
 static_assert(ASCS_SERVER_PORT > 0, "server port must be bigger than zero.");
 
-//msg send and recv buffer's maximum size (list::size()), corresponding buffers are expanded dynamically, which means only allocate memory when needed.
-#ifndef ASCS_MAX_MSG_NUM
-#define ASCS_MAX_MSG_NUM		1024
+#ifdef ASCS_MAX_MSG_NUM
+	#ifdef _MSC_VER
+		#pragma message("macro ASCS_MAX_MSG_NUM is deprecated, use ASCS_MAX_SEND_BUF or ASCS_MAX_RECV_BUF instead, the meanings also changed too, please note.")
+	#else
+		#warning macro ASCS_MAX_MSG_NUM is deprecated, use ASCS_MAX_SEND_BUF or ASCS_MAX_RECV_BUF instead, the meanings also changed too, please note.
+	#endif
 #endif
-static_assert(ASCS_MAX_MSG_NUM > 0, "message capacity must be bigger than zero.");
+
+//send buffer's maximum size (bytes), it will be expanded dynamically (not fixed) within this range.
+#ifndef ASCS_MAX_SEND_BUF
+#define ASCS_MAX_SEND_BUF		65536
+#endif
+static_assert(ASCS_MAX_SEND_BUF > 15, "send buffer capacity must be bigger than 15.");
+
+//recv buffer's maximum size (bytes), it will be expanded dynamically (not fixed) within this range.
+#ifndef ASCS_MAX_RECV_BUF
+#define ASCS_MAX_RECV_BUF		65536
+#endif
+static_assert(ASCS_MAX_RECV_BUF > 15, "recv buffer capacity must be bigger than 15.");
 
 //buffer (on stack) size used when writing logs.
 #ifndef ASCS_UNIFIED_OUT_BUF_NUM

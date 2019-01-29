@@ -469,6 +469,13 @@ TYPE FUNNAME(const char* pstr, size_t len, bool can_overflow) {return FUNNAME(&p
 template<typename Buffer> TYPE FUNNAME(const Buffer& buffer, bool can_overflow = false) {return FUNNAME(buffer.data(), buffer.size(), can_overflow);}
 
 #define TCP_SEND_MSG(FUNNAME, NATIVE, SEND_FUNNAME) \
+bool FUNNAME(in_msg_type&& msg, bool can_overflow = false) \
+{ \
+	if (!can_overflow && !this->is_send_buffer_available()) \
+		return false; \
+	; \
+	return SEND_FUNNAME(std::move(msg)); \
+} \
 bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) \
 { \
 	if (!can_overflow && !this->is_send_buffer_available()) \
