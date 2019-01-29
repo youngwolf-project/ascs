@@ -81,13 +81,27 @@ public:
 
 		return msg;
 	}
-	virtual msg_type pack_heartbeat()
+	virtual msg_type pack_header(size_t length)
 	{
-		ASCS_HEAD_TYPE head_len = ASCS_HEAD_LEN;
-		head_len = ASCS_HEAD_H2N(head_len);
+		if (length < ASCS_MSG_BUFFER_SIZE)
+		{
+			length += ASCS_HEAD_LEN;
+			if (length <= ASCS_MSG_BUFFER_SIZE) //overflow
+			{
+				auto head_len = (ASCS_HEAD_TYPE) length;
+				if (length != head_len)
+					unified_out::error_out("pack msg error: length exceeded the header's range!");
+				else
+				{
+					head_len = ASCS_HEAD_H2N(head_len);
+					return msg_type((const char*) &head_len, ASCS_HEAD_LEN);
+				}
+			}
+		}
 
-		return msg_type((const char*) &head_len, ASCS_HEAD_LEN);
+		return msg_type();
 	}
+	virtual msg_type pack_heartbeat() {return pack_header(0);}
 
 	//do not use following helper functions for heartbeat messages.
 	virtual char* raw_data(msg_type& msg) const {return const_cast<char*>(std::next(msg.data(), ASCS_HEAD_LEN));}
@@ -112,13 +126,14 @@ public:
 		raw_msg->swap(str);
 		return typename super::msg_type(raw_msg);
 	}
-	virtual typename super::msg_type pack_heartbeat()
+	virtual typename super::msg_type pack_header(size_t length)
 	{
 		auto raw_msg = new string_buffer();
-		auto str = packer().pack_heartbeat();
+		auto str = packer().pack_header(length);
 		raw_msg->swap(str);
 		return typename super::msg_type(raw_msg);
 	}
+	virtual typename super::msg_type pack_heartbeat() {return pack_header(0);}
 
 	virtual char* raw_data(typename super::msg_type& msg) const {return const_cast<char*>(std::next(msg.data(), ASCS_HEAD_LEN));}
 	virtual const char* raw_data(typename super::msg_ctype& msg) const {return std::next(msg.data(), ASCS_HEAD_LEN);}

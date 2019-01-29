@@ -75,11 +75,13 @@ public:
 	short_client(service_pump& service_pump_) : multi_client_base(service_pump_) {}
 
 	void set_server_addr(unsigned short _port, const std::string& _ip = ASCS_SERVER_IP) {port = _port; ip = _ip;}
-	bool send_msg(const std::string& msg) {return send_msg(msg, port, ip);}
-	bool send_msg(const std::string& msg, unsigned short port, const std::string& ip)
+	bool send_msg(const std::string& msg) {return send_msg(std::string(msg), port, ip);}
+	bool send_msg(std::string&& msg) {return send_msg(std::move(msg), port, ip);}
+	bool send_msg(const std::string& msg, unsigned short port, const std::string& ip) {return send_msg(std::string(msg), port, ip);}
+	bool send_msg(std::string&& msg, unsigned short port, const std::string& ip)
 	{
 		auto socket_ptr = add_socket(port, ip);
-		return socket_ptr ? socket_ptr->send_msg(msg) : false;
+		return socket_ptr ? socket_ptr->send_msg(std::move(msg)) : false;
 	}
 
 private:
