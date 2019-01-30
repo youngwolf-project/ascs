@@ -8,7 +8,7 @@
 //#define ASCS_CLEAR_OBJECT_INTERVAL 1
 #define ASCS_SYNC_DISPATCH
 #define ASCS_DISPATCH_BATCH_MSG
-//#define ASCS_WANT_MSG_SEND_NOTIFY
+#define ASCS_WANT_MSG_SEND_NOTIFY
 #define ASCS_FULL_STATISTIC //full statistic will slightly impact efficiency
 #define ASCS_AVOID_AUTO_STOP_SERVICE
 #define ASCS_DECREASE_THREAD_AT_RUNTIME
@@ -104,9 +104,13 @@ public:
 		msg_num = msg_num_;
 
 		std::string msg(msg_len, msg_fill);
-		memcpy(msg.data(), &recv_index, sizeof(size_t)); //seq
+		msg.replace(0, sizeof(size_t), (const char*) &recv_index, sizeof(size_t)); //seq
 
+#ifdef ASCS_WANT_MSG_SEND_NOTIFY
+		send_msg(msg); //can not apply new feature introduced by version 1.4.0, we need a whole message in on_msg_send
+#else
 		send_msg(std::move(msg)); //new feature introduced by version 1.4.0, avoid one memory replication
+#endif
 	}
 
 protected:
@@ -253,7 +257,8 @@ void send_msg_one_by_one(echo_client& client, size_t msg_num, size_t msg_len, ch
 	} while (percent < 100);
 	begin_time.stop();
 
-	printf(" finished in %f seconds, speed: %f(*2) MBps.\n", begin_time.elapsed(), total_msg_bytes / begin_time.elapsed() / 1024 / 1024);
+	printf(" finished in %f seconds, TPS: %f(*2), speed: %f(*2) MBps.\n",
+		begin_time.elapsed(), client.size() * msg_num / begin_time.elapsed(), total_msg_bytes / begin_time.elapsed() / 1024 / 1024);
 }
 
 void send_msg_randomly(echo_client& client, size_t msg_num, size_t msg_len, char msg_fill)
@@ -288,7 +293,8 @@ void send_msg_randomly(echo_client& client, size_t msg_num, size_t msg_len, char
 	begin_time.stop();
 	delete[] buff;
 
-	printf(" finished in %f seconds, speed: %f(*2) MBps.\n", begin_time.elapsed(), total_msg_bytes / begin_time.elapsed() / 1024 / 1024);
+	printf(" finished in %f seconds, TPS: %f(*2), speed: %f(*2) MBps.\n",
+		begin_time.elapsed(), msg_num / begin_time.elapsed(), total_msg_bytes / begin_time.elapsed() / 1024 / 1024);
 }
 
 //use up to a specific worker threads to send messages concurrently
