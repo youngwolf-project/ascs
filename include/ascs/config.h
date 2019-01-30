@@ -483,15 +483,17 @@
  * HIGHLIGHT:
  * Make client_socket_base be able to call multi_client_base (via i_matrix) like server_socket_base call server_base (via i_server),
  *  and so does ssl::client_socket_base and udp::socket_base.
+ * Promote performance by reducing memory replications if you already generated the message body and can be swapped into ascs.
+ * Introduce shared_mutex, it can promote performance if you find or traverse (do_something_to_all or do_something_to_one) objects frequently.
  *
  * FIX:
  *
  * ENHANCEMENTS:
  * Introduce macro ASCS_RECONNECT to control the reconnecting mechanism.
- * Introduce macro ASCS_SHARED_MUTEX_TYPE and ASCS_SHARED_LOCK_TYPE, they're used during searching or traversing objects in object_pool
- *  (via do_something_to_all or do_something_to_one), if you search or traverse objects frequently and shared_mutex is available, use shared_mutex
- *  with shared_lock instead of mutex with unique_lock will promote performance, otherwise, do not define these two macros.
- * Add an overload to send_(native_)msg and safe_send_(native_)msg respectively (just on TCP), they accept a in_msg_type&& parameter (but not packed),
+ * Introduce macro ASCS_SHARED_MUTEX_TYPE and ASCS_SHARED_LOCK_TYPE, they're used during finding or traversing (do_something_to_all or do_something_to_one)
+ *  objects in object_pool, if you find or traverse objects frequently and shared_mutex is available, use shared_mutex with shared_lock instead of
+ *  mutex with unique_lock will promote performance, otherwise, do not define these two macros.
+ * Add an overload to send_(native_)msg and safe_send_(native_)msg respectively (just on TCP), they accept an in_msg_type&& parameter (not packed),
  *  this will reduce one memory replication (needs i_packer::pack_header), and statistic.send_msg_sum will be one bigger than before because ascs
  *  add an additional message just represent the header to avoid copying the message body.
  * Control send and recv buffer accurately rather than just message number before, see macro ASCS_MAX_SEND_BUF and ASCS_MAX_RECV_BUF for more details.
@@ -572,13 +574,13 @@ static_assert(ASCS_SERVER_PORT > 0, "server port must be bigger than zero.");
 
 //send buffer's maximum size (bytes), it will be expanded dynamically (not fixed) within this range.
 #ifndef ASCS_MAX_SEND_BUF
-#define ASCS_MAX_SEND_BUF		65536
+#define ASCS_MAX_SEND_BUF		1048576 //1M
 #endif
 static_assert(ASCS_MAX_SEND_BUF > 15, "send buffer capacity must be bigger than 15.");
 
 //recv buffer's maximum size (bytes), it will be expanded dynamically (not fixed) within this range.
 #ifndef ASCS_MAX_RECV_BUF
-#define ASCS_MAX_RECV_BUF		65536
+#define ASCS_MAX_RECV_BUF		1048576 //1M
 #endif
 static_assert(ASCS_MAX_RECV_BUF > 15, "recv buffer capacity must be bigger than 15.");
 
