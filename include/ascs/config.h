@@ -476,7 +476,7 @@
  * Socket used by tcp::multi_client_base, ssl::multi_client_base and udp::multi_socket_service needs to provide a constructor which accept
  *  a reference of i_matrix instead of a reference of asio::io_context.
  * Macro ASCS_MAX_MSG_NUM been renamed to ASCS_MAX_SEND_BUF and ASCS_MAX_RECV_BUF, unit been changed to byte.
- * Introduce virtual function pack_header to i_packer, it just pack headers.
+ * Introduce an additional overload of pack_msg virtual function to i_packer, it needs an in_msg_type&& parameter and can reduce one memory replication.
  * statistic.send_msg_sum may be bigger than before, see ENHANCEMENTS section for more details.
  * Return value from on_msg_handle(out_queue_type&) been changed from size_t to bool.
  *
@@ -494,7 +494,7 @@
  *  objects in object_pool, if you find or traverse objects frequently and shared_mutex is available, use shared_mutex with shared_lock instead of
  *  mutex with unique_lock will promote performance, otherwise, do not define these two macros.
  * Add an overload to send_(native_)msg and safe_send_(native_)msg respectively (just on TCP), they accept an in_msg_type&& parameter (not packed),
- *  this will reduce one memory replication (needs i_packer::pack_header), and statistic.send_msg_sum will be one bigger than before because ascs
+ *  this will reduce one memory replication, and statistic.send_msg_sum will be one bigger than before because ascs
  *  add an additional message just represent the header to avoid copying the message body.
  * Control send and recv buffer accurately rather than just message number before, see macro ASCS_MAX_SEND_BUF and ASCS_MAX_RECV_BUF for more details.
  *

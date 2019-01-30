@@ -168,6 +168,7 @@ class i_packer
 public:
 	typedef MsgType msg_type;
 	typedef const msg_type msg_ctype;
+	typedef std::list<msg_type> container_type;
 
 protected:
 	virtual ~i_packer() {}
@@ -175,7 +176,7 @@ protected:
 public:
 	virtual void reset() {}
 	virtual msg_type pack_msg(const char* const pstr[], const size_t len[], size_t num, bool native = false) = 0;
-	virtual msg_type pack_header(size_t length) {return msg_type();}
+	virtual bool pack_msg(msg_type&& msg, container_type& msg_can, bool native = false) {return false;}
 	virtual msg_type pack_heartbeat() {return msg_type();}
 	virtual char* raw_data(msg_type& msg) const {return nullptr;}
 	virtual const char* raw_data(msg_ctype& msg) const {return nullptr;}
@@ -474,16 +475,23 @@ bool FUNNAME(in_msg_type&& msg, bool can_overflow = false) \
 { \
 	if (!can_overflow && !this->is_send_buffer_available()) \
 		return false; \
-	else if (NATIVE) \
-		return SEND_FUNNAME(std::move(msg)); \
-	auto header = packer_->pack_header(msg.size()); \
-	return (header.empty() ? true : SEND_FUNNAME(std::move(header))) && SEND_FUNNAME(std::move(msg)); \
+	typename Packer::container_type msg_can; \
+	auto_duration dur(stat.pack_time_sum); \
+	if (!packer_->pack_msg(std::move(msg), msg_can, NATIVE)) \
+		return FUNNAME(msg, can_overflow); \
+	dur.end(); \
+	std::list<typename super::in_msg> temp_buffer; \
+	ascs::do_something_to_all(msg_can, [&temp_buffer](in_msg_type& msg) {temp_buffer.emplace_back(std::move(msg));}); \
+	send_msg_buffer.move_items_in(temp_buffer); \
+	if (!sending && is_ready()) \
+		send_msg(); \
+	return true; \
 } \
 bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) \
 { \
 	if (!can_overflow && !this->is_send_buffer_available()) \
 		return false; \
-	auto_duration dur(this->stat.pack_time_sum); \
+	auto_duration dur(stat.pack_time_sum); \
 	auto msg = packer_->pack_msg(pstr, len, num, NATIVE); \
 	dur.end(); \
 	return SEND_FUNNAME(std::move(msg)); \
@@ -519,7 +527,7 @@ sync_call_result FUNNAME(const char* const pstr[], const size_t len[], size_t nu
 { \
 	if (!can_overflow && !this->is_send_buffer_available()) \
 		return sync_call_result::NOT_APPLICABLE; \
-	auto_duration dur(this->stat.pack_time_sum); \
+	auto_duration dur(stat.pack_time_sum); \
 	auto msg = packer_->pack_msg(pstr, len, num, NATIVE); \
 	dur.end(); \
 	return SEND_FUNNAME(std::move(msg), duration); \

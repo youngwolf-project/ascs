@@ -13,10 +13,11 @@
 #define ASCS_ALIGNED_TIMER
 #define ASCS_AVOID_AUTO_STOP_SERVICE
 #define ASCS_DECREASE_THREAD_AT_RUNTIME
-//#define ASCS_MAX_MSG_NUM		16
-//if there's a huge number of links, please reduce messge buffer via ASCS_MAX_MSG_NUM macro.
-//please think about if we have 512 links, how much memory we can accupy at most with default ASCS_MAX_MSG_NUM?
-//it's 2 * 1024 * 1024 * 512 = 1G
+//#define ASCS_MAX_SEND_BUF	65536
+//#define ASCS_MAX_RECV_BUF	65536
+//if there's a huge number of links, please reduce messge buffer via ASCS_MAX_SEND_BUF and ASCS_MAX_RECV_BUF macro.
+//please think about if we have 512 links, how much memory we can accupy at most with default ASCS_MAX_SEND_BUF and ASCS_MAX_RECV_BUF?
+//it's 2 * 1M * 512 = 1G
 
 //use the following macro to control the type of packer and unpacker
 #define PACKER_UNPACKER_TYPE	0
@@ -38,8 +39,6 @@
 #define ASCS_DEFAULT_PACKER fixed_length_packer
 #define ASCS_DEFAULT_UNPACKER fixed_length_unpacker
 #elif 3 == PACKER_UNPACKER_TYPE
-#undef ASCS_HEARTBEAT_INTERVAL
-#define ASCS_HEARTBEAT_INTERVAL	0 //not support heartbeat
 #define ASCS_DEFAULT_PACKER prefix_suffix_packer
 #define ASCS_DEFAULT_UNPACKER prefix_suffix_unpacker
 #endif

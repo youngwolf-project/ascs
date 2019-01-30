@@ -42,6 +42,17 @@ public:
 
 		return total_len;
 	}
+
+	static ASCS_HEAD_TYPE pack_header(size_t len)
+	{
+		assert(len < ASCS_MSG_BUFFER_SIZE);
+		auto total_len = ASCS_HEAD_LEN + len;
+		assert(total_len <= ASCS_MSG_BUFFER_SIZE);
+		auto head_len = (ASCS_HEAD_TYPE) total_len;
+		assert(head_len == total_len);
+
+		return ASCS_HEAD_H2N(head_len);
+	}
 };
 
 //protocol: length + body
@@ -81,27 +92,18 @@ public:
 
 		return msg;
 	}
-	virtual msg_type pack_header(size_t length)
+	virtual bool pack_msg(msg_type&& msg, container_type& msg_can, bool native = false)
 	{
-		if (length < ASCS_MSG_BUFFER_SIZE)
+		if (!native)
 		{
-			length += ASCS_HEAD_LEN;
-			if (length <= ASCS_MSG_BUFFER_SIZE) //overflow
-			{
-				auto head_len = (ASCS_HEAD_TYPE) length;
-				if (length != head_len)
-					unified_out::error_out("pack msg error: length exceeded the header's range!");
-				else
-				{
-					head_len = ASCS_HEAD_H2N(head_len);
-					return msg_type((const char*) &head_len, ASCS_HEAD_LEN);
-				}
-			}
+			auto head_len = packer_helper::pack_header(msg.size());
+			msg_can.emplace_back((const char*) &head_len, ASCS_HEAD_LEN);
 		}
+		msg_can.emplace_back(std::move(msg));
 
-		return msg_type();
+		return true;
 	}
-	virtual msg_type pack_heartbeat() {return pack_header(0);}
+	virtual msg_type pack_heartbeat() {auto head_len = packer_helper::pack_header(0); return msg_type((const char*) &head_len, ASCS_HEAD_LEN);}
 
 	//do not use following helper functions for heartbeat messages.
 	virtual char* raw_data(msg_type& msg) const {return const_cast<char*>(std::next(msg.data(), ASCS_HEAD_LEN));}
@@ -126,14 +128,13 @@ public:
 		raw_msg->swap(str);
 		return typename super::msg_type(raw_msg);
 	}
-	virtual typename super::msg_type pack_header(size_t length)
+	virtual typename super::msg_type pack_heartbeat()
 	{
 		auto raw_msg = new string_buffer();
-		auto str = packer().pack_header(length);
+		auto str = packer().pack_heartbeat();
 		raw_msg->swap(str);
 		return typename super::msg_type(raw_msg);
 	}
-	virtual typename super::msg_type pack_heartbeat() {return pack_header(0);}
 
 	virtual char* raw_data(typename super::msg_type& msg) const {return const_cast<char*>(std::next(msg.data(), ASCS_HEAD_LEN));}
 	virtual const char* raw_data(typename super::msg_ctype& msg) const {return std::next(msg.data(), ASCS_HEAD_LEN);}
@@ -145,7 +146,8 @@ class fixed_length_packer : public packer
 {
 public:
 	using packer::pack_msg;
-	virtual msg_type pack_msg(const char* const pstr[], const size_t len[], size_t num, bool native = false) {return packer::pack_msg(pstr, len, num, true);}
+	virtual msg_type pack_msg(const char* const pstr[], const size_t len[], size_t num, bool native = true) {return packer::pack_msg(pstr, len, num, true);}
+	virtual bool pack_msg(msg_type&& msg, container_type& msg_can, bool native = true) {msg_can.emplace_back(std::move(msg)); return true;}
 	//not support heartbeat because fixed_length_unpacker cannot recognize heartbeat message
 
 	virtual char* raw_data(msg_type& msg) const {return const_cast<char*>(msg.data());}
@@ -182,8 +184,18 @@ public:
 
 		return msg;
 	}
+	virtual bool pack_msg(msg_type&& msg, container_type& msg_can, bool native = false)
+	{
+		if (!native && !_prefix.empty())
+			msg_can.emplace_back(_prefix);
+		msg_can.emplace_back(std::move(msg));
+		if (!native && !_suffix.empty())
+			msg_can.emplace_back(_suffix);
 
+		return true;
+	}
 	virtual msg_type pack_heartbeat() {return _prefix + _suffix;}
+
 	virtual char* raw_data(msg_type& msg) const {return const_cast<char*>(std::next(msg.data(), _prefix.size()));}
 	virtual const char* raw_data(msg_ctype& msg) const {return std::next(msg.data(), _prefix.size());}
 	virtual size_t raw_data_len(msg_ctype& msg) const {return msg.size() - _prefix.size() - _suffix.size();}

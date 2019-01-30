@@ -16,18 +16,9 @@
 #define ASCS_DEFAULT_UNPACKER	non_copy_unpacker
 //#define ASCS_DEFAULT_UNPACKER	stream_unpacker
 
-//the following three macros demonstrate how to support huge msg(exceed 65535 - 2).
-//huge msg will consume huge memory, for example, if we want to support 1M msg size, because every tcp::socket has a
-//private unpacker which has a fixed buffer with at lest 1M size, so just for unpackers, 1K tcp::socket will consume 1G memory.
-//if we consider the send buffer and recv buffer, the buffer's default max size is 1K, so, every tcp::socket
-//can consume 2G(2 * 1M * 1K) memory when performance testing(both send buffer and recv buffer are full).
-//generally speaking, if there are 1K clients connected to the server, the server can consume
-//1G(occupied by unpackers) + 2G(occupied by msg buffer) * 1K = 2049G memory theoretically.
-//please note that the server also need to define at least ASCS_HUGE_MSG and ASCS_MSG_BUFFER_SIZE macros too.
-
+//the following two macros demonstrate how to support huge msg(exceed 65535 - 2).
 //#define ASCS_HUGE_MSG
-//#define ASCS_MSG_BUFFER_SIZE (1024 * 1024)
-//#define ASCS_MAX_MSG_NUM 8 //reduce msg buffer size to reduce memory occupation
+//#define ASCS_MSG_BUFFER_SIZE (1024 * 1024) //should not bigger than ASCS_MAX_SEND_BUF and ASCS_MAX_RECV_BUF, please note
 #define ASCS_HEARTBEAT_INTERVAL	5 //if use stream_unpacker, heartbeat messages will be treated as normal messages,
 								  //because stream_unpacker doesn't support heartbeat
 //configuration
