@@ -51,17 +51,19 @@ template<typename T> using list = std::list<T>;
 // swap
 // emplace_back(const T& item)
 // emplace_back(T&& item)
-// splice(decltype(Container::end()), std::list<T>&), after this, std::list<T> must be empty
+// splice(iter, std::list<T>&), after this, std::list<T> must be empty
+// splice(iter, Container&, iter, iter), if macro ASCS_DISPATCH_BATCH_MSG been defined
+// splice(iter, Container&), if macro ASCS_DISPATCH_BATCH_MSG been defined
 // front
 // pop_front
 // begin
 // end
 template<typename T, typename Container, typename Lockable> //thread safety depends on Container or Lockable
-#ifdef ASCS_DISPATCH_BATCH_MSG
-class queue : public Container, public Lockable
-#else
+//#ifdef ASCS_DISPATCH_BATCH_MSG
+//class queue : public Container, public Lockable
+//#else
 class queue : protected Container, public Lockable
-#endif
+//#endif
 {
 public:
 	typedef T data_type;
@@ -135,6 +137,30 @@ public:
 
 	bool try_dequeue_(T& item) {if (this->empty()) return false; item.swap(this->front()); this->pop_front(); buff_size -= item.size(); return true;}
 	//not thread safe
+
+#ifdef ASCS_DISPATCH_BATCH_MSG
+	void move_items_out(Container& dest, size_t max_item_num = -1) {typename Lockable::lock_guard lock(*this); move_items_out_(dest, max_item_num);} //thread safe
+	void move_items_out_(Container& dest, size_t max_item_num = -1) //not thread safe
+	{
+		if ((size_t) -1 == max_item_num)
+		{
+			dest.splice(std::end(dest), *this);
+			buff_size = 0;
+		}
+		else if (max_item_num > 0)
+		{
+			size_t s = 0, index = 0;
+			auto end_iter = this->begin();
+			do_something_to_one(*this, [&](const T& item) {if (++index > max_item_num) return true; s += item.size(); ++end_iter; return false;});
+
+			dest.splice(std::end(dest), *this, this->begin(), end_iter);
+			buff_size -= s;
+		}
+	}
+
+	using Container::begin;
+	using Container::end;
+#endif
 
 private:
 	size_t buff_size; //in use

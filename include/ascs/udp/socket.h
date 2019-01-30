@@ -97,6 +97,8 @@ public:
 
 	///////////////////////////////////////////////////
 	//msg sending interface
+	//if the message already packed, do call direct_send_msg or direct_sync_send_msg to reduce unnecessary memory replication, if you will not
+	// use it any more, use std::move to wrap it when calling direct_send_msg or direct_sync_send_msg.
 	UDP_SEND_MSG(send_msg, false, do_direct_send_msg) //use the packer with native = false to pack the msgs
 	UDP_SEND_MSG(send_native_msg, true, do_direct_send_msg) //use the packer with native = true to pack the msgs
 	//guarantee send msg successfully even if can_overflow equal to false

@@ -477,6 +477,8 @@
  *  a reference of i_matrix instead of a reference of asio::io_context.
  * Macro ASCS_MAX_MSG_NUM been renamed to ASCS_MAX_SEND_BUF and ASCS_MAX_RECV_BUF, unit been changed to byte.
  * Introduce virtual function pack_header to i_packer, it just pack headers.
+ * statistic.send_msg_sum may be bigger than before, see ENHANCEMENTS section for more details.
+ * Return value from on_msg_handle(out_queue_type&) been changed from size_t to bool.
  *
  * HIGHLIGHT:
  * Make client_socket_base be able to call multi_client_base (via i_matrix) like server_socket_base call server_base (via i_server),
@@ -486,11 +488,12 @@
  *
  * ENHANCEMENTS:
  * Introduce macro ASCS_RECONNECT to control the reconnecting mechanism.
- * Introduce macro ASCS_SHARED_MUTEX_TYPE and ASCS_SHARED_LOCK_TYPE, they're used during searching or traversing (via do_something_to_all or do_something_to_one)
- *  objects in object_pool, if you search or traverse objects frequently and shared_mutex is available, use shared_mutex and shared_lock instead of mutex and unique_lock
- *  will promote performance, otherwise, do not define these two macros (so they will be mutex and unique_lock by default).
- * Add an overload to send_(native_)msg, safe_send_(native_)msg, sync_send_(native_)msg and sync_safe_send_(native_)msg respectively, it accepts a in_msg_type&& parameter,
- *  this will reduce one memory replication (needs i_packer::pack_header).
+ * Introduce macro ASCS_SHARED_MUTEX_TYPE and ASCS_SHARED_LOCK_TYPE, they're used during searching or traversing objects in object_pool
+ *  (via do_something_to_all or do_something_to_one), if you search or traverse objects frequently and shared_mutex is available, use shared_mutex
+ *  with shared_lock instead of mutex with unique_lock will promote performance, otherwise, do not define these two macros.
+ * Add an overload to send_(native_)msg and safe_send_(native_)msg respectively (just on TCP), they accept a in_msg_type&& parameter (but not packed),
+ *  this will reduce one memory replication (needs i_packer::pack_header), and statistic.send_msg_sum will be one bigger than before because ascs
+ *  add an additional message just represent the header to avoid copying the message body.
  * Control send and recv buffer accurately rather than just message number before, see macro ASCS_MAX_SEND_BUF and ASCS_MAX_RECV_BUF for more details.
  *
  * DELETION:
@@ -836,8 +839,8 @@ static_assert(ASIO_HAS_STD_FUTURE == 1, "sync message sending needs std::future.
 // on_msg (new messages arrived) can be invoked concurrently, please note. as before, on_msg will block the next receiving but only on current socket.
 //if you cannot handle all of the messages in on_msg (like echo_server), you should not use sync message dispatching except you can bear message disordering.
 
-//if you search or traverse (via do_something_to_all or do_something_to_one) objects in object_pool frequently and shared_mutex is available, use shared_mutex and
-// shared_lock instead of mutex and unique_lock will promote performance, otherwise, do not define these two macros(so they will be mutex and unique_lock by default).
+//if you search or traverse (via do_something_to_all or do_something_to_one) objects in object_pool frequently and shared_mutex is available,
+// use shared_mutex with shared_lock instead of mutex with unique_lock will promote performance, otherwise, do not define these two macros.
 #ifndef ASCS_SHARED_MUTEX_TYPE
 #define ASCS_SHARED_MUTEX_TYPE	std::mutex
 #endif

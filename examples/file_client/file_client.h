@@ -48,7 +48,7 @@ public:
 		order += file_name;
 
 		state = TRANS_PREPARE;
-		send_msg(order, true);
+		send_msg(std::move(order), true);
 
 		return true;
 	}
@@ -59,7 +59,7 @@ public:
 		{
 			std::string order("\2", ORDER_LEN);
 			order += str;
-			send_msg(order, true);
+			send_msg(std::move(order), true);
 		}
 	}
 

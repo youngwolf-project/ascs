@@ -103,12 +103,10 @@ public:
 		clear_status();
 		msg_num = msg_num_;
 
-		auto buff = new char[msg_len];
-		memset(buff, msg_fill, msg_len);
-		memcpy(buff, &recv_index, sizeof(size_t)); //seq
+		std::string msg(msg_len, msg_fill);
+		memcpy(msg.data(), &recv_index, sizeof(size_t)); //seq
 
-		send_msg(buff, msg_len, false);
-		delete[] buff;
+		send_msg(std::move(msg)); //new feature introduced by version 1.4.0, avoid one memory replication
 	}
 
 protected:
@@ -129,14 +127,14 @@ protected:
 #endif
 #ifdef ASCS_DISPATCH_BATCH_MSG
 	//do not hold msg_can for further using, access msg_can and return from on_msg_handle as quickly as possible
-	virtual size_t on_msg_handle(out_queue_type& msg_can)
+	virtual bool on_msg_handle(out_queue_type& msg_can)
 	{
 		//to consume a part of the messages in msg_can, see echo_server.
 		out_container_type tmp_can;
 		msg_can.swap(tmp_can); //must be thread safe
 
 		ascs::do_something_to_all(tmp_can, [this](out_msg_type& msg) {this->handle_msg(msg);});
-		return tmp_can.size();
+		return true;
 	}
 #else
 	virtual bool on_msg_handle(out_msg_type& msg) {handle_msg(msg); return true;}
@@ -334,7 +332,6 @@ void send_msg_concurrently(echo_client& client, size_t send_thread_num, size_t m
 			for (size_t i = 0; i < msg_num; ++i)
 			{
 				memcpy(buff, &i, sizeof(size_t)); //seq
-
 				do_something_to_all(item, [buff, msg_len](echo_client::object_ctype& item2) {item2->safe_send_msg(buff, msg_len, false);}); //can_overflow is false, it's important
 			}
 			delete[] buff;

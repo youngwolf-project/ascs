@@ -61,7 +61,7 @@ int main(int argc, const char* argv[])
 			{
 				std::string name = *iter++;
 				for (; iter != std::end(parameters); ++iter)
-					client.send_msg(name, *iter);
+					client.send_msg(name, std::move(*iter));
 			}
 		}
 	}

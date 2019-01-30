@@ -474,14 +474,17 @@ bool FUNNAME(in_msg_type&& msg, bool can_overflow = false) \
 { \
 	if (!can_overflow && !this->is_send_buffer_available()) \
 		return false; \
-	return (NATIVE || SEND_FUNNAME(this->packer_->pack_header(msg.size()))) && SEND_FUNNAME(std::move(msg)); \
+	else if (NATIVE) \
+		return SEND_FUNNAME(std::move(msg)); \
+	auto header = packer_->pack_header(msg.size()); \
+	return (header.empty() ? true : SEND_FUNNAME(std::move(header))) && SEND_FUNNAME(std::move(msg)); \
 } \
 bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) \
 { \
 	if (!can_overflow && !this->is_send_buffer_available()) \
 		return false; \
 	auto_duration dur(this->stat.pack_time_sum); \
-	auto msg = this->packer_->pack_msg(pstr, len, num, NATIVE); \
+	auto msg = packer_->pack_msg(pstr, len, num, NATIVE); \
 	dur.end(); \
 	return SEND_FUNNAME(std::move(msg)); \
 } \
@@ -517,7 +520,7 @@ sync_call_result FUNNAME(const char* const pstr[], const size_t len[], size_t nu
 	if (!can_overflow && !this->is_send_buffer_available()) \
 		return sync_call_result::NOT_APPLICABLE; \
 	auto_duration dur(this->stat.pack_time_sum); \
-	auto msg = this->packer_->pack_msg(pstr, len, num, NATIVE); \
+	auto msg = packer_->pack_msg(pstr, len, num, NATIVE); \
 	dur.end(); \
 	return SEND_FUNNAME(std::move(msg), duration); \
 } \
@@ -549,7 +552,7 @@ bool FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* const pstr[],
 { \
 	if (!can_overflow && !this->is_send_buffer_available()) \
 		return false; \
-	in_msg_type msg(peer_addr, this->packer_->pack_msg(pstr, len, num, NATIVE)); \
+	in_msg_type msg(peer_addr, packer_->pack_msg(pstr, len, num, NATIVE)); \
 	return SEND_FUNNAME(std::move(msg)); \
 } \
 UDP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)
@@ -583,7 +586,7 @@ sync_call_result FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* c
 { \
 	if (!can_overflow && !this->is_send_buffer_available()) \
 		return sync_call_result::NOT_APPLICABLE; \
-	in_msg_type msg(peer_addr, this->packer_->pack_msg(pstr, len, num, NATIVE)); \
+	in_msg_type msg(peer_addr, packer_->pack_msg(pstr, len, num, NATIVE)); \
 	return SEND_FUNNAME(std::move(msg), duration); \
 } \
 UDP_SYNC_SEND_MSG_CALL_SWITCH(FUNNAME, sync_call_result)

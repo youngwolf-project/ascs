@@ -102,7 +102,6 @@ protected:
 	}
 
 	//msg handling: send the original msg back(echo server)
-/*
 #ifdef ASCS_SYNC_DISPATCH //do not open this feature
 	//do not hold msg_can for further using, return from on_msg as quickly as possible
 	virtual size_t on_msg(std::list<out_msg_type>& msg_can)
@@ -115,38 +114,29 @@ protected:
 		//1. we can not use safe_send_msg as i said many times, we should not block service threads.
 		//2. if we use true can_overflow to call send_msg, then buffer usage will be out of control, we should not take this risk.
 
-		ascs::do_something_to_all(msg_can, [this](out_msg_type& msg) {this->send_msg(msg, true);});
+		ascs::do_something_to_all(msg_can, [this](out_msg_type& msg) {this->send_msg(std::move(msg), true);}); //require that out_msg_type and in_msg_type are identical
 		auto re = msg_can.size();
 		msg_can.clear();
 
 		return re;
 	}
 #endif
-*/
+
 #ifdef ASCS_DISPATCH_BATCH_MSG
 	//do not hold msg_can for further using, access msg_can and return from on_msg_handle as quickly as possible
-	virtual size_t on_msg_handle(out_queue_type& msg_can)
+	virtual bool on_msg_handle(out_queue_type& msg_can)
 	{
 		if (!is_send_buffer_available())
-			return 0;
+			return false;
 
 		out_container_type tmp_can;
-		//this manner requires the container used by the message queue can be spliced (such as std::list, but not std::vector,
-		// ascs doesn't require this characteristic).
-		//these code can be compiled because we used list as the container of the message queue, see macro ASCS_OUTPUT_CONTAINER for more details
-		//to consume all messages in msg_can, see echo_client
-		msg_can.lock();
-		auto begin_iter = std::begin(msg_can);
-		//don't be too greedy, here is in a service thread, we should not block this thread for a long time
-		auto end_iter = msg_can.size() > 10 ? std::next(begin_iter, 10) : std::end(msg_can);
-		tmp_can.splice(std::end(tmp_can), msg_can, begin_iter, end_iter); //the rest messages will be dispatched via the next on_msg_handle
-		msg_can.unlock();
+		msg_can.move_items_out(tmp_can, 10); //don't be too greedy, here is in a service thread, we should not block this thread for a long time
 
-		ascs::do_something_to_all(tmp_can, [this](out_msg_type& msg) {this->send_msg(msg, true);});
-		return tmp_can.size();
+		ascs::do_something_to_all(tmp_can, [this](out_msg_type& msg) {this->send_msg(std::move(msg), true);}); //require that out_msg_type and in_msg_type are identical
+		return true;
 	}
 #else
-	virtual bool on_msg_handle(out_msg_type& msg) {return send_msg(msg);}
+	virtual bool on_msg_handle(out_msg_type& msg) {return send_msg(std::move(msg));} //require that out_msg_type and in_msg_type are identical
 #endif
 	//msg handling end
 };
@@ -191,7 +181,7 @@ protected:
 
 #ifdef ASCS_DISPATCH_BATCH_MSG
 	//do not hold msg_can for further using, access msg_can and return from on_msg_handle as quickly as possible
-	virtual size_t on_msg_handle(out_queue_type& msg_can) {auto re = server_socket_base::on_msg_handle(msg_can); force_shutdown(); return re;}
+	virtual bool on_msg_handle(out_queue_type& msg_can) {auto re = server_socket_base::on_msg_handle(msg_can); force_shutdown(); return re;}
 #else
 	virtual bool on_msg_handle(out_msg_type& msg) {auto re = server_socket_base::on_msg_handle(msg); force_shutdown(); return re;}
 #endif

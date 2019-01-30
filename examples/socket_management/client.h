@@ -89,10 +89,11 @@ public:
 		return socket_ptr ? (socket_ptr->force_shutdown(), true) : false;
 	}
 
-	bool send_msg(const std::string& name, const std::string& msg)
+	bool send_msg(const std::string& name, const std::string& msg) {return send_msg(name, std::string(msg));}
+	bool send_msg(const std::string& name, std::string&& msg)
 	{
 		auto socket_ptr = find(find_link(name));
-		return socket_ptr ?  socket_ptr->send_msg(msg) : false;
+		return socket_ptr ?  socket_ptr->send_msg(std::move(msg)) : false;
 	}
 
 protected:
