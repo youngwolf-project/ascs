@@ -204,7 +204,8 @@ public:
 	//don't use the packer but insert into send buffer directly
 	bool direct_send_msg(const InMsgType& msg, bool can_overflow = false)
 		{return can_overflow || is_send_buffer_available() ? do_direct_send_msg(InMsgType(msg)) : false;}
-	bool direct_send_msg(InMsgType&& msg, bool can_overflow = false) {return can_overflow || is_send_buffer_available() ? do_direct_send_msg(std::move(msg)) : false;}
+	bool direct_send_msg(InMsgType&& msg, bool can_overflow = false)
+		{return can_overflow || is_send_buffer_available() ? do_direct_send_msg(std::move(msg)) : false;}
 	bool direct_send_msg(typename Packer::container_type& msg_can, bool can_overflow = false)
 		{return can_overflow || is_send_buffer_available() ? do_direct_send_msg(msg_can) : false;}
 
@@ -214,6 +215,8 @@ public:
 		{return can_overflow || is_send_buffer_available() ? do_direct_sync_send_msg(InMsgType(msg), duration) : sync_call_result::NOT_APPLICABLE;}
 	sync_call_result direct_sync_send_msg(InMsgType&& msg, unsigned duration = 0, bool can_overflow = false) //unit is millisecond, 0 means wait infinitely
 		{return can_overflow || is_send_buffer_available() ? do_direct_sync_send_msg(std::move(msg), duration) : sync_call_result::NOT_APPLICABLE;}
+	sync_call_result direct_sync_send_msg(typename Packer::container_type& msg_can, unsigned duration = 0, bool can_overflow = false)
+		{return can_overflow || is_send_buffer_available() ? do_direct_sync_send_msg(msg_can, duration) : sync_call_result::NOT_APPLICABLE;}
 #endif
 
 #ifdef ASCS_SYNC_RECV
@@ -455,6 +458,25 @@ protected:
 		auto unused = in_msg(std::move(msg), true);
 		auto f = unused.p->get_future();
 		send_msg_buffer.enqueue(std::move(unused));
+		if (!sending && is_ready())
+			send_msg();
+
+		return 0 == duration || std::future_status::ready == f.wait_for(std::chrono::milliseconds(duration)) ? f.get() : sync_call_result::TIMEOUT;
+	}
+
+	sync_call_result do_direct_sync_send_msg(typename Packer::container_type& msg_can, unsigned duration = 0)
+	{
+		if (stopped())
+			return sync_call_result::NOT_APPLICABLE;
+		else if (msg_can.empty())
+			return sync_call_result::SUCCESS;
+
+		std::list<in_msg> temp_buffer;
+		ascs::do_something_to_all(msg_can, [&temp_buffer](InMsgType& msg) {temp_buffer.emplace_back(std::move(msg));});
+
+		temp_buffer.back().check_and_create_promise(true);
+		auto f = temp_buffer.back().p->get_future();
+		send_msg_buffer.move_items_in(temp_buffer);
 		if (!sending && is_ready())
 			send_msg();
 

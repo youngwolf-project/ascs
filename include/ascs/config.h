@@ -497,7 +497,7 @@
  *  this will reduce one memory replication, and statistic.send_msg_sum will be one bigger than before because ascs
  *  add an additional message just represent the header to avoid copying the message body.
  * Control send and recv buffer accurately rather than just message number before, see macro ASCS_MAX_SEND_BUF and ASCS_MAX_RECV_BUF for more details.
- * direct_send_msg support batch operation.
+ * direct_send_msg and direct_sync_send_msg support batch operation.
  * Introduce virtual function type_name() and type_id() to ascs::socket, they can identify whether a given two ascs::socket has the same type.
  *
  * DELETION:

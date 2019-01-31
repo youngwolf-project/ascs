@@ -522,8 +522,18 @@ template<typename Buffer> TYPE FUNNAME(const Buffer& buffer, unsigned duration =
 	{return FUNNAME(buffer.data(), buffer.size(), duration, can_overflow);}
 
 #define TCP_SYNC_SEND_MSG(FUNNAME, NATIVE) \
-sync_call_result FUNNAME(in_msg_type&& msg, bool can_overflow = false) \
-	{return NATIVE ?  this->direct_sync_send_msg(std::move(msg), can_overflow) : FUNNAME(msg, can_overflow);} \
+sync_call_result FUNNAME(in_msg_type&& msg, unsigned duration = 0, bool can_overflow = false) \
+{ \
+	if (NATIVE) \
+		return this->direct_sync_send_msg(std::move(msg), duration, can_overflow); \
+	else if (!can_overflow && !this->is_send_buffer_available()) \
+		return sync_call_result::NOT_APPLICABLE; \
+	typename Packer::container_type msg_can; \
+	auto_duration dur(stat.pack_time_sum); \
+	auto re = packer_->pack_msg(std::move(msg), msg_can); \
+	dur.end(); \
+	return re ? do_direct_sync_send_msg(msg_can, duration) : FUNNAME(msg, duration, can_overflow); \
+} \
 sync_call_result FUNNAME(const char* const pstr[], const size_t len[], size_t num, unsigned duration = 0, bool can_overflow = false) \
 { \
 	if (!can_overflow && !this->is_send_buffer_available()) \
@@ -538,6 +548,9 @@ TCP_SYNC_SEND_MSG_CALL_SWITCH(FUNNAME, sync_call_result)
 //guarantee send msg successfully even if can_overflow equal to false, success at here just means putting the msg into tcp::socket_base's send buffer successfully
 //if can_overflow equal to false and the buffer is not available, will wait until it becomes available
 #define TCP_SYNC_SAFE_SEND_MSG(FUNNAME, SEND_FUNNAME) \
+sync_call_result FUNNAME(in_msg_type&& msg, unsigned duration = 0, bool can_overflow = false) \
+	{while (sync_call_result::SUCCESS != SEND_FUNNAME(std::move(msg), duration, can_overflow)) \
+		SAFE_SEND_MSG_CHECK(sync_call_result::NOT_APPLICABLE) return sync_call_result::SUCCESS;} \
 sync_call_result FUNNAME(const char* const pstr[], const size_t len[], size_t num, unsigned duration = 0, bool can_overflow = false) \
 	{while (sync_call_result::SUCCESS != SEND_FUNNAME(pstr, len, num, duration, can_overflow)) \
 		SAFE_SEND_MSG_CHECK(sync_call_result::NOT_APPLICABLE) return sync_call_result::SUCCESS;} \
