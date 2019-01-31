@@ -122,6 +122,8 @@ public:
 	virtual bool obsoleted() {return !started_ && !is_async_calling();}
 	virtual bool is_ready() = 0; //is ready for sending and receiving messages
 	virtual void send_heartbeat() = 0;
+	virtual std::string type_name() const = 0;
+	virtual int type_id() const = 0;
 
 	bool started() const {return started_;}
 	void start()
@@ -203,6 +205,8 @@ public:
 	bool direct_send_msg(const InMsgType& msg, bool can_overflow = false)
 		{return can_overflow || is_send_buffer_available() ? do_direct_send_msg(InMsgType(msg)) : false;}
 	bool direct_send_msg(InMsgType&& msg, bool can_overflow = false) {return can_overflow || is_send_buffer_available() ? do_direct_send_msg(std::move(msg)) : false;}
+	bool direct_send_msg(typename Packer::container_type& msg_can, bool can_overflow = false)
+		{return can_overflow || is_send_buffer_available() ? do_direct_send_msg(msg_can) : false;}
 
 #ifdef ASCS_SYNC_SEND
 	//don't use the packer but insert into send buffer directly, then wait for the sending to finish.
@@ -423,6 +427,17 @@ protected:
 		//even if we meet an empty message (because of too big message or insufficient memory, most likely), we still return true, why?
 		//please think about the function safe_send_(native_)msg, if we keep returning false, it will enter a dead loop.
 		//the packer provider has the responsibility to write detailed reasons down when packing message failed.
+		return true;
+	}
+
+	bool do_direct_send_msg(typename Packer::container_type& msg_can)
+	{
+		std::list<in_msg> temp_buffer;
+		ascs::do_something_to_all(msg_can, [&temp_buffer](InMsgType& msg) {temp_buffer.emplace_back(std::move(msg));});
+		send_msg_buffer.move_items_in(temp_buffer);
+		if (!sending && is_ready())
+			send_msg();
+
 		return true;
 	}
 

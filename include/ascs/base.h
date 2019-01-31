@@ -176,7 +176,8 @@ protected:
 public:
 	virtual void reset() {}
 	virtual msg_type pack_msg(const char* const pstr[], const size_t len[], size_t num, bool native = false) = 0;
-	virtual bool pack_msg(msg_type&& msg, container_type& msg_can, bool native = false) {return false;}
+	//no native parameter anymore, which means it's always false, if true, you should call direct_send_msg instead
+	virtual bool pack_msg(msg_type&& msg, container_type& msg_can) {return false;}
 	virtual msg_type pack_heartbeat() {return msg_type();}
 	virtual char* raw_data(msg_type& msg) const {return nullptr;}
 	virtual const char* raw_data(msg_ctype& msg) const {return nullptr;}
@@ -395,13 +396,15 @@ template<typename T> struct obj_with_begin_time : public T
 #ifdef ASCS_SYNC_SEND
 template<typename T> struct obj_with_begin_time_promise : public obj_with_begin_time<T>
 {
-	obj_with_begin_time_promise(bool need_promise = false) {check_and_create_promise(need_promise);}
-	obj_with_begin_time_promise(T&& obj, bool need_promise = false) : obj_with_begin_time<T>(std::move(obj)) {check_and_create_promise(need_promise);}
-	obj_with_begin_time_promise(obj_with_begin_time_promise&& other) : obj_with_begin_time<T>(std::move(other)), p(std::move(other.p)) {}
-	obj_with_begin_time_promise& operator=(obj_with_begin_time_promise&& other) {obj_with_begin_time<T>::operator=(std::move(other)); p = std::move(other.p); return *this;}
+typedef obj_with_begin_time<T> super;
 
-	void swap(T& obj, bool need_promise = false) {obj_with_begin_time<T>::swap(obj); check_and_create_promise(need_promise);}
-	void swap(obj_with_begin_time_promise& other) {obj_with_begin_time<T>::swap(other); p.swap(other.p);}
+	obj_with_begin_time_promise(bool need_promise = false) {check_and_create_promise(need_promise);}
+	obj_with_begin_time_promise(T&& obj, bool need_promise = false) : super(std::move(obj)) {check_and_create_promise(need_promise);}
+	obj_with_begin_time_promise(obj_with_begin_time_promise&& other) : super(std::move(other)), p(std::move(other.p)) {}
+	obj_with_begin_time_promise& operator=(obj_with_begin_time_promise&& other) {super::operator=(std::move(other)); p = std::move(other.p); return *this;}
+
+	void swap(T& obj, bool need_promise = false) {super::swap(obj); check_and_create_promise(need_promise);}
+	void swap(obj_with_begin_time_promise& other) {super::swap(other); p.swap(other.p);}
 
 	void clear() {p.reset(); T::clear();}
 	void check_and_create_promise(bool need_promise) {if (!need_promise) p.reset(); else if (!p) p = std::make_shared<std::promise<sync_call_result>>();}
@@ -470,22 +473,18 @@ template<typename _Predicate> void NAME(const _Predicate& __pred) const {for (au
 TYPE FUNNAME(const char* pstr, size_t len, bool can_overflow) {return FUNNAME(&pstr, &len, 1, can_overflow);} \
 template<typename Buffer> TYPE FUNNAME(const Buffer& buffer, bool can_overflow = false) {return FUNNAME(buffer.data(), buffer.size(), can_overflow);}
 
-#define TCP_SEND_MSG(FUNNAME, NATIVE, SEND_FUNNAME) \
+#define TCP_SEND_MSG(FUNNAME, NATIVE) \
 bool FUNNAME(in_msg_type&& msg, bool can_overflow = false) \
 { \
-	if (!can_overflow && !this->is_send_buffer_available()) \
+	if (NATIVE) \
+		return this->direct_send_msg(std::move(msg), can_overflow); \
+	else if (!can_overflow && !this->is_send_buffer_available()) \
 		return false; \
 	typename Packer::container_type msg_can; \
 	auto_duration dur(stat.pack_time_sum); \
-	if (!packer_->pack_msg(std::move(msg), msg_can, NATIVE)) \
-		return FUNNAME(msg, can_overflow); \
+	auto re = packer_->pack_msg(std::move(msg), msg_can); \
 	dur.end(); \
-	std::list<typename super::in_msg> temp_buffer; \
-	ascs::do_something_to_all(msg_can, [&temp_buffer](in_msg_type& msg) {temp_buffer.emplace_back(std::move(msg));}); \
-	send_msg_buffer.move_items_in(temp_buffer); \
-	if (!sending && is_ready()) \
-		send_msg(); \
-	return true; \
+	return re ? do_direct_send_msg(msg_can) : FUNNAME(msg, can_overflow); \
 } \
 bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) \
 { \
@@ -494,7 +493,7 @@ bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_
 	auto_duration dur(stat.pack_time_sum); \
 	auto msg = packer_->pack_msg(pstr, len, num, NATIVE); \
 	dur.end(); \
-	return SEND_FUNNAME(std::move(msg)); \
+	return do_direct_send_msg(std::move(msg)); \
 } \
 TCP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)
 
@@ -522,7 +521,9 @@ TYPE FUNNAME(const char* pstr, size_t len, unsigned duration, bool can_overflow)
 template<typename Buffer> TYPE FUNNAME(const Buffer& buffer, unsigned duration = 0, bool can_overflow = false) \
 	{return FUNNAME(buffer.data(), buffer.size(), duration, can_overflow);}
 
-#define TCP_SYNC_SEND_MSG(FUNNAME, NATIVE, SEND_FUNNAME) \
+#define TCP_SYNC_SEND_MSG(FUNNAME, NATIVE) \
+sync_call_result FUNNAME(in_msg_type&& msg, bool can_overflow = false) \
+	{return NATIVE ?  this->direct_sync_send_msg(std::move(msg), can_overflow) : FUNNAME(msg, can_overflow);} \
 sync_call_result FUNNAME(const char* const pstr[], const size_t len[], size_t num, unsigned duration = 0, bool can_overflow = false) \
 { \
 	if (!can_overflow && !this->is_send_buffer_available()) \
@@ -530,7 +531,7 @@ sync_call_result FUNNAME(const char* const pstr[], const size_t len[], size_t nu
 	auto_duration dur(stat.pack_time_sum); \
 	auto msg = packer_->pack_msg(pstr, len, num, NATIVE); \
 	dur.end(); \
-	return SEND_FUNNAME(std::move(msg), duration); \
+	return do_direct_sync_send_msg(std::move(msg), duration); \
 } \
 TCP_SYNC_SEND_MSG_CALL_SWITCH(FUNNAME, sync_call_result)
 
@@ -554,14 +555,14 @@ template<typename Buffer> TYPE FUNNAME(const Buffer& buffer, bool can_overflow =
 template<typename Buffer> TYPE FUNNAME(const asio::ip::udp::endpoint& peer_addr, const Buffer& buffer, bool can_overflow = false) \
 	{return FUNNAME(peer_addr, buffer.data(), buffer.size(), can_overflow);}
 
-#define UDP_SEND_MSG(FUNNAME, NATIVE, SEND_FUNNAME) \
+#define UDP_SEND_MSG(FUNNAME, NATIVE) \
 bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) {return FUNNAME(peer_addr, pstr, len, num, can_overflow);} \
 bool FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) \
 { \
 	if (!can_overflow && !this->is_send_buffer_available()) \
 		return false; \
 	in_msg_type msg(peer_addr, packer_->pack_msg(pstr, len, num, NATIVE)); \
-	return SEND_FUNNAME(std::move(msg)); \
+	return do_direct_send_msg(std::move(msg)); \
 } \
 UDP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)
 
@@ -586,7 +587,7 @@ template<typename Buffer> TYPE FUNNAME(const Buffer& buffer, unsigned duration =
 template<typename Buffer> TYPE FUNNAME(const asio::ip::udp::endpoint& peer_addr, const Buffer& buffer, unsigned duration = 0, bool can_overflow = false) \
 	{return FUNNAME(peer_addr, buffer.data(), buffer.size(), duration, can_overflow);}
 
-#define UDP_SYNC_SEND_MSG(FUNNAME, NATIVE, SEND_FUNNAME) \
+#define UDP_SYNC_SEND_MSG(FUNNAME, NATIVE) \
 sync_call_result FUNNAME(const char* const pstr[], const size_t len[], size_t num, unsigned duration = 0, bool can_overflow = false) \
 	{return FUNNAME(peer_addr, pstr, len, num, duration, can_overflow);} \
 sync_call_result FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* const pstr[], const size_t len[], size_t num, \
@@ -595,7 +596,7 @@ sync_call_result FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* c
 	if (!can_overflow && !this->is_send_buffer_available()) \
 		return sync_call_result::NOT_APPLICABLE; \
 	in_msg_type msg(peer_addr, packer_->pack_msg(pstr, len, num, NATIVE)); \
-	return SEND_FUNNAME(std::move(msg), duration); \
+	return do_direct_sync_send_msg(std::move(msg), duration); \
 } \
 UDP_SYNC_SEND_MSG_CALL_SWITCH(FUNNAME, sync_call_result)
 

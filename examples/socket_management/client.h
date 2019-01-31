@@ -13,8 +13,10 @@ class my_client_socket : public client_socket_base<ASCS_DEFAULT_PACKER, ASCS_DEF
 public:
 	my_client_socket(my_matrix& matrix_) : client_socket_base(matrix_)
 	{
-		std::dynamic_pointer_cast<prefix_suffix_packer>(packer())->prefix_suffix("", "\n");
-		std::dynamic_pointer_cast<prefix_suffix_unpacker>(unpacker())->prefix_suffix("", "\n");
+#if 3 == PACKER_UNPACKER_TYPE
+		std::dynamic_pointer_cast<ASCS_DEFAULT_PACKER>(packer())->prefix_suffix("", "\n");
+		std::dynamic_pointer_cast<ASCS_DEFAULT_UNPACKER>(unpacker())->prefix_suffix("", "\n");
+#endif
 	}
 
 	void name(const std::string& name_) {_name = name_;}
@@ -22,7 +24,13 @@ public:
 
 protected:
 	//msg handling
+#if 2 == PACKER_UNPACKER_TYPE
+	//fixed_length_unpacker uses basic_buffer as its message type, it doesn't append additional \0 to the end of the message as std::string does,
+	//so it cannot be printed by printf.
+	virtual bool on_msg_handle(out_msg_type& msg) {printf("received: " ASCS_SF ", I'm %s\n", msg.size(), _name.data()); return true;}
+#else
 	virtual bool on_msg_handle(out_msg_type& msg) {printf("received: %s, I'm %s\n", msg.data(), _name.data()); return true;}
+#endif
 	//msg handling end
 
 	virtual void on_recv_error(const asio::error_code& ec) {get_matrix()->del_link(_name); client_socket_base::on_recv_error(ec);}

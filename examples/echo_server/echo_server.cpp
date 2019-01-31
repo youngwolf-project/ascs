@@ -78,9 +78,7 @@ public:
 	{
 		packer(global_packer);
 
-#if 2 == PACKER_UNPACKER_TYPE
-		std::dynamic_pointer_cast<ASCS_DEFAULT_UNPACKER>(unpacker())->fixed_length(1024);
-#elif 3 == PACKER_UNPACKER_TYPE
+#if 3 == PACKER_UNPACKER_TYPE
 		std::dynamic_pointer_cast<ASCS_DEFAULT_UNPACKER>(unpacker())->prefix_suffix("begin", "end");
 #endif
 	}

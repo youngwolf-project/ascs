@@ -92,13 +92,10 @@ public:
 
 		return msg;
 	}
-	virtual bool pack_msg(msg_type&& msg, container_type& msg_can, bool native = false)
+	virtual bool pack_msg(msg_type&& msg, container_type& msg_can)
 	{
-		if (!native)
-		{
-			auto head_len = packer_helper::pack_header(msg.size());
-			msg_can.emplace_back((const char*) &head_len, ASCS_HEAD_LEN);
-		}
+		auto head_len = packer_helper::pack_header(msg.size());
+		msg_can.emplace_back((const char*) &head_len, ASCS_HEAD_LEN);
 		msg_can.emplace_back(std::move(msg));
 
 		return true;
@@ -128,6 +125,16 @@ public:
 		raw_msg->swap(str);
 		return typename super::msg_type(raw_msg);
 	}
+	virtual bool pack_msg(typename super::msg_type&& msg, typename super::container_type& msg_can)
+	{
+		auto raw_msg = new string_buffer();
+		auto head_len = packer_helper::pack_header(msg.size());
+		raw_msg->assign((const char*) &head_len, ASCS_HEAD_LEN);
+		msg_can.emplace_back(std::move(raw_msg));
+		msg_can.emplace_back(std::move(msg));
+
+		return true;
+	}
 	virtual typename super::msg_type pack_heartbeat()
 	{
 		auto raw_msg = new string_buffer();
@@ -147,7 +154,7 @@ class fixed_length_packer : public packer
 public:
 	using packer::pack_msg;
 	virtual msg_type pack_msg(const char* const pstr[], const size_t len[], size_t num, bool native = true) {return packer::pack_msg(pstr, len, num, true);}
-	virtual bool pack_msg(msg_type&& msg, container_type& msg_can, bool native = true) {msg_can.emplace_back(std::move(msg)); return true;}
+	virtual bool pack_msg(msg_type&& msg, container_type& msg_can) {msg_can.emplace_back(std::move(msg)); return true;}
 	//not support heartbeat because fixed_length_unpacker cannot recognize heartbeat message
 
 	virtual char* raw_data(msg_type& msg) const {return const_cast<char*>(msg.data());}
@@ -159,7 +166,8 @@ public:
 class prefix_suffix_packer : public i_packer<std::string>
 {
 public:
-	void prefix_suffix(const std::string& prefix, const std::string& suffix) {assert(!suffix.empty() && prefix.size() + suffix.size() < ASCS_MSG_BUFFER_SIZE); _prefix = prefix;  _suffix = suffix;}
+	void prefix_suffix(const std::string& prefix, const std::string& suffix)
+		{assert(!suffix.empty() && prefix.size() + suffix.size() < ASCS_MSG_BUFFER_SIZE); _prefix = prefix;  _suffix = suffix;}
 	const std::string& prefix() const {return _prefix;}
 	const std::string& suffix() const {return _suffix;}
 
@@ -184,12 +192,12 @@ public:
 
 		return msg;
 	}
-	virtual bool pack_msg(msg_type&& msg, container_type& msg_can, bool native = false)
+	virtual bool pack_msg(msg_type&& msg, container_type& msg_can)
 	{
-		if (!native && !_prefix.empty())
+		if (!_prefix.empty())
 			msg_can.emplace_back(_prefix);
 		msg_can.emplace_back(std::move(msg));
-		if (!native && !_suffix.empty())
+		if (!_suffix.empty())
 			msg_can.emplace_back(_suffix);
 
 		return true;

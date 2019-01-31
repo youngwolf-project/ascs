@@ -85,9 +85,7 @@ class echo_socket : public client_socket
 public:
 	echo_socket(i_matrix& matrix_) : client_socket(matrix_), recv_bytes(0), recv_index(0)
 	{
-#if 2 == PACKER_UNPACKER_TYPE
-		std::dynamic_pointer_cast<ASCS_DEFAULT_UNPACKER>(unpacker())->fixed_length(1024);
-#elif 3 == PACKER_UNPACKER_TYPE
+#if 3 == PACKER_UNPACKER_TYPE
 		std::dynamic_pointer_cast<ASCS_DEFAULT_PACKER>(packer())->prefix_suffix("begin", "end");
 		std::dynamic_pointer_cast<ASCS_DEFAULT_UNPACKER>(unpacker())->prefix_suffix("begin", "end");
 #endif
@@ -516,7 +514,7 @@ int main(int argc, const char* argv[])
 				std::max((size_t) atoi(iter++->data()), sizeof(size_t))); //include seq
 #elif 2 == PACKER_UNPACKER_TYPE
 			if (iter != std::end(parameters)) ++iter;
-			msg_len = 1024; //we hard code this because we fixedly initialized the length of fixed_length_unpacker to 1024
+			msg_len = 1024; //we hard code this because the default fixed length is 1024, and we not changed it
 #elif 3 == PACKER_UNPACKER_TYPE
 			if (iter != std::end(parameters)) msg_len = std::min((size_t) ASCS_MSG_BUFFER_SIZE,
 				std::max((size_t) atoi(iter++->data()), sizeof(size_t))); //include seq
