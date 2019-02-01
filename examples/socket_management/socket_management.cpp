@@ -1,6 +1,5 @@
 
 #include <iostream>
-#include <map>
 
 //configuration
 #define ASCS_REUSE_OBJECT		//use objects pool

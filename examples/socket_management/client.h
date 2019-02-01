@@ -1,6 +1,8 @@
 #ifndef _CLIENT_H_
 #define _CLIENT_H_
 
+#include <map>
+
 //demonstrates how to call multi_client_base in client_socket_base (just like server_socket_base call server_base)
 class my_matrix : public i_matrix
 {
