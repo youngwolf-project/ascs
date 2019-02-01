@@ -51,8 +51,8 @@ template<typename T> using list = std::list<T>;
 // swap
 // emplace_back(const T& item)
 // emplace_back(T&& item)
-// splice(iter, Container&), after this, the source container must become empty
-// splice(iter, Container&, iter, iter), if macro ASCS_DISPATCH_BATCH_MSG been defined
+// splice(iter, std::list<T>&), after this, std::list<T> must be empty
+// splice(iter, std::list<T>&, iter, iter), if macro ASCS_DISPATCH_BATCH_MSG been defined
 // front
 // pop_front
 // back
@@ -84,7 +84,7 @@ public:
 	//thread safe
 	bool enqueue(const T& item) {typename Lockable::lock_guard lock(*this); return enqueue_(item);}
 	bool enqueue(T&& item) {typename Lockable::lock_guard lock(*this); return enqueue_(std::move(item));}
-	void move_items_in(Container& src, size_t size_in_byte = 0) {typename Lockable::lock_guard lock(*this); move_items_in_(src, size_in_byte);}
+	void move_items_in(std::list<T>& src, size_t size_in_byte = 0) {typename Lockable::lock_guard lock(*this); move_items_in_(src, size_in_byte);}
 	bool try_dequeue(T& item) {typename Lockable::lock_guard lock(*this); return try_dequeue_(item);}
 	//thread safe
 
@@ -122,7 +122,7 @@ public:
 		return true;
 	}
 
-	void move_items_in_(Container& src, size_t size_in_byte = 0)
+	void move_items_in_(std::list<T>& src, size_t size_in_byte = 0)
 	{
 		if (0 == size_in_byte)
 			do_something_to_all(src, [&size_in_byte](const T& item) {size_in_byte += item.size();});

@@ -618,8 +618,7 @@ UDP_SYNC_SEND_MSG_CALL_SWITCH(FUNNAME, sync_call_result)
 #define UDP_SYNC_SAFE_SEND_MSG(FUNNAME, SEND_FUNNAME) \
 sync_call_result FUNNAME(const char* const pstr[], const size_t len[], size_t num, unsigned duration = 0, bool can_overflow = false) \
 	{return FUNNAME(peer_addr, pstr, len, num, duration, can_overflow);} \
-sync_call_result FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* const pstr[], const size_t len[], size_t num, \
-	unsigned duration = 0, bool can_overflow = false) \
+sync_call_result FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* const pstr[], const size_t len[], size_t num, unsigned duration = 0, bool can_overflow = false) \
 	{while (sync_call_result::SUCCESS != SEND_FUNNAME(peer_addr, pstr, len, num, duration, can_overflow)) \
 		SAFE_SEND_MSG_CHECK(sync_call_result::NOT_APPLICABLE) return sync_call_result::SUCCESS;} \
 UDP_SYNC_SEND_MSG_CALL_SWITCH(FUNNAME, sync_call_result)
