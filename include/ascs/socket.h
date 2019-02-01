@@ -404,7 +404,7 @@ protected:
 #endif
 		if (msg_num > 0)
 		{
-			std::list<out_msg> temp_buffer(msg_num);
+			out_container_type temp_buffer(msg_num);
 			auto op_iter = temp_buffer.begin();
 			for (auto iter = temp_msg_can.begin(); iter != temp_msg_can.end(); ++op_iter, ++iter)
 				op_iter->swap(*iter);
@@ -437,7 +437,7 @@ protected:
 	bool do_direct_send_msg(typename Packer::container_type& msg_can)
 	{
 		size_t size_in_byte = 0;
-		std::list<in_msg> temp_buffer;
+		in_container_type temp_buffer;
 		ascs::do_something_to_all(msg_can, [&size_in_byte, &temp_buffer](InMsgType& msg) {size_in_byte += msg.size(); temp_buffer.emplace_back(std::move(msg));});
 		send_msg_buffer.move_items_in(temp_buffer, size_in_byte);
 		if (!sending && is_ready())
@@ -474,7 +474,7 @@ protected:
 			return sync_call_result::SUCCESS;
 
 		size_t size_in_byte = 0;
-		std::list<in_msg> temp_buffer;
+		in_container_type temp_buffer;
 		ascs::do_something_to_all(msg_can, [&size_in_byte, &temp_buffer](InMsgType& msg) {size_in_byte += msg.size(); temp_buffer.emplace_back(std::move(msg));});
 
 		temp_buffer.back().check_and_create_promise(true);
