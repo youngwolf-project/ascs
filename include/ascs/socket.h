@@ -356,6 +356,10 @@ protected:
 
 	bool handle_msg()
 	{
+		ascs::do_something_to_all(temp_msg_can, [this](const OutMsgType& item) {this->stat.recv_byte_sum += item.size();});
+
+		auto msg_num = temp_msg_can.size();
+		stat.recv_msg_sum += msg_num;
 #ifdef ASCS_SYNC_RECV
 		std::unique_lock<std::mutex> lock(sync_recv_mutex);
 		if (sync_recv_status::REQUESTED == sr_status)
@@ -370,10 +374,8 @@ protected:
 				return handled_msg(); //sync_recv_msg() has consumed temp_msg_can
 		}
 		lock.unlock();
+		msg_num = temp_msg_can.size();
 #endif
-		auto msg_num = temp_msg_can.size();
-		stat.recv_msg_sum += msg_num;
-
 #ifdef ASCS_SYNC_DISPATCH
 #ifndef ASCS_PASSIVE_RECV
 		if (msg_num > 0)
@@ -396,10 +398,7 @@ protected:
 			std::list<out_msg> temp_buffer(msg_num);
 			auto op_iter = temp_buffer.begin();
 			for (auto iter = temp_msg_can.begin(); iter != temp_msg_can.end(); ++op_iter, ++iter)
-			{
-				stat.recv_byte_sum += iter->size();
 				op_iter->swap(*iter);
-			}
 			temp_msg_can.clear();
 
 			recv_msg_buffer.move_items_in(temp_buffer);
