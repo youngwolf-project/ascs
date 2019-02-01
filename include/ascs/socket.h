@@ -363,6 +363,12 @@ protected:
 
 	bool handle_msg()
 	{
+		size_t size_in_byte = 0;
+		ascs::do_something_to_all(temp_msg_can, [&](const OutMsgType& item) {size_in_byte += item.size();});
+
+		auto msg_num = temp_msg_can.size();
+		stat.recv_msg_sum += msg_num;
+		stat.recv_byte_sum += size_in_byte;
 #ifdef ASCS_SYNC_RECV
 		std::unique_lock<std::mutex> lock(sync_recv_mutex);
 		if (sync_recv_status::REQUESTED == sr_status)
@@ -377,10 +383,8 @@ protected:
 				return handled_msg(); //sync_recv_msg() has consumed temp_msg_can
 		}
 		lock.unlock();
+		msg_num = temp_msg_can.size();
 #endif
-		auto msg_num = temp_msg_can.size();
-		stat.recv_msg_sum += msg_num;
-
 #ifdef ASCS_SYNC_DISPATCH
 #ifndef ASCS_PASSIVE_RECV
 		if (msg_num > 0)
@@ -403,13 +407,10 @@ protected:
 			std::list<out_msg> temp_buffer(msg_num);
 			auto op_iter = temp_buffer.begin();
 			for (auto iter = temp_msg_can.begin(); iter != temp_msg_can.end(); ++op_iter, ++iter)
-			{
-				stat.recv_byte_sum += iter->size();
 				op_iter->swap(*iter);
-			}
 			temp_msg_can.clear();
 
-			recv_msg_buffer.move_items_in(temp_buffer);
+			recv_msg_buffer.move_items_in(temp_buffer, size_in_byte);
 			dispatch_msg();
 		}
 
@@ -435,9 +436,10 @@ protected:
 
 	bool do_direct_send_msg(typename Packer::container_type& msg_can)
 	{
+		size_t size_in_byte = 0;
 		std::list<in_msg> temp_buffer;
-		ascs::do_something_to_all(msg_can, [&temp_buffer](InMsgType& msg) {temp_buffer.emplace_back(std::move(msg));});
-		send_msg_buffer.move_items_in(temp_buffer);
+		ascs::do_something_to_all(msg_can, [&size_in_byte, &temp_buffer](InMsgType& msg) {size_in_byte += msg.size(); temp_buffer.emplace_back(std::move(msg));});
+		send_msg_buffer.move_items_in(temp_buffer, size_in_byte);
 		if (!sending && is_ready())
 			send_msg();
 
@@ -471,12 +473,13 @@ protected:
 		else if (msg_can.empty())
 			return sync_call_result::SUCCESS;
 
+		size_t size_in_byte = 0;
 		std::list<in_msg> temp_buffer;
-		ascs::do_something_to_all(msg_can, [&temp_buffer](InMsgType& msg) {temp_buffer.emplace_back(std::move(msg));});
+		ascs::do_something_to_all(msg_can, [&size_in_byte, &temp_buffer](InMsgType& msg) {size_in_byte += msg.size(); temp_buffer.emplace_back(std::move(msg));});
 
 		temp_buffer.back().check_and_create_promise(true);
 		auto f = temp_buffer.back().p->get_future();
-		send_msg_buffer.move_items_in(temp_buffer);
+		send_msg_buffer.move_items_in(temp_buffer, size_in_byte);
 		if (!sending && is_ready())
 			send_msg();
 

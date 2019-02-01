@@ -59,11 +59,7 @@ template<typename T> using list = std::list<T>;
 // begin
 // end
 template<typename T, typename Container, typename Lockable> //thread safety depends on Container or Lockable
-//#ifdef ASCS_DISPATCH_BATCH_MSG
-//class queue : public Container, public Lockable
-//#else
 class queue : protected Container, public Lockable
-//#endif
 {
 public:
 	typedef T data_type;
@@ -78,7 +74,7 @@ public:
 	void swap(Container& other)
 	{
 		size_t s = 0;
-		do_something_to_all(other, [&](const T& item) {s += item.size();});
+		do_something_to_all(other, [&s](const T& item) {s += item.size();});
 
 		typename Lockable::lock_guard lock(*this);
 		Container::swap(other);
@@ -88,7 +84,7 @@ public:
 	//thread safe
 	bool enqueue(const T& item) {typename Lockable::lock_guard lock(*this); return enqueue_(item);}
 	bool enqueue(T&& item) {typename Lockable::lock_guard lock(*this); return enqueue_(std::move(item));}
-	void move_items_in(std::list<T>& can) {typename Lockable::lock_guard lock(*this); move_items_in_(can);}
+	void move_items_in(std::list<T>& can, size_t size_in_byte = 0) {typename Lockable::lock_guard lock(*this); move_items_in_(can, size_in_byte);}
 	bool try_dequeue(T& item) {typename Lockable::lock_guard lock(*this); return try_dequeue_(item);}
 	//thread safe
 
@@ -126,13 +122,13 @@ public:
 		return true;
 	}
 
-	void move_items_in_(std::list<T>& can)
+	void move_items_in_(std::list<T>& can, size_t size_in_byte = 0)
 	{
-		size_t s = 0;
-		do_something_to_all(can, [&](const T& item) {s += item.size();});
+		if (0 == size_in_byte)
+			do_something_to_all(can, [&size_in_byte](const T& item) {size_in_byte += item.size();});
 
 		this->splice(this->end(), can);
-		buff_size += s;
+		buff_size += size_in_byte;
 	}
 
 	bool try_dequeue_(T& item) {if (this->empty()) return false; item.swap(this->front()); this->pop_front(); buff_size -= item.size(); return true;}
