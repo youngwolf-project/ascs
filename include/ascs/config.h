@@ -475,9 +475,9 @@
  * SPECIAL ATTENTION (incompatible with old editions):
  * Socket used by tcp::multi_client_base, ssl::multi_client_base and udp::multi_socket_service needs to provide a constructor which accept
  *  a reference of i_matrix instead of a reference of asio::io_context.
- * Macro ASCS_MAX_MSG_NUM been renamed to ASCS_MAX_SEND_BUF and ASCS_MAX_RECV_BUF, unit been changed to byte.
- * Introduce an additional overload of pack_msg virtual function to i_packer, it needs an in_msg_type&& parameter and can reduce one memory replication.
- * statistic.send_msg_sum may be bigger than before, see ENHANCEMENTS section for more details.
+ * Limit send and recv buffers by acctual utilization (in byte) rather than message number before, so macro ASCS_MAX_MSG_NUM been renamed to
+ *  ASCS_MAX_SEND_BUF and ASCS_MAX_RECV_BUF, and unit been changed to byte.
+ * statistic.send_msg_sum may be bigger than before (but statistic.send_byte_sum will be the same), see ENHANCEMENTS section for more details.
  * Return value from on_msg_handle(out_queue_type&) been changed from size_t to bool.
  *
  * HIGHLIGHT:
@@ -493,15 +493,16 @@
  * Introduce macro ASCS_SHARED_MUTEX_TYPE and ASCS_SHARED_LOCK_TYPE, they're used during finding or traversing (do_something_to_all or do_something_to_one)
  *  objects in object_pool, if you find or traverse objects frequently and shared_mutex is available, use shared_mutex with shared_lock instead of
  *  mutex with unique_lock will promote performance, otherwise, do not define these two macros.
- * Add an overload to send_(native_)msg and safe_send_(native_)msg respectively (just on TCP), they accept an in_msg_type&& parameter (not packed),
- *  this will reduce one memory replication, and statistic.send_msg_sum will be one bigger than before because ascs
- *  add an additional message just represent the header to avoid copying the message body.
+ * Introduce an additional overload of pack_msg virtual function to i_packer, it needs an in_msg_type&& parameter and can reduce one memory replication.
+ * Add an overload to send_(native_)msg, safe_send_(native_)msg, sync_send_(native_)msg and sync_safe_send_(native_)msg respectively (just on TCP),
+ *  they accept an in_msg_type&& parameter (not packed), this will reduce one memory replication, and statistic.send_msg_sum will be one bigger than before
+ *  because ascs add an additional message just represent the header to avoid copying the message body.
  * Control send and recv buffer accurately rather than just message number before, see macro ASCS_MAX_SEND_BUF and ASCS_MAX_RECV_BUF for more details.
  * direct_send_msg and direct_sync_send_msg support batch operation.
  * Introduce virtual function type_name() and type_id() to ascs::socket, they can identify whether a given two ascs::socket has the same type.
  *
  * DELETION:
- * Drop ascs::list which was implemented by ascs before, just simply use std::list, which means list::size() will not be called any more.
+ * Drop ascs::list, use std::list instead, which means list::size() will not be used for buffer utilization checking any more.
  *
  * REFACTORING:
  *
