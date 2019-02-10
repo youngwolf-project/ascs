@@ -176,8 +176,10 @@ protected:
 public:
 	virtual void reset() {}
 	virtual msg_type pack_msg(const char* const pstr[], const size_t len[], size_t num, bool native = false) = 0;
-	//no native parameter anymore, which means it's always false, if true, you should call direct_send_msg instead
+	//no native parameter anymore, which means it's always false, if true, you should call direct_(sync_)send_msg instead
 	virtual bool pack_msg(msg_type&& msg, container_type& msg_can) {return false;}
+	virtual bool pack_msg(msg_type&& msg1, msg_type&& msg2, container_type& msg_can) {return false;}
+	virtual bool pack_msg(container_type& in, container_type& out) {return false;}
 	virtual msg_type pack_heartbeat() {return msg_type();}
 	virtual char* raw_data(msg_type& msg) const {return nullptr;}
 	virtual const char* raw_data(msg_ctype& msg) const {return nullptr;}
@@ -476,15 +478,43 @@ template<typename Buffer> TYPE FUNNAME(const Buffer& buffer, bool can_overflow =
 #define TCP_SEND_MSG(FUNNAME, NATIVE) \
 bool FUNNAME(in_msg_type&& msg, bool can_overflow = false) \
 { \
-	if (NATIVE) \
-		return this->direct_send_msg(std::move(msg), can_overflow); \
-	else if (!can_overflow && !this->is_send_buffer_available()) \
+	if (!can_overflow && !this->is_send_buffer_available()) \
 		return false; \
+	else if (NATIVE) \
+		return do_direct_send_msg(std::move(msg)); \
 	typename Packer::container_type msg_can; \
 	auto_duration dur(stat.pack_time_sum); \
 	auto re = packer_->pack_msg(std::move(msg), msg_can); \
 	dur.end(); \
 	return re ? do_direct_send_msg(msg_can) : FUNNAME(msg, can_overflow); \
+} \
+bool FUNNAME(in_msg_type&& msg1, in_msg_type&& msg2, bool can_overflow = false) \
+{ \
+	if (!can_overflow && !this->is_send_buffer_available()) \
+		return false; \
+	else if (NATIVE) \
+	{ \
+		do_direct_send_msg(std::move(msg1)); \
+		do_direct_send_msg(std::move(msg2)); \
+		return true; /*do_direct_send_msg will always succeed*/ \
+	} \
+	typename Packer::container_type msg_can; \
+	auto_duration dur(stat.pack_time_sum); \
+	auto re = packer_->pack_msg(std::move(msg1), std::move(msg2), msg_can); \
+	dur.end(); \
+	return re && do_direct_send_msg(msg_can); \
+} \
+bool FUNNAME(typename Packer::container_type& msg_can, bool can_overflow = false)  \
+{ \
+	if (!can_overflow && !this->is_send_buffer_available()) \
+		return false; \
+	else if (NATIVE) \
+		return do_direct_send_msg(msg_can); \
+	typename Packer::container_type out; \
+	auto_duration dur(stat.pack_time_sum); \
+	auto re = packer_->pack_msg(msg_can, out); \
+	dur.end(); \
+	return re && do_direct_send_msg(out); \
 } \
 bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) \
 { \
@@ -502,6 +532,10 @@ TCP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)
 #define TCP_SAFE_SEND_MSG(FUNNAME, SEND_FUNNAME) \
 bool FUNNAME(in_msg_type&& msg, bool can_overflow = false) \
 	{while (!SEND_FUNNAME(std::move(msg), can_overflow)) SAFE_SEND_MSG_CHECK(false) return true;} \
+bool FUNNAME(in_msg_type&& msg1, in_msg_type&& msg2, bool can_overflow = false) \
+	{while (!SEND_FUNNAME(std::move(msg1), std::move(msg2), can_overflow)) SAFE_SEND_MSG_CHECK(false) return true;} \
+bool FUNNAME(typename Packer::container_type& msg_can, bool can_overflow = false) \
+	{while (!SEND_FUNNAME(msg_can, can_overflow)) SAFE_SEND_MSG_CHECK(false) return true;} \
 bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) \
 	{while (!SEND_FUNNAME(pstr, len, num, can_overflow)) SAFE_SEND_MSG_CHECK(false) return true;} \
 TCP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)
@@ -524,15 +558,43 @@ template<typename Buffer> TYPE FUNNAME(const Buffer& buffer, unsigned duration =
 #define TCP_SYNC_SEND_MSG(FUNNAME, NATIVE) \
 sync_call_result FUNNAME(in_msg_type&& msg, unsigned duration = 0, bool can_overflow = false) \
 { \
-	if (NATIVE) \
-		return this->direct_sync_send_msg(std::move(msg), duration, can_overflow); \
-	else if (!can_overflow && !this->is_send_buffer_available()) \
+	if (!can_overflow && !this->is_send_buffer_available()) \
 		return sync_call_result::NOT_APPLICABLE; \
+	else if (NATIVE) \
+		return do_direct_sync_send_msg(std::move(msg), duration); \
 	typename Packer::container_type msg_can; \
 	auto_duration dur(stat.pack_time_sum); \
 	auto re = packer_->pack_msg(std::move(msg), msg_can); \
 	dur.end(); \
 	return re ? do_direct_sync_send_msg(msg_can, duration) : FUNNAME(msg, duration, can_overflow); \
+} \
+sync_call_result FUNNAME(in_msg_type&& msg1, in_msg_type&& msg2, unsigned duration = 0, bool can_overflow = false) \
+{ \
+	if (!can_overflow && !this->is_send_buffer_available()) \
+		return sync_call_result::NOT_APPLICABLE; \
+	else if (NATIVE) \
+	{ \
+		do_direct_sync_send_msg(std::move(msg1), duration); \
+		do_direct_sync_send_msg(std::move(msg2), duration); \
+		return sync_call_result::SUCCESS; /*do_direct_sync_send_msg will always succeed*/ \
+	} \
+	typename Packer::container_type msg_can; \
+	auto_duration dur(stat.pack_time_sum); \
+	auto re = packer_->pack_msg(std::move(msg1), std::move(msg2), msg_can); \
+	dur.end(); \
+	return re ? do_direct_sync_send_msg(msg_can, duration) : sync_call_result::NOT_APPLICABLE; \
+} \
+sync_call_result FUNNAME(typename Packer::container_type& msg_can, unsigned duration = 0, bool can_overflow = false) \
+{ \
+	if (!can_overflow && !this->is_send_buffer_available()) \
+		return sync_call_result::NOT_APPLICABLE; \
+	else if (NATIVE) \
+		return do_direct_sync_send_msg(msg_can, duration); \
+	typename Packer::container_type out; \
+	auto_duration dur(stat.pack_time_sum); \
+	auto re = packer_->pack_msg(msg_can, out); \
+	dur.end(); \
+	return re ? do_direct_sync_send_msg(out, duration) : sync_call_result::NOT_APPLICABLE; \
 } \
 sync_call_result FUNNAME(const char* const pstr[], const size_t len[], size_t num, unsigned duration = 0, bool can_overflow = false) \
 { \
@@ -550,6 +612,12 @@ TCP_SYNC_SEND_MSG_CALL_SWITCH(FUNNAME, sync_call_result)
 #define TCP_SYNC_SAFE_SEND_MSG(FUNNAME, SEND_FUNNAME) \
 sync_call_result FUNNAME(in_msg_type&& msg, unsigned duration = 0, bool can_overflow = false) \
 	{while (sync_call_result::SUCCESS != SEND_FUNNAME(std::move(msg), duration, can_overflow)) \
+		SAFE_SEND_MSG_CHECK(sync_call_result::NOT_APPLICABLE) return sync_call_result::SUCCESS;} \
+sync_call_result FUNNAME(in_msg_type&& msg1, in_msg_type&& msg2, unsigned duration = 0, bool can_overflow = false) \
+	{while (sync_call_result::SUCCESS != SEND_FUNNAME(std::move(msg1), std::move(msg2), duration, can_overflow)) \
+		SAFE_SEND_MSG_CHECK(sync_call_result::NOT_APPLICABLE) return sync_call_result::SUCCESS;} \
+sync_call_result FUNNAME(typename Packer::container_type& msg_can, unsigned duration = 0, bool can_overflow = false) \
+	{while (sync_call_result::SUCCESS != SEND_FUNNAME(msg_can, duration, can_overflow)) \
 		SAFE_SEND_MSG_CHECK(sync_call_result::NOT_APPLICABLE) return sync_call_result::SUCCESS;} \
 sync_call_result FUNNAME(const char* const pstr[], const size_t len[], size_t num, unsigned duration = 0, bool can_overflow = false) \
 	{while (sync_call_result::SUCCESS != SEND_FUNNAME(pstr, len, num, duration, can_overflow)) \

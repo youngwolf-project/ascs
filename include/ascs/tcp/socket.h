@@ -122,8 +122,6 @@ public:
 
 	///////////////////////////////////////////////////
 	//msg sending interface
-	//you can call send_(native_)msg or safe_send_(native_)msg which accepts a in_msg_type&& parameter (but not packed) if you will not use
-	// the in_msg_type any more, this can reduce one memory replication.
 	//if the message already packed, do call direct_send_msg or direct_sync_send_msg to reduce unnecessary memory replication, if you will not
 	// use it any more, use std::move to wrap it when calling direct_send_msg or direct_sync_send_msg.
 	TCP_SEND_MSG(send_msg, false) //use the packer with native = false to pack the msgs

@@ -67,17 +67,11 @@ int main(int argc, const char* argv[])
 				continue;
 
 			if ("add" == *iter)
-			{
-				++iter;
-				if (iter != std::end(parameters))
+				for (++iter; iter != std::end(parameters); ++iter)
 					client.add_link(*iter);
-			}
 			else if ("del" == *iter)
-			{
-				++iter;
-				if (iter != std::end(parameters))
+				for (++iter; iter != std::end(parameters); ++iter)
 					client.shutdown_link(*iter);
-			}
 			else
 			{
 				std::string name = *iter++;

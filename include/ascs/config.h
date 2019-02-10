@@ -483,20 +483,21 @@
  * HIGHLIGHT:
  * Make client_socket_base be able to call multi_client_base (via i_matrix) like server_socket_base call server_base (via i_server),
  *  and so does ssl::client_socket_base and udp::socket_base.
- * Promote performance by reducing memory replications if you already generated the message body and can be swapped into ascs.
- * Introduce shared_mutex, it can promote performance if you find or traverse (do_something_to_all or do_something_to_one) objects frequently.
+ * Promote performance by reducing memory replications if you already generated the message body and it can be swapped into ascs.
+ * Introduce shared_mutex, it can promote performance if you find or traverse (via do_something_to_all or do_something_to_one) objects frequently.
  *
  * FIX:
  *
  * ENHANCEMENTS:
  * Introduce macro ASCS_RECONNECT to control the reconnecting mechanism.
- * Introduce macro ASCS_SHARED_MUTEX_TYPE and ASCS_SHARED_LOCK_TYPE, they're used during finding or traversing (do_something_to_all or do_something_to_one)
+ * Introduce macro ASCS_SHARED_MUTEX_TYPE and ASCS_SHARED_LOCK_TYPE, they're used during finding or traversing (via do_something_to_all or do_something_to_one)
  *  objects in object_pool, if you find or traverse objects frequently and shared_mutex is available, use shared_mutex with shared_lock instead of
  *  mutex with unique_lock will promote performance, otherwise, do not define these two macros.
- * Introduce an additional overload of pack_msg virtual function to i_packer, it needs an in_msg_type&& parameter and can reduce one memory replication.
- * Add an overload to send_(native_)msg, safe_send_(native_)msg, sync_send_(native_)msg and sync_safe_send_(native_)msg respectively (just on TCP),
- *  they accept an in_msg_type&& parameter (not packed), this will reduce one memory replication, and statistic.send_msg_sum will be one bigger than before
- *  because ascs add an additional message just represent the header to avoid copying the message body.
+ * Introduce three additional overloads of pack_msg virtual function to i_packer, they accept one or more than one i_packer::msg_type (not packed) that belong to
+ *  the same message.
+ * Add three overloads to send_(native_)msg, safe_send_(native_)msg, sync_send_(native_)msg and sync_safe_send_(native_)msg respectively (just on TCP),
+ *  they accept one or more than one rvalue reference of in_msg_type, this will reduce one memory replication, and the statistic.send_msg_sum will be one bigger
+ *  than before because the packer will add an additional message just represent the header to avoid copying the message bodies.
  * Control send and recv buffer accurately rather than just message number before, see macro ASCS_MAX_SEND_BUF and ASCS_MAX_RECV_BUF for more details.
  * direct_send_msg and direct_sync_send_msg support batch operation.
  * Introduce virtual function type_name() and type_id() to ascs::socket, they can identify whether a given two ascs::socket has the same type.

@@ -49,6 +49,7 @@ using namespace ascs::ext::tcp;
 #define QUIT_COMMAND	"quit"
 #define RESTART_COMMAND	"restart"
 #define RECONNECT		"reconnect"
+#define STATISTIC		"statistic"
 
 //we only want close reconnecting mechanism on this socket, so we don't define macro ASCS_RECONNECT
 class short_connection : public client_socket
@@ -143,10 +144,12 @@ int main(int argc, const char* argv[])
 		}
 		else if (RECONNECT == str)
 			client.graceful_shutdown(true);
+		else if (STATISTIC == str)
+			puts(client.get_statistic().to_string().data());
 		else
 		{
-			client.sync_safe_send_msg(str + " (from normal client)", 100);
-			//client.safe_send_msg(str + " (from normal client)");
+			client.sync_safe_send_msg(std::move(str), std::string(" (from normal client)"), 100); //new feature introduced in 1.4.0
+			//client.safe_send_msg(std::move(str),  std::string(" (from normal client)")); //new feature introduced in 1.4.0
 
 			client2.send_msg(str + " (from short client)");
 		}

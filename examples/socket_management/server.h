@@ -14,12 +14,21 @@ public:
 
 protected:
 	//msg handling
-#if 1 == PACKER_UNPACKER_TYPE || 2 == PACKER_UNPACKER_TYPE
-	//replaceable_unpacker uses auto_buffer or shared_buffer as its message type, they don't support + operation,
-	//fixed_length_unpacker uses basic_buffer as its message type, it doesn't support + operation too.
+#if 1 == PACKER_UNPACKER_TYPE
+	//replaceable_unpacker uses auto_buffer or shared_buffer as its message type
+	virtual bool on_msg_handle(out_msg_type& msg)
+	{
+		auto raw_msg = new string_buffer();
+		raw_msg->assign(" (from the server)");
+
+		typename ASCS_DEFAULT_PACKER::msg_type msg2;
+		msg2.raw_buffer(raw_msg);
+		return send_msg(std::move(msg), std::move(msg2)); //new feature introduced in 1.4.0
+	}
+#elif 2 == PACKER_UNPACKER_TYPE
 	virtual bool on_msg_handle(out_msg_type& msg) {return send_msg(std::move(msg));}
 #else
-	virtual bool on_msg_handle(out_msg_type& msg) {return send_msg(msg + " (from the server)");}
+	virtual bool on_msg_handle(out_msg_type& msg) {return send_msg(std::move(msg), std::string(" (from the server)"));} //new feature introduced in 1.4.0
 #endif
 	//msg handling end
 };

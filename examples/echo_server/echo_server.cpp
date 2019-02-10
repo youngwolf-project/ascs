@@ -111,7 +111,7 @@ protected:
 		//1. we can not use safe_send_msg as i said many times, we should not block service threads.
 		//2. if we use true can_overflow to call send_msg, then buffer usage will be out of control, we should not take this risk.
 
-		//to successfully avoid one memory replication, we need that the type of out_msg_type and in_msg_type to be identical
+		//following statement can avoid one memory replication if the type of out_msg_type and in_msg_type are identical.
 		ascs::do_something_to_all(msg_can, [this](out_msg_type& msg) {this->send_msg(std::move(msg), true);});
 		auto re = msg_can.size();
 		msg_can.clear();
@@ -130,12 +130,12 @@ protected:
 		out_container_type tmp_can;
 		msg_can.move_items_out(tmp_can, 10); //don't be too greedy, here is in a service thread, we should not block this thread for a long time
 
-		//to successfully avoid one memory replication, we need that the type of out_msg_type and in_msg_type to be identical
+		//following statement can avoid one memory replication if the type of out_msg_type and in_msg_type are identical.
 		ascs::do_something_to_all(tmp_can, [this](out_msg_type& msg) {this->send_msg(std::move(msg), true);});
 		return true;
 	}
 #else
-	//to successfully avoid one memory replication, we need that the type of out_msg_type and in_msg_type to be identical
+	//following statement can avoid one memory replication if the type of out_msg_type and in_msg_type are identical.
 	virtual bool on_msg_handle(out_msg_type& msg) {return send_msg(std::move(msg));}
 #endif
 	//msg handling end
