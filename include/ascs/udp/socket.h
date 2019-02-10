@@ -42,7 +42,7 @@ public:
 		in_msg_type msg(peer_addr, packer_->pack_heartbeat());
 		do_direct_send_msg(std::move(msg));
 	}
-	virtual std::string type_name() const {return "UDP";}
+	virtual const char* type_name() const {return "UDP";}
 	virtual int type_id() const {return 0;}
 
 	//reset all, be ensure that there's no any operations performed on this socket when invoke it

@@ -44,7 +44,6 @@
 
 #if defined(ASCS_WANT_MSG_SEND_NOTIFY) && (!defined(ASCS_HEARTBEAT_INTERVAL) || ASCS_HEARTBEAT_INTERVAL <= 0)
 #define ASCS_INPUT_QUEUE non_lock_queue //we will never operate sending buffer concurrently, so need no locks
-#define ASCS_INPUT_CONTAINER list
 #endif
 //configuration
 

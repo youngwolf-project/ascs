@@ -114,7 +114,7 @@ public:
 	client_socket_base(asio::io_context& io_context_, asio::ssl::context& ctx) : super(io_context_, ctx) {}
 	client_socket_base(Matrix& matrix_, asio::ssl::context& ctx) : super(matrix_, ctx) {}
 
-	virtual std::string type_name() const {return "SSL (client endpoint)";}
+	virtual const char* type_name() const {return "SSL (client endpoint)";}
 	virtual int type_id() const {return 3;}
 
 #ifndef ASCS_REUSE_SSL_STREAM
@@ -189,7 +189,7 @@ private:
 public:
 	server_socket_base(Server& server_, asio::ssl::context& ctx) : super(server_, ctx) {}
 
-	virtual std::string type_name() const {return "SSL (server endpoint)";}
+	virtual const char* type_name() const {return "SSL (server endpoint)";}
 	virtual int type_id() const {return 4;}
 
 #ifndef ASCS_REUSE_SSL_STREAM

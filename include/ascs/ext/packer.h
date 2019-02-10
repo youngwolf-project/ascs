@@ -260,6 +260,10 @@ public:
 	}
 	virtual bool pack_msg(msg_type&& msg, container_type& msg_can)
 	{
+		auto len = _prefix.size() + msg.size() + _suffix.size();
+		if (len > ASCS_MSG_BUFFER_SIZE) //not considered overflow
+			return false;
+
 		if (!_prefix.empty())
 			msg_can.emplace_back(_prefix);
 		msg_can.emplace_back(std::move(msg));
@@ -270,6 +274,10 @@ public:
 	}
 	virtual bool pack_msg(msg_type&& msg1, msg_type&& msg2, container_type& msg_can)
 	{
+		auto len = _prefix.size() + msg1.size() + msg2.size() + _suffix.size();
+		if (len > ASCS_MSG_BUFFER_SIZE) //not considered overflow
+			return false;
+
 		if (!_prefix.empty())
 			msg_can.emplace_back(_prefix);
 		msg_can.emplace_back(std::move(msg1));
@@ -281,6 +289,11 @@ public:
 	}
 	virtual bool pack_msg(container_type& in, container_type& out)
 	{
+		auto len = _prefix.size() + _suffix.size();
+		do_something_to_all(in, [&len](msg_ctype& msg) {len += msg.size();});
+		if (len > ASCS_MSG_BUFFER_SIZE) //not considered overflow
+			return false;
+
 		if (!_prefix.empty())
 			out.emplace_back(_prefix);
 		out.splice(std::end(out), in);

@@ -122,7 +122,7 @@ public:
 	virtual bool obsoleted() {return !started_ && !is_async_calling();}
 	virtual bool is_ready() = 0; //is ready for sending and receiving messages
 	virtual void send_heartbeat() = 0;
-	virtual std::string type_name() const = 0;
+	virtual const char* type_name() const = 0;
 	virtual int type_id() const = 0;
 
 	bool started() const {return started_;}

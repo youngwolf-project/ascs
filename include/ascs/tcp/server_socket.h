@@ -31,7 +31,7 @@ public:
 	template<typename Arg>
 	server_socket_base(Server& server_, Arg& arg) : super(server_.get_service_pump(), arg), server(server_) {}
 
-	virtual std::string type_name() const {return "TCP (server endpoint)";}
+	virtual const char* type_name() const {return "TCP (server endpoint)";}
 	virtual int type_id() const {return 2;}
 
 	//reset all, be ensure that there's no any operations performed on this socket when invoke it
