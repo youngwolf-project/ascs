@@ -121,7 +121,7 @@ int main(int argc, const char* argv[])
 		ip = argv[2];
 
 	client.set_server_addr(port, ip);
-	client2.set_server_addr(port + 1, ip);
+	client2.set_server_addr(port + 100, ip);
 
 	sp.start_service();
 	auto t = create_sync_recv_thread(client);
@@ -148,10 +148,21 @@ int main(int argc, const char* argv[])
 			puts(client.get_statistic().to_string().data());
 		else
 		{
-			client.sync_safe_send_msg(std::move(str), std::string(" (from normal client)"), 100); //new feature introduced in 1.4.0
-			//client.safe_send_msg(std::move(str),  std::string(" (from normal client)")); //new feature introduced in 1.4.0
+			std::string tmp_str = str + " (from short client)"; //backup str, because it will be swapped into client
 
-			client2.send_msg(str + " (from short client)");
+			//each of following 4 tests is exclusive from other 3, because str will be swapped into client (to reduce one memory replication)
+			//to avoid this, call other overloads that don't accept rvalue references.
+			//we also have another 4 tests that send native messages not listed, you can try to complete them.
+			//test #1
+			client.sync_safe_send_msg(std::move(str), std::string(" (from normal client)"), 100); //new feature introduced in 1.4.0
+			//test #2
+			//client.sync_send_msg(std::move(str), std::string(" (from normal client)"), 100); //new feature introduced in 1.4.0
+			//test #3
+			//client.safe_send_msg(std::move(str),  std::string(" (from normal client)")); //new feature introduced in 1.4.0
+			//test #4
+			//client.send_msg(std::move(str), std::string(" (from normal client)")); //new feature introduced in 1.4.0
+
+			client2.send_msg(tmp_str);
 		}
 	}
 

@@ -21,9 +21,7 @@ protected:
 		auto raw_msg = new string_buffer();
 		raw_msg->assign(" (from the server)");
 
-		typename ASCS_DEFAULT_PACKER::msg_type msg2;
-		msg2.raw_buffer(raw_msg);
-		return send_msg(std::move(msg), std::move(msg2)); //new feature introduced in 1.4.0
+		return send_msg(std::move(msg), ASCS_DEFAULT_PACKER::msg_type(raw_msg)); //new feature introduced in 1.4.0
 	}
 #elif 2 == PACKER_UNPACKER_TYPE
 	virtual bool on_msg_handle(out_msg_type& msg) {return send_msg(std::move(msg));}

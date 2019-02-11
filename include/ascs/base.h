@@ -179,7 +179,7 @@ public:
 	//no native parameter anymore, which means it's always false, if true, you should call direct_(sync_)send_msg instead
 	virtual bool pack_msg(msg_type&& msg, container_type& msg_can) {return false;}
 	virtual bool pack_msg(msg_type&& msg1, msg_type&& msg2, container_type& msg_can) {return false;}
-	virtual bool pack_msg(container_type& in, container_type& out) {return false;}
+	virtual bool pack_msg(container_type&& in, container_type& out) {return false;}
 	virtual msg_type pack_heartbeat() {return msg_type();}
 	virtual char* raw_data(msg_type& msg) const {return nullptr;}
 	virtual const char* raw_data(msg_ctype& msg) const {return nullptr;}
