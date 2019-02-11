@@ -14,7 +14,6 @@
 #define _ASCS_UDP_SOCKET_H_
 
 #include "../socket.h"
-#include "../container.h"
 
 namespace ascs { namespace udp {
 

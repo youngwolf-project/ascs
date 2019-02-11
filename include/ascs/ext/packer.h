@@ -164,7 +164,7 @@ public:
 		auto head_len = packer_helper::pack_header(len);
 		auto raw_msg = new string_buffer();
 		raw_msg->assign((const char*) &head_len, ASCS_HEAD_LEN);
-		msg_can.emplace_back(std::move(raw_msg));
+		msg_can.emplace_back(raw_msg);
 		msg_can.emplace_back(std::move(msg));
 
 		return true;
@@ -178,7 +178,7 @@ public:
 		auto head_len = packer_helper::pack_header(len);
 		auto raw_msg = new string_buffer();
 		raw_msg->assign((const char*) &head_len, ASCS_HEAD_LEN);
-		msg_can.emplace_back(std::move(raw_msg));
+		msg_can.emplace_back(raw_msg);
 		msg_can.emplace_back(std::move(msg1));
 		msg_can.emplace_back(std::move(msg2));
 
@@ -194,7 +194,7 @@ public:
 		auto head_len = packer_helper::pack_header(len);
 		auto raw_msg = new string_buffer();
 		raw_msg->assign((const char*) &head_len, ASCS_HEAD_LEN);
-		out.emplace_back(std::move(raw_msg));
+		out.emplace_back(raw_msg);
 		out.splice(std::end(out), in);
 
 		return true;

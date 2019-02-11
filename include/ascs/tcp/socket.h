@@ -14,7 +14,6 @@
 #define _ASCS_TCP_SOCKET_H_
 
 #include "../socket.h"
-#include "../container.h"
 
 namespace ascs { namespace tcp {
 

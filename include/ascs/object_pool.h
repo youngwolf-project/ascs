@@ -18,7 +18,6 @@
 
 #include "executor.h"
 #include "timer.h"
-#include "container.h"
 #include "service_pump.h"
 
 namespace ascs
