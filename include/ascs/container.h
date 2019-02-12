@@ -147,7 +147,10 @@ public:
 			auto end_iter = this->begin();
 			do_something_to_one(*this, [&](const T& item) {if (++index > max_item_num) return true; s += item.size(); ++end_iter; return false;});
 
-			dest.splice(std::end(dest), *this, this->begin(), end_iter);
+			if (end_iter == this->end())
+				dest.splice(std::end(dest), *this);
+			else
+				dest.splice(std::end(dest), *this, this->begin(), end_iter);
 			buff_size -= s;
 		}
 	}
