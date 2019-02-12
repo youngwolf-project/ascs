@@ -101,7 +101,7 @@ protected:
 	//msg handling: send the original msg back(echo server)
 #ifdef ASCS_SYNC_DISPATCH //do not open this feature
 	//do not hold msg_can for further using, return from on_msg as quickly as possible
-	virtual size_t on_msg(std::list<out_msg_type>& msg_can)
+	virtual size_t on_msg(list<out_msg_type>& msg_can)
 	{
 		if (!is_send_buffer_available())
 			return 0; //congestion control
@@ -176,7 +176,7 @@ protected:
 	//msg handling
 #ifdef ASCS_SYNC_DISPATCH
 	//do not hold msg_can for further using, return from on_msg as quickly as possible
-	virtual size_t on_msg(std::list<out_msg_type>& msg_can) {auto re = server_socket_base::on_msg(msg_can); force_shutdown(); return re;}
+	virtual size_t on_msg(list<out_msg_type>& msg_can) {auto re = server_socket_base::on_msg(msg_can); force_shutdown(); return re;}
 #endif
 
 #ifdef ASCS_DISPATCH_BATCH_MSG

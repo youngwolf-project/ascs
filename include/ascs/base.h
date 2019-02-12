@@ -161,6 +161,8 @@ protected:
 //not like auto_buffer, shared_buffer is copyable, but auto_buffer is a bit more efficient.
 //packer or/and unpacker who used auto_buffer or shared_buffer as its msg type will be replaceable.
 
+template<typename T> using list = std::list<T>;
+
 //packer concept
 template<typename MsgType>
 class i_packer
@@ -168,7 +170,7 @@ class i_packer
 public:
 	typedef MsgType msg_type;
 	typedef const msg_type msg_ctype;
-	typedef std::list<msg_type> container_type;
+	typedef list<msg_type> container_type;
 
 protected:
 	virtual ~i_packer() {}
@@ -208,7 +210,7 @@ class i_unpacker
 public:
 	typedef MsgType msg_type;
 	typedef const msg_type msg_ctype;
-	typedef std::list<msg_type> container_type;
+	typedef list<msg_type> container_type;
 	typedef ASCS_RECV_BUFFER_TYPE buffer_type;
 
 	bool stripped() const {return _stripped;}

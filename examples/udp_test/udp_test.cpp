@@ -26,7 +26,7 @@ using namespace ascs::ext::udp;
 std::thread create_sync_recv_thread(single_service& service)
 {
 	return std::thread([&service]() {
-		std::list<single_service::out_msg_type> msg_can;
+		list<single_service::out_msg_type> msg_can;
 		sync_call_result re = sync_call_result::SUCCESS;
 		do
 		{

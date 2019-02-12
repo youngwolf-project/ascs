@@ -506,6 +506,7 @@
  * Drop ascs::list, use std::list instead, which means list::size() will not be used for buffer utilization checking any more.
  *
  * REFACTORING:
+ * Unify all container to ascs::list (before, some of them were std::list).
  *
  * REPLACEMENTS:
  *

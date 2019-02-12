@@ -58,7 +58,7 @@ public:
 public:
 	typedef i_service* object_type;
 	typedef const object_type object_ctype;
-	typedef std::list<object_type> container_type;
+	typedef list<object_type> container_type;
 
 	service_pump() : started(false)
 #ifdef ASCS_DECREASE_THREAD_AT_RUNTIME
@@ -289,7 +289,7 @@ private:
 	bool started;
 	container_type service_can;
 	std::mutex service_can_mutex;
-	std::list<std::thread> service_threads;
+	list<std::thread> service_threads;
 
 #ifdef ASCS_DECREASE_THREAD_AT_RUNTIME
 	std::atomic_int_fast32_t real_thread_num;

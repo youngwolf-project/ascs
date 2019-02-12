@@ -184,7 +184,7 @@ protected:
 	//msg_can contains messages that were failed to send and tcp::socket_base will not hold them any more, if you want to re-send them in the future,
 	// you must take over them and re-send (at any time) them via direct_send_msg.
 	//DO NOT hold msg_can for future using, just swap its content with your own container in this virtual function.
-	virtual void on_send_error(const asio::error_code& ec, std::list<typename super::in_msg>& msg_can) {unified_out::error_out("send msg error (%d %s)", ec.value(), ec.message().data());}
+	virtual void on_send_error(const asio::error_code& ec, list<typename super::in_msg>& msg_can) {unified_out::error_out("send msg error (%d %s)", ec.value(), ec.message().data());}
 
 	virtual void on_close()
 	{
@@ -284,7 +284,7 @@ private:
 		if (!in_strand && sending)
 			return true;
 
-		std::list<asio::const_buffer> bufs;
+		list<asio::const_buffer> bufs;
 		{
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
 			const size_t max_send_size = 1;
@@ -386,7 +386,7 @@ private:
 #endif
 
 	std::shared_ptr<i_unpacker<out_msg_type>> unpacker_;
-	std::list<typename super::in_msg> last_send_msg;
+	list<typename super::in_msg> last_send_msg;
 	asio::io_context::strand strand;
 };
 

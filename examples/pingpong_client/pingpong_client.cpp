@@ -52,7 +52,7 @@ protected:
 
 	//msg handling, must define macro ASCS_SYNC_DISPATCH
 	//do not hold msg_can for further using, access msg_can and return from on_msg as quickly as possible
-	virtual size_t on_msg(std::list<out_msg_type>& msg_can)
+	virtual size_t on_msg(list<out_msg_type>& msg_can)
 	{
 		ascs::do_something_to_all(msg_can, [this](out_msg_type& msg) {this->handle_msg(msg);});
 		auto re = msg_can.size();
