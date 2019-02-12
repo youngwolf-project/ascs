@@ -184,7 +184,8 @@ protected:
 	//msg_can contains messages that were failed to send and tcp::socket_base will not hold them any more, if you want to re-send them in the future,
 	// you must take over them and re-send (at any time) them via direct_send_msg.
 	//DO NOT hold msg_can for future using, just swap its content with your own container in this virtual function.
-	virtual void on_send_error(const asio::error_code& ec, list<typename super::in_msg>& msg_can) {unified_out::error_out("send msg error (%d %s)", ec.value(), ec.message().data());}
+	virtual void on_send_error(const asio::error_code& ec, typename super::in_container_type& msg_can)
+		{unified_out::error_out("send msg error (%d %s)", ec.value(), ec.message().data());}
 
 	virtual void on_close()
 	{
@@ -284,27 +285,18 @@ private:
 		if (!in_strand && sending)
 			return true;
 
-		list<asio::const_buffer> bufs;
-		{
+		auto end_time = statistic::now();
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
-			const size_t max_send_size = 1;
+		send_msg_buffer.move_items_out(0, last_send_msg);
 #else
-			const size_t max_send_size = asio::detail::default_max_transfer_size;
+		send_msg_buffer.move_items_out(asio::detail::default_max_transfer_size, last_send_msg);
 #endif
-			size_t size = 0;
-			typename super::in_msg msg;
-			auto end_time = statistic::now();
-
-			typename super::in_queue_type::lock_guard lock(send_msg_buffer);
-			while (send_msg_buffer.try_dequeue_(msg))
-			{
-				stat.send_delay_sum += end_time - msg.begin_time;
-				size += msg.size();
-				last_send_msg.emplace_back(std::move(msg));
-				bufs.emplace_back(last_send_msg.back().data(), last_send_msg.back().size());
-				if (size >= max_send_size)
-					break;
-			}
+		std::vector<asio::const_buffer> bufs;
+		bufs.reserve(last_send_msg.size());
+		for (auto iter = std::begin(last_send_msg); iter != std::end(last_send_msg); ++iter)
+		{
+			stat.send_delay_sum += end_time - iter->begin_time;
+			bufs.emplace_back(iter->data(), iter->size());
 		}
 
 		if ((sending = !bufs.empty()))
@@ -386,7 +378,7 @@ private:
 #endif
 
 	std::shared_ptr<i_unpacker<out_msg_type>> unpacker_;
-	list<typename super::in_msg> last_send_msg;
+	typename super::in_container_type last_send_msg;
 	asio::io_context::strand strand;
 };
 

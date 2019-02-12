@@ -174,7 +174,7 @@ protected:
 	}
 
 private:
-	typedef list<timer_info> container_type;
+	typedef std::list<timer_info> container_type;
 	container_type timer_can;
 	std::mutex timer_can_mutex;
 

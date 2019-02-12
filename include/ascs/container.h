@@ -45,12 +45,14 @@ private:
 
 //Container must at least has the following functions (like std::list):
 // Container() and Container(size_t) constructor
+// size
+// empty
 // clear
 // swap
 // emplace_back(const T& item)
 // emplace_back(T&& item)
-// splice(iter, list<T>&), after this, list<T> must be empty
-// splice(iter, list<T>&, iter, iter), if macro ASCS_DISPATCH_BATCH_MSG been defined
+// splice(iter, Container&), after this, the source container must be empty
+// splice(iter, Container&, iter, iter)
 // front
 // pop_front
 // back
@@ -82,7 +84,7 @@ public:
 	//thread safe
 	bool enqueue(const T& item) {typename Lockable::lock_guard lock(*this); return enqueue_(item);}
 	bool enqueue(T&& item) {typename Lockable::lock_guard lock(*this); return enqueue_(std::move(item));}
-	void move_items_in(list<T>& src, size_t size_in_byte = 0) {typename Lockable::lock_guard lock(*this); move_items_in_(src, size_in_byte);}
+	void move_items_in(Container& src, size_t size_in_byte = 0) {typename Lockable::lock_guard lock(*this); move_items_in_(src, size_in_byte);}
 	bool try_dequeue(T& item) {typename Lockable::lock_guard lock(*this); return try_dequeue_(item);}
 	//thread safe
 
@@ -120,7 +122,7 @@ public:
 		return true;
 	}
 
-	void move_items_in_(list<T>& src, size_t size_in_byte = 0)
+	void move_items_in_(Container& src, size_t size_in_byte = 0)
 	{
 		if (0 == size_in_byte)
 			do_something_to_all(src, [&size_in_byte](const T& item) {size_in_byte += item.size();});
@@ -132,8 +134,9 @@ public:
 	bool try_dequeue_(T& item) {if (this->empty()) return false; item.swap(this->front()); this->pop_front(); buff_size -= item.size(); return true;}
 	//not thread safe
 
-#ifdef ASCS_DISPATCH_BATCH_MSG
 	void move_items_out(Container& dest, size_t max_item_num = -1) {typename Lockable::lock_guard lock(*this); move_items_out_(dest, max_item_num);} //thread safe
+	void move_items_out(size_t max_size_in_byte, Container& dest) {typename Lockable::lock_guard lock(*this); move_items_out_(max_size_in_byte, dest);} //thread safe
+
 	void move_items_out_(Container& dest, size_t max_item_num = -1) //not thread safe
 	{
 		if ((size_t) -1 == max_item_num)
@@ -155,9 +158,29 @@ public:
 		}
 	}
 
+	void move_items_out_(size_t max_size_in_byte, Container& dest) //not thread safe
+	{
+		if ((size_t) -1 == max_size_in_byte)
+		{
+			dest.splice(std::end(dest), *this);
+			buff_size = 0;
+		}
+		else
+		{
+			size_t s = 0;
+			auto end_iter = this->begin();
+			do_something_to_one(*this, [&](const T& item) {s += item.size(); ++end_iter; if (s >= max_size_in_byte) return true; return false;});
+
+			if (end_iter == this->end())
+				dest.splice(std::end(dest), *this);
+			else
+				dest.splice(std::end(dest), *this, this->begin(), end_iter);
+			buff_size -= s;
+		}
+	}
+
 	using Container::begin;
 	using Container::end;
-#endif
 
 private:
 	size_t buff_size; //in use
