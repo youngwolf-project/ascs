@@ -554,9 +554,7 @@ private:
 		{
 			auto begin_time = statistic::now();
 #ifdef ASCS_FULL_STATISTIC
-			recv_msg_buffer.lock();
-			ascs::do_something_to_all(recv_msg_buffer, [&, this](out_msg& msg) {this->stat.dispatch_dealy_sum += begin_time - msg.begin_time;});
-			recv_msg_buffer.unlock();
+			recv_msg_buffer.do_something_to_all([&, this](out_msg& msg) {this->stat.dispatch_delay_sum += begin_time - msg.begin_time;});
 #endif
 			auto re = on_msg_handle(recv_msg_buffer);
 			auto end_time = statistic::now();
@@ -565,9 +563,7 @@ private:
 			if (!re) //dispatch failed, re-dispatch
 			{
 #ifdef ASCS_FULL_STATISTIC
-				recv_msg_buffer.lock();
-				ascs::do_something_to_all(recv_msg_buffer, [&end_time](out_msg& msg) {msg.restart(end_time);});
-				recv_msg_buffer.unlock();
+				recv_msg_buffer.do_something_to_all([&end_time](out_msg& msg) {msg.restart(end_time);});
 #endif
 				set_timer(TIMER_DISPATCH_MSG, msg_handling_interval_, [this](tid id)->bool {return this->timer_handler(TIMER_DISPATCH_MSG);}); //hold dispatching
 			}
@@ -577,7 +573,7 @@ private:
 		if ((dispatching = !dispatched || recv_msg_buffer.try_dequeue(last_dispatch_msg)))
 		{
 			auto begin_time = statistic::now();
-			stat.dispatch_dealy_sum += begin_time - last_dispatch_msg.begin_time;
+			stat.dispatch_delay_sum += begin_time - last_dispatch_msg.begin_time;
 			auto re = on_msg_handle(last_dispatch_msg); //must before next msg dispatching to keep sequence
 			auto end_time = statistic::now();
 			stat.handle_time_sum += end_time - begin_time;

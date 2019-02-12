@@ -59,7 +59,7 @@ private:
 // begin
 // end
 template<typename T, typename Container, typename Lockable> //thread safety depends on Container or Lockable
-class queue : protected Container, public Lockable
+class queue : private Container, public Lockable
 {
 public:
 	typedef T data_type;
@@ -74,7 +74,7 @@ public:
 	void swap(Container& other)
 	{
 		size_t s = 0;
-		do_something_to_all(other, [&s](const T& item) {s += item.size();});
+		ascs::do_something_to_all(other, [&s](const T& item) {s += item.size();});
 
 		typename Lockable::lock_guard lock(*this);
 		Container::swap(other);
@@ -86,6 +86,10 @@ public:
 	bool enqueue(T&& item) {typename Lockable::lock_guard lock(*this); return enqueue_(std::move(item));}
 	void move_items_in(Container& src, size_t size_in_byte = 0) {typename Lockable::lock_guard lock(*this); move_items_in_(src, size_in_byte);}
 	bool try_dequeue(T& item) {typename Lockable::lock_guard lock(*this); return try_dequeue_(item);}
+	void move_items_out(Container& dest, size_t max_item_num = -1) {typename Lockable::lock_guard lock(*this); move_items_out_(dest, max_item_num);}
+	void move_items_out(size_t max_size_in_byte, Container& dest) {typename Lockable::lock_guard lock(*this); move_items_out_(max_size_in_byte, dest);}
+	template<typename _Predicate> void do_something_to_all(const _Predicate& __pred) {typename Lockable::lock_guard lock(*this); do_something_to_all_(__pred);}
+	template<typename _Predicate> void do_something_to_one(const _Predicate& __pred) {typename Lockable::lock_guard lock(*this); do_something_to_one_(__pred);}
 	//thread safe
 
 	//not thread safe
@@ -125,17 +129,13 @@ public:
 	void move_items_in_(Container& src, size_t size_in_byte = 0)
 	{
 		if (0 == size_in_byte)
-			do_something_to_all(src, [&size_in_byte](const T& item) {size_in_byte += item.size();});
+			ascs::do_something_to_all(src, [&size_in_byte](const T& item) {size_in_byte += item.size();});
 
 		this->splice(this->end(), src);
 		buff_size += size_in_byte;
 	}
 
 	bool try_dequeue_(T& item) {if (this->empty()) return false; item.swap(this->front()); this->pop_front(); buff_size -= item.size(); return true;}
-	//not thread safe
-
-	void move_items_out(Container& dest, size_t max_item_num = -1) {typename Lockable::lock_guard lock(*this); move_items_out_(dest, max_item_num);} //thread safe
-	void move_items_out(size_t max_size_in_byte, Container& dest) {typename Lockable::lock_guard lock(*this); move_items_out_(max_size_in_byte, dest);} //thread safe
 
 	void move_items_out_(Container& dest, size_t max_item_num = -1) //not thread safe
 	{
@@ -148,7 +148,7 @@ public:
 		{
 			size_t s = 0, index = 0;
 			auto end_iter = this->begin();
-			do_something_to_one(*this, [&](const T& item) {if (++index > max_item_num) return true; s += item.size(); ++end_iter; return false;});
+			do_something_to_one_([&](const T& item) {if (++index > max_item_num) return true; s += item.size(); ++end_iter; return false;});
 
 			if (end_iter == this->end())
 				dest.splice(std::end(dest), *this);
@@ -169,7 +169,7 @@ public:
 		{
 			size_t s = 0;
 			auto end_iter = this->begin();
-			do_something_to_one(*this, [&](const T& item) {s += item.size(); ++end_iter; if (s >= max_size_in_byte) return true; return false;});
+			do_something_to_one_([&](const T& item) {s += item.size(); ++end_iter; if (s >= max_size_in_byte) return true; return false;});
 
 			if (end_iter == this->end())
 				dest.splice(std::end(dest), *this);
@@ -179,8 +179,12 @@ public:
 		}
 	}
 
-	using Container::begin;
-	using Container::end;
+	template<typename _Predicate>
+	void do_something_to_all_(const _Predicate& __pred) {for (auto& item : *this) __pred(item);}
+
+	template<typename _Predicate>
+	void do_something_to_one_(const _Predicate& __pred) {for (auto iter = this->begin(); iter != this->end(); ++iter) if (__pred(*iter)) break;}
+	//not thread safe
 
 private:
 	size_t buff_size; //in use
