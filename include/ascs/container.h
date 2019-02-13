@@ -137,7 +137,7 @@ public:
 
 	bool try_dequeue_(T& item) {if (this->empty()) return false; item.swap(this->front()); this->pop_front(); buff_size -= item.size(); return true;}
 
-	void move_items_out_(Container& dest, size_t max_item_num = -1) //not thread safe
+	void move_items_out_(Container& dest, size_t max_item_num = -1)
 	{
 		if ((size_t) -1 == max_item_num)
 		{
@@ -158,7 +158,7 @@ public:
 		}
 	}
 
-	void move_items_out_(size_t max_size_in_byte, Container& dest) //not thread safe
+	void move_items_out_(size_t max_size_in_byte, Container& dest)
 	{
 		if ((size_t) -1 == max_size_in_byte)
 		{
