@@ -113,6 +113,7 @@ protected:
 	//msg handling
 #ifdef ASCS_SYNC_DISPATCH
 	//do not hold msg_can for further using, return from on_msg as quickly as possible
+	//access msg_can freely within this callback, it's always thread safe.
 	virtual size_t on_msg(list<out_msg_type>& msg_can)
 	{
 		ascs::do_something_to_all(msg_can, [this](out_msg_type& msg) {this->handle_msg(msg);});
@@ -127,11 +128,12 @@ protected:
 #endif
 #ifdef ASCS_DISPATCH_BATCH_MSG
 	//do not hold msg_can for further using, access msg_can and return from on_msg_handle as quickly as possible
+	//can only access msg_can via functions that marked as 'thread safe', if you used non-lock queue, its your responsibility to guarantee
+	// that new messages will not come until we returned from this callback (for example, pingpong test).
 	virtual bool on_msg_handle(out_queue_type& msg_can)
 	{
-		//to consume a part of the messages in msg_can, see echo_server.
 		out_container_type tmp_can;
-		msg_can.swap(tmp_can); //must be thread safe
+		msg_can.swap(tmp_can); //to consume a part of the messages in msg_can, see echo_server
 
 		ascs::do_something_to_all(tmp_can, [this](out_msg_type& msg) {this->handle_msg(msg);});
 		return true;
