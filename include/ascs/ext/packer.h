@@ -119,8 +119,7 @@ public:
 	}
 	virtual bool pack_msg(container_type&& in, container_type& out)
 	{
-		size_t len = 0;
-		do_something_to_all(in, [&len](msg_ctype& msg) {len += msg.size();});
+		auto len = ascs::get_size_in_byte(in);
 		if (len > packer::get_max_msg_size()) //not considered overflow
 			return false;
 
@@ -186,8 +185,7 @@ public:
 	}
 	virtual bool pack_msg(typename super::container_type&& in, typename super::container_type& out)
 	{
-		size_t len = 0;
-		do_something_to_all(in, [&len](typename super::msg_ctype& msg) {len += msg.size();});
+		auto len = ascs::get_size_in_byte(in);
 		if (len > packer::get_max_msg_size()) //not considered overflow
 			return false;
 
@@ -289,8 +287,7 @@ public:
 	}
 	virtual bool pack_msg(container_type&& in, container_type& out)
 	{
-		auto len = _prefix.size() + _suffix.size();
-		do_something_to_all(in, [&len](msg_ctype& msg) {len += msg.size();});
+		auto len = _prefix.size() + _suffix.size() + ascs::get_size_in_byte(in);
 		if (len > ASCS_MSG_BUFFER_SIZE) //not considered overflow
 			return false;
 

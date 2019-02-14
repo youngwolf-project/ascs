@@ -511,7 +511,7 @@ template<typename T> struct obj_with_begin_time : public T
 #ifdef ASCS_SYNC_SEND
 template<typename T> struct obj_with_begin_time_promise : public obj_with_begin_time<T>
 {
-typedef obj_with_begin_time<T> super;
+	typedef obj_with_begin_time<T> super;
 
 	obj_with_begin_time_promise(bool need_promise = false) {check_and_create_promise(need_promise);}
 	obj_with_begin_time_promise(T&& obj, bool need_promise = false) : super(std::move(obj)) {check_and_create_promise(need_promise);}
@@ -544,6 +544,14 @@ void do_something_to_one(_Can& __can, _Mutex& __mutex, const _Predicate& __pred)
 
 template<typename _Can, typename _Predicate>
 void do_something_to_one(_Can& __can, const _Predicate& __pred) {for (auto iter = std::begin(__can); iter != std::end(__can); ++iter) if (__pred(*iter)) break;}
+
+template<typename _Can>
+size_t get_size_in_byte(const _Can& __can)
+{
+	size_t size_in_byte = 0;
+	do_something_to_all(__can, [&size_in_byte](decltype(__can.front()) item) {size_in_byte += item.size();});
+	return size_in_byte;
+}
 
 //member functions, used to do something to any member container(except map and multimap) optionally with any member mutex
 #define DO_SOMETHING_TO_ALL_MUTEX(CAN, MUTEX) DO_SOMETHING_TO_ALL_MUTEX_NAME(do_something_to_all, CAN, MUTEX)

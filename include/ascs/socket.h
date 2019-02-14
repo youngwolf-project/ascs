@@ -364,9 +364,7 @@ protected:
 
 	bool handle_msg()
 	{
-		size_t size_in_byte = 0;
-		ascs::do_something_to_all(temp_msg_can, [&](const OutMsgType& item) {size_in_byte += item.size();});
-
+		auto size_in_byte = ascs::get_size_in_byte(temp_msg_can);
 		auto msg_num = temp_msg_can.size();
 		stat.recv_msg_sum += msg_num;
 		stat.recv_byte_sum += size_in_byte;

@@ -71,14 +71,13 @@ public:
 	size_t size() const {return buff_size;} //must be thread safe, but doesn't have to be consistent
 	bool empty() const {return 0 == size();} //must be thread safe, but doesn't have to be consistent
 	void clear() {typename Lockable::lock_guard lock(*this); Container::clear(); buff_size = 0;}
-	void swap(Container& other)
+	void swap(Container& can)
 	{
-		size_t s = 0;
-		ascs::do_something_to_all(other, [&s](const T& item) {s += item.size();});
+		auto size_in_byte = ascs::get_size_in_byte(can);
 
 		typename Lockable::lock_guard lock(*this);
-		Container::swap(other);
-		buff_size = s;
+		Container::swap(can);
+		buff_size = size_in_byte;
 	}
 
 	//thread safe
@@ -129,7 +128,7 @@ public:
 	void move_items_in_(Container& src, size_t size_in_byte = 0)
 	{
 		if (0 == size_in_byte)
-			ascs::do_something_to_all(src, [&size_in_byte](const T& item) {size_in_byte += item.size();});
+			size_in_byte = ascs::get_size_in_byte(src);
 
 		this->splice(this->end(), src);
 		buff_size += size_in_byte;
