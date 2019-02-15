@@ -299,7 +299,7 @@ public:
 	void list_all_object() {do_something_to_all([](object_ctype& item) {item->show_info("", "");});}
 
 	template<typename _Predicate> void do_something_to_all(const _Predicate& __pred)
-		{ASCS_SHARED_LOCK_TYPE<ASCS_SHARED_MUTEX_TYPE> lock(object_can_mutex); for (typename container_type::value_type& item : object_can) __pred(item.second);}
+		{ASCS_SHARED_LOCK_TYPE<ASCS_SHARED_MUTEX_TYPE> lock(object_can_mutex); for (auto& item : object_can) __pred(item.second);}
 
 	template<typename _Predicate> void do_something_to_one(const _Predicate& __pred)
 	{

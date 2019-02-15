@@ -549,7 +549,7 @@ template<typename _Can>
 size_t get_size_in_byte(const _Can& __can)
 {
 	size_t size_in_byte = 0;
-	do_something_to_all(__can, [&size_in_byte](decltype(__can.front()) item) {size_in_byte += item.size();});
+	do_something_to_all(__can, [&size_in_byte](typename _Can::const_reference item) {size_in_byte += item.size();});
 	return size_in_byte;
 }
 
@@ -588,7 +588,7 @@ template<typename _Predicate> void NAME(const _Predicate& __pred) const {for (au
 	{msg.clear(); if (CAN.try_dequeue(msg) && msg.p) msg.p->set_value(sync_call_result::NOT_APPLICABLE);}
 #define POP_ALL_PENDING_MSG(FUNNAME, CAN, CANTYPE) void FUNNAME(CANTYPE& can) {can.clear(); CAN.swap(can);}
 #define POP_ALL_PENDING_MSG_NOTIFY(FUNNAME, CAN, CANTYPE) void FUNNAME(CANTYPE& can) \
-	{can.clear(); CAN.swap(can); ascs::do_something_to_all(can, [](decltype(can.front()) msg) {if (msg.p) msg.p->set_value(sync_call_result::NOT_APPLICABLE);});}
+	{can.clear(); CAN.swap(can); ascs::do_something_to_all(can, [](typename CANTYPE::reference msg) {if (msg.p) msg.p->set_value(sync_call_result::NOT_APPLICABLE);});}
 
 ///////////////////////////////////////////////////
 //TCP msg sending interface

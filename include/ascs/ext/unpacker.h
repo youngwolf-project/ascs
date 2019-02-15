@@ -73,7 +73,7 @@ public:
 	{
 		std::list<std::pair<const char*, size_t>> msg_pos_can;
 		auto unpack_ok = parse_msg(bytes_transferred, msg_pos_can);
-		do_something_to_all(msg_pos_can, [&msg_can](decltype(msg_pos_can.front())& item) {
+		do_something_to_all(msg_pos_can, [&msg_can](decltype(msg_pos_can.front()) item) {
 			if (item.second > 0) //exclude heartbeat
 				msg_can.emplace_back(item.first, item.second);
 		});
