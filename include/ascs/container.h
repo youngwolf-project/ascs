@@ -49,16 +49,16 @@ private:
 // empty
 // clear
 // swap
-// emplace_back(const T& item)
-// emplace_back(T&& item)
-// splice(iter, Container&), after this, the source container must be empty
+// emplace_back(typename Container::const_reference item)
+// emplace_back(typename Container::value_type&& item)
+// splice(iter, Container&)
 // splice(iter, Container&, iter, iter)
 // front
 // pop_front
 // back
 // begin
 // end
-template<typename T, typename Container, typename Lockable> //thread safety depends on Container or Lockable
+template<typename Container, typename Lockable> //thread safety depends on Container or Lockable
 class queue : private Container, public Lockable
 {
 public:
@@ -86,10 +86,10 @@ public:
 
 	size_t get_size_in_byte() {typename Lockable::lock_guard lock(*this); return get_size_in_byte_();}
 
-	bool enqueue(const T& item) {typename Lockable::lock_guard lock(*this); return enqueue_(item);}
-	bool enqueue(T&& item) {typename Lockable::lock_guard lock(*this); return enqueue_(std::move(item));}
+	bool enqueue(const_reference item) {typename Lockable::lock_guard lock(*this); return enqueue_(item);}
+	bool enqueue(value_type&& item) {typename Lockable::lock_guard lock(*this); return enqueue_(std::move(item));}
 	void move_items_in(Container& src, size_t size_in_byte = 0) {typename Lockable::lock_guard lock(*this); move_items_in_(src, size_in_byte);}
-	bool try_dequeue(T& item) {typename Lockable::lock_guard lock(*this); return try_dequeue_(item);}
+	bool try_dequeue(reference item) {typename Lockable::lock_guard lock(*this); return try_dequeue_(item);}
 	void move_items_out(Container& dest, size_t max_item_num = -1) {typename Lockable::lock_guard lock(*this); move_items_out_(dest, max_item_num);}
 	void move_items_out(size_t max_size_in_byte, Container& dest) {typename Lockable::lock_guard lock(*this); move_items_out_(max_size_in_byte, dest);}
 	template<typename _Predicate> void do_something_to_all(const _Predicate& __pred) {typename Lockable::lock_guard lock(*this); do_something_to_all_(__pred);}
@@ -97,7 +97,7 @@ public:
 	//thread safe
 
 	//not thread safe
-	bool enqueue_(const T& item)
+	bool enqueue_(const_reference item)
 	{
 		try
 		{
@@ -113,7 +113,7 @@ public:
 		return true;
 	}
 
-	bool enqueue_(T&& item)
+	bool enqueue_(value_type&& item)
 	{
 		try
 		{
@@ -139,7 +139,7 @@ public:
 		buff_size += size_in_byte;
 	}
 
-	bool try_dequeue_(T& item) {if (this->empty()) return false; item.swap(this->front()); this->pop_front(); buff_size -= item.size(); return true;}
+	bool try_dequeue_(reference item) {if (this->empty()) return false; item.swap(this->front()); this->pop_front(); buff_size -= item.size(); return true;}
 
 	void move_items_out_(Container& dest, size_t max_item_num = -1)
 	{
@@ -152,7 +152,7 @@ public:
 		{
 			size_t s = 0, index = 0;
 			auto end_iter = this->begin();
-			do_something_to_one_([&](const T& item) {if (++index > max_item_num) return true; s += item.size(); ++end_iter; return false;});
+			do_something_to_one_([&](const_reference item) {if (++index > max_item_num) return true; s += item.size(); ++end_iter; return false;});
 
 			if (end_iter == this->end())
 				dest.splice(std::end(dest), *this);
@@ -173,7 +173,7 @@ public:
 		{
 			size_t s = 0;
 			auto end_iter = this->begin();
-			do_something_to_one_([&](const T& item) {s += item.size(); ++end_iter; if (s >= max_size_in_byte) return true; return false;});
+			do_something_to_one_([&](const_reference item) {s += item.size(); ++end_iter; if (s >= max_size_in_byte) return true; return false;});
 
 			if (end_iter == this->end())
 				dest.splice(std::end(dest), *this);
@@ -205,8 +205,9 @@ private:
 	size_t buff_size; //in use
 };
 
-template<typename T, typename Container> using non_lock_queue = queue<T, Container, dummy_lockable>; //thread safety depends on Container
-template<typename T, typename Container> using lock_queue = queue<T, Container, lockable>;
+//ascs requires that queue must take one and only one template argument
+template<typename Container> using non_lock_queue = queue<Container, dummy_lockable>; //thread safety depends on Container
+template<typename Container> using lock_queue = queue<Container, lockable>;
 
 } //namespace
 

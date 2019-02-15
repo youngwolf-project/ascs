@@ -161,7 +161,7 @@ protected:
 //not like auto_buffer, shared_buffer is copyable, but auto_buffer is a bit more efficient.
 //packer or/and unpacker who used auto_buffer or shared_buffer as its msg type will be replaceable.
 
-//ascs requires that container must take one and only one template argument.
+//ascs requires that container must take one and only one template argument
 #if defined(_MSC_VER) || defined(__clang__) || _GLIBCXX_USE_CXX11_ABI
 template<typename T> using list = std::list<T>;
 //for list::size() and empty(), ascs::queue needs them to be thread safe no matter itself is lockable or dummy lockable (see ascs::queue for more details).
