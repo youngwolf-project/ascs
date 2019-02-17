@@ -130,13 +130,13 @@ protected:
 	//do not hold msg_can for further using, access msg_can and return from on_msg_handle as quickly as possible
 	//can only access msg_can via functions that marked as 'thread safe', if you used non-lock queue, its your responsibility to guarantee
 	// that new messages will not come until we returned from this callback (for example, pingpong test).
-	virtual bool on_msg_handle(out_queue_type& msg_can)
+	virtual size_t on_msg_handle(out_queue_type& msg_can)
 	{
 		out_container_type tmp_can;
 		msg_can.swap(tmp_can); //to consume a part of the messages in msg_can, see echo_server
 
 		ascs::do_something_to_all(tmp_can, [this](out_msg_type& msg) {this->handle_msg(msg);});
-		return true;
+		return tmp_can.size();
 	}
 #else
 	virtual bool on_msg_handle(out_msg_type& msg) {handle_msg(msg); return true;}

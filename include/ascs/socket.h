@@ -299,13 +299,13 @@ protected:
 #ifdef ASCS_DISPATCH_BATCH_MSG
 	//return the number of handled msg, if some msg left behind, socket will re-dispatch them asynchronously
 	//notice: using inconstant is for the convenience of swapping
-	virtual bool on_msg_handle(out_queue_type& msg_can)
+	virtual size_t on_msg_handle(out_queue_type& msg_can)
 	{
 		out_container_type tmp_can;
 		msg_can.swap(tmp_can); //must be thread safe
 
 		ascs::do_something_to_all(tmp_can, [](OutMsgType& msg) {unified_out::debug_out("recv(" ASCS_SF "): %s", msg.size(), msg.data());});
-		return true;
+		return tmp_can.size();
 	}
 #else
 	//return true means msg been handled, false means msg cannot be handled right now, and socket will re-dispatch it asynchronously
@@ -557,7 +557,7 @@ private:
 			auto end_time = statistic::now();
 			stat.handle_time_sum += end_time - begin_time;
 
-			if (!re) //dispatch failed, re-dispatch
+			if (0 == re) //dispatch failed, re-dispatch
 			{
 #ifdef ASCS_FULL_STATISTIC
 				recv_msg_buffer.do_something_to_all([&end_time](out_msg& msg) {msg.restart(end_time);});

@@ -478,7 +478,6 @@
  * Limit send and recv buffers by acctual utilization (in byte) rather than message number before, so macro ASCS_MAX_MSG_NUM been renamed to
  *  ASCS_MAX_SEND_BUF and ASCS_MAX_RECV_BUF, and unit been changed to byte.
  * statistic.send_msg_sum may be bigger than before (but statistic.send_byte_sum will be the same), see ENHANCEMENTS section for more details.
- * Return value from on_msg_handle(out_queue_type&) been changed from size_t to bool.
  *
  * HIGHLIGHT:
  * Make client_socket_base be able to call multi_client_base (via i_matrix) like server_socket_base call server_base (via i_server),

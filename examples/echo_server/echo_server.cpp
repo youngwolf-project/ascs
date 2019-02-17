@@ -125,17 +125,17 @@ protected:
 	//do not hold msg_can for further using, access msg_can and return from on_msg_handle as quickly as possible
 	//can only access msg_can via functions that marked as 'thread safe', if you used non-lock queue, its your responsibility to guarantee
 	// that new messages will not come until we returned from this callback (for example, pingpong test).
-	virtual bool on_msg_handle(out_queue_type& msg_can)
+	virtual size_t on_msg_handle(out_queue_type& msg_can)
 	{
 		if (!is_send_buffer_available())
-			return false;
+			return 0;
 
 		out_container_type tmp_can;
 		msg_can.move_items_out(tmp_can, 10); //don't be too greedy, here is in a service thread, we should not block this thread for a long time
 
 		//following statement can avoid one memory replication if the type of out_msg_type and in_msg_type are identical.
 		ascs::do_something_to_all(tmp_can, [this](out_msg_type& msg) {this->send_msg(std::move(msg), true);});
-		return true;
+		return tmp_can.size();
 	}
 #else
 	//following statement can avoid one memory replication if the type of out_msg_type and in_msg_type are identical.
@@ -187,7 +187,7 @@ protected:
 	//do not hold msg_can for further using, access msg_can and return from on_msg_handle as quickly as possible
 	//can only access msg_can via functions that marked as 'thread safe', if you used non-lock queue, its your responsibility to guarantee
 	// that new messages will not come until we returned from this callback (for example, pingpong test).
-	virtual bool on_msg_handle(out_queue_type& msg_can) {auto re = server_socket_base::on_msg_handle(msg_can); force_shutdown(); return re;}
+	virtual size_t on_msg_handle(out_queue_type& msg_can) {auto re = server_socket_base::on_msg_handle(msg_can); force_shutdown(); return re;}
 #else
 	virtual bool on_msg_handle(out_msg_type& msg) {auto re = server_socket_base::on_msg_handle(msg); force_shutdown(); return re;}
 #endif
