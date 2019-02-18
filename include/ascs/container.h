@@ -86,8 +86,7 @@ public:
 
 	size_t get_size_in_byte() {typename Lockable::lock_guard lock(*this); return get_size_in_byte_();}
 
-	bool enqueue(const_reference item) {typename Lockable::lock_guard lock(*this); return enqueue_(item);}
-	bool enqueue(value_type&& item) {typename Lockable::lock_guard lock(*this); return enqueue_(std::move(item));}
+	template<typename T> bool enqueue(T&& item) {typename Lockable::lock_guard lock(*this); return enqueue_(std::forward<T>(item));}
 	void move_items_in(Container& src, size_t size_in_byte = 0) {typename Lockable::lock_guard lock(*this); move_items_in_(src, size_in_byte);}
 	bool try_dequeue(reference item) {typename Lockable::lock_guard lock(*this); return try_dequeue_(item);}
 	void move_items_out(Container& dest, size_t max_item_num = -1) {typename Lockable::lock_guard lock(*this); move_items_out_(dest, max_item_num);}
@@ -97,28 +96,12 @@ public:
 	//thread safe
 
 	//not thread safe
-	bool enqueue_(const_reference item)
-	{
-		try
-		{
-			this->emplace_back(item);
-			buff_size += item.size();
-		}
-		catch (const std::exception& e)
-		{
-			unified_out::error_out("cannot hold more objects (%s)", e.what());
-			return false;
-		}
-
-		return true;
-	}
-
-	bool enqueue_(value_type&& item)
+	template<typename T> bool enqueue_(T&& item)
 	{
 		try
 		{
 			auto s = item.size();
-			this->emplace_back(std::move(item));
+			this->emplace_back(std::forward<T>(item));
 			buff_size += s;
 		}
 		catch (const std::exception& e)

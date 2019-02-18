@@ -495,9 +495,13 @@ enum sync_call_result {SUCCESS, NOT_APPLICABLE, DUPLICATE, TIMEOUT};
 template<typename T> struct obj_with_begin_time : public T
 {
 	obj_with_begin_time() {}
+	obj_with_begin_time(const T& obj) : T(obj) {restart();}
 	obj_with_begin_time(T&& obj) : T(std::move(obj)) {restart();}
+	obj_with_begin_time& operator=(const T& obj) {T::operator=(obj); restart(); return *this;}
 	obj_with_begin_time& operator=(T&& obj) {T::operator=(std::move(obj)); restart(); return *this;}
+	obj_with_begin_time(const obj_with_begin_time& other) : T(other), begin_time(other.begin_time) {}
 	obj_with_begin_time(obj_with_begin_time&& other) : T(std::move(other)), begin_time(std::move(other.begin_time)) {}
+	obj_with_begin_time& operator=(const obj_with_begin_time& other) {T::operator=(other); begin_time = other.begin_time; return *this;}
 	obj_with_begin_time& operator=(obj_with_begin_time&& other) {T::operator=(std::move(other)); begin_time = std::move(other.begin_time); return *this;}
 
 	void restart() {restart(statistic::now());}
@@ -514,8 +518,11 @@ template<typename T> struct obj_with_begin_time_promise : public obj_with_begin_
 	typedef obj_with_begin_time<T> super;
 
 	obj_with_begin_time_promise(bool need_promise = false) {check_and_create_promise(need_promise);}
+	obj_with_begin_time_promise(const T& obj, bool need_promise = false) : super(obj) {check_and_create_promise(need_promise);}
 	obj_with_begin_time_promise(T&& obj, bool need_promise = false) : super(std::move(obj)) {check_and_create_promise(need_promise);}
+	obj_with_begin_time_promise(const obj_with_begin_time_promise& other) : super(other), p(other.p) {}
 	obj_with_begin_time_promise(obj_with_begin_time_promise&& other) : super(std::move(other)), p(std::move(other.p)) {}
+	obj_with_begin_time_promise& operator=(const obj_with_begin_time_promise& other) {super::operator=(other); p = other.p; return *this;}
 	obj_with_begin_time_promise& operator=(obj_with_begin_time_promise&& other) {super::operator=(std::move(other)); p = std::move(other.p); return *this;}
 
 	void swap(T& obj, bool need_promise = false) {super::swap(obj); check_and_create_promise(need_promise);}

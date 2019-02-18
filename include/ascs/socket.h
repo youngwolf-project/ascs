@@ -202,25 +202,21 @@ public:
 	bool is_recv_buffer_available() const {return recv_msg_buffer.size() < ASCS_MAX_RECV_BUF;}
 
 	//don't use the packer but insert into send buffer directly
-	bool direct_send_msg(const InMsgType& msg, bool can_overflow = false)
-		{return can_overflow || is_send_buffer_available() ? do_direct_send_msg(InMsgType(msg)) : false;}
-	bool direct_send_msg(InMsgType&& msg, bool can_overflow = false)
-		{return can_overflow || is_send_buffer_available() ? do_direct_send_msg(std::move(msg)) : false;}
+	template<typename T> bool direct_send_msg(T&& msg, bool can_overflow = false)
+		{return can_overflow || is_send_buffer_available() ? do_direct_send_msg(std::forward<T>(msg)) : false;}
 	bool direct_send_msg(list<InMsgType>& msg_can, bool can_overflow = false)
 		{return can_overflow || is_send_buffer_available() ? do_direct_send_msg(msg_can) : false;}
 
 #ifdef ASCS_SYNC_SEND
-	//don't use the packer but insert into send buffer directly, then wait for the sending to finish.
-	sync_call_result direct_sync_send_msg(const InMsgType& msg, unsigned duration = 0, bool can_overflow = false) //unit is millisecond, 0 means wait infinitely
-		{return can_overflow || is_send_buffer_available() ? do_direct_sync_send_msg(InMsgType(msg), duration) : sync_call_result::NOT_APPLICABLE;}
-	sync_call_result direct_sync_send_msg(InMsgType&& msg, unsigned duration = 0, bool can_overflow = false) //unit is millisecond, 0 means wait infinitely
-		{return can_overflow || is_send_buffer_available() ? do_direct_sync_send_msg(std::move(msg), duration) : sync_call_result::NOT_APPLICABLE;}
+	//don't use the packer but insert into send buffer directly, then wait for the sending to finish, unit of the duration is millisecond, 0 means wait infinitely.
+	template<typename T> sync_call_result direct_sync_send_msg(T&& msg, unsigned duration = 0, bool can_overflow = false)
+		{return can_overflow || is_send_buffer_available() ? do_direct_sync_send_msg(std::forward<T>(msg), duration) : sync_call_result::NOT_APPLICABLE;}
 	sync_call_result direct_sync_send_msg(list<InMsgType>& msg_can, unsigned duration = 0, bool can_overflow = false)
 		{return can_overflow || is_send_buffer_available() ? do_direct_sync_send_msg(msg_can, duration) : sync_call_result::NOT_APPLICABLE;}
 #endif
 
 #ifdef ASCS_SYNC_RECV
-	sync_call_result sync_recv_msg(list<OutMsgType>& msg_can, unsigned duration = 0) //unit is millisecond, 0 means wait infinitely
+	sync_call_result sync_recv_msg(list<OutMsgType>& msg_can, unsigned duration = 0) //unit of the duration is millisecond, 0 means wait infinitely
 	{
 		if (stopped())
 			return sync_call_result::NOT_APPLICABLE;
@@ -415,16 +411,12 @@ protected:
 		return handled_msg();
 	}
 
-	bool do_direct_send_msg(InMsgType&& msg)
+	template<typename T> bool do_direct_send_msg(T&& msg)
 	{
 		if (msg.empty())
 			unified_out::error_out("found an empty message, please check your packer.");
-		else
-		{
-			send_msg_buffer.enqueue(in_msg(std::move(msg)));
-			if (!sending && is_ready())
-				send_msg();
-		}
+		else if (send_msg_buffer.enqueue(std::forward<T>(msg)) && !sending && is_ready())
+			send_msg();
 
 		//even if we meet an empty message (because of too big message or insufficient memory, most likely), we still return true, why?
 		//please think about the function safe_send_(native_)msg, if we keep returning false, it will enter a dead loop.
@@ -445,7 +437,7 @@ protected:
 	}
 
 #ifdef ASCS_SYNC_SEND
-	sync_call_result do_direct_sync_send_msg(InMsgType&& msg, unsigned duration = 0)
+	template<typename T> sync_call_result do_direct_sync_send_msg(T&& msg, unsigned duration = 0)
 	{
 		if (stopped())
 			return sync_call_result::NOT_APPLICABLE;
@@ -455,10 +447,9 @@ protected:
 			return sync_call_result::SUCCESS;
 		}
 
-		auto unused = in_msg(std::move(msg), true);
+		auto unused = in_msg(std::forward<T>(msg), true);
 		auto f = unused.p->get_future();
-		send_msg_buffer.enqueue(std::move(unused));
-		if (!sending && is_ready())
+		if (send_msg_buffer.enqueue(std::move(unused)) && !sending && is_ready())
 			send_msg();
 
 		return 0 == duration || std::future_status::ready == f.wait_for(std::chrono::milliseconds(duration)) ? f.get() : sync_call_result::TIMEOUT;
