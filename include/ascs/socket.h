@@ -208,7 +208,7 @@ public:
 		{return can_overflow || is_send_buffer_available() ? do_direct_send_msg(msg_can) : false;}
 
 #ifdef ASCS_SYNC_SEND
-	//don't use the packer but insert into send buffer directly, then wait for the sending to finish, unit of the duration is millisecond, 0 means wait infinitely.
+	//don't use the packer but insert into send buffer directly, then wait for the sending to finish, unit of the duration is millisecond, 0 means wait infinitely
 	template<typename T> sync_call_result direct_sync_send_msg(T&& msg, unsigned duration = 0, bool can_overflow = false)
 		{return can_overflow || is_send_buffer_available() ? do_direct_sync_send_msg(std::forward<T>(msg), duration) : sync_call_result::NOT_APPLICABLE;}
 	sync_call_result direct_sync_send_msg(list<InMsgType>& msg_can, unsigned duration = 0, bool can_overflow = false)
@@ -449,7 +449,9 @@ protected:
 
 		auto unused = in_msg(std::forward<T>(msg), true);
 		auto f = unused.p->get_future();
-		if (send_msg_buffer.enqueue(std::move(unused)) && !sending && is_ready())
+		if (!send_msg_buffer.enqueue(std::move(unused)))
+			return sync_call_result::NOT_APPLICABLE;
+		else if (!sending && is_ready())
 			send_msg();
 
 		return 0 == duration || std::future_status::ready == f.wait_for(std::chrono::milliseconds(duration)) ? f.get() : sync_call_result::TIMEOUT;
