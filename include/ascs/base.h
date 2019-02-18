@@ -509,6 +509,8 @@ template<typename T> struct obj_with_begin_time : public T
 	void swap(T& obj) {T::swap(obj); restart();}
 	void swap(obj_with_begin_time& other) {T::swap(other); std::swap(begin_time, other.begin_time);}
 
+	void clear() {T::clear(); begin_time = typename statistic::stat_time();}
+
 	typename statistic::stat_time begin_time;
 };
 
@@ -528,7 +530,7 @@ template<typename T> struct obj_with_begin_time_promise : public obj_with_begin_
 	void swap(T& obj, bool need_promise = false) {super::swap(obj); check_and_create_promise(need_promise);}
 	void swap(obj_with_begin_time_promise& other) {super::swap(other); p.swap(other.p);}
 
-	void clear() {p.reset(); T::clear();}
+	void clear() {super::clear(); p.reset();}
 	void check_and_create_promise(bool need_promise) {if (!need_promise) p.reset(); else if (!p) p = std::make_shared<std::promise<sync_call_result>>();}
 
 	std::shared_ptr<std::promise<sync_call_result>> p;
