@@ -49,8 +49,8 @@ private:
 // empty
 // clear
 // swap
-// emplace_back(typename Container::const_reference item)
-// emplace_back(typename Container::value_type&& item)
+// template<typename T> emplace_back(const T& item), if you call direct_(sync_)send_msg which accepts other than rvalue reference
+// template<typename T> emplace_back(T&& item)
 // splice(iter, Container&)
 // splice(iter, Container&, iter, iter)
 // front
