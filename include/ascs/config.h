@@ -489,7 +489,7 @@
  * FIX:
  *
  * ENHANCEMENTS:
- * Introduce macro ASCS_RECONNECT to control the reconnecting mechanism.
+ * Introduce macro ASCS_RECONNECT to control the default switch of reconnecting mechanism.
  * Introduce macro ASCS_SHARED_MUTEX_TYPE and ASCS_SHARED_LOCK_TYPE, they're used during finding or traversing (via do_something_to_all or do_something_to_one)
  *  objects in object_pool, if you find or traverse objects frequently and shared_mutex is available, use shared_mutex with shared_lock instead of
  *  mutex with unique_lock will promote performance, otherwise, do not define these two macros.
@@ -572,9 +572,9 @@ static_assert(ASCS_SERVER_PORT > 0, "server port must be bigger than zero.");
 
 #ifdef ASCS_MAX_MSG_NUM
 	#ifdef _MSC_VER
-		#pragma message("macro ASCS_MAX_MSG_NUM is deprecated, use ASCS_MAX_SEND_BUF or ASCS_MAX_RECV_BUF instead, the meanings also changed too, please note.")
+		#pragma message("macro ASCS_MAX_MSG_NUM is deprecated, use ASCS_MAX_SEND_BUF and ASCS_MAX_RECV_BUF instead, the meanings also changed too, please note.")
 	#else
-		#warning macro ASCS_MAX_MSG_NUM is deprecated, use ASCS_MAX_SEND_BUF or ASCS_MAX_RECV_BUF instead, the meanings also changed too, please note.
+		#warning macro ASCS_MAX_MSG_NUM is deprecated, use ASCS_MAX_SEND_BUF and ASCS_MAX_RECV_BUF instead, the meanings also changed too, please note.
 	#endif
 #endif
 
