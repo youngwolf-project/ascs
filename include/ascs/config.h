@@ -479,6 +479,7 @@
  *  ASCS_MAX_SEND_BUF and ASCS_MAX_RECV_BUF, and unit been changed to byte.
  * statistic.send_msg_sum may be bigger than before (but statistic.send_byte_sum will be the same), see ENHANCEMENTS section for more details.
  * Not support gcc 4.6 any more, please use st_asio_wrapper instead.
+ * Make function tcp::socket_base::reset to be virtual.
  *
  * HIGHLIGHT:
  * Make client_socket_base be able to call multi_client_base (via i_matrix) like server_socket_base call server_base (via i_server),
