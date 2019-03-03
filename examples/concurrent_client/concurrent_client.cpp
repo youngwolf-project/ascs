@@ -8,7 +8,6 @@
 #define ASCS_DELAY_CLOSE		5 //define this to avoid hooks for async call (and slightly improve efficiency)
 #define ASCS_MSG_BUFFER_SIZE	1024
 #define ASCS_INPUT_QUEUE		non_lock_queue //we will never operate sending buffer concurrently, so need no locks
-#define ASCS_INPUT_CONTAINER	list
 #define ASCS_DECREASE_THREAD_AT_RUNTIME
 //configuration
 
@@ -28,7 +27,7 @@ using namespace ascs::ext::tcp;
 class echo_socket : public client_socket
 {
 public:
-	echo_socket(asio::io_context& io_context_) : client_socket(io_context_), msg_len(ASCS_MSG_BUFFER_SIZE - ASCS_HEAD_LEN) {unpacker()->stripped(false);}
+	echo_socket(i_matrix& matrix_) : client_socket(matrix_), msg_len(ASCS_MSG_BUFFER_SIZE - ASCS_HEAD_LEN) {unpacker()->stripped(false);}
 
 	void begin(size_t msg_len_) {msg_len = msg_len_;}
 	void check_delay(float max_delay) {if (is_connected() && last_send_time.elapsed() > max_delay) force_shutdown();}

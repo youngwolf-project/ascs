@@ -15,13 +15,13 @@
 
 #include "tracked_executor.h"
 #include "timer.h"
+#include "container.h"
 
 namespace ascs
 {
 
 template<typename Socket, typename Packer, typename InMsgType, typename OutMsgType,
-	template<typename, typename> class InQueue, template<typename> class InContainer,
-	template<typename, typename> class OutQueue, template<typename> class OutContainer>
+	template<typename> class InQueue, template<typename> class InContainer, template<typename> class OutQueue, template<typename> class OutContainer>
 class socket : public timer<tracked_executor>
 {
 private:
@@ -108,8 +108,8 @@ public:
 	typedef obj_with_begin_time<OutMsgType> out_msg;
 	typedef InContainer<in_msg> in_container_type;
 	typedef OutContainer<out_msg> out_container_type;
-	typedef InQueue<in_msg, in_container_type> in_queue_type;
-	typedef OutQueue<out_msg, out_container_type> out_queue_type;
+	typedef InQueue<in_container_type> in_queue_type;
+	typedef OutQueue<out_container_type> out_queue_type;
 
 	uint_fast64_t id() const {return _id;}
 	bool is_equal_to(uint_fast64_t id) const {return _id == id;}
@@ -122,6 +122,8 @@ public:
 	virtual bool obsoleted() {return !started_ && !is_async_calling();}
 	virtual bool is_ready() = 0; //is ready for sending and receiving messages
 	virtual void send_heartbeat() = 0;
+	virtual const char* type_name() const = 0;
+	virtual int type_id() const = 0;
 
 	bool started() const {return started_;}
 	void start()
@@ -193,27 +195,28 @@ public:
 
 	//if you use can_overflow = true to invoke send_msg or send_native_msg, it will always succeed no matter the sending buffer is overflow or not,
 	//this can exhaust all virtual memory, please pay special attentions.
-	bool is_send_buffer_available() const {return send_msg_buffer.size() < ASCS_MAX_MSG_NUM;}
+	bool is_send_buffer_available() const {return send_msg_buffer.size_in_byte() < ASCS_MAX_SEND_BUF;}
 
 	//if you define macro ASCS_PASSIVE_RECV and call recv_msg greedily, the receiving buffer may overflow, this can exhaust all virtual memory,
 	//to avoid this problem, call recv_msg only if is_recv_buffer_available() returns true.
-	bool is_recv_buffer_available() const {return recv_msg_buffer.size() < ASCS_MAX_MSG_NUM;}
+	bool is_recv_buffer_available() const {return recv_msg_buffer.size_in_byte() < ASCS_MAX_RECV_BUF;}
 
 	//don't use the packer but insert into send buffer directly
-	bool direct_send_msg(const InMsgType& msg, bool can_overflow = false)
-		{return can_overflow || is_send_buffer_available() ? do_direct_send_msg(InMsgType(msg)) : false;}
-	bool direct_send_msg(InMsgType&& msg, bool can_overflow = false) {return can_overflow || is_send_buffer_available() ? do_direct_send_msg(std::move(msg)) : false;}
+	template<typename T> bool direct_send_msg(T&& msg, bool can_overflow = false)
+		{return can_overflow || is_send_buffer_available() ? do_direct_send_msg(std::forward<T>(msg)) : false;}
+	bool direct_send_msg(list<InMsgType>& msg_can, bool can_overflow = false)
+		{return can_overflow || is_send_buffer_available() ? do_direct_send_msg(msg_can) : false;}
 
 #ifdef ASCS_SYNC_SEND
-	//don't use the packer but insert into send buffer directly, then wait for the sending to finish.
-	sync_call_result direct_sync_send_msg(const InMsgType& msg, unsigned duration = 0, bool can_overflow = false) //unit is millisecond, 0 means wait infinitely
-		{return can_overflow || is_send_buffer_available() ? do_direct_sync_send_msg(InMsgType(msg), duration) : sync_call_result::NOT_APPLICABLE;}
-	sync_call_result direct_sync_send_msg(InMsgType&& msg, unsigned duration = 0, bool can_overflow = false) //unit is millisecond, 0 means wait infinitely
-		{return can_overflow || is_send_buffer_available() ? do_direct_sync_send_msg(std::move(msg), duration) : sync_call_result::NOT_APPLICABLE;}
+	//don't use the packer but insert into send buffer directly, then wait for the sending to finish, unit of the duration is millisecond, 0 means wait infinitely
+	template<typename T> sync_call_result direct_sync_send_msg(T&& msg, unsigned duration = 0, bool can_overflow = false)
+		{return can_overflow || is_send_buffer_available() ? do_direct_sync_send_msg(std::forward<T>(msg), duration) : sync_call_result::NOT_APPLICABLE;}
+	sync_call_result direct_sync_send_msg(list<InMsgType>& msg_can, unsigned duration = 0, bool can_overflow = false)
+		{return can_overflow || is_send_buffer_available() ? do_direct_sync_send_msg(msg_can, duration) : sync_call_result::NOT_APPLICABLE;}
 #endif
 
 #ifdef ASCS_SYNC_RECV
-	sync_call_result sync_recv_msg(std::list<OutMsgType>& msg_can, unsigned duration = 0) //unit is millisecond, 0 means wait infinitely
+	sync_call_result sync_recv_msg(list<OutMsgType>& msg_can, unsigned duration = 0) //unit of the duration is millisecond, 0 means wait infinitely
 	{
 		if (stopped())
 			return sync_call_result::NOT_APPLICABLE;
@@ -279,7 +282,7 @@ protected:
 #ifdef ASCS_SYNC_DISPATCH
 	//return the number of handled msg, if some msg left behind, socket will re-dispatch them asynchronously
 	//notice: using inconstant is for the convenience of swapping
-	virtual size_t on_msg(std::list<OutMsgType>& msg_can)
+	virtual size_t on_msg(list<OutMsgType>& msg_can)
 	{
 		//it's always thread safe in this virtual function, because it blocks message receiving
 		ascs::do_something_to_all(msg_can, [](OutMsgType& msg) {unified_out::debug_out("recv(" ASCS_SF "): %s", msg.size(), msg.data());});
@@ -356,10 +359,10 @@ protected:
 
 	bool handle_msg()
 	{
-		ascs::do_something_to_all(temp_msg_can, [this](const OutMsgType& item) {this->stat.recv_byte_sum += item.size();});
-
+		auto size_in_byte = ascs::get_size_in_byte(temp_msg_can);
 		auto msg_num = temp_msg_can.size();
 		stat.recv_msg_sum += msg_num;
+		stat.recv_byte_sum += size_in_byte;
 #ifdef ASCS_SYNC_RECV
 		std::unique_lock<std::mutex> lock(sync_recv_mutex);
 		if (sync_recv_status::REQUESTED == sr_status)
@@ -379,13 +382,12 @@ protected:
 #ifdef ASCS_SYNC_DISPATCH
 #ifndef ASCS_PASSIVE_RECV
 		if (msg_num > 0)
-		{
 #endif
+		{
+			auto_duration dur(stat.handle_time_sum);
 			on_msg(temp_msg_can);
 			msg_num = temp_msg_can.size();
-#ifndef ASCS_PASSIVE_RECV
 		}
-#endif
 #elif defined(ASCS_PASSIVE_RECV)
 		if (0 == msg_num)
 		{
@@ -395,29 +397,25 @@ protected:
 #endif
 		if (msg_num > 0)
 		{
-			std::list<out_msg> temp_buffer(msg_num);
+			out_container_type temp_buffer(msg_num);
 			auto op_iter = temp_buffer.begin();
 			for (auto iter = temp_msg_can.begin(); iter != temp_msg_can.end(); ++op_iter, ++iter)
 				op_iter->swap(*iter);
 			temp_msg_can.clear();
 
-			recv_msg_buffer.move_items_in(temp_buffer);
+			recv_msg_buffer.move_items_in(temp_buffer, size_in_byte);
 			dispatch_msg();
 		}
 
 		return handled_msg();
 	}
 
-	bool do_direct_send_msg(InMsgType&& msg)
+	template<typename T> bool do_direct_send_msg(T&& msg)
 	{
 		if (msg.empty())
 			unified_out::error_out("found an empty message, please check your packer.");
-		else
-		{
-			send_msg_buffer.enqueue(in_msg(std::move(msg)));
-			if (!sending && is_ready())
-				send_msg();
-		}
+		else if (send_msg_buffer.enqueue(std::forward<T>(msg)) && !sending && is_ready())
+			send_msg();
 
 		//even if we meet an empty message (because of too big message or insufficient memory, most likely), we still return true, why?
 		//please think about the function safe_send_(native_)msg, if we keep returning false, it will enter a dead loop.
@@ -425,8 +423,20 @@ protected:
 		return true;
 	}
 
+	bool do_direct_send_msg(list<InMsgType>& msg_can)
+	{
+		size_t size_in_byte = 0;
+		in_container_type temp_buffer;
+		ascs::do_something_to_all(msg_can, [&size_in_byte, &temp_buffer](InMsgType& msg) {size_in_byte += msg.size(); temp_buffer.emplace_back(std::move(msg));});
+		send_msg_buffer.move_items_in(temp_buffer, size_in_byte);
+		if (!sending && is_ready())
+			send_msg();
+
+		return true;
+	}
+
 #ifdef ASCS_SYNC_SEND
-	sync_call_result do_direct_sync_send_msg(InMsgType&& msg, unsigned duration = 0)
+	template<typename T> sync_call_result do_direct_sync_send_msg(T&& msg, unsigned duration = 0)
 	{
 		if (stopped())
 			return sync_call_result::NOT_APPLICABLE;
@@ -436,9 +446,30 @@ protected:
 			return sync_call_result::SUCCESS;
 		}
 
-		auto unused = in_msg(std::move(msg), true);
+		auto unused = in_msg(std::forward<T>(msg), true);
 		auto f = unused.p->get_future();
-		send_msg_buffer.enqueue(std::move(unused));
+		if (!send_msg_buffer.enqueue(std::move(unused)))
+			return sync_call_result::NOT_APPLICABLE;
+		else if (!sending && is_ready())
+			send_msg();
+
+		return 0 == duration || std::future_status::ready == f.wait_for(std::chrono::milliseconds(duration)) ? f.get() : sync_call_result::TIMEOUT;
+	}
+
+	sync_call_result do_direct_sync_send_msg(list<InMsgType>& msg_can, unsigned duration = 0)
+	{
+		if (stopped())
+			return sync_call_result::NOT_APPLICABLE;
+		else if (msg_can.empty())
+			return sync_call_result::SUCCESS;
+
+		size_t size_in_byte = 0;
+		in_container_type temp_buffer;
+		ascs::do_something_to_all(msg_can, [&size_in_byte, &temp_buffer](InMsgType& msg) {size_in_byte += msg.size(); temp_buffer.emplace_back(std::move(msg));});
+
+		temp_buffer.back().check_and_create_promise(true);
+		auto f = temp_buffer.back().p->get_future();
+		send_msg_buffer.move_items_in(temp_buffer, size_in_byte);
 		if (!sending && is_ready())
 			send_msg();
 
@@ -512,9 +543,7 @@ private:
 		{
 			auto begin_time = statistic::now();
 #ifdef ASCS_FULL_STATISTIC
-			recv_msg_buffer.lock();
-			ascs::do_something_to_all(recv_msg_buffer, [&, this](out_msg& msg) {this->stat.dispatch_dealy_sum += begin_time - msg.begin_time;});
-			recv_msg_buffer.unlock();
+			recv_msg_buffer.do_something_to_all([&, this](out_msg& msg) {this->stat.dispatch_delay_sum += begin_time - msg.begin_time;});
 #endif
 			auto re = on_msg_handle(recv_msg_buffer);
 			auto end_time = statistic::now();
@@ -523,9 +552,7 @@ private:
 			if (0 == re) //dispatch failed, re-dispatch
 			{
 #ifdef ASCS_FULL_STATISTIC
-				recv_msg_buffer.lock();
-				ascs::do_something_to_all(recv_msg_buffer, [&end_time](out_msg& msg) {msg.restart(end_time);});
-				recv_msg_buffer.unlock();
+				recv_msg_buffer.do_something_to_all([&end_time](out_msg& msg) {msg.restart(end_time);});
 #endif
 				set_timer(TIMER_DISPATCH_MSG, msg_handling_interval_, [this](tid id)->bool {return this->timer_handler(TIMER_DISPATCH_MSG);}); //hold dispatching
 			}
@@ -535,7 +562,7 @@ private:
 		if ((dispatching = !dispatched || recv_msg_buffer.try_dequeue(last_dispatch_msg)))
 		{
 			auto begin_time = statistic::now();
-			stat.dispatch_dealy_sum += begin_time - last_dispatch_msg.begin_time;
+			stat.dispatch_delay_sum += begin_time - last_dispatch_msg.begin_time;
 			auto re = on_msg_handle(last_dispatch_msg); //must before next msg dispatching to keep sequence
 			auto end_time = statistic::now();
 			stat.handle_time_sum += end_time - begin_time;
@@ -593,7 +620,7 @@ private:
 protected:
 	struct statistic stat;
 	std::shared_ptr<i_packer<typename Packer::msg_type>> packer_;
-	std::list<OutMsgType> temp_msg_can;
+	list<OutMsgType> temp_msg_can;
 
 	in_queue_type send_msg_buffer;
 	volatile bool sending;

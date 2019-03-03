@@ -9,7 +9,6 @@
 //#define ASCS_WANT_MSG_SEND_NOTIFY
 #define ASCS_MSG_BUFFER_SIZE 65536
 #define ASCS_INPUT_QUEUE non_lock_queue //we will never operate sending buffer concurrently, so need no locks
-#define ASCS_INPUT_CONTAINER list
 #define ASCS_DEFAULT_UNPACKER stream_unpacker //non-protocol
 #define ASCS_DECREASE_THREAD_AT_RUNTIME
 //configuration
@@ -37,7 +36,7 @@ std::atomic_ushort completed_session_num;
 class echo_socket : public client_socket
 {
 public:
-	echo_socket(asio::io_context& io_context_) : client_socket(io_context_) {}
+	echo_socket(i_matrix& matrix_) : client_socket(matrix_) {}
 
 	void begin(size_t msg_num, const char* msg, size_t msg_len)
 	{
@@ -53,7 +52,8 @@ protected:
 
 	//msg handling, must define macro ASCS_SYNC_DISPATCH
 	//do not hold msg_can for further using, access msg_can and return from on_msg as quickly as possible
-	virtual size_t on_msg(std::list<out_msg_type>& msg_can)
+	//access msg_can freely within this callback, it's always thread safe.
+	virtual size_t on_msg(list<out_msg_type>& msg_can)
 	{
 		ascs::do_something_to_all(msg_can, [this](out_msg_type& msg) {this->handle_msg(msg);});
 		auto re = msg_can.size();
@@ -97,6 +97,7 @@ private:
 		}
 		else
 			direct_send_msg(std::move(msg), true);
+		//if the type of out_msg_type and in_msg_type are not identical, the compilation will fail, then you should use send_native_msg instead.
 	}
 #endif
 

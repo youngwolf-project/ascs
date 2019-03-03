@@ -42,6 +42,17 @@ public:
 
 		return total_len;
 	}
+
+	static ASCS_HEAD_TYPE pack_header(size_t len)
+	{
+		assert(len < ASCS_MSG_BUFFER_SIZE);
+		auto total_len = ASCS_HEAD_LEN + len;
+		assert(total_len <= ASCS_MSG_BUFFER_SIZE);
+		auto head_len = (ASCS_HEAD_TYPE) total_len;
+		assert(head_len == total_len);
+
+		return ASCS_HEAD_H2N(head_len);
+	}
 };
 
 //protocol: length + body
@@ -56,9 +67,7 @@ public:
 		msg_type msg;
 		auto pre_len = native ? 0 : ASCS_HEAD_LEN;
 		auto total_len = packer_helper::msg_size_check(pre_len, pstr, len, num);
-		if ((size_t) -1 == total_len)
-			return msg;
-		else if (total_len > pre_len)
+		if ((size_t) -1 != total_len && total_len > pre_len)
 		{
 			if (!native)
 			{
@@ -83,13 +92,44 @@ public:
 
 		return msg;
 	}
-	virtual msg_type pack_heartbeat()
+	virtual bool pack_msg(msg_type&& msg, container_type& msg_can)
 	{
-		ASCS_HEAD_TYPE head_len = ASCS_HEAD_LEN;
-		head_len = ASCS_HEAD_H2N(head_len);
+		auto len = msg.size();
+		if (len > packer::get_max_msg_size())
+			return false;
 
-		return msg_type((const char*) &head_len, ASCS_HEAD_LEN);
+		auto head_len = packer_helper::pack_header(len);
+		msg_can.emplace_back((const char*) &head_len, ASCS_HEAD_LEN);
+		msg_can.emplace_back(std::move(msg));
+
+		return true;
 	}
+	virtual bool pack_msg(msg_type&& msg1, msg_type&& msg2, container_type& msg_can)
+	{
+		auto len = msg1.size() + msg2.size();
+		if (len > packer::get_max_msg_size()) //not considered overflow
+			return false;
+
+		auto head_len = packer_helper::pack_header(len);
+		msg_can.emplace_back((const char*) &head_len, ASCS_HEAD_LEN);
+		msg_can.emplace_back(std::move(msg1));
+		msg_can.emplace_back(std::move(msg2));
+
+		return true;
+	}
+	virtual bool pack_msg(container_type&& in, container_type& out)
+	{
+		auto len = ascs::get_size_in_byte(in);
+		if (len > packer::get_max_msg_size()) //not considered overflow
+			return false;
+
+		auto head_len = packer_helper::pack_header(len);
+		out.emplace_back((const char*) &head_len, ASCS_HEAD_LEN);
+		out.splice(std::end(out), in);
+
+		return true;
+	}
+	virtual msg_type pack_heartbeat() {auto head_len = packer_helper::pack_header(0); return msg_type((const char*) &head_len, ASCS_HEAD_LEN);}
 
 	//do not use following helper functions for heartbeat messages.
 	virtual char* raw_data(msg_type& msg) const {return const_cast<char*>(std::next(msg.data(), ASCS_HEAD_LEN));}
@@ -114,6 +154,49 @@ public:
 		raw_msg->swap(str);
 		return typename super::msg_type(raw_msg);
 	}
+	virtual bool pack_msg(typename super::msg_type&& msg, typename super::container_type& msg_can)
+	{
+		auto len = msg.size();
+		if (len > packer::get_max_msg_size())
+			return false;
+
+		auto head_len = packer_helper::pack_header(len);
+		auto raw_msg = new string_buffer();
+		raw_msg->assign((const char*) &head_len, ASCS_HEAD_LEN);
+		msg_can.emplace_back(raw_msg);
+		msg_can.emplace_back(std::move(msg));
+
+		return true;
+	}
+	virtual bool pack_msg(typename super::msg_type&& msg1, typename super::msg_type&& msg2, typename super::container_type& msg_can)
+	{
+		auto len = msg1.size() + msg2.size();
+		if (len > packer::get_max_msg_size()) //not considered overflow
+			return false;
+
+		auto head_len = packer_helper::pack_header(len);
+		auto raw_msg = new string_buffer();
+		raw_msg->assign((const char*) &head_len, ASCS_HEAD_LEN);
+		msg_can.emplace_back(raw_msg);
+		msg_can.emplace_back(std::move(msg1));
+		msg_can.emplace_back(std::move(msg2));
+
+		return true;
+	}
+	virtual bool pack_msg(typename super::container_type&& in, typename super::container_type& out)
+	{
+		auto len = ascs::get_size_in_byte(in);
+		if (len > packer::get_max_msg_size()) //not considered overflow
+			return false;
+
+		auto head_len = packer_helper::pack_header(len);
+		auto raw_msg = new string_buffer();
+		raw_msg->assign((const char*) &head_len, ASCS_HEAD_LEN);
+		out.emplace_back(raw_msg);
+		out.splice(std::end(out), in);
+
+		return true;
+	}
 	virtual typename super::msg_type pack_heartbeat()
 	{
 		auto raw_msg = new string_buffer();
@@ -132,7 +215,10 @@ class fixed_length_packer : public packer
 {
 public:
 	using packer::pack_msg;
-	virtual msg_type pack_msg(const char* const pstr[], const size_t len[], size_t num, bool native = false) {return packer::pack_msg(pstr, len, num, true);}
+	virtual msg_type pack_msg(const char* const pstr[], const size_t len[], size_t num, bool native = true) {return packer::pack_msg(pstr, len, num, true);}
+	virtual bool pack_msg(msg_type&& msg, container_type& msg_can) {msg_can.emplace_back(std::move(msg)); return true;}
+	virtual bool pack_msg(msg_type&& msg1, msg_type&& msg2, container_type& msg_can) {msg_can.emplace_back(std::move(msg1)); msg_can.emplace_back(std::move(msg2)); return true;}
+	virtual bool pack_msg(container_type&& in, container_type& out) {in.swap(out); return true;}
 	//not support heartbeat because fixed_length_unpacker cannot recognize heartbeat message
 
 	virtual char* raw_data(msg_type& msg) const {return const_cast<char*>(msg.data());}
@@ -144,7 +230,8 @@ public:
 class prefix_suffix_packer : public i_packer<std::string>
 {
 public:
-	void prefix_suffix(const std::string& prefix, const std::string& suffix) {assert(!suffix.empty() && prefix.size() + suffix.size() < ASCS_MSG_BUFFER_SIZE); _prefix = prefix;  _suffix = suffix;}
+	void prefix_suffix(const std::string& prefix, const std::string& suffix)
+		{assert(!suffix.empty() && prefix.size() + suffix.size() < ASCS_MSG_BUFFER_SIZE); _prefix = prefix;  _suffix = suffix;}
 	const std::string& prefix() const {return _prefix;}
 	const std::string& suffix() const {return _suffix;}
 
@@ -155,9 +242,7 @@ public:
 		msg_type msg;
 		auto pre_len = native ? 0 : _prefix.size() + _suffix.size();
 		auto total_len = packer_helper::msg_size_check(pre_len, pstr, len, num);
-		if ((size_t) -1 == total_len)
-			return msg;
-		else if (total_len > pre_len)
+		if ((size_t) -1 != total_len && total_len > pre_len)
 		{
 			msg.reserve(total_len);
 			if (!native)
@@ -171,8 +256,51 @@ public:
 
 		return msg;
 	}
+	virtual bool pack_msg(msg_type&& msg, container_type& msg_can)
+	{
+		auto len = _prefix.size() + msg.size() + _suffix.size();
+		if (len > ASCS_MSG_BUFFER_SIZE) //not considered overflow
+			return false;
 
+		if (!_prefix.empty())
+			msg_can.emplace_back(_prefix);
+		msg_can.emplace_back(std::move(msg));
+		if (!_suffix.empty())
+			msg_can.emplace_back(_suffix);
+
+		return true;
+	}
+	virtual bool pack_msg(msg_type&& msg1, msg_type&& msg2, container_type& msg_can)
+	{
+		auto len = _prefix.size() + msg1.size() + msg2.size() + _suffix.size();
+		if (len > ASCS_MSG_BUFFER_SIZE) //not considered overflow
+			return false;
+
+		if (!_prefix.empty())
+			msg_can.emplace_back(_prefix);
+		msg_can.emplace_back(std::move(msg1));
+		msg_can.emplace_back(std::move(msg2));
+		if (!_suffix.empty())
+			msg_can.emplace_back(_suffix);
+
+		return true;
+	}
+	virtual bool pack_msg(container_type&& in, container_type& out)
+	{
+		auto len = _prefix.size() + _suffix.size() + ascs::get_size_in_byte(in);
+		if (len > ASCS_MSG_BUFFER_SIZE) //not considered overflow
+			return false;
+
+		if (!_prefix.empty())
+			out.emplace_back(_prefix);
+		out.splice(std::end(out), in);
+		if (!_suffix.empty())
+			out.emplace_back(_suffix);
+
+		return true;
+	}
 	virtual msg_type pack_heartbeat() {return _prefix + _suffix;}
+
 	virtual char* raw_data(msg_type& msg) const {return const_cast<char*>(std::next(msg.data(), _prefix.size()));}
 	virtual const char* raw_data(msg_ctype& msg) const {return std::next(msg.data(), _prefix.size());}
 	virtual size_t raw_data_len(msg_ctype& msg) const {return msg.size() - _prefix.size() - _suffix.size();}

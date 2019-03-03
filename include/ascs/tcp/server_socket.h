@@ -18,8 +18,8 @@
 namespace ascs { namespace tcp {
 
 template<typename Packer, typename Unpacker, typename Server = i_server, typename Socket = asio::ip::tcp::socket,
-	template<typename, typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
-	template<typename, typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
+	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
+	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
 class server_socket_base : public socket_base<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer>,
 	public std::enable_shared_from_this<server_socket_base<Packer, Unpacker, Server, Socket, InQueue, InContainer, OutQueue, OutContainer>>
 {
@@ -31,10 +31,9 @@ public:
 	template<typename Arg>
 	server_socket_base(Server& server_, Arg& arg) : super(server_.get_service_pump(), arg), server(server_) {}
 
-	//reset all, be ensure that there's no any operations performed on this socket when invoke it
-	//subclass must re-write this function to initialize itself, and then do not forget to invoke superclass' reset function too
-	//notice, when reusing this socket, object_pool will invoke this function
-	virtual void reset() {super::reset();}
+	virtual const char* type_name() const {return "TCP (server endpoint)";}
+	virtual int type_id() const {return 2;}
+
 	virtual void take_over(std::shared_ptr<server_socket_base> socket_ptr) {} //restore this socket from socket_ptr
 
 	void disconnect() {force_shutdown();}

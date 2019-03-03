@@ -18,7 +18,6 @@
 
 #include "executor.h"
 #include "timer.h"
-#include "container.h"
 #include "service_pump.h"
 
 namespace ascs
@@ -58,7 +57,7 @@ protected:
 			return false;
 		assert(!object_ptr->is_equal_to(-1));
 
-		std::lock_guard<std::mutex> lock(object_can_mutex);
+		std::lock_guard<ASCS_SHARED_MUTEX_TYPE> lock(object_can_mutex);
 		return object_can.size() < max_size_ ? object_can.emplace(object_ptr->id(), object_ptr).second : false;
 	}
 
@@ -68,7 +67,7 @@ protected:
 	{
 		assert(object_ptr);
 
-		std::unique_lock<std::mutex> lock(object_can_mutex);
+		std::unique_lock<ASCS_SHARED_MUTEX_TYPE> lock(object_can_mutex);
 		auto exist = object_can.erase(object_ptr->id()) > 0;
 		lock.unlock();
 
@@ -81,6 +80,7 @@ protected:
 		return exist;
 	}
 
+	//you can do some statistic about object creations at here
 	virtual void on_create(object_ctype& object_ptr) {}
 
 	void init_object(object_ctype& object_ptr)
@@ -109,7 +109,7 @@ protected:
 		{
 			assert(!find(id));
 
-			std::lock_guard<std::mutex> lock(object_can_mutex);
+			std::lock_guard<ASCS_SHARED_MUTEX_TYPE> lock(object_can_mutex);
 			object_can.erase(object_ptr->id());
 			object_ptr->id(id);
 			object_can.emplace(id, object_ptr); //must succeed
@@ -149,8 +149,6 @@ return object_ptr;
 	template<typename Arg1, typename Arg2> object_type create_object(Arg1& arg1, Arg2& arg2) {CREATE_OBJECT_2_ARG(object_type);}
 #endif
 
-	object_type create_object() {return create_object(get_service_pump());}
-
 public:
 	//to configure unordered_set(for example, set factor or reserved size), not thread safe, so must be called before service_pump startup.
 	container_type& container() {return object_can;}
@@ -160,13 +158,13 @@ public:
 
 	size_t size()
 	{
-		std::lock_guard<std::mutex> lock(object_can_mutex);
+		ASCS_SHARED_LOCK_TYPE<ASCS_SHARED_MUTEX_TYPE> lock(object_can_mutex);
 		return object_can.size();
 	}
 
 	object_type find(uint_fast64_t id)
 	{
-		std::lock_guard<std::mutex> lock(object_can_mutex);
+		ASCS_SHARED_LOCK_TYPE<ASCS_SHARED_MUTEX_TYPE> lock(object_can_mutex);
 		auto iter = object_can.find(id);
 		return iter != std::end(object_can) ? iter->second : object_type();
 	}
@@ -174,7 +172,7 @@ public:
 	//this method has linear complexity, please note.
 	object_type at(size_t index)
 	{
-		std::lock_guard<std::mutex> lock(object_can_mutex);
+		ASCS_SHARED_LOCK_TYPE<ASCS_SHARED_MUTEX_TYPE> lock(object_can_mutex);
 		assert(index < object_can.size());
 		return index < object_can.size() ? std::next(std::begin(object_can), index)->second : object_type();
 	}
@@ -238,7 +236,7 @@ public:
 	{
 		decltype(invalid_object_can) objects;
 
-		std::unique_lock<std::mutex> lock(object_can_mutex);
+		std::unique_lock<ASCS_SHARED_MUTEX_TYPE> lock(object_can_mutex);
 		for (auto iter = std::begin(object_can); iter != std::end(object_can);)
 			if (iter->second->obsoleted())
 			{
@@ -302,16 +300,21 @@ public:
 	void list_all_object() {do_something_to_all([](object_ctype& item) {item->show_info("", "");});}
 
 	template<typename _Predicate> void do_something_to_all(const _Predicate& __pred)
-		{std::lock_guard<std::mutex> lock(object_can_mutex); for (typename container_type::value_type& item : object_can) __pred(item.second);}
+		{ASCS_SHARED_LOCK_TYPE<ASCS_SHARED_MUTEX_TYPE> lock(object_can_mutex); for (auto& item : object_can) __pred(item.second);}
 
 	template<typename _Predicate> void do_something_to_one(const _Predicate& __pred)
-		{std::lock_guard<std::mutex> lock(object_can_mutex); for (auto iter = std::begin(object_can); iter != std::end(object_can); ++iter) if (__pred(iter->second)) break;}
+	{
+		ASCS_SHARED_LOCK_TYPE<ASCS_SHARED_MUTEX_TYPE> lock(object_can_mutex);
+		for (auto iter = std::begin(object_can); iter != std::end(object_can); ++iter)
+			if (__pred(iter->second))
+				break;
+	}
 
 private:
 	std::atomic_uint_fast64_t cur_id;
 
 	container_type object_can;
-	std::mutex object_can_mutex;
+	ASCS_SHARED_MUTEX_TYPE object_can_mutex;
 	size_t max_size_;
 
 	//because all objects are dynamic created and stored in object_can, after receiving error occurred (you are recommended to delete the object from object_can,
@@ -319,7 +322,7 @@ private:
 	//we must guarantee these objects not be freed from the heap or reused, so we move these objects from object_can to invalid_object_can, and free them
 	//from the heap or reuse them in the near future. if ASCS_CLEAR_OBJECT_INTERVAL been defined, clear_obsoleted_object() will be invoked automatically and
 	//periodically to move all invalid objects into invalid_object_can.
-	list<object_type> invalid_object_can;
+	std::list<object_type> invalid_object_can;
 	std::mutex invalid_object_can_mutex;
 };
 

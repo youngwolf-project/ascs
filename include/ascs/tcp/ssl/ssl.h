@@ -26,13 +26,21 @@ namespace ascs { namespace ssl {
 template <typename Socket>
 class socket : public Socket
 {
-#if defined(ASCS_REUSE_OBJECT) && !defined(ASCS_REUSE_SSL_STREAM)
-	#error please define ASCS_REUSE_SSL_STREAM macro explicitly if you need asio::ssl::stream to be reusable!
+#ifndef ASCS_REUSE_SSL_STREAM
+	#ifdef ASCS_REUSE_OBJECT
+		#error please define ASCS_REUSE_SSL_STREAM macro explicitly if you need asio::ssl::stream to be reusable!
+	#endif
+	#if ASCS_RECONNECT
+		#ifdef _MSC_VER
+			#pragma message("without macro ASCS_REUSE_SSL_STREAM, ssl::client_socket_base is not able to reconnect the server.")
+		#else
+			#warning without macro ASCS_REUSE_SSL_STREAM, ssl::client_socket_base is not able to reconnect the server.
+		#endif
+	#endif
 #endif
 
 public:
-	template<typename Arg>
-	socket(Arg& arg, asio::ssl::context& ctx) : Socket(arg, ctx) {}
+	template<typename Arg> socket(Arg& arg, asio::ssl::context& ctx) : Socket(arg, ctx) {}
 
 protected:
 	virtual void on_recv_error(const asio::error_code& ec)
@@ -94,16 +102,20 @@ private:
 	using Socket::status;
 };
 
-template <typename Packer, typename Unpacker, typename Socket = asio::ssl::stream<asio::ip::tcp::socket>,
-	template<typename, typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
-	template<typename, typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
-class client_socket_base : public socket<tcp::client_socket_base<Packer, Unpacker, Socket, InQueue, InContainer, OutQueue, OutContainer>>
+template <typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = asio::ssl::stream<asio::ip::tcp::socket>,
+	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
+	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
+class client_socket_base : public socket<tcp::client_socket_base<Packer, Unpacker, Matrix, Socket, InQueue, InContainer, OutQueue, OutContainer>>
 {
 private:
-	typedef socket<tcp::client_socket_base<Packer, Unpacker, Socket, InQueue, InContainer, OutQueue, OutContainer>> super;
+	typedef socket<tcp::client_socket_base<Packer, Unpacker, Matrix, Socket, InQueue, InContainer, OutQueue, OutContainer>> super;
 
 public:
 	client_socket_base(asio::io_context& io_context_, asio::ssl::context& ctx) : super(io_context_, ctx) {}
+	client_socket_base(Matrix& matrix_, asio::ssl::context& ctx) : super(matrix_, ctx) {}
+
+	virtual const char* type_name() const {return "SSL (client endpoint)";}
+	virtual int type_id() const {return 3;}
 
 #ifndef ASCS_REUSE_SSL_STREAM
 	void disconnect(bool reconnect = false) {force_shutdown(reconnect);}
@@ -136,7 +148,7 @@ private:
 	{
 		this->on_handshake(ec);
 
-#ifndef ASCS_REUSE_SSL_STREAM
+#if ASCS_RECONNECT && !defined(ASCS_REUSE_SSL_STREAM)
 		this->close_reconnect();
 #endif
 
@@ -159,7 +171,7 @@ public:
 	object_pool(service_pump& service_pump_, const asio::ssl::context::method& m) : super(service_pump_), ctx(m) {}
 	asio::ssl::context& context() {return ctx;}
 
-	typename object_pool::object_type create_object() {return create_object(this->get_service_pump());}
+protected:
 	template<typename Arg> typename object_pool::object_type create_object(Arg& arg) {return super::create_object(arg, ctx);}
 
 private:
@@ -167,8 +179,8 @@ private:
 };
 
 template<typename Packer, typename Unpacker, typename Server = tcp::i_server, typename Socket = asio::ssl::stream<asio::ip::tcp::socket>,
-	template<typename, typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
-	template<typename, typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
+	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
+	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
 class server_socket_base : public socket<tcp::server_socket_base<Packer, Unpacker, Server, Socket, InQueue, InContainer, OutQueue, OutContainer>>
 {
 private:
@@ -176,6 +188,9 @@ private:
 
 public:
 	server_socket_base(Server& server_, asio::ssl::context& ctx) : super(server_, ctx) {}
+
+	virtual const char* type_name() const {return "SSL (server endpoint)";}
+	virtual int type_id() const {return 4;}
 
 #ifndef ASCS_REUSE_SSL_STREAM
 	void disconnect() {force_shutdown();}

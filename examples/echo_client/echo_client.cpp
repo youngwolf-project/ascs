@@ -12,10 +12,11 @@
 #define ASCS_FULL_STATISTIC //full statistic will slightly impact efficiency
 #define ASCS_AVOID_AUTO_STOP_SERVICE
 #define ASCS_DECREASE_THREAD_AT_RUNTIME
-//#define ASCS_MAX_MSG_NUM	16
-//if there's a huge number of links, please reduce messge buffer via ASCS_MAX_MSG_NUM macro.
-//please think about if we have 512 links, how much memory we can accupy at most with default ASCS_MAX_MSG_NUM?
-//it's 2 * 1024 * 1024 * 512 = 1G
+//#define ASCS_MAX_SEND_BUF	65536
+//#define ASCS_MAX_RECV_BUF	65536
+//if there's a huge number of links, please reduce messge buffer via ASCS_MAX_SEND_BUF and ASCS_MAX_RECV_BUF macro.
+//please think about if we have 512 links, how much memory we can accupy at most with default ASCS_MAX_SEND_BUF and ASCS_MAX_RECV_BUF?
+//it's 2 * 1M * 512 = 1G
 
 //use the following macro to control the type of packer and unpacker
 #define PACKER_UNPACKER_TYPE	0
@@ -37,15 +38,12 @@
 #define ASCS_DEFAULT_PACKER fixed_length_packer
 #define ASCS_DEFAULT_UNPACKER fixed_length_unpacker
 #elif 3 == PACKER_UNPACKER_TYPE
-#undef ASCS_HEARTBEAT_INTERVAL
-#define ASCS_HEARTBEAT_INTERVAL	0 //not support heartbeat
 #define ASCS_DEFAULT_PACKER prefix_suffix_packer
 #define ASCS_DEFAULT_UNPACKER prefix_suffix_unpacker
 #endif
 
 #if defined(ASCS_WANT_MSG_SEND_NOTIFY) && (!defined(ASCS_HEARTBEAT_INTERVAL) || ASCS_HEARTBEAT_INTERVAL <= 0)
 #define ASCS_INPUT_QUEUE non_lock_queue //we will never operate sending buffer concurrently, so need no locks
-#define ASCS_INPUT_CONTAINER list
 #endif
 //configuration
 
@@ -84,11 +82,9 @@ TCP_SEND_MSG_CALL_SWITCH(FUNNAME, void)
 class echo_socket : public client_socket
 {
 public:
-	echo_socket(asio::io_context& io_context_) : client_socket(io_context_), recv_bytes(0), recv_index(0)
+	echo_socket(i_matrix& matrix_) : client_socket(matrix_), recv_bytes(0), recv_index(0)
 	{
-#if 2 == PACKER_UNPACKER_TYPE
-		std::dynamic_pointer_cast<ASCS_DEFAULT_UNPACKER>(unpacker())->fixed_length(1024);
-#elif 3 == PACKER_UNPACKER_TYPE
+#if 3 == PACKER_UNPACKER_TYPE
 		std::dynamic_pointer_cast<ASCS_DEFAULT_PACKER>(packer())->prefix_suffix("begin", "end");
 		std::dynamic_pointer_cast<ASCS_DEFAULT_UNPACKER>(unpacker())->prefix_suffix("begin", "end");
 #endif
@@ -103,19 +99,22 @@ public:
 		clear_status();
 		msg_num = msg_num_;
 
-		auto buff = new char[msg_len];
-		memset(buff, msg_fill, msg_len);
-		memcpy(buff, &recv_index, sizeof(size_t)); //seq
+		std::string msg(msg_len, msg_fill);
+		msg.replace(0, sizeof(size_t), (const char*) &recv_index, sizeof(size_t)); //seq
 
-		send_msg(buff, msg_len, false);
-		delete[] buff;
+#ifdef ASCS_WANT_MSG_SEND_NOTIFY
+		send_msg(msg); //can not apply new feature introduced by version 1.4.0, we need a whole message in on_msg_send
+#else
+		send_msg(std::move(msg)); //new feature introduced by version 1.4.0, avoid one memory replication
+#endif
 	}
 
 protected:
 	//msg handling
 #ifdef ASCS_SYNC_DISPATCH
 	//do not hold msg_can for further using, return from on_msg as quickly as possible
-	virtual size_t on_msg(std::list<out_msg_type>& msg_can)
+	//access msg_can freely within this callback, it's always thread safe.
+	virtual size_t on_msg(list<out_msg_type>& msg_can)
 	{
 		ascs::do_something_to_all(msg_can, [this](out_msg_type& msg) {this->handle_msg(msg);});
 		auto re = msg_can.size();
@@ -129,11 +128,12 @@ protected:
 #endif
 #ifdef ASCS_DISPATCH_BATCH_MSG
 	//do not hold msg_can for further using, access msg_can and return from on_msg_handle as quickly as possible
+	//can only access msg_can via functions that marked as 'thread safe', if you used non-lock queue, its your responsibility to guarantee
+	// that new messages will not come until we returned from this callback (for example, pingpong test).
 	virtual size_t on_msg_handle(out_queue_type& msg_can)
 	{
-		//to consume a part of the messages in msg_can, see echo_server.
 		out_container_type tmp_can;
-		msg_can.swap(tmp_can); //must be thread safe
+		msg_can.swap(tmp_can); //to consume a part of the messages in msg_can, see echo_server
 
 		ascs::do_something_to_all(tmp_can, [this](out_msg_type& msg) {this->handle_msg(msg);});
 		return tmp_can.size();
@@ -255,7 +255,8 @@ void send_msg_one_by_one(echo_client& client, size_t msg_num, size_t msg_len, ch
 	} while (percent < 100);
 	begin_time.stop();
 
-	printf(" finished in %f seconds, speed: %f(*2) MBps.\n", begin_time.elapsed(), total_msg_bytes / begin_time.elapsed() / 1024 / 1024);
+	printf(" finished in %f seconds, TPS: %f(*2), speed: %f(*2) MBps.\n",
+		begin_time.elapsed(), client.size() * msg_num / begin_time.elapsed(), total_msg_bytes / begin_time.elapsed() / 1024 / 1024);
 }
 
 void send_msg_randomly(echo_client& client, size_t msg_num, size_t msg_len, char msg_fill)
@@ -290,7 +291,8 @@ void send_msg_randomly(echo_client& client, size_t msg_num, size_t msg_len, char
 	begin_time.stop();
 	delete[] buff;
 
-	printf(" finished in %f seconds, speed: %f(*2) MBps.\n", begin_time.elapsed(), total_msg_bytes / begin_time.elapsed() / 1024 / 1024);
+	printf(" finished in %f seconds, TPS: %f(*2), speed: %f(*2) MBps.\n",
+		begin_time.elapsed(), msg_num / begin_time.elapsed(), total_msg_bytes / begin_time.elapsed() / 1024 / 1024);
 }
 
 //use up to a specific worker threads to send messages concurrently
@@ -334,7 +336,6 @@ void send_msg_concurrently(echo_client& client, size_t send_thread_num, size_t m
 			for (size_t i = 0; i < msg_num; ++i)
 			{
 				memcpy(buff, &i, sizeof(size_t)); //seq
-
 				do_something_to_all(item, [buff, msg_len](echo_client::object_ctype& item2) {item2->safe_send_msg(buff, msg_len, false);}); //can_overflow is false, it's important
 			}
 			delete[] buff;
@@ -514,7 +515,7 @@ int main(int argc, const char* argv[])
 				std::max((size_t) atoi(iter++->data()), sizeof(size_t))); //include seq
 #elif 2 == PACKER_UNPACKER_TYPE
 			if (iter != std::end(parameters)) ++iter;
-			msg_len = 1024; //we hard code this because we fixedly initialized the length of fixed_length_unpacker to 1024
+			msg_len = 1024; //we hard code this because the default fixed length is 1024, and we not changed it
 #elif 3 == PACKER_UNPACKER_TYPE
 			if (iter != std::end(parameters)) msg_len = std::min((size_t) ASCS_MSG_BUFFER_SIZE,
 				std::max((size_t) atoi(iter++->data()), sizeof(size_t))); //include seq

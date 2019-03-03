@@ -469,6 +469,48 @@
  *
  * REPLACEMENTS:
  *
+ * ===============================================================
+ * 2019.3.3		version 1.4.0
+ *
+ * SPECIAL ATTENTION (incompatible with old editions):
+ * Socket used by tcp::multi_client_base, ssl::multi_client_base and udp::multi_socket_service needs to provide a constructor which accept
+ *  a reference of i_matrix instead of a reference of asio::io_context.
+ * Limit send and recv buffers by actual utilization (in byte) rather than message number before, so macro ASCS_MAX_MSG_NUM been renamed to
+ *  ASCS_MAX_SEND_BUF and ASCS_MAX_RECV_BUF, and unit been changed to byte.
+ * statistic.send_msg_sum may be bigger than before (but statistic.send_byte_sum will be the same), see ENHANCEMENTS section for more details.
+ * Not support gcc 4.6 any more, please use st_asio_wrapper instead.
+ * Make function tcp::socket_base::reset to be virtual.
+ *
+ * HIGHLIGHT:
+ * Make client_socket_base be able to call multi_client_base (via i_matrix) like server_socket_base call server_base (via i_server),
+ *  and so does ssl::client_socket_base and udp::socket_base.
+ * Promote performance by reducing memory replications if you already generated the message body and it can be swapped into ascs.
+ * Introduce shared_mutex, it can promote performance if you find or traverse (via do_something_to_all or do_something_to_one) objects frequently.
+ *
+ * FIX:
+ *
+ * ENHANCEMENTS:
+ * Introduce macro ASCS_RECONNECT to control the default switch of reconnecting mechanism.
+ * Introduce macro ASCS_SHARED_MUTEX_TYPE and ASCS_SHARED_LOCK_TYPE, they're used during finding or traversing (via do_something_to_all or do_something_to_one)
+ *  objects in object_pool, if you find or traverse objects frequently and shared_mutex is available, use shared_mutex with shared_lock instead of
+ *  mutex with unique_lock will promote performance, otherwise, do not define these two macros.
+ * Introduce three additional overloads of pack_msg virtual function to i_packer, they accept one or more than one i_packer::msg_type (not packed) that belong to
+ *  the same message.
+ * Add three overloads to send_(native_)msg, safe_send_(native_)msg, sync_send_(native_)msg and sync_safe_send_(native_)msg respectively (just on TCP),
+ *  they accept one or more than one rvalue reference of in_msg_type, this will reduce one memory replication, and the statistic.send_msg_sum will be one bigger
+ *  than before because the packer will add an additional message just represent the header to avoid copying the message bodies.
+ * Control send and recv buffer accurately rather than just message number before, see macro ASCS_MAX_SEND_BUF and ASCS_MAX_RECV_BUF for more details.
+ * direct_send_msg and direct_sync_send_msg support batch operation.
+ * Introduce virtual function type_name() and type_id() to ascs::socket, they can identify whether a given two ascs::socket has the same type.
+ * force_shutdown and graceful_shutdown support reconnecting even if the link has broken.
+ *
+ * DELETION:
+ *
+ * REFACTORING:
+ * Unify all container to ascs::list (before, some of them were std::list).
+ *
+ * REPLACEMENTS:
+ *
  */
 
 #ifndef _ASCS_CONFIG_H_
@@ -478,8 +520,8 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#define ASCS_VER		10304	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.3.4"
+#define ASCS_VER		10400	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.4.0"
 
 //asio and compiler check
 #ifdef _MSC_VER
@@ -489,7 +531,7 @@
 	#ifdef __clang__
 		static_assert(__clang_major__ > 3 || (__clang_major__ == 3 && __clang_minor__ >= 1), "ascs needs Clang 3.1 or higher.");
 	#else
-		static_assert(__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6), "ascs needs GCC 4.6 or higher.");
+		static_assert(__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ > 6), "ascs needs GCC 4.7 or higher.");
 	#endif
 
 	#if !defined(__GXX_EXPERIMENTAL_CXX0X__) && (!defined(__cplusplus) || __cplusplus < 201103L)
@@ -528,11 +570,25 @@ namespace asio {typedef io_service io_context;}
 #endif
 static_assert(ASCS_SERVER_PORT > 0, "server port must be bigger than zero.");
 
-//msg send and recv buffer's maximum size (list::size()), corresponding buffers are expanded dynamically, which means only allocate memory when needed.
-#ifndef ASCS_MAX_MSG_NUM
-#define ASCS_MAX_MSG_NUM		1024
+#ifdef ASCS_MAX_MSG_NUM
+	#ifdef _MSC_VER
+		#pragma message("macro ASCS_MAX_MSG_NUM is deprecated, use ASCS_MAX_SEND_BUF and ASCS_MAX_RECV_BUF instead, the meanings also changed too, please note.")
+	#else
+		#warning macro ASCS_MAX_MSG_NUM is deprecated, use ASCS_MAX_SEND_BUF and ASCS_MAX_RECV_BUF instead, the meanings also changed too, please note.
+	#endif
 #endif
-static_assert(ASCS_MAX_MSG_NUM > 0, "message capacity must be bigger than zero.");
+
+//send buffer's maximum size (bytes), it will be expanded dynamically (not fixed) within this range.
+#ifndef ASCS_MAX_SEND_BUF
+#define ASCS_MAX_SEND_BUF		1048576 //1M
+#endif
+static_assert(ASCS_MAX_SEND_BUF > 15, "send buffer capacity must be bigger than 15.");
+
+//recv buffer's maximum size (bytes), it will be expanded dynamically (not fixed) within this range.
+#ifndef ASCS_MAX_RECV_BUF
+#define ASCS_MAX_RECV_BUF		1048576 //1M
+#endif
+static_assert(ASCS_MAX_RECV_BUF > 15, "recv buffer capacity must be bigger than 15.");
 
 //buffer (on stack) size used when writing logs.
 #ifndef ASCS_UNIFIED_OUT_BUF_NUM
@@ -632,6 +688,12 @@ static_assert(ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION > 0, "graceful shutdown durati
 //you can also rewrite tcp::client_socket_base::prepare_reconnect(), and return a negative value.
 #ifndef ASCS_RECONNECT_INTERVAL
 #define ASCS_RECONNECT_INTERVAL	500 //millisecond(s)
+#endif
+
+//define ASCS_RECONNECT macro as false, then no reconnecting will be performed after the link broken passively.
+//if proactively shutdown the link, reconnect or not depends on the reconnect parameter passed via disconnect, force_shutdown and graceful_shutdown.
+#ifndef ASCS_RECONNECT
+#define ASCS_RECONNECT	true
 #endif
 
 //how many async_accept delivery concurrently, an equivalent way is to rewrite virtual function server_socket_base::async_accept_num().
@@ -755,7 +817,10 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 
 //#define ASCS_SYNC_SEND
 #ifdef ASCS_SYNC_SEND
-static_assert(ASIO_HAS_STD_FUTURE == 1, "sync message sending needs std::future.");
+	#ifndef ASIO_HAS_STD_FUTURE
+	#define ASIO_HAS_STD_FUTURE	0
+	#endif
+	static_assert(ASIO_HAS_STD_FUTURE == 1, "sync message sending needs std::future.");
 #endif
 //#define ASCS_SYNC_RECV
 //define these macro to gain additional series of sync message sending and receiving, they are:
@@ -776,7 +841,7 @@ static_assert(ASIO_HAS_STD_FUTURE == 1, "sync message sending needs std::future.
 //If both sync message receiving and async message receiving exist, sync receiving has the priority no matter it was initiated before async receiving or not.
 
 //#define ASCS_SYNC_DISPATCH
-//with this macro, virtual size_t on_msg(std::list<OutMsgType>& msg_can) will be provided, you can rewrite it and handle all or a part of the
+//with this macro, virtual size_t on_msg(list<OutMsgType>& msg_can) will be provided, you can rewrite it and handle all or a part of the
 // messages like virtual function on_msg_handle (with macro ASCS_DISPATCH_BATCH_MSG), if your logic is simple enough (like echo or pingpong test),
 // this feature is recommended because it can slightly improve efficiency.
 //now we have three ways to handle messages (sync_recv_msg, on_msg and on_msg_handle), the invocation order is the same as listed, if messages been successfully
@@ -784,6 +849,15 @@ static_assert(ASIO_HAS_STD_FUTURE == 1, "sync message sending needs std::future.
 // zero) the messages, then on_msg_handle will continue to dispatch the rest of them asynchronously, this will disorder messages because on_msg_handle and the next
 // on_msg (new messages arrived) can be invoked concurrently, please note. as before, on_msg will block the next receiving but only on current socket.
 //if you cannot handle all of the messages in on_msg (like echo_server), you should not use sync message dispatching except you can bear message disordering.
+
+//if you search or traverse (via do_something_to_all or do_something_to_one) objects in object_pool frequently and shared_mutex is available,
+// use shared_mutex with shared_lock instead of mutex with unique_lock will promote performance, otherwise, do not define these two macros.
+#ifndef ASCS_SHARED_MUTEX_TYPE
+#define ASCS_SHARED_MUTEX_TYPE	std::mutex
+#endif
+#ifndef ASCS_SHARED_LOCK_TYPE
+#define ASCS_SHARED_LOCK_TYPE	std::unique_lock
+#endif
 
 //configurations
 

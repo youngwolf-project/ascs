@@ -17,9 +17,9 @@
 
 namespace ascs { namespace tcp {
 
-template <typename Packer, typename Unpacker, typename Socket = asio::ip::tcp::socket,
-	template<typename, typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
-	template<typename, typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
+template <typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = asio::ip::tcp::socket,
+	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
+	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
 class client_socket_base : public socket_base<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer>
 {
 private:
@@ -30,23 +30,27 @@ public:
 	static const typename super::tid TIMER_CONNECT = TIMER_BEGIN;
 	static const typename super::tid TIMER_END = TIMER_BEGIN + 5;
 
-	client_socket_base(asio::io_context& io_context_) : super(io_context_), need_reconnect(true) {set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
-	template<typename Arg>
-	client_socket_base(asio::io_context& io_context_, Arg& arg) : super(io_context_, arg), need_reconnect(true) {set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
+	client_socket_base(asio::io_context& io_context_) : super(io_context_) {first_init();}
+	template<typename Arg> client_socket_base(asio::io_context& io_context_, Arg& arg) : super(io_context_, arg) {first_init();}
 
-	//reset all, be ensure that no operations performed on this socket when invoke it, subclass must rewrite this function to initialize itself, and then
-	// call superclass' reset function, before reusing this socket, object_pool will invoke this function
-	virtual void reset() {need_reconnect = true; super::reset();}
+	client_socket_base(Matrix& matrix_) : super(matrix_.get_service_pump()) {first_init(&matrix_);}
+	template<typename Arg> client_socket_base(Matrix& matrix_, Arg& arg) : super(matrix_.get_service_pump(), arg) {first_init(&matrix_);}
+
+	virtual const char* type_name() const {return "TCP (client endpoint)";}
+	virtual int type_id() const {return 1;}
+
+	virtual void reset() {need_reconnect = ASCS_RECONNECT; super::reset();}
 
 	bool set_server_addr(unsigned short port, const std::string& ip = ASCS_SERVER_IP) {return set_addr(server_addr, port, ip);}
 	const asio::ip::tcp::endpoint& get_server_addr() const {return server_addr;}
 	bool set_local_addr(unsigned short port, const std::string& ip = std::string()) {return set_addr(local_addr, port, ip);}
 	const asio::ip::tcp::endpoint& get_local_addr() const {return local_addr;}
 
-	//if you don't want to reconnect to the server after link broken, call close_reconnect() or rewrite after_close() virtual function and do nothing in it,
+	//if you don't want to reconnect to the server after link broken, define macro ASCS_RECONNECT as false, call close_reconnect() in on_connect()
+	// or rewrite after_close() virtual function and do nothing in it.
 	//if you want to control the retry times and delay time after reconnecting failed, rewrite prepare_reconnect virtual function.
 	//disconnect(bool), force_shutdown(bool) and graceful_shutdown(bool, bool) can overwrite reconnecting behavior, please note.
-	//reset() virtual function will open reconnecting, please note.
+	//reset() virtual function will set reconnecting behavior according to macro ASCS_RECONNECT, please note.
 	void open_reconnect() {need_reconnect = true;}
 	void close_reconnect() {need_reconnect = false;}
 
@@ -54,10 +58,13 @@ public:
 	void disconnect(bool reconnect = false) {force_shutdown(reconnect);}
 	void force_shutdown(bool reconnect = false)
 	{
-		if (super::link_status::FORCE_SHUTTING_DOWN != this->status)
+		need_reconnect = reconnect;
+
+		if (!this->started() && reconnect)
+			return this->start();
+		else if (super::link_status::FORCE_SHUTTING_DOWN != this->status)
 			this->show_info("client link:", "been shut down.");
 
-		need_reconnect = reconnect;
 		super::force_shutdown();
 	}
 
@@ -67,16 +74,25 @@ public:
 	//this function is not thread safe, please note.
 	void graceful_shutdown(bool reconnect = false, bool sync = true)
 	{
-		if (this->is_broken())
+		need_reconnect = reconnect;
+
+		if (!this->started() && reconnect)
+			return this->start();
+		else if (this->is_broken())
 			return force_shutdown(reconnect);
 		else if (!this->is_shutting_down())
 			this->show_info("client link:", "being shut down gracefully.");
 
-		need_reconnect = reconnect;
 		super::graceful_shutdown(sync);
 	}
 
 protected:
+	//helper function, just call it in constructor
+	void first_init(Matrix* matrix_ = nullptr) {need_reconnect = ASCS_RECONNECT; matrix = matrix_; set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
+
+	Matrix* get_matrix() {return matrix;}
+	const Matrix* get_matrix() const {return matrix;}
+
 	virtual bool do_start() //connect
 	{
 		assert(!this->is_connected());
@@ -194,6 +210,8 @@ private:
 	bool need_reconnect;
 	asio::ip::tcp::endpoint server_addr;
 	asio::ip::tcp::endpoint local_addr;
+
+	Matrix* matrix;
 };
 
 }} //namespace

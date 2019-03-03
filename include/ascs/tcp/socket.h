@@ -14,13 +14,11 @@
 #define _ASCS_TCP_SOCKET_H_
 
 #include "../socket.h"
-#include "../container.h"
 
 namespace ascs { namespace tcp {
 
 template <typename Socket, typename Packer, typename Unpacker,
-	template<typename, typename> class InQueue, template<typename> class InContainer,
-	template<typename, typename> class OutQueue, template<typename> class OutContainer>
+	template<typename> class InQueue, template<typename> class InContainer, template<typename> class OutQueue, template<typename> class OutContainer>
 class socket_base : public socket<Socket, Packer, typename Packer::msg_type, typename Unpacker::msg_type, InQueue, InContainer, OutQueue, OutContainer>
 {
 public:
@@ -56,8 +54,12 @@ public:
 		do_direct_send_msg(std::move(msg));
 	}
 
-	//reset all, be ensure that there's no any operations performed on this tcp::socket_base when invoke it
-	void reset() {status = link_status::BROKEN; last_send_msg.clear(); unpacker_->reset(); super::reset();}
+	//reset all, be ensure that there's no any operations performed on this socket when invoke it
+	//subclass must re-write this function to initialize itself, and then do not forget to invoke superclass' reset function too
+	//notice, when reusing this socket, object_pool will invoke this function, so if you want to do some additional initialization
+	// for this socket, do it at here and in the constructor.
+	//for tcp::single_client_base and ssl::single_client_base, this virtual function will never be called, please note.
+	virtual void reset() {status = link_status::BROKEN; last_send_msg.clear(); unpacker_->reset(); super::reset();}
 
 	//SOCKET status
 	bool is_broken() const {return link_status::BROKEN == status;}
@@ -122,16 +124,18 @@ public:
 
 	///////////////////////////////////////////////////
 	//msg sending interface
-	TCP_SEND_MSG(send_msg, false, do_direct_send_msg) //use the packer with native = false to pack the msgs
-	TCP_SEND_MSG(send_native_msg, true, do_direct_send_msg) //use the packer with native = true to pack the msgs
+	//if the message already packed, do call direct_send_msg or direct_sync_send_msg to reduce unnecessary memory replication, if you will not
+	// use it any more, use std::move to wrap it when calling direct_send_msg or direct_sync_send_msg.
+	TCP_SEND_MSG(send_msg, false) //use the packer with native = false to pack the msgs
+	TCP_SEND_MSG(send_native_msg, true) //use the packer with native = true to pack the msgs
 	//guarantee send msg successfully even if can_overflow equal to false
 	//success at here just means put the msg into tcp::socket_base's send buffer
 	TCP_SAFE_SEND_MSG(safe_send_msg, send_msg)
 	TCP_SAFE_SEND_MSG(safe_send_native_msg, send_native_msg)
 
 #ifdef ASCS_SYNC_SEND
-	TCP_SYNC_SEND_MSG(sync_send_msg, false, do_direct_sync_send_msg) //use the packer with native = false to pack the msgs
-	TCP_SYNC_SEND_MSG(sync_send_native_msg, true, do_direct_sync_send_msg) //use the packer with native = true to pack the msgs
+	TCP_SYNC_SEND_MSG(sync_send_msg, false) //use the packer with native = false to pack the msgs
+	TCP_SYNC_SEND_MSG(sync_send_native_msg, true) //use the packer with native = true to pack the msgs
 	//guarantee send msg successfully even if can_overflow equal to false
 	//success at here just means put the msg into tcp::socket_base's send buffer
 	TCP_SYNC_SAFE_SEND_MSG(sync_safe_send_msg, sync_send_msg)
@@ -183,7 +187,8 @@ protected:
 	//msg_can contains messages that were failed to send and tcp::socket_base will not hold them any more, if you want to re-send them in the future,
 	// you must take over them and re-send (at any time) them via direct_send_msg.
 	//DO NOT hold msg_can for future using, just swap its content with your own container in this virtual function.
-	virtual void on_send_error(const asio::error_code& ec, list<typename super::in_msg>& msg_can) {unified_out::error_out("send msg error (%d %s)", ec.value(), ec.message().data());}
+	virtual void on_send_error(const asio::error_code& ec, typename super::in_container_type& msg_can)
+		{unified_out::error_out("send msg error (%d %s)", ec.value(), ec.message().data());}
 
 	virtual void on_close()
 	{
@@ -283,27 +288,18 @@ private:
 		if (!in_strand && sending)
 			return true;
 
-		std::list<asio::const_buffer> bufs;
-		{
+		auto end_time = statistic::now();
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
-			const size_t max_send_size = 1;
+		send_msg_buffer.move_items_out(0, last_send_msg);
 #else
-			const size_t max_send_size = asio::detail::default_max_transfer_size;
+		send_msg_buffer.move_items_out(asio::detail::default_max_transfer_size, last_send_msg);
 #endif
-			size_t size = 0;
-			typename super::in_msg msg;
-			auto end_time = statistic::now();
-
-			typename super::in_queue_type::lock_guard lock(send_msg_buffer);
-			while (send_msg_buffer.try_dequeue_(msg))
-			{
-				stat.send_delay_sum += end_time - msg.begin_time;
-				size += msg.size();
-				last_send_msg.emplace_back(std::move(msg));
-				bufs.emplace_back(last_send_msg.back().data(), last_send_msg.back().size());
-				if (size >= max_send_size)
-					break;
-			}
+		std::vector<asio::const_buffer> bufs;
+		bufs.reserve(last_send_msg.size());
+		for (auto iter = std::begin(last_send_msg); iter != std::end(last_send_msg); ++iter)
+		{
+			stat.send_delay_sum += end_time - iter->begin_time;
+			bufs.emplace_back(iter->data(), iter->size());
 		}
 
 		if ((sending = !bufs.empty()))
@@ -385,7 +381,7 @@ private:
 #endif
 
 	std::shared_ptr<i_unpacker<out_msg_type>> unpacker_;
-	list<typename super::in_msg> last_send_msg;
+	typename super::in_container_type last_send_msg;
 	asio::io_context::strand strand;
 };
 

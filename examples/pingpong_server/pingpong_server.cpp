@@ -8,7 +8,6 @@
 #define ASCS_SYNC_DISPATCH
 #define ASCS_MSG_BUFFER_SIZE	65536
 #define ASCS_INPUT_QUEUE non_lock_queue
-#define ASCS_INPUT_CONTAINER list
 //if pingpong_client only send message in on_msg_handle(), which means a responsive system, a real pingpong test,
 //then, before pingpong_server send each message, the previous message has been sent to pingpong_client,
 //so sending buffer will always be empty, which means we will never operate sending buffer concurrently, so need no locks.
@@ -39,8 +38,10 @@ public:
 protected:
 	//msg handling: send the original msg back (echo server), must define macro ASCS_SYNC_DISPATCH
 	//do not hold msg_can for further using, access msg_can and return from on_msg as quickly as possible
-	virtual size_t on_msg(std::list<out_msg_type>& msg_can)
+	//access msg_can freely within this callback, it's always thread safe.
+	virtual size_t on_msg(list<out_msg_type>& msg_can)
 	{
+		//if the type of out_msg_type and in_msg_type are not identical, the compilation will fail, then you should use send_native_msg instead.
 		ascs::do_something_to_all(msg_can, [this](out_msg_type& msg) {this->direct_send_msg(std::move(msg));});
 		auto re = msg_can.size();
 		msg_can.clear(); //if we left behind some messages in msg_can, they will be dispatched via on_msg_handle asynchronously, which means it's

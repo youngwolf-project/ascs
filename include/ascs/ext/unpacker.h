@@ -73,7 +73,7 @@ public:
 	{
 		std::list<std::pair<const char*, size_t>> msg_pos_can;
 		auto unpack_ok = parse_msg(bytes_transferred, msg_pos_can);
-		do_something_to_all(msg_pos_can, [&msg_can](decltype(msg_pos_can.front())& item) {
+		do_something_to_all(msg_pos_can, [&msg_can](decltype(msg_pos_can.front()) item) {
 			if (item.second > 0) //exclude heartbeat
 				msg_can.emplace_back(item.first, item.second);
 		});
@@ -208,8 +208,9 @@ protected:
 };
 
 //protocol: length + body
-//this unpacker demonstrate how to forbid memory replication while parsing msgs (let asio write msg directly).
-//not support unstripped messages, please note (you can fix this defect if you like).
+//let asio write msg directly (no temporary memory needed), not support unstripped messages, please note (you can fix this defect if you like).
+//actually, this unpacker has the worst performance, because it needs 2 read for one message, other unpackers are able to get many messages from just one read.
+//so this unpacker just demonstrates a way to avoid memory replications and temporary memory utilization, it can provide better performance for huge messages.
 class non_copy_unpacker : public i_unpacker<basic_buffer>
 {
 public:
@@ -287,7 +288,9 @@ private:
 };
 
 //protocol: fixed length
-//non-copy
+//non-copy, let asio write msg directly (no temporary memory needed), actually, this unpacker has poor performance, because it needs one read for one message, other unpackers
+//are able to get many messages from just one read, so this unpacker just demonstrates a way to avoid memory replications and temporary memory utilization, it can provide better
+//performance for huge messages.
 class fixed_length_unpacker : public i_unpacker<basic_buffer>
 {
 public:

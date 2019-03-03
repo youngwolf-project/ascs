@@ -18,118 +18,6 @@
 namespace ascs
 {
 
-//ascs requires that container must take one and only one template argument.
-#if defined(_MSC_VER) || defined(__clang__) || _GLIBCXX_USE_CXX11_ABI
-template<typename T> using list = std::list<T>;
-//for list::size() and empty(), ascs::queue needs them to be thread safe no matter itself is lockable or dummy lockable (see ascs::queue for more details).
-#else
-//a substitute of std::list, it's size() function has O(1) complexity and is thread safe (but doesn't have to be consistent)
-//BTW, the naming rule is not mine, I copied them from std::list in Visual C++ 14.0
-template<typename _Ty>
-class list
-{
-public:
-	typedef list<_Ty> _Myt;
-	typedef std::list<_Ty> _Mybase;
-
-	typedef typename _Mybase::value_type value_type;
-	typedef typename _Mybase::size_type size_type;
-
-	typedef typename _Mybase::reference reference;
-	typedef typename _Mybase::const_reference const_reference;
-
-	typedef typename _Mybase::iterator iterator;
-	typedef typename _Mybase::const_iterator const_iterator;
-	typedef typename _Mybase::reverse_iterator reverse_iterator;
-	typedef typename _Mybase::const_reverse_iterator const_reverse_iterator;
-
-#if	__GNUC__ > 4 || __GNUC_MINOR__ > 8
-	typedef const_iterator Iter;
-#else
-	typedef iterator Iter; //just satisfy old gcc compilers (before gcc 4.9)
-#endif
-
-	list() : s(0) {}
-	list(list&& other) : s(0) {swap(other);}
-
-	list& operator=(list&& other) {clear(); swap(other); return *this;}
-	void swap(list& other) {impl.swap(other.impl); std::swap(s, other.s);}
-
-	bool empty() const {return 0 == s;}
-	size_type size() const {return s;}
-	void resize(size_type _Newsize)
-	{
-		while (s < _Newsize)
-		{
-			impl.emplace_back();
-			++s;
-		}
-
-		if (s > _Newsize)
-		{
-			auto end_iter = std::end(impl);
-			auto begin_iter = _Newsize <= s / 2 ? std::next(std::begin(impl), _Newsize) : std::prev(end_iter, s - _Newsize); //minimize iterator movement
-
-			s = _Newsize;
-			impl.erase(begin_iter, end_iter);
-		}
-	}
-	void clear() {s = 0; impl.clear();}
-	iterator erase(Iter _Where) {--s; return impl.erase(_Where);}
-
-	void push_front(const _Ty& _Val) {++s; impl.push_front(_Val);}
-	void push_front(_Ty&& _Val) {++s; impl.push_front(std::move(_Val));}
-	template<class... _Valty>
-	void emplace_front(_Valty&&... _Val) {++s; impl.emplace_front(std::forward<_Valty>(_Val)...);}
-	void pop_front() {--s; impl.pop_front();}
-	reference front() {return impl.front();}
-	iterator begin() {return impl.begin();}
-	reverse_iterator rbegin() {return impl.rbegin();}
-	const_reference front() const {return impl.front();}
-	const_iterator begin() const {return impl.begin();}
-	const_reverse_iterator rbegin() const {return impl.rbegin();}
-
-	void push_back(const _Ty& _Val) {++s; impl.push_back(_Val);}
-	void push_back(_Ty&& _Val) {++s; impl.push_back(std::move(_Val));}
-	template<class... _Valty>
-	void emplace_back(_Valty&&... _Val) {impl.emplace_back(std::forward<_Valty>(_Val)...); ++s;}
-	void pop_back() {--s; impl.pop_back();}
-	reference back() {return impl.back();}
-	iterator end() {return impl.end();}
-	reverse_iterator rend() {return impl.rend();}
-	const_reference back() const {return impl.back();}
-	const_iterator end() const {return impl.end();}
-	const_reverse_iterator rend() const {return impl.rend();}
-
-	void splice(Iter _Where, _Mybase& _Right) {s += _Right.size(); impl.splice(_Where, _Right);}
-	void splice(Iter _Where, _Mybase& _Right, Iter _First) {++s; impl.splice(_Where, _Right, _First);}
-	void splice(Iter _Where, _Mybase& _Right, Iter _First, Iter _Last)
-	{
-		auto size = std::distance(_First, _Last);
-		//this std::distance invocation is the penalty for making complexity of size() constant.
-		s += size;
-
-		impl.splice(_Where, _Right, _First, _Last);
-	}
-
-	void splice(Iter _Where, _Myt& _Right) {s += _Right.size(); _Right.s = 0; impl.splice(_Where, _Right.impl);}
-	void splice(Iter _Where, _Myt& _Right, Iter _First) {++s; --_Right.s; impl.splice(_Where, _Right.impl, _First);}
-	void splice(Iter _Where, _Myt& _Right, Iter _First, Iter _Last)
-	{
-		auto size = std::distance(_First, _Last);
-		//this std::distance invocation is the penalty for making complexity of size() constant.
-		s += size;
-		_Right.s -= size;
-
-		impl.splice(_Where, _Right.impl, _First, _Last);
-	}
-
-private:
-	volatile size_type s;
-	_Mybase impl;
-};
-#endif
-
 class dummy_lockable
 {
 public:
@@ -155,54 +43,146 @@ private:
 	std::mutex mutex; //std::mutex is more efficient than std::shared_(timed_)mutex
 };
 
-//Container must at least has the following functions (like list):
+//Container must at least has the following functions (like std::list):
 // Container() and Container(size_t) constructor
-// size (must be thread safe, but doesn't have to be consistent, std::list before gcc 5 doesn't meet this requirement, ascs::list does)
-// empty (must be thread safe, but doesn't have to be consistent)
+// size, must be thread safe, but doesn't have to be consistent
+// empty, must be thread safe, but doesn't have to be consistent
 // clear
 // swap
-// emplace_back(const T& item)
-// emplace_back(T&& item)
-// splice(decltype(Container::end()), std::list<T>&), after this, std::list<T> must be empty
+// template<typename T> emplace_back(const T& item), if you call direct_(sync_)send_msg which accepts other than rvalue reference
+// template<typename T> emplace_back(T&& item)
+// splice(iter, Container&)
+// splice(iter, Container&, iter, iter)
 // front
 // pop_front
+// back
+// begin
 // end
-template<typename T, typename Container, typename Lockable> //thread safety depends on Container or Lockable
-#ifdef ASCS_DISPATCH_BATCH_MSG
-class queue : public Container, public Lockable
-#else
-class queue : protected Container, public Lockable
-#endif
+template<typename Container, typename Lockable> //thread safety depends on Container or Lockable
+class queue : private Container, public Lockable
 {
 public:
-	typedef T data_type;
-
-	queue() {}
-	queue(size_t capacity) : Container(capacity) {}
-
-	bool is_thread_safe() const {return Lockable::is_lockable();}
+	using typename Container::value_type;
+	using typename Container::size_type;
+	using typename Container::reference;
+	using typename Container::const_reference;
 	using Container::size;
 	using Container::empty;
-	void clear() {typename Lockable::lock_guard lock(*this); Container::clear();}
-	void swap(Container& other) {typename Lockable::lock_guard lock(*this); Container::swap(other);}
+
+	queue() : buff_size(0) {}
+	queue(size_t capacity) : Container(capacity), buff_size(0) {}
 
 	//thread safe
-	bool enqueue(const T& item) {typename Lockable::lock_guard lock(*this); return enqueue_(item);}
-	bool enqueue(T&& item) {typename Lockable::lock_guard lock(*this); return enqueue_(std::move(item));}
-	void move_items_in(std::list<T>& can) {typename Lockable::lock_guard lock(*this); move_items_in_(can);}
-	bool try_dequeue(T& item) {typename Lockable::lock_guard lock(*this); return try_dequeue_(item);}
+	bool is_thread_safe() const {return Lockable::is_lockable();}
+	size_t size_in_byte() const {return buff_size;}
+	void clear() {typename Lockable::lock_guard lock(*this); Container::clear(); buff_size = 0;}
+	void swap(Container& can)
+	{
+		auto size_in_byte = ascs::get_size_in_byte(can);
+
+		typename Lockable::lock_guard lock(*this);
+		Container::swap(can);
+		buff_size = size_in_byte;
+	}
+
+	template<typename T> bool enqueue(T&& item) {typename Lockable::lock_guard lock(*this); return enqueue_(std::forward<T>(item));}
+	void move_items_in(Container& src, size_t size_in_byte = 0) {typename Lockable::lock_guard lock(*this); move_items_in_(src, size_in_byte);}
+	bool try_dequeue(reference item) {typename Lockable::lock_guard lock(*this); return try_dequeue_(item);}
+	void move_items_out(Container& dest, size_t max_item_num = -1) {typename Lockable::lock_guard lock(*this); move_items_out_(dest, max_item_num);}
+	void move_items_out(size_t max_size_in_byte, Container& dest) {typename Lockable::lock_guard lock(*this); move_items_out_(max_size_in_byte, dest);}
+	template<typename _Predicate> void do_something_to_all(const _Predicate& __pred) {typename Lockable::lock_guard lock(*this); do_something_to_all_(__pred);}
+	template<typename _Predicate> void do_something_to_one(const _Predicate& __pred) {typename Lockable::lock_guard lock(*this); do_something_to_one_(__pred);}
+	//thread safe
 
 	//not thread safe
-	bool enqueue_(const T& item)
-		{try {this->emplace_back(item);} catch (const std::exception& e) {unified_out::error_out("cannot hold more objects (%s)", e.what()); return false;} return true;}
-	bool enqueue_(T&& item)
-		{try {this->emplace_back(std::move(item));} catch (const std::exception& e) {unified_out::error_out("cannot hold more objects (%s)", e.what()); return false;} return true;}
-	void move_items_in_(std::list<T>& can) {this->splice(this->end(), can);}
-	bool try_dequeue_(T& item) {if (this->empty()) return false; item.swap(this->front()); this->pop_front(); return true;}
+	template<typename T> bool enqueue_(T&& item)
+	{
+		try
+		{
+			auto s = item.size();
+			this->emplace_back(std::forward<T>(item));
+			buff_size += s;
+		}
+		catch (const std::exception& e)
+		{
+			unified_out::error_out("cannot hold more objects (%s)", e.what());
+			return false;
+		}
+
+		return true;
+	}
+
+	void move_items_in_(Container& src, size_t size_in_byte = 0)
+	{
+		if (0 == size_in_byte)
+			size_in_byte = ascs::get_size_in_byte(src);
+
+		this->splice(this->end(), src);
+		buff_size += size_in_byte;
+	}
+
+	bool try_dequeue_(reference item) {if (this->empty()) return false; item.swap(this->front()); this->pop_front(); buff_size -= item.size(); return true;}
+
+	void move_items_out_(Container& dest, size_t max_item_num = -1)
+	{
+		if ((size_t) -1 == max_item_num)
+		{
+			dest.splice(std::end(dest), *this);
+			buff_size = 0;
+		}
+		else if (max_item_num > 0)
+		{
+			size_t s = 0, index = 0;
+			auto end_iter = this->begin();
+			do_something_to_one_([&](const_reference item) {if (++index > max_item_num) return true; s += item.size(); ++end_iter; return false;});
+
+			if (end_iter == this->end())
+				dest.splice(std::end(dest), *this);
+			else
+				dest.splice(std::end(dest), *this, this->begin(), end_iter);
+			buff_size -= s;
+		}
+	}
+
+	void move_items_out_(size_t max_size_in_byte, Container& dest)
+	{
+		if ((size_t) -1 == max_size_in_byte)
+		{
+			dest.splice(std::end(dest), *this);
+			buff_size = 0;
+		}
+		else
+		{
+			size_t s = 0;
+			auto end_iter = this->begin();
+			do_something_to_one_([&](const_reference item) {s += item.size(); ++end_iter; if (s >= max_size_in_byte) return true; return false;});
+
+			if (end_iter == this->end())
+				dest.splice(std::end(dest), *this);
+			else
+				dest.splice(std::end(dest), *this, this->begin(), end_iter);
+			buff_size -= s;
+		}
+	}
+
+	template<typename _Predicate>
+	void do_something_to_all_(const _Predicate& __pred) {for (auto& item : *this) __pred(item);}
+	template<typename _Predicate>
+	void do_something_to_all_(const _Predicate& __pred) const {for (auto& item : *this) __pred(item);}
+
+	template<typename _Predicate>
+	void do_something_to_one_(const _Predicate& __pred) {for (auto iter = this->begin(); iter != this->end(); ++iter) if (__pred(*iter)) break;}
+	template<typename _Predicate>
+	void do_something_to_one_(const _Predicate& __pred) const {for (auto iter = this->begin(); iter != this->end(); ++iter) if (__pred(*iter)) break;}
+	//not thread safe
+
+private:
+	size_t buff_size; //in use
 };
 
-template<typename T, typename Container> using non_lock_queue = queue<T, Container, dummy_lockable>; //thread safety depends on Container
-template<typename T, typename Container> using lock_queue = queue<T, Container, lockable>;
+//ascs requires that queue must take one and only one template argument
+template<typename Container> using non_lock_queue = queue<Container, dummy_lockable>; //thread safety depends on Container
+template<typename Container> using lock_queue = queue<Container, lockable>;
 
 } //namespace
 

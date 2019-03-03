@@ -13,10 +13,6 @@
 #ifndef _ASCS_BASE_H_
 #define _ASCS_BASE_H_
 
-#if defined(__MINGW32__) || defined(__MINGW64__) //terrible Mingw
-#include <bits/c++config.h> //for printf in stdio.h, it needs macro __USE_MINGW_ANSI_STDIO
-#include <pthread.h> //for ctime_r in time.h, it needs macro _POSIX_THREAD_SAFE_FUNCTIONS
-#endif
 #include <stdio.h>
 #include <stdarg.h>
 
@@ -68,16 +64,23 @@ private:
 
 class tracked_executor;
 class service_pump;
+class i_matrix
+{
+public:
+	virtual bool started() const = 0;
+	virtual service_pump& get_service_pump() = 0;
+	virtual const service_pump& get_service_pump() const = 0;
+
+	virtual std::shared_ptr<tracked_executor> find_socket(uint_fast64_t id) = 0;
+};
+
 namespace tcp
 {
-	class i_server
+	class i_server : public i_matrix
 	{
 	public:
-		virtual service_pump& get_service_pump() = 0;
-		virtual const service_pump& get_service_pump() const = 0;
 		virtual bool del_socket(const std::shared_ptr<tracked_executor>& socket_ptr) = 0;
 		virtual bool restore_socket(const std::shared_ptr<tracked_executor>& socket_ptr, uint_fast64_t id) = 0;
-		virtual std::shared_ptr<tracked_executor> find_socket(uint_fast64_t id) = 0;
 	};
 } //namespace
 
@@ -158,6 +161,119 @@ protected:
 //not like auto_buffer, shared_buffer is copyable, but auto_buffer is a bit more efficient.
 //packer or/and unpacker who used auto_buffer or shared_buffer as its msg type will be replaceable.
 
+//ascs requires that container must take one and only one template argument
+#if defined(_MSC_VER) || defined(__clang__) || _GLIBCXX_USE_CXX11_ABI
+template<typename T> using list = std::list<T>;
+//for list::size() and empty(), ascs::queue needs them to be thread safe no matter itself is lockable or dummy lockable (see ascs::queue for more details).
+#else
+//a substitute of std::list, it's size() function has O(1) complexity and is thread safe (but doesn't have to be consistent)
+//BTW, the naming rule is not mine, I copied them from std::list in Visual C++ 14.0
+template<typename _Ty>
+class list
+{
+public:
+	typedef list<_Ty> _Myt;
+	typedef std::list<_Ty> _Mybase;
+
+	typedef typename _Mybase::value_type value_type;
+	typedef typename _Mybase::size_type size_type;
+
+	typedef typename _Mybase::reference reference;
+	typedef typename _Mybase::const_reference const_reference;
+
+	typedef typename _Mybase::iterator iterator;
+	typedef typename _Mybase::const_iterator const_iterator;
+	typedef typename _Mybase::reverse_iterator reverse_iterator;
+	typedef typename _Mybase::const_reverse_iterator const_reverse_iterator;
+
+#if	__GNUC__ > 4 || __GNUC_MINOR__ > 8
+	typedef const_iterator Iter;
+#else
+	typedef iterator Iter; //just satisfy old gcc compilers (before gcc 4.9)
+#endif
+
+	list() : s(0) {}
+	list(size_type n) : s(n), impl(n) {}
+	list(list&& other) : s(0) {swap(other);}
+
+	list& operator=(list&& other) {clear(); swap(other); return *this;}
+	void swap(list& other) {impl.swap(other.impl); std::swap(s, other.s);}
+
+	bool empty() const {return 0 == s;}
+	size_type size() const {return s;}
+	void resize(size_type _Newsize)
+	{
+		while (s < _Newsize)
+		{
+			impl.emplace_back();
+			++s;
+		}
+
+		if (s > _Newsize)
+		{
+			auto end_iter = std::end(impl);
+			auto begin_iter = _Newsize <= s / 2 ? std::next(std::begin(impl), _Newsize) : std::prev(end_iter, s - _Newsize); //minimize iterator movement
+
+			s = _Newsize;
+			impl.erase(begin_iter, end_iter);
+		}
+	}
+	void clear() {s = 0; impl.clear();}
+	iterator erase(Iter _Where) {--s; return impl.erase(_Where);}
+
+	void push_front(const _Ty& _Val) {++s; impl.push_front(_Val);}
+	void push_front(_Ty&& _Val) {++s; impl.push_front(std::move(_Val));}
+	template<class... _Valty>
+	void emplace_front(_Valty&&... _Val) {++s; impl.emplace_front(std::forward<_Valty>(_Val)...);}
+	void pop_front() {--s; impl.pop_front();}
+	reference front() {return impl.front();}
+	iterator begin() {return impl.begin();}
+	reverse_iterator rbegin() {return impl.rbegin();}
+	const_reference front() const {return impl.front();}
+	const_iterator begin() const {return impl.begin();}
+	const_reverse_iterator rbegin() const {return impl.rbegin();}
+
+	void push_back(const _Ty& _Val) {++s; impl.push_back(_Val);}
+	void push_back(_Ty&& _Val) {++s; impl.push_back(std::move(_Val));}
+	template<class... _Valty>
+	void emplace_back(_Valty&&... _Val) {impl.emplace_back(std::forward<_Valty>(_Val)...); ++s;}
+	void pop_back() {--s; impl.pop_back();}
+	reference back() {return impl.back();}
+	iterator end() {return impl.end();}
+	reverse_iterator rend() {return impl.rend();}
+	const_reference back() const {return impl.back();}
+	const_iterator end() const {return impl.end();}
+	const_reverse_iterator rend() const {return impl.rend();}
+
+	void splice(Iter _Where, _Mybase& _Right) {s += _Right.size(); impl.splice(_Where, _Right);}
+	void splice(Iter _Where, _Mybase& _Right, Iter _First) {++s; impl.splice(_Where, _Right, _First);}
+	void splice(Iter _Where, _Mybase& _Right, Iter _First, Iter _Last)
+	{
+		auto size = std::distance(_First, _Last);
+		//this std::distance invocation is the penalty for making complexity of size() constant.
+		s += size;
+
+		impl.splice(_Where, _Right, _First, _Last);
+	}
+
+	void splice(Iter _Where, _Myt& _Right) {s += _Right.size(); _Right.s = 0; impl.splice(_Where, _Right.impl);}
+	void splice(Iter _Where, _Myt& _Right, Iter _First) {++s; --_Right.s; impl.splice(_Where, _Right.impl, _First);}
+	void splice(Iter _Where, _Myt& _Right, Iter _First, Iter _Last)
+	{
+		auto size = std::distance(_First, _Last);
+		//this std::distance invocation is the penalty for making complexity of size() constant.
+		s += size;
+		_Right.s -= size;
+
+		impl.splice(_Where, _Right.impl, _First, _Last);
+	}
+
+private:
+	volatile size_type s;
+	_Mybase impl;
+};
+#endif
+
 //packer concept
 template<typename MsgType>
 class i_packer
@@ -165,6 +281,7 @@ class i_packer
 public:
 	typedef MsgType msg_type;
 	typedef const msg_type msg_ctype;
+	typedef list<msg_type> container_type;
 
 protected:
 	virtual ~i_packer() {}
@@ -172,6 +289,10 @@ protected:
 public:
 	virtual void reset() {}
 	virtual msg_type pack_msg(const char* const pstr[], const size_t len[], size_t num, bool native = false) = 0;
+	//no native parameter anymore, which means it's always false, if true, you should call direct_(sync_)send_msg instead
+	virtual bool pack_msg(msg_type&& msg, container_type& msg_can) {return false;}
+	virtual bool pack_msg(msg_type&& msg1, msg_type&& msg2, container_type& msg_can) {return false;}
+	virtual bool pack_msg(container_type&& in, container_type& out) {return false;}
 	virtual msg_type pack_heartbeat() {return msg_type();}
 	virtual char* raw_data(msg_type& msg) const {return nullptr;}
 	virtual const char* raw_data(msg_ctype& msg) const {return nullptr;}
@@ -200,7 +321,7 @@ class i_unpacker
 public:
 	typedef MsgType msg_type;
 	typedef const msg_type msg_ctype;
-	typedef std::list<msg_type> container_type;
+	typedef list<msg_type> container_type;
 	typedef ASCS_RECV_BUFFER_TYPE buffer_type;
 
 	bool stripped() const {return _stripped;}
@@ -283,7 +404,7 @@ struct statistic
 	{
 		send_delay_sum = send_time_sum = pack_time_sum = stat_duration(0);
 
-		dispatch_dealy_sum = recv_idle_sum = stat_duration(0);
+		dispatch_delay_sum = recv_idle_sum = stat_duration(0);
 		handle_time_sum = stat_duration(0);
 		unpack_time_sum = stat_duration(0);
 	}
@@ -301,7 +422,7 @@ struct statistic
 
 		recv_msg_sum += other.recv_msg_sum;
 		recv_byte_sum += other.recv_byte_sum;
-		dispatch_dealy_sum += other.dispatch_dealy_sum;
+		dispatch_delay_sum += other.dispatch_delay_sum;
 		recv_idle_sum += other.recv_idle_sum;
 		handle_time_sum += other.handle_time_sum;
 		unpack_time_sum += other.unpack_time_sum;
@@ -324,7 +445,7 @@ struct statistic
 			<< "message sum: " << recv_msg_sum << std::endl
 			<< "size in bytes: " << recv_byte_sum
 #ifdef ASCS_FULL_STATISTIC
-			<< "\ndispatch delay: " << std::chrono::duration_cast<std::chrono::duration<float>>(dispatch_dealy_sum).count() << std::endl
+			<< "\ndispatch delay: " << std::chrono::duration_cast<std::chrono::duration<float>>(dispatch_delay_sum).count() << std::endl
 			<< "recv idle duration: " << std::chrono::duration_cast<std::chrono::duration<float>>(recv_idle_sum).count() << std::endl
 			<< "on_msg_handle duration: " << std::chrono::duration_cast<std::chrono::duration<float>>(handle_time_sum).count() << std::endl
 			<< "unpack duration: " << std::chrono::duration_cast<std::chrono::duration<float>>(unpack_time_sum).count()
@@ -343,7 +464,7 @@ struct statistic
 	//recv corresponding statistic
 	uint_fast64_t recv_msg_sum; //msgs returned by i_unpacker::parse_msg
 	uint_fast64_t recv_byte_sum; //msgs (in bytes) returned by i_unpacker::parse_msg
-	stat_duration dispatch_dealy_sum; //from parse_msg(exclude msg unpacking) to on_msg_handle
+	stat_duration dispatch_delay_sum; //from parse_msg(exclude msg unpacking) to on_msg_handle
 	stat_duration recv_idle_sum; //during this duration, socket suspended msg reception (receiving buffer overflow)
 	stat_duration handle_time_sum; //on_msg_handle (and on_msg) consumed time, this indicate the efficiency of msg handling
 	stat_duration unpack_time_sum; //udp::socket_base will not gather this item
@@ -374,9 +495,13 @@ enum sync_call_result {SUCCESS, NOT_APPLICABLE, DUPLICATE, TIMEOUT};
 template<typename T> struct obj_with_begin_time : public T
 {
 	obj_with_begin_time() {}
+	obj_with_begin_time(const T& obj) : T(obj) {restart();}
 	obj_with_begin_time(T&& obj) : T(std::move(obj)) {restart();}
+	obj_with_begin_time& operator=(const T& obj) {T::operator=(obj); restart(); return *this;}
 	obj_with_begin_time& operator=(T&& obj) {T::operator=(std::move(obj)); restart(); return *this;}
+	obj_with_begin_time(const obj_with_begin_time& other) : T(other), begin_time(other.begin_time) {}
 	obj_with_begin_time(obj_with_begin_time&& other) : T(std::move(other)), begin_time(std::move(other.begin_time)) {}
+	obj_with_begin_time& operator=(const obj_with_begin_time& other) {T::operator=(other); begin_time = other.begin_time; return *this;}
 	obj_with_begin_time& operator=(obj_with_begin_time&& other) {T::operator=(std::move(other)); begin_time = std::move(other.begin_time); return *this;}
 
 	void restart() {restart(statistic::now());}
@@ -384,21 +509,28 @@ template<typename T> struct obj_with_begin_time : public T
 	void swap(T& obj) {T::swap(obj); restart();}
 	void swap(obj_with_begin_time& other) {T::swap(other); std::swap(begin_time, other.begin_time);}
 
+	void clear() {T::clear(); begin_time = typename statistic::stat_time();}
+
 	typename statistic::stat_time begin_time;
 };
 
 #ifdef ASCS_SYNC_SEND
 template<typename T> struct obj_with_begin_time_promise : public obj_with_begin_time<T>
 {
+	typedef obj_with_begin_time<T> super;
+
 	obj_with_begin_time_promise(bool need_promise = false) {check_and_create_promise(need_promise);}
-	obj_with_begin_time_promise(T&& obj, bool need_promise = false) : obj_with_begin_time<T>(std::move(obj)) {check_and_create_promise(need_promise);}
-	obj_with_begin_time_promise(obj_with_begin_time_promise&& other) : obj_with_begin_time<T>(std::move(other)), p(std::move(other.p)) {}
-	obj_with_begin_time_promise& operator=(obj_with_begin_time_promise&& other) {obj_with_begin_time<T>::operator=(std::move(other)); p = std::move(other.p); return *this;}
+	obj_with_begin_time_promise(const T& obj, bool need_promise = false) : super(obj) {check_and_create_promise(need_promise);}
+	obj_with_begin_time_promise(T&& obj, bool need_promise = false) : super(std::move(obj)) {check_and_create_promise(need_promise);}
+	obj_with_begin_time_promise(const obj_with_begin_time_promise& other) : super(other), p(other.p) {}
+	obj_with_begin_time_promise(obj_with_begin_time_promise&& other) : super(std::move(other)), p(std::move(other.p)) {}
+	obj_with_begin_time_promise& operator=(const obj_with_begin_time_promise& other) {super::operator=(other); p = other.p; return *this;}
+	obj_with_begin_time_promise& operator=(obj_with_begin_time_promise&& other) {super::operator=(std::move(other)); p = std::move(other.p); return *this;}
 
-	void swap(T& obj, bool need_promise = false) {obj_with_begin_time<T>::swap(obj); check_and_create_promise(need_promise);}
-	void swap(obj_with_begin_time_promise& other) {obj_with_begin_time<T>::swap(other); p.swap(other.p);}
+	void swap(T& obj, bool need_promise = false) {super::swap(obj); check_and_create_promise(need_promise);}
+	void swap(obj_with_begin_time_promise& other) {super::swap(other); p.swap(other.p);}
 
-	void clear() {p.reset(); T::clear();}
+	void clear() {super::clear(); p.reset();}
 	void check_and_create_promise(bool need_promise) {if (!need_promise) p.reset(); else if (!p) p = std::make_shared<std::promise<sync_call_result>>();}
 
 	std::shared_ptr<std::promise<sync_call_result>> p;
@@ -421,6 +553,14 @@ void do_something_to_one(_Can& __can, _Mutex& __mutex, const _Predicate& __pred)
 
 template<typename _Can, typename _Predicate>
 void do_something_to_one(_Can& __can, const _Predicate& __pred) {for (auto iter = std::begin(__can); iter != std::end(__can); ++iter) if (__pred(*iter)) break;}
+
+template<typename _Can>
+size_t get_size_in_byte(const _Can& __can)
+{
+	size_t size_in_byte = 0;
+	do_something_to_all(__can, [&size_in_byte](typename _Can::const_reference item) {size_in_byte += item.size();});
+	return size_in_byte;
+}
 
 //member functions, used to do something to any member container(except map and multimap) optionally with any member mutex
 #define DO_SOMETHING_TO_ALL_MUTEX(CAN, MUTEX) DO_SOMETHING_TO_ALL_MUTEX_NAME(do_something_to_all, CAN, MUTEX)
@@ -457,7 +597,7 @@ template<typename _Predicate> void NAME(const _Predicate& __pred) const {for (au
 	{msg.clear(); if (CAN.try_dequeue(msg) && msg.p) msg.p->set_value(sync_call_result::NOT_APPLICABLE);}
 #define POP_ALL_PENDING_MSG(FUNNAME, CAN, CANTYPE) void FUNNAME(CANTYPE& can) {can.clear(); CAN.swap(can);}
 #define POP_ALL_PENDING_MSG_NOTIFY(FUNNAME, CAN, CANTYPE) void FUNNAME(CANTYPE& can) \
-	{can.clear(); CAN.swap(can); ascs::do_something_to_all(can, [](decltype(can.front()) msg) {if (msg.p) msg.p->set_value(sync_call_result::NOT_APPLICABLE);});}
+	{can.clear(); CAN.swap(can); ascs::do_something_to_all(can, [](typename CANTYPE::reference msg) {if (msg.p) msg.p->set_value(sync_call_result::NOT_APPLICABLE);});}
 
 ///////////////////////////////////////////////////
 //TCP msg sending interface
@@ -465,21 +605,67 @@ template<typename _Predicate> void NAME(const _Predicate& __pred) const {for (au
 TYPE FUNNAME(const char* pstr, size_t len, bool can_overflow) {return FUNNAME(&pstr, &len, 1, can_overflow);} \
 template<typename Buffer> TYPE FUNNAME(const Buffer& buffer, bool can_overflow = false) {return FUNNAME(buffer.data(), buffer.size(), can_overflow);}
 
-#define TCP_SEND_MSG(FUNNAME, NATIVE, SEND_FUNNAME) \
+#define TCP_SEND_MSG(FUNNAME, NATIVE) \
+bool FUNNAME(in_msg_type&& msg, bool can_overflow = false) \
+{ \
+	if (!can_overflow && !this->is_send_buffer_available()) \
+		return false; \
+	else if (NATIVE) \
+		return do_direct_send_msg(std::move(msg)); \
+	typename Packer::container_type msg_can; \
+	auto_duration dur(stat.pack_time_sum); \
+	auto re = packer_->pack_msg(std::move(msg), msg_can); \
+	dur.end(); \
+	return re ? do_direct_send_msg(msg_can) : FUNNAME(msg, can_overflow); \
+} \
+bool FUNNAME(in_msg_type&& msg1, in_msg_type&& msg2, bool can_overflow = false) \
+{ \
+	if (!can_overflow && !this->is_send_buffer_available()) \
+		return false; \
+	else if (NATIVE) \
+	{ \
+		do_direct_send_msg(std::move(msg1)); \
+		do_direct_send_msg(std::move(msg2)); \
+		return true; /*do_direct_send_msg will always succeed*/ \
+	} \
+	typename Packer::container_type msg_can; \
+	auto_duration dur(stat.pack_time_sum); \
+	auto re = packer_->pack_msg(std::move(msg1), std::move(msg2), msg_can); \
+	dur.end(); \
+	return re && do_direct_send_msg(msg_can); \
+} \
+bool FUNNAME(typename Packer::container_type& msg_can, bool can_overflow = false)  \
+{ \
+	if (!can_overflow && !this->is_send_buffer_available()) \
+		return false; \
+	else if (NATIVE) \
+		return do_direct_send_msg(msg_can); \
+	typename Packer::container_type out; \
+	auto_duration dur(stat.pack_time_sum); \
+	auto re = packer_->pack_msg(msg_can, out); \
+	dur.end(); \
+	return re && do_direct_send_msg(out); \
+} \
 bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) \
 { \
 	if (!can_overflow && !this->is_send_buffer_available()) \
 		return false; \
-	auto_duration dur(this->stat.pack_time_sum); \
-	auto msg = this->packer_->pack_msg(pstr, len, num, NATIVE); \
+	auto_duration dur(stat.pack_time_sum); \
+	auto msg = packer_->pack_msg(pstr, len, num, NATIVE); \
 	dur.end(); \
-	return SEND_FUNNAME(std::move(msg)); \
+	return do_direct_send_msg(std::move(msg)); \
 } \
 TCP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)
 
 //guarantee send msg successfully even if can_overflow equal to false, success at here just means putting the msg into tcp::socket_base's send buffer successfully
 //if can_overflow equal to false and the buffer is not available, will wait until it becomes available
 #define TCP_SAFE_SEND_MSG(FUNNAME, SEND_FUNNAME) \
+bool FUNNAME(in_msg_type&& msg, bool can_overflow = false) \
+	{while (!SEND_FUNNAME(std::move(msg), can_overflow)) SAFE_SEND_MSG_CHECK(false) return true;} \
+bool FUNNAME(in_msg_type&& msg1, in_msg_type&& msg2, bool can_overflow = false) \
+	{while (!SEND_FUNNAME(std::move(msg1), std::move(msg2), can_overflow)) SAFE_SEND_MSG_CHECK(false) return true;} \
+bool FUNNAME(typename Packer::container_type& msg_can, bool can_overflow = false) \
+	{while (!SEND_FUNNAME(msg_can, can_overflow)) SAFE_SEND_MSG_CHECK(false) return true;} \
 bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) \
 	{while (!SEND_FUNNAME(pstr, len, num, can_overflow)) SAFE_SEND_MSG_CHECK(false) return true;} \
 TCP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)
@@ -499,21 +685,70 @@ TYPE FUNNAME(const char* pstr, size_t len, unsigned duration, bool can_overflow)
 template<typename Buffer> TYPE FUNNAME(const Buffer& buffer, unsigned duration = 0, bool can_overflow = false) \
 	{return FUNNAME(buffer.data(), buffer.size(), duration, can_overflow);}
 
-#define TCP_SYNC_SEND_MSG(FUNNAME, NATIVE, SEND_FUNNAME) \
+#define TCP_SYNC_SEND_MSG(FUNNAME, NATIVE) \
+sync_call_result FUNNAME(in_msg_type&& msg, unsigned duration = 0, bool can_overflow = false) \
+{ \
+	if (!can_overflow && !this->is_send_buffer_available()) \
+		return sync_call_result::NOT_APPLICABLE; \
+	else if (NATIVE) \
+		return do_direct_sync_send_msg(std::move(msg), duration); \
+	typename Packer::container_type msg_can; \
+	auto_duration dur(stat.pack_time_sum); \
+	auto re = packer_->pack_msg(std::move(msg), msg_can); \
+	dur.end(); \
+	return re ? do_direct_sync_send_msg(msg_can, duration) : FUNNAME(msg, duration, can_overflow); \
+} \
+sync_call_result FUNNAME(in_msg_type&& msg1, in_msg_type&& msg2, unsigned duration = 0, bool can_overflow = false) \
+{ \
+	if (!can_overflow && !this->is_send_buffer_available()) \
+		return sync_call_result::NOT_APPLICABLE; \
+	else if (NATIVE) \
+	{ \
+		do_direct_sync_send_msg(std::move(msg1), duration); \
+		do_direct_sync_send_msg(std::move(msg2), duration); \
+		return sync_call_result::SUCCESS; /*do_direct_sync_send_msg will always succeed*/ \
+	} \
+	typename Packer::container_type msg_can; \
+	auto_duration dur(stat.pack_time_sum); \
+	auto re = packer_->pack_msg(std::move(msg1), std::move(msg2), msg_can); \
+	dur.end(); \
+	return re ? do_direct_sync_send_msg(msg_can, duration) : sync_call_result::NOT_APPLICABLE; \
+} \
+sync_call_result FUNNAME(typename Packer::container_type& msg_can, unsigned duration = 0, bool can_overflow = false) \
+{ \
+	if (!can_overflow && !this->is_send_buffer_available()) \
+		return sync_call_result::NOT_APPLICABLE; \
+	else if (NATIVE) \
+		return do_direct_sync_send_msg(msg_can, duration); \
+	typename Packer::container_type out; \
+	auto_duration dur(stat.pack_time_sum); \
+	auto re = packer_->pack_msg(msg_can, out); \
+	dur.end(); \
+	return re ? do_direct_sync_send_msg(out, duration) : sync_call_result::NOT_APPLICABLE; \
+} \
 sync_call_result FUNNAME(const char* const pstr[], const size_t len[], size_t num, unsigned duration = 0, bool can_overflow = false) \
 { \
 	if (!can_overflow && !this->is_send_buffer_available()) \
 		return sync_call_result::NOT_APPLICABLE; \
-	auto_duration dur(this->stat.pack_time_sum); \
-	auto msg = this->packer_->pack_msg(pstr, len, num, NATIVE); \
+	auto_duration dur(stat.pack_time_sum); \
+	auto msg = packer_->pack_msg(pstr, len, num, NATIVE); \
 	dur.end(); \
-	return SEND_FUNNAME(std::move(msg), duration); \
+	return do_direct_sync_send_msg(std::move(msg), duration); \
 } \
 TCP_SYNC_SEND_MSG_CALL_SWITCH(FUNNAME, sync_call_result)
 
 //guarantee send msg successfully even if can_overflow equal to false, success at here just means putting the msg into tcp::socket_base's send buffer successfully
 //if can_overflow equal to false and the buffer is not available, will wait until it becomes available
 #define TCP_SYNC_SAFE_SEND_MSG(FUNNAME, SEND_FUNNAME) \
+sync_call_result FUNNAME(in_msg_type&& msg, unsigned duration = 0, bool can_overflow = false) \
+	{while (sync_call_result::SUCCESS != SEND_FUNNAME(std::move(msg), duration, can_overflow)) \
+		SAFE_SEND_MSG_CHECK(sync_call_result::NOT_APPLICABLE) return sync_call_result::SUCCESS;} \
+sync_call_result FUNNAME(in_msg_type&& msg1, in_msg_type&& msg2, unsigned duration = 0, bool can_overflow = false) \
+	{while (sync_call_result::SUCCESS != SEND_FUNNAME(std::move(msg1), std::move(msg2), duration, can_overflow)) \
+		SAFE_SEND_MSG_CHECK(sync_call_result::NOT_APPLICABLE) return sync_call_result::SUCCESS;} \
+sync_call_result FUNNAME(typename Packer::container_type& msg_can, unsigned duration = 0, bool can_overflow = false) \
+	{while (sync_call_result::SUCCESS != SEND_FUNNAME(msg_can, duration, can_overflow)) \
+		SAFE_SEND_MSG_CHECK(sync_call_result::NOT_APPLICABLE) return sync_call_result::SUCCESS;} \
 sync_call_result FUNNAME(const char* const pstr[], const size_t len[], size_t num, unsigned duration = 0, bool can_overflow = false) \
 	{while (sync_call_result::SUCCESS != SEND_FUNNAME(pstr, len, num, duration, can_overflow)) \
 		SAFE_SEND_MSG_CHECK(sync_call_result::NOT_APPLICABLE) return sync_call_result::SUCCESS;} \
@@ -531,14 +766,14 @@ template<typename Buffer> TYPE FUNNAME(const Buffer& buffer, bool can_overflow =
 template<typename Buffer> TYPE FUNNAME(const asio::ip::udp::endpoint& peer_addr, const Buffer& buffer, bool can_overflow = false) \
 	{return FUNNAME(peer_addr, buffer.data(), buffer.size(), can_overflow);}
 
-#define UDP_SEND_MSG(FUNNAME, NATIVE, SEND_FUNNAME) \
+#define UDP_SEND_MSG(FUNNAME, NATIVE) \
 bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) {return FUNNAME(peer_addr, pstr, len, num, can_overflow);} \
 bool FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) \
 { \
 	if (!can_overflow && !this->is_send_buffer_available()) \
 		return false; \
-	in_msg_type msg(peer_addr, this->packer_->pack_msg(pstr, len, num, NATIVE)); \
-	return SEND_FUNNAME(std::move(msg)); \
+	in_msg_type msg(peer_addr, packer_->pack_msg(pstr, len, num, NATIVE)); \
+	return do_direct_send_msg(std::move(msg)); \
 } \
 UDP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)
 
@@ -563,7 +798,7 @@ template<typename Buffer> TYPE FUNNAME(const Buffer& buffer, unsigned duration =
 template<typename Buffer> TYPE FUNNAME(const asio::ip::udp::endpoint& peer_addr, const Buffer& buffer, unsigned duration = 0, bool can_overflow = false) \
 	{return FUNNAME(peer_addr, buffer.data(), buffer.size(), duration, can_overflow);}
 
-#define UDP_SYNC_SEND_MSG(FUNNAME, NATIVE, SEND_FUNNAME) \
+#define UDP_SYNC_SEND_MSG(FUNNAME, NATIVE) \
 sync_call_result FUNNAME(const char* const pstr[], const size_t len[], size_t num, unsigned duration = 0, bool can_overflow = false) \
 	{return FUNNAME(peer_addr, pstr, len, num, duration, can_overflow);} \
 sync_call_result FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* const pstr[], const size_t len[], size_t num, \
@@ -571,8 +806,8 @@ sync_call_result FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* c
 { \
 	if (!can_overflow && !this->is_send_buffer_available()) \
 		return sync_call_result::NOT_APPLICABLE; \
-	in_msg_type msg(peer_addr, this->packer_->pack_msg(pstr, len, num, NATIVE)); \
-	return SEND_FUNNAME(std::move(msg), duration); \
+	in_msg_type msg(peer_addr, packer_->pack_msg(pstr, len, num, NATIVE)); \
+	return do_direct_sync_send_msg(std::move(msg), duration); \
 } \
 UDP_SYNC_SEND_MSG_CALL_SWITCH(FUNNAME, sync_call_result)
 
@@ -581,8 +816,7 @@ UDP_SYNC_SEND_MSG_CALL_SWITCH(FUNNAME, sync_call_result)
 #define UDP_SYNC_SAFE_SEND_MSG(FUNNAME, SEND_FUNNAME) \
 sync_call_result FUNNAME(const char* const pstr[], const size_t len[], size_t num, unsigned duration = 0, bool can_overflow = false) \
 	{return FUNNAME(peer_addr, pstr, len, num, duration, can_overflow);} \
-sync_call_result FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* const pstr[], const size_t len[], size_t num, \
-	unsigned duration = 0, bool can_overflow = false) \
+sync_call_result FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* const pstr[], const size_t len[], size_t num, unsigned duration = 0, bool can_overflow = false) \
 	{while (sync_call_result::SUCCESS != SEND_FUNNAME(peer_addr, pstr, len, num, duration, can_overflow)) \
 		SAFE_SEND_MSG_CHECK(sync_call_result::NOT_APPLICABLE) return sync_call_result::SUCCESS;} \
 UDP_SYNC_SEND_MSG_CALL_SWITCH(FUNNAME, sync_call_result)
@@ -624,7 +858,7 @@ public:
 		if (len >= buff_len)
 			*std::next(buff, buff_len - 1) = '\0';
 		else
-#if defined(_MSC_VER) && _MSC_VER >= 1400
+#ifdef _MSC_VER
 			vsnprintf_s(std::next(buff, len), buff_len - len, _TRUNCATE, fmt, ap);
 #else
 			vsnprintf(std::next(buff, len), buff_len - len, fmt, ap);

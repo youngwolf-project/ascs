@@ -14,13 +14,12 @@
 #define _ASCS_UDP_SOCKET_H_
 
 #include "../socket.h"
-#include "../container.h"
 
 namespace ascs { namespace udp {
 
-template <typename Packer, typename Unpacker, typename Socket = asio::ip::udp::socket,
-	template<typename, typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
-	template<typename, typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
+template <typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = asio::ip::udp::socket,
+	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
+	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
 class socket_base : public socket<Socket, Packer, udp_msg<typename Packer::msg_type>, udp_msg<typename Unpacker::msg_type>, InQueue, InContainer, OutQueue, OutContainer>
 {
 public:
@@ -33,7 +32,8 @@ private:
 	typedef socket<Socket, Packer, in_msg_type, out_msg_type, InQueue, InContainer, OutQueue, OutContainer> super;
 
 public:
-	socket_base(asio::io_context& io_context_) : super(io_context_), has_bound(false), unpacker_(std::make_shared<Unpacker>()), strand(io_context_) {}
+	socket_base(asio::io_context& io_context_) : super(io_context_), strand(io_context_) {first_init();}
+	socket_base(Matrix& matrix_) : super(matrix_.get_service_pump()), strand(matrix_.get_service_pump()) {first_init(&matrix_);}
 
 	virtual bool is_ready() {return has_bound;}
 	virtual void send_heartbeat()
@@ -41,10 +41,14 @@ public:
 		in_msg_type msg(peer_addr, packer_->pack_heartbeat());
 		do_direct_send_msg(std::move(msg));
 	}
+	virtual const char* type_name() const {return "UDP";}
+	virtual int type_id() const {return 0;}
 
 	//reset all, be ensure that there's no any operations performed on this socket when invoke it
 	//subclass must re-write this function to initialize itself, and then do not forget to invoke superclass' reset function too
-	//notice, when reusing this socket, object_pool will invoke this function
+	//notice, when reusing this socket, object_pool will invoke this function, so if you want to do some additional initialization
+	// for this socket, do it at here and in the constructor.
+	//for udp::single_service_base, this virtual function will never be called, please note.
 	virtual void reset()
 	{
 		has_bound = false;
@@ -96,18 +100,20 @@ public:
 
 	///////////////////////////////////////////////////
 	//msg sending interface
-	UDP_SEND_MSG(send_msg, false, do_direct_send_msg) //use the packer with native = false to pack the msgs
-	UDP_SEND_MSG(send_native_msg, true, do_direct_send_msg) //use the packer with native = true to pack the msgs
+	//if the message already packed, do call direct_send_msg or direct_sync_send_msg to reduce unnecessary memory replication, if you will not
+	// use it any more, use std::move to wrap it when calling direct_send_msg or direct_sync_send_msg.
+	UDP_SEND_MSG(send_msg, false) //use the packer with native = false to pack the msgs
+	UDP_SEND_MSG(send_native_msg, true) //use the packer with native = true to pack the msgs
 	//guarantee send msg successfully even if can_overflow equal to false
 	//success at here just means put the msg into udp::socket_base's send buffer
 	UDP_SAFE_SEND_MSG(safe_send_msg, send_msg)
 	UDP_SAFE_SEND_MSG(safe_send_native_msg, send_native_msg)
 
 #ifdef ASCS_SYNC_SEND
-	UDP_SYNC_SEND_MSG(sync_send_msg, false, do_direct_sync_send_msg) //use the packer with native = false to pack the msgs
-	UDP_SYNC_SEND_MSG(sync_send_native_msg, true, do_direct_sync_send_msg) //use the packer with native = true to pack the msgs
+	UDP_SYNC_SEND_MSG(sync_send_msg, false) //use the packer with native = false to pack the msgs
+	UDP_SYNC_SEND_MSG(sync_send_native_msg, true) //use the packer with native = true to pack the msgs
 	//guarantee send msg successfully even if can_overflow equal to false
-	//success at here just means put the msg into tcp::socket_base's send buffer
+	//success at here just means put the msg into udp::socket_base's send buffer
 	UDP_SYNC_SAFE_SEND_MSG(sync_safe_send_msg, sync_send_msg)
 	UDP_SYNC_SAFE_SEND_MSG(sync_safe_send_native_msg, sync_send_native_msg)
 #endif
@@ -115,6 +121,12 @@ public:
 	///////////////////////////////////////////////////
 
 protected:
+	//helper function, just call it in constructor
+	void first_init(Matrix* matrix_ = nullptr) {has_bound = false; unpacker_ = std::make_shared<Unpacker>(); matrix = matrix_;}
+
+	Matrix* get_matrix() {return matrix;}
+	const Matrix* get_matrix() const {return matrix;}
+
 	virtual bool do_start()
 	{
 		auto& lowest_object = this->lowest_layer();
@@ -344,6 +356,7 @@ private:
 	asio::ip::udp::endpoint temp_addr; //used when receiving messages
 	asio::ip::udp::endpoint peer_addr;
 
+	Matrix* matrix;
 	asio::io_context::strand strand;
 };
 

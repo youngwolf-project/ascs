@@ -13,22 +13,12 @@
 							//if the server send messages quickly enough, you will see them cross together.
 #define ASCS_ALIGNED_TIMER
 #define ASCS_CUSTOM_LOG
-#define ASCS_WANT_ALL_MSG_SEND_NOTIFY
 #define ASCS_DEFAULT_UNPACKER	non_copy_unpacker
 //#define ASCS_DEFAULT_UNPACKER	stream_unpacker
 
-//the following three macros demonstrate how to support huge msg(exceed 65535 - 2).
-//huge msg will consume huge memory, for example, if we want to support 1M msg size, because every tcp::socket has a
-//private unpacker which has a fixed buffer with at lest 1M size, so just for unpackers, 1K tcp::socket will consume 1G memory.
-//if we consider the send buffer and recv buffer, the buffer's default max size is 1K, so, every tcp::socket
-//can consume 2G(2 * 1M * 1K) memory when performance testing(both send buffer and recv buffer are full).
-//generally speaking, if there are 1K clients connected to the server, the server can consume
-//1G(occupied by unpackers) + 2G(occupied by msg buffer) * 1K = 2049G memory theoretically.
-//please note that the server also need to define at least ASCS_HUGE_MSG and ASCS_MSG_BUFFER_SIZE macros too.
-
+//the following two macros demonstrate how to support huge msg(exceed 65535 - 2).
 //#define ASCS_HUGE_MSG
-//#define ASCS_MSG_BUFFER_SIZE (1024 * 1024)
-//#define ASCS_MAX_MSG_NUM 8 //reduce msg buffer size to reduce memory occupation
+//#define ASCS_MSG_BUFFER_SIZE (1024 * 1024) //should not bigger than ASCS_MAX_SEND_BUF and ASCS_MAX_RECV_BUF, please note
 #define ASCS_HEARTBEAT_INTERVAL	5 //if use stream_unpacker, heartbeat messages will be treated as normal messages,
 								  //because stream_unpacker doesn't support heartbeat
 //configuration
@@ -59,50 +49,32 @@ using namespace ascs::ext::tcp;
 #define QUIT_COMMAND	"quit"
 #define RESTART_COMMAND	"restart"
 #define RECONNECT		"reconnect"
+#define STATISTIC		"statistic"
 
-//demonstrates how to access client in client_socket (just like access server in server_socket)
-class i_controller
-{
-public:
-	virtual void on_all_msg_send(uint_fast64_t id) = 0;
-	//add more interfaces if needed
-};
-
+//we only want close reconnecting mechanism on this socket, so we don't define macro ASCS_RECONNECT
 class short_connection : public client_socket
 {
 public:
-	short_connection(asio::io_context& io_context_) : client_socket(io_context_), controller(nullptr) {}
-
-	void set_controller(i_controller* _controller) {controller = _controller;}
-	i_controller* get_controller() const {return controller;}
+	short_connection(i_matrix& matrix_) : client_socket(matrix_) {}
 
 protected:
-	virtual void on_connect() {close_reconnect();}
-
-#ifdef ASCS_WANT_ALL_MSG_SEND_NOTIFY
-	virtual void on_all_msg_send(in_msg_type& msg) {controller->on_all_msg_send(id());}
-#endif
-
-private:
-	i_controller* controller;
+	virtual void on_connect() {close_reconnect();} //close reconnecting mechanism
 };
 
-class short_client : public multi_client_base<short_connection>, protected i_controller
+class short_client : public multi_client_base<short_connection>
 {
 public:
 	short_client(service_pump& service_pump_) : multi_client_base(service_pump_) {}
 
 	void set_server_addr(unsigned short _port, const std::string& _ip = ASCS_SERVER_IP) {port = _port; ip = _ip;}
-
-	bool send_msg(const std::string& msg) {return send_msg(msg, port, ip);}
-	bool send_msg(const std::string& msg, unsigned short port, const std::string& ip)
+	bool send_msg(const std::string& msg) {return send_msg(std::string(msg), port, ip);}
+	bool send_msg(std::string&& msg) {return send_msg(std::move(msg), port, ip);}
+	bool send_msg(const std::string& msg, unsigned short port, const std::string& ip) {return send_msg(std::string(msg), port, ip);}
+	bool send_msg(std::string&& msg, unsigned short port, const std::string& ip)
 	{
 		auto socket_ptr = add_socket(port, ip);
-		return socket_ptr ? socket_ptr->set_controller(this), socket_ptr->send_msg(msg) : false;
+		return socket_ptr ? socket_ptr->send_msg(std::move(msg)) : false;
 	}
-
-protected:
-	virtual void on_all_msg_send(uint_fast64_t id) {}
 
 private:
 	unsigned short port;
@@ -149,7 +121,7 @@ int main(int argc, const char* argv[])
 		ip = argv[2];
 
 	client.set_server_addr(port, ip);
-	client2.set_server_addr(port + 1, ip);
+	client2.set_server_addr(port + 100, ip);
 
 	sp.start_service();
 	auto t = create_sync_recv_thread(client);
@@ -172,12 +144,25 @@ int main(int argc, const char* argv[])
 		}
 		else if (RECONNECT == str)
 			client.graceful_shutdown(true);
+		else if (STATISTIC == str)
+			puts(client.get_statistic().to_string().data());
 		else
 		{
-			client.sync_safe_send_msg(str + " (from normal client)", 100);
-			//client.safe_send_msg(str + " (from normal client)");
+			std::string tmp_str = str + " (from short client)"; //make a backup of str first, because it will be moved into client
 
-			client2.send_msg(str + " (from short client)");
+			//each of following 4 tests is exclusive from other 3, because str will be moved into client (to reduce one memory replication)
+			//to avoid this, call other overloads that accept const references.
+			//we also have another 4 tests that send native messages (if the server used stream_unpacker) not listed, you can try to complete them.
+			//test #1
+			client.sync_safe_send_msg(std::move(str), std::string(" (from normal client)"), 100); //new feature introduced in 1.4.0
+			//test #2
+			//client.sync_send_msg(std::move(str), std::string(" (from normal client)"), 100); //new feature introduced in 1.4.0
+			//test #3
+			//client.safe_send_msg(std::move(str),  std::string(" (from normal client)")); //new feature introduced in 1.4.0
+			//test #4
+			//client.send_msg(std::move(str), std::string(" (from normal client)")); //new feature introduced in 1.4.0
+
+			client2.send_msg(tmp_str);
 		}
 	}
 

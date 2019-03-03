@@ -19,11 +19,11 @@ namespace ascs { namespace tcp {
 
 template<typename Socket> using single_client_base = single_socket_service<Socket>;
 
-template<typename Socket, typename Pool = object_pool<Socket>>
-class multi_client_base : public multi_socket_service<Socket, Pool>
+template<typename Socket, typename Pool = object_pool<Socket>, typename Matrix = i_matrix>
+class multi_client_base : public multi_socket_service<Socket, Pool, Matrix>
 {
 private:
-	typedef multi_socket_service<Socket, Pool> super;
+	typedef multi_socket_service<Socket, Pool, Matrix> super;
 
 public:
 	multi_client_base(service_pump& service_pump_) : super(service_pump_) {}
@@ -38,15 +38,18 @@ public:
 		return size;
 	}
 
+	typename Pool::object_type create_object() {return Pool::create_object(*this);}
+	template<typename Arg> typename Pool::object_type create_object(Arg& arg) {return Pool::create_object(*this, arg);}
+
 	using super::add_socket;
 	typename Pool::object_type add_socket()
 	{
-		auto socket_ptr(this->create_object());
+		auto socket_ptr(create_object());
 		return this->add_socket(socket_ptr, false) ? socket_ptr : typename Pool::object_type();
 	}
 	typename Pool::object_type add_socket(unsigned short port, const std::string& ip = ASCS_SERVER_IP)
 	{
-		auto socket_ptr(this->create_object());
+		auto socket_ptr(create_object());
 		if (!socket_ptr)
 			return socket_ptr;
 
@@ -55,7 +58,7 @@ public:
 	}
 	typename Pool::object_type add_socket(unsigned short port, unsigned short local_port, const std::string& ip = ASCS_SERVER_IP, const std::string& local_ip = std::string())
 	{
-		auto socket_ptr(this->create_object());
+		auto socket_ptr(create_object());
 		if (!socket_ptr)
 			return socket_ptr;
 
