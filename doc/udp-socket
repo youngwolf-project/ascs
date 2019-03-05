@@ -2,9 +2,9 @@
 namespace ascs { namespace udp {
 
 udp套接字类，实现udp数据的收发
-template <typename Packer, typename Unpacker, typename Socket = asio::ip::udp::socket,
-	template<typename, typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
-	template<typename, typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
+template <typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = asio::ip::udp::socket,
+	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
+	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
 class socket_base : public socket<Socket, Packer, Unpacker, udp_msg<typename Packer::msg_type>, udp_msg<typename Unpacker::msg_type>, InQueue, InContainer, OutQueue, OutContainer>
 {
 public:
@@ -15,6 +15,7 @@ public:
 
 public:
 	socket_base(asio::io_context& io_context_);
+	socket_base(Matrix& matrix_);
 
 public:
 	virtual bool is_ready();
@@ -23,8 +24,15 @@ public:
 	virtual void send_heartbeat();
 发送一个心跳包。
 
+	virtual const char* type_name() const;
+返回 “UDP”。
+
+	virtual int type_id() const;
+返回 0。
+
 	virtual void reset();
-重置所有，object_pool在重用时会调用。socket_base的子类可重写它以重置自己的状态，记得最后需要调用本类的reset。
+重置所有并调用同类同名函数，如果你在构造函数里面做了额外的配置工作，那么那些配置工作也需要在这里做，因为在对象
+被重用时，不会再调用构造函数，而是这个reset函数。
 
 	void set_local_addr(unsigned short port, const std::string& ip = std::string());
 	const asio::ip::udp::endpoint& get_local_addr() const;
@@ -32,7 +40,7 @@ public:
 
 	bool set_peer_addr(unsigned short port, const std::string& ip = std::string());
 	const asio::ip::udp::endpoint& get_peer_addr() const;
-设置获取对端地址。
+设置获取对端地址，发送消息时也可以指定对端地址，那时这里的对端地址将不使用。
 
 	void disconnect();
 	void force_close();
@@ -83,6 +91,15 @@ safe系列函数，在on_msg和om_msg_handle里面调用时需要特别谨慎，
 以上所有函数都有同步发送版本，请参考tcp::socket_base。
 
 protected:
+	void first_init(Matrix* matrix_ = nullptr);
+构造时调用，仅仅是为了节省代码量而已，因为我们有两个构造函数都将调用它。
+
+	Matrix* get_matrix();
+	const Matrix* get_matrix() const;
+
+	virtual bool do_start();
+创建套接字，绑定到指定端口，然后调用父类的同名函数。
+
 	virtual void on_recv_error(const error_code& ec);
 接收消息出错时回调。
 
@@ -92,18 +109,19 @@ protected:
 #ifdef ASCS_SYNC_SEND
 	virtual void on_close();
 #endif
-通知所有同步发送结束。
+通知所有同步发送结束，然后调用父类同名函数。
 
 private:
 #ifndef ASCS_PASSIVE_RECV
 	virtual void recv_msg();
 post一个异步调用到do_recv_msg()。
 #endif
+
 	virtual void send_msg();
 post一个异步调用到do_send_msg()。
 
 	void shutdown();
-关闭套接字，停止所有定时器，直接派发所有剩余消息，重置所有状态（调用reset_state）。
+调用父类close函数。
 
 	void do_recv_msg();
 调用async_receive_from()。
@@ -132,6 +150,9 @@ private:
 	using super::reading;
 #endif
 
+	bool has_bound;
+是否已经绑定到指定地址。
+
 	typename super::in_msg last_send_msg;
 	std::shared_ptr<i_unpacker<typename Unpacker::msg_type>> unpacker_;
 	asio::ip::udp::endpoint local_addr;
@@ -141,6 +162,7 @@ private:
 它只代表上一次接收udp消息时的对端地址，对于已经接收到的udp消息，对端地址保存在out_msg_type里面。
 如果发送消息时不指定对端地址，则使用peer_addr。
 
+	Matrix* matrix;
 	asio::io_context::strand strand;
 };
 
