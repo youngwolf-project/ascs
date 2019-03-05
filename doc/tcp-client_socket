@@ -2,42 +2,73 @@
 namespace ascs { namespace tcp {
 
 带连接功能的tcp::socket_base，算是一个真正的客户端了
-template <typename Packer, typename Unpacker, typename Socket = asio::ip::tcp::socket,
-	template<typename, typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
-	template<typename, typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
+template <typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = asio::ip::tcp::socket,
+	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
+	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
 class client_socket_base : public socket_base<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer>
 {
-public:
-	client_socket_base(asio::io_service& io_service_);
+private:
+	typedef socket_base<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer> super;
 
-	template<typename Arg>
-	client_socket_base(asio::io_service& io_service_, Arg& arg);
+public:
+	static const typename super::tid TIMER_BEGIN = super::TIMER_END;
+	static const typename super::tid TIMER_CONNECT = TIMER_BEGIN;
+	static const typename super::tid TIMER_END = TIMER_BEGIN + 5;
+
+	client_socket_base(asio::io_service& io_service_);
+	template<typename Arg> client_socket_base(asio::io_context& io_context_, Arg& arg);
+
+	client_socket_base(Matrix& matrix_);
+	template<typename Arg> client_socket_base(Matrix& matrix_, Arg& arg);
 ssl使用。
 
-public:
-	virtual void reset();
-重置所有，object_pool在重用时会调用。client_socket_base的子类可重写它以重置自己的状态，记得最后需要调用本类的reset。
+	virtual const char* type_name() const;
+返回 "TCP (client endpoint)"。
 
-	virtual bool obsoleted();
-在调用父类同名函数的基础上，增加了对是否重连接的判断，如果需要重连接则返回假。
+	virtual int type_id() const;
+返回 1。
+
+	virtual void reset();
+重置重连状态为ASCS_RECONNECT，然后调用父类同名函数。
 
 	void set_server_addr(unsigned short port, const std::string& ip);
 	const boost::asio::ip::tcp::endpoint& get_server_addr() const;
 设置服务端地址用于连接之用，需要在do_start之前被调用。
 
+	bool set_local_addr(unsigned short port, const std::string& ip = std::string());
+	const asio::ip::tcp::endpoint& get_local_addr() const;
+设备本端地址，需要在do_start之前被调用。
+
+	void open_reconnect();
+	void close_reconnect();
+开启关闭自动重连接。
+如果你想关闭重连接，则：
+1.定义ASCS_RECONNECT为false；
+2.在on_connect()中调用close_reconnect()；
+3.重写after_close()并且什么也不做。
+如果你想控制重连接失败之后的重试次数，则重写prepare_reconnect虚函数。
+disconnect(bool), force_shutdown(bool) 和 graceful_shutdown(bool, bool) 可以覆盖宏定义的定义。
+reset()函数会重置重连接行为为ASCS_RECONNECT。
+
 	void disconnect(bool reconnect = false);
 直接调用force_shutdown。
 
 	void force_shutdown(bool reconnect = false);
-强制关闭————调用父类的shutdown，如果reconnect为true，则关闭之后，马上重新连接服务器。
+强制关闭，记录重连接状态，输出一些提示信息，调用父类的shutdown。
 
 	void graceful_shutdown(bool reconnect = false, bool sync = true);
-优雅关闭，调用父类的graceful_shutdown函数，reconnect参数的意义同上，sync参数直接传递给父类。
+优雅关闭，记录重连接状态，输出一些提示信息，调用父类的graceful_shutdown函数。
 在on_msg中，请以sync为false调用该函数，在其它所有service线程中，推荐也用sync为false调用该函数。
-	
+
 protected:
+	void first_init(Matrix* matrix_ = nullptr);
+构造时调用，仅仅是为了节省代码量而已，因为我们有多个构造函数都将调用它。
+
+	Matrix* get_matrix();
+	const Matrix* get_matrix() const;
+
 	virtual bool do_start();
-发起异步连接。
+创建套接字，绑定本端端口，开始异步连接。
 
 	virtual void connect_handler(const asio::error_code& ec);
 异步连接回调函数，如果失败则调用prepare_next_reconnect()，成功则调用父类do_start()。
@@ -63,17 +94,22 @@ protected:
 	virtual void after_close();
 如果需要重连接，则执行重连接。
 
+private:
 	bool prepare_next_reconnect(const asio::error_code& ec);
 如果允许（io_context仍然在运行且prepare_reconnect返回大于等于0），启动定时器以延时一小段时间之后重新连接服务器。
 
-protected:
+private:
 	bool need_reconnect;
 是否重新连接（当连接断开后）。
 
-private:
 	asio::ip::tcp::endpoint server_addr;
 服务器地址。
 
+	asio::ip::tcp::endpoint local_addr;
+本端地址。
+
+	Matrix* matrix;
+用于操控multi_client_base，multi_client_base在创建client_socket_base的时候，会把自己this指针通过构造函数传入。
 };
 
 }} //namespace

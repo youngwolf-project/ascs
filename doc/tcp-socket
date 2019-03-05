@@ -3,8 +3,7 @@ namespace ascs { namespace tcp {
 
 tcp套接字类，实现tcp数据的收发
 template <typename Socket, typename Packer, typename Unpacker,
-	template<typename, typename> class InQueue, template<typename> class InContainer,
-	template<typename, typename> class OutQueue, template<typename> class OutContainer>
+	template<typename> class InQueue, template<typename> class InContainer, template<typename> class OutQueue, template<typename> class OutContainer>
 class socket_base : public socket<Socket, Packer, typename Packer::msg_type, typename Unpacker::msg_type, InQueue, InContainer, OutQueue, OutContainer>
 {
 public:
@@ -40,8 +39,9 @@ public:
 	virtual void send_heartbeat();
 发送一个心跳包。
 
-	void reset();
-重置所有并调用同类同名函数。
+	virtual void reset();
+重置所有并调用同类同名函数，如果你在构造函数里面做了额外的配置工作，那么那些配置工作也需要在这里做，因为在对象
+被重用时，不会再调用构造函数，而是这个reset函数。
 
 	bool is_broken() const;
 连接是否已经断开。
@@ -61,7 +61,7 @@ public:
 获取／修改解包器。
 注意，运行时修改解包器是非线程安全的，只能在如下几个地方修改，切记：
 1. 构造函数；
-2. 子类的reset函数（虚的那个）；
+2. 子类的reset函数；
 3. on_msg（需要定义ASCS_SYNC_DISPATCH宏）；
 4. 定义ASCS_PASSIVE_RECV宏，并在调用(sync_)recv_msg之前修改。
 不支持多线程一是为了效率，二是这个功能用得很少，三是可以通过在unpacker里面加标志位来达到同步的目的。
@@ -70,26 +70,39 @@ public:
 post一个异步调用到do_recv_msg()。
 #endif
 
-	template<typename Buffer> bool send_msg(const Buffer& buffer, bool can_overflow);
+	bool send_msg(in_msg_type&& msg, bool can_overflow = false);
+	bool send_msg(in_msg_type&& msg1, in_msg_type&& msg2, bool can_overflow = false);
+	bool send_msg(typename Packer::container_type& msg_can, bool can_overflow = false);
 	bool send_msg(const char* pstr, size_t len, bool can_overflow);
-	bool send_msg(const char* const pstr[], const size_t len[], size_t num, bool can_overflow);
-发送消息，前两个是helper函数，最后一个才是真正的发送消息（放入消息发送缓存）；第一个调用第二个，第二个调用第三个。
+	template<typename Buffer> bool send_msg(const Buffer& buffer, bool can_overflow = fase);
+	bool send_msg(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = fase);
+发送消息，前三个会为每一个消息打一个只包涵头的包，另一个直接move到库的缓存里面，减少一次内存拷贝，
+第四、五个是helper函数，第五个调用第四个，第四个调用第六个。
 
-	template<typename Buffer> bool send_native_msg(const Buffer& buffer, bool can_overflow);
+	bool send_native_msg(in_msg_type&& msg, bool can_overflow = false);
+	bool send_native_msg(in_msg_type&& msg1, in_msg_type&& msg2, bool can_overflow = false);
+	bool send_native_msg(typename Packer::container_type& msg_can, bool can_overflow = false);
 	bool send_native_msg(const char* pstr, size_t len, bool can_overflow);
-	bool send_native_msg(const char* const pstr[], const size_t len[], size_t num, bool can_overflow);
-同上，只是以native为true调用i_packer::pack_msg接口。
+	template<typename Buffer> bool send_native_msg(const Buffer& buffer, bool can_overflow = fase);
+	bool send_native_msg(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = fase);
+同上，只是以native为true调用i_packer::pack_msg接口，对于前三个，则干脆不调用i_packer::pack_msg函数。
 
-	template<typename Buffer> bool safe_send_msg(const Buffer& buffer, bool can_overflow);
+	bool safe_send_msg(in_msg_type&& msg, bool can_overflow = false);
+	bool safe_send_msg(in_msg_type&& msg1, in_msg_type&& msg2, bool can_overflow = false);
+	bool safe_send_msg(typename Packer::container_type& msg_can, bool can_overflow = false);
 	bool safe_send_msg(const char* pstr, size_t len, bool can_overflow);
+	template<typename Buffer> bool safe_send_msg(const Buffer& buffer, bool can_overflow);
 	bool safe_send_msg(const char* const pstr[], const size_t len[], size_t num, bool can_overflow);
 同send_msg，只是在消息发送缓存溢出的时候会等待直到缓存可用；如果is_ready()返回false或者io_context已经停止，则马上放弃等待返回失败。
 safe系列函数，在on_msg和om_msg_handle里面调用时需要特别谨慎，因为它会阻塞service线程。
 
-	template<typename Buffer> bool safe_send_native_msg(const Buffer& buffer, bool can_overflow);
+	bool safe_send_native_msg(in_msg_type&& msg, bool can_overflow = false);
+	bool safe_send_native_msg(in_msg_type&& msg1, in_msg_type&& msg2, bool can_overflow = false);
+	bool safe_send_native_msg(typename Packer::container_type& msg_can, bool can_overflow = false);
 	bool safe_send_native_msg(const char* pstr, size_t len, bool can_overflow);
+	template<typename Buffer> bool safe_send_native_msg(const Buffer& buffer, bool can_overflow);
 	bool safe_send_native_msg(const char* const pstr[], const size_t len[], size_t num, bool can_overflow);
-同上，只是以native为true调用i_packer::pack_msg接口。
+同上，只是以native为true调用i_packer::pack_msg接口，对于前三个，则干脆不调用i_packer::pack_msg函数。
 
 以上所有函数都有对应的一个以sync_开头的版本，表示同步发送，同时带一个超时间隔，为0则永远等待直到发送成功。
 注意超时返回不代表是错误，库用异步写来模拟同步写，超时返回之后，消息仍然可以在将来的某个时候被成功发送，此时on_msg_send仍然会
@@ -99,16 +112,18 @@ protected:
 	void force_shutdown();
 	void graceful_shutdown(bool sync);
 第一个直接直接调用shutdown()。
-第二个函数优雅关闭套接字，所谓优雅关闭，就是先关闭自己的数据发送，然后接收完遗留数据之后，才完全关闭套接字。当sync为假时，graceful_shutdown马上返回，
-优雅关闭将在后台继承进行，当回调到on_recv_error的时候，关闭结束（有可能优雅关闭成功，有可能超时被强制关闭，超时由ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION宏决定）。
+第二个函数优雅关闭套接字，所谓优雅关闭，就是先关闭自己的数据发送，然后接收完遗留数据之后，才完全关闭套接字。当sync为假时，
+graceful_shutdown马上返回，优雅关闭将在后台继承进行，当回调到on_recv_error的时候，关闭结束（有可能优雅关闭成功，有可能超时
+被强制关闭，超时由ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION宏决定）。
 
 virtual bool do_start();
 记录连接建立时间，更新连接状态为已连接，调用on_connect()，调用父类同名函数。
 
-#ifdef ASCS_SYNC_SEND
+	virtual void on_send_error(const error_code& ec);
+发送失败时回调。
+
 	virtual void on_close();
-#endif
-通知所有同步发送结束。
+更新连接状态为断开状态，通知所有同步发送结束，调用父类同名函数。
 
 	virtual void on_connect();
 连接建立后回调。
@@ -117,7 +132,7 @@ virtual bool do_start();
 解包出错时回调。
 
 	virtual void on_async_shutdown_error() = 0;
-异步关闭连接失败时架设。
+异步关闭连接失败时回调。
 
 private:
 #ifndef ASCS_PASSIVE_RECV
@@ -137,7 +152,7 @@ post一个异步调用到do_send_msg()。
 调用async_read。
 
 	void recv_handler(const error_code& ec, size_t bytes_transferred);
-收到数据后asio回调。
+收到消息后由asio回调。
 
 	bool do_send_msg(bool in_strand);
 调用async_write。
@@ -164,7 +179,7 @@ private:
 #endif
 
 	std::shared_ptr<i_unpacker<out_msg_type>> unpacker_;
-	list<typename super::in_msg> last_send_msg;
+	typename super::in_containter_type last_send_msg;
 	asio::io_context::strand strand;
 };
 

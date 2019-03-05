@@ -194,19 +194,7 @@ private:
 	using super::do_direct_sync_send_msg;
 #endif
 
-	void shutdown()
-	{
-		this->stop_all_timer();
-		close();
-
-		auto& lowest_object = this->lowest_layer();
-		if (lowest_object.is_open())
-		{
-			asio::error_code ec;
-			lowest_object.shutdown(asio::ip::udp::socket::shutdown_both, ec);
-			lowest_object.close(ec);
-		}
-	}
+	void shutdown() {close();}
 
 	void do_recv_msg()
 	{
