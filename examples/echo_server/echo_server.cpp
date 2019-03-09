@@ -170,6 +170,17 @@ protected:
 };
 #endif
 
+//demonstrate how to accept just one client at server endpoint
+class normal_server : public server_base<normal_socket>
+{
+public:
+	normal_server(service_pump& service_pump_) : server_base(service_pump_) {}
+
+protected:
+	virtual int async_accept_num() {return 1;} //this make on_accept to be called in single thread, because stop_listen() is not thread safe
+	virtual bool on_accept(object_ctype& socket_ptr) {stop_listen(); return true;}
+};
+
 class short_connection : public server_socket_base<packer, unpacker>
 {
 public:
@@ -204,13 +215,11 @@ int main(int argc, const char* argv[])
 		puts("type " QUIT_COMMAND " to end.");
 
 	service_pump sp;
-	//only need a simple server? you can directly use server or tcp::server_base, because of normal_socket,
-	//this server cannot support fixed_length_packer/fixed_length_unpacker and prefix_suffix_packer/prefix_suffix_unpacker,
-	//the reason is these packer and unpacker need additional initializations that normal_socket not implemented,
-	//see echo_socket's constructor for more details.
-	server_base<normal_socket> normal_server(sp);
-	server_base<short_connection> short_server(sp);
+	//because of normal_socket, this server cannot support fixed_length_packer/fixed_length_unpacker and prefix_suffix_packer/prefix_suffix_unpacker,
+	//the reason is these packer and unpacker need additional initializations that normal_socket not implemented, see echo_socket's constructor for more details.
+	normal_server normal_server_(sp);
 	echo_server echo_server_(sp); //echo server
+	server_base<short_connection> short_server(sp);
 
 	unsigned short port = ASCS_SERVER_PORT;
 	std::string ip;
@@ -219,7 +228,7 @@ int main(int argc, const char* argv[])
 	if (argc > 3)
 		ip = argv[3];
 
-	normal_server.set_server_addr(port + 100, ip);
+	normal_server_.set_server_addr(port + 100, ip);
 	short_server.set_server_addr(port + 200, ip);
 	echo_server_.set_server_addr(port, ip);
 
@@ -247,19 +256,19 @@ int main(int argc, const char* argv[])
 		}
 		else if (STATISTIC == str)
 		{
-			printf("normal server, link #: " ASCS_SF ", invalid links: " ASCS_SF "\n", normal_server.size(), normal_server.invalid_object_size());
+			printf("normal server, link #: " ASCS_SF ", invalid links: " ASCS_SF "\n", normal_server_.size(), normal_server_.invalid_object_size());
 			printf("echo server, link #: " ASCS_SF ", invalid links: " ASCS_SF "\n\n", echo_server_.size(), echo_server_.invalid_object_size());
 			puts(echo_server_.get_statistic().to_string().data());
 		}
 		else if (STATUS == str)
 		{
-			normal_server.list_all_status();
+			normal_server_.list_all_status();
 			echo_server_.list_all_status();
 		}
 		else if (LIST_ALL_CLIENT == str)
 		{
 			puts("clients from normal server:");
-			normal_server.list_all_object();
+			normal_server_.list_all_object();
 			puts("clients from echo server:");
 			echo_server_.list_all_object();
 		}
@@ -271,7 +280,7 @@ int main(int argc, const char* argv[])
 		{
 //			/*
 			//broadcast series functions call pack_msg for each client respectively, because clients may used different protocols(so different type of packers, of course)
-			normal_server.broadcast_msg(str.data(), str.size() + 1, false);
+			normal_server_.broadcast_msg(str.data(), str.size() + 1, false);
 			//send \0 character too, because demo client used basic_buffer as its msg type, it will not append \0 character automatically as std::string does,
 			//so need \0 character when printing it.
 //			*/
@@ -282,11 +291,11 @@ int main(int argc, const char* argv[])
 			//send \0 character too, because demo client used basic_buffer as its msg type, it will not append \0 character automatically as std::string does,
 			//so need \0 character when printing it.
 			if (!msg.empty())
-				normal_server.do_something_to_all([&msg](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(msg);});
+				normal_server_.do_something_to_all([&msg](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(msg);});
 			*/
 			/*
 			//if demo client is using stream_unpacker
-			normal_server.do_something_to_all([&str](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(str);});
+			normal_server_.do_something_to_all([&str](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(str);});
 			*/
 		}
 	}
