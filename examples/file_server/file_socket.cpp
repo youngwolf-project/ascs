@@ -10,9 +10,9 @@
 //sent to file_client, so sending buffer will always be empty, which means we will never operate sending buffer concurrently,
 //so need no locks.
 #if defined(_MSC_VER) && _MSC_VER <= 1800
-#define ASCS_DEFAULT_PACKER replaceable_packer<shared_buffer<i_buffer>>
+#define ASCS_DEFAULT_PACKER packer2<shared_buffer<i_buffer>>
 #else
-#define ASCS_DEFAULT_PACKER replaceable_packer<>
+#define ASCS_DEFAULT_PACKER packer2<>
 #endif
 #define ASCS_RECV_BUFFER_TYPE std::vector<asio::mutable_buffer> //scatter-gather buffer, it's very useful under certain situations (for example, ring buffer).
 #define ASCS_SCATTERED_RECV_BUFFER //used by unpackers, not belongs to ascs

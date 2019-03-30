@@ -125,10 +125,10 @@ public:
 protected:
 	buffer_type buffer;
 };
-typedef auto_buffer<i_buffer> replaceable_buffer;
 
 //convert '->' operation to '.' operation
 //user need to allocate object, and shared_buffer will free it
+//not like auto_buffer, shared_buffer is copyable (seemingly), but auto_buffer is a bit more efficient.
 template<typename T> class shared_buffer
 {
 public:
@@ -158,8 +158,6 @@ public:
 protected:
 	buffer_type buffer;
 };
-//not like auto_buffer, shared_buffer is copyable, but auto_buffer is a bit more efficient.
-//packer or/and unpacker who used auto_buffer or shared_buffer as its msg type will be replaceable.
 
 //ascs requires that container must take one and only one template argument
 #if defined(_MSC_VER) || defined(__clang__) || _GLIBCXX_USE_CXX11_ABI

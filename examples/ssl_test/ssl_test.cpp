@@ -7,11 +7,11 @@
 #define ASCS_REUSE_SSL_STREAM
 #define ASCS_ENHANCED_STABILITY
 //#if defined(_MSC_VER) && _MSC_VER <= 1800
-//#define ASCS_DEFAULT_PACKER replaceable_packer<shared_buffer<i_buffer>>
+//#define ASCS_DEFAULT_PACKER packer2<shared_buffer<i_buffer>>
 //#else
-//#define ASCS_DEFAULT_PACKER replaceable_packer<>
+//#define ASCS_DEFAULT_PACKER packer2<>
 //#endif
-//#define ASCS_DEFAULT_UNPACKER replaceable_unpacker<>
+//#define ASCS_DEFAULT_UNPACKER unpacker2<>
 #define ASCS_HEARTBEAT_INTERVAL	5 //SSL has supported heartbeat because we used user data instead of OOB to implement
 								  //heartbeat since 1.2.0
 //configuration

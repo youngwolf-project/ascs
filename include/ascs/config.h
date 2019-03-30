@@ -56,7 +56,6 @@
  * In contrast to non_lock_queue, split message_queue into lock_queue and lock_free_queue.
  * Move container related classes and functions from base.h to container.h.
  * Improve efficiency in scenarios of low throughput like pingpong test.
- * Replaceable packer/unpacker now support replaceable_buffer (an alias of auto_buffer) and shared_buffer to be their message type.
  * Move class statistic and obj_with_begin_time out of ascs::socket to reduce template tiers.
  *
  * 2016.11.1	version 1.1.2
@@ -480,6 +479,8 @@
  * statistic.send_msg_sum may be bigger than before (but statistic.send_byte_sum will be the same), see ENHANCEMENTS section for more details.
  * Not support gcc 4.6 any more, please use st_asio_wrapper instead.
  * Make function tcp::socket_base::reset to be virtual.
+ * Rename replaceable_unpacker to unpacker2, replaceable_udp_unpacker to udp_unpacker2, replaceable_packer to packer2, because their names confuse
+ *  users, any packer or unpacker is replaceable for those packer or unpacker that has the same msg_type.
  *
  * HIGHLIGHT:
  * Make client_socket_base be able to call multi_client_base (via i_matrix) like server_socket_base call server_base (via i_server),
@@ -503,6 +504,9 @@
  * direct_send_msg and direct_sync_send_msg support batch operation.
  * Introduce virtual function type_name() and type_id() to ascs::socket, they can identify whether a given two ascs::socket has the same type.
  * force_shutdown and graceful_shutdown support reconnecting even if the link has broken.
+ * Extract function start_listen from current implementations.
+ * Support concurrency hint for io_context if possible.
+ * Demonstrate how to accept just one client at server endpoint in demo echo_server.
  *
  * DELETION:
  *

@@ -22,17 +22,17 @@
 //use the following macro to control the type of packer and unpacker
 #define PACKER_UNPACKER_TYPE	0
 //0-default packer and unpacker, head(length) + body
-//1-replaceable packer and unpacker, head(length) + body
+//1-packer2 and unpacker2, head(length) + body
 //2-fixed length packer and unpacker
 //3-prefix and/or suffix packer and unpacker
 
 #if 1 == PACKER_UNPACKER_TYPE
 #if defined(_MSC_VER) && _MSC_VER <= 1800
-#define ASCS_DEFAULT_PACKER replaceable_packer<shared_buffer<i_buffer>>
+#define ASCS_DEFAULT_PACKER packer2<shared_buffer<i_buffer>>
 #else
-#define ASCS_DEFAULT_PACKER replaceable_packer<>
+#define ASCS_DEFAULT_PACKER packer2<>
 #endif
-#define ASCS_DEFAULT_UNPACKER replaceable_unpacker<>
+#define ASCS_DEFAULT_UNPACKER unpacker2<>
 #elif 2 == PACKER_UNPACKER_TYPE
 #undef ASCS_HEARTBEAT_INTERVAL
 #define ASCS_HEARTBEAT_INTERVAL	0 //not support heartbeat
