@@ -7,7 +7,6 @@
 #define ASCS_PASSIVE_RECV
 //#define ASCS_INPUT_QUEUE non_lock_queue
 //we cannot use non_lock_queue, because we also send messages (talking messages) out of ascs::socket::on_msg_send().
-#define ASCS_DEFAULT_UNPACKER unpacker2<>
 #define ASCS_RECV_BUFFER_TYPE std::vector<asio::mutable_buffer> //scatter-gather buffer, it's very useful under certain situations (for example, ring buffer).
 #define ASCS_SCATTERED_RECV_BUFFER //used by unpackers, not belongs to ascs
 //configuration
