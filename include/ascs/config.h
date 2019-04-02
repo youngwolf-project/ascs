@@ -479,8 +479,6 @@
  * statistic.send_msg_sum may be bigger than before (but statistic.send_byte_sum will be the same), see ENHANCEMENTS section for more details.
  * Not support gcc 4.6 any more, please use st_asio_wrapper instead.
  * Make function tcp::socket_base::reset to be virtual.
- * Rename replaceable_unpacker to unpacker2, replaceable_udp_unpacker to udp_unpacker2, replaceable_packer to packer2, because their names confuse
- *  users, any packer or unpacker is replaceable for those packer or unpacker that has the same msg_type.
  *
  * HIGHLIGHT:
  * Make client_socket_base be able to call multi_client_base (via i_matrix) like server_socket_base call server_base (via i_server),
@@ -504,6 +502,26 @@
  * direct_send_msg and direct_sync_send_msg support batch operation.
  * Introduce virtual function type_name() and type_id() to ascs::socket, they can identify whether a given two ascs::socket has the same type.
  * force_shutdown and graceful_shutdown support reconnecting even if the link has broken.
+ *
+ * DELETION:
+ *
+ * REFACTORING:
+ * Unify all container to ascs::list (before, some of them were std::list).
+ *
+ * REPLACEMENTS:
+ *
+ * ===============================================================
+ * 2019.4.6		version 1.4.1
+ *
+ * SPECIAL ATTENTION (incompatible with old editions):
+ * Rename replaceable_unpacker to unpacker2, replaceable_udp_unpacker to udp_unpacker2, replaceable_packer to packer2, because their names confuse
+ *  users, any packer or unpacker is replaceable for those packer or unpacker that has the same msg_type.
+ *
+ * HIGHLIGHT:
+ *
+ * FIX:
+ *
+ * ENHANCEMENTS:
  * Extract function start_listen from current implementations.
  * Support concurrency hint for io_context if possible.
  * Demonstrate how to accept just one client at server endpoint in demo echo_server.
@@ -511,7 +529,6 @@
  * DELETION:
  *
  * REFACTORING:
- * Unify all container to ascs::list (before, some of them were std::list).
  *
  * REPLACEMENTS:
  *
@@ -524,8 +541,8 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#define ASCS_VER		10400	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.4.0"
+#define ASCS_VER		10401	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.4.1"
 
 //asio and compiler check
 #ifdef _MSC_VER
