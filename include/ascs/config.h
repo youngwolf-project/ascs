@@ -520,6 +520,8 @@
  * HIGHLIGHT:
  *
  * FIX:
+ * Fix corrupt std::future because of the deletion of the owner (std::promise).
+ * Fix infinite waiting after sync message sending or receiving failed.
  *
  * ENHANCEMENTS:
  * Extract function start_listen from current implementations.

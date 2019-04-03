@@ -267,8 +267,6 @@ protected:
 
 		return true;
 	}
-
-	virtual void on_recv_error(const asio::error_code& ec) = 0; //receiving error or peer endpoint quit(false ec means okay)
 	virtual bool on_heartbeat_error() = 0; //heartbeat timed out, return true to continue heartbeat function (useful for UDP)
 
 	//if ASCS_DELAY_CLOSE is equal to zero, in this callback, socket guarantee that there's no any other async call associated it,
@@ -354,6 +352,20 @@ protected:
 		}
 
 		return true;
+	}
+
+	void handle_error()
+	{
+#ifdef ASCS_SYNC_RECV
+		std::unique_lock<std::mutex> lock(sync_recv_mutex);
+		if (sync_recv_status::REQUESTED == sr_status)
+		{
+			sr_status = sync_recv_status::RESPONDED;
+			sync_recv_cv.notify_one();
+
+			sync_recv_cv.wait(lock, [this]() {return !this->started_ || sync_recv_status::RESPONDED != this->sr_status;});
+		}
+#endif
 	}
 
 	bool handle_msg()
@@ -446,7 +458,8 @@ protected:
 		}
 
 		auto unused = in_msg(std::forward<T>(msg), true);
-		auto f = unused.p->get_future();
+		auto p = unused.p;
+		auto f = p->get_future();
 		if (!send_msg_buffer.enqueue(std::move(unused)))
 			return sync_call_result::NOT_APPLICABLE;
 		else if (!sending && is_ready())
@@ -467,7 +480,8 @@ protected:
 		ascs::do_something_to_all(msg_can, [&size_in_byte, &temp_buffer](InMsgType& msg) {size_in_byte += msg.size(); temp_buffer.emplace_back(std::move(msg));});
 
 		temp_buffer.back().check_and_create_promise(true);
-		auto f = temp_buffer.back().p->get_future();
+		auto p = temp_buffer.back().p;
+		auto f = p->get_future();
 		send_msg_buffer.move_items_in(temp_buffer, size_in_byte);
 		if (!sending && is_ready())
 			send_msg();
