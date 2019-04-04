@@ -37,7 +37,8 @@ public:
 
 protected:
 	socket(asio::io_context& io_context_) : super(io_context_), next_layer_(io_context_), strand(io_context_) {first_init();}
-	template<typename Arg> socket(asio::io_context& io_context_, Arg& arg) : super(io_context_), next_layer_(io_context_, arg), strand(io_context_) {first_init();}
+	template<typename Arg>
+	socket(asio::io_context& io_context_, Arg&& arg) : super(io_context_), next_layer_(io_context_, std::forward<Arg>(arg)), strand(io_context_) {first_init();}
 
 	//helper function, just call it in constructor
 	void first_init()
@@ -360,10 +361,10 @@ protected:
 		std::unique_lock<std::mutex> lock(sync_recv_mutex);
 		if (sync_recv_status::REQUESTED == sr_status)
 		{
-			sr_status = sync_recv_status::RESPONDED;
+			sr_status = sync_recv_status::RESPONDED_FAILURE;
 			sync_recv_cv.notify_one();
 
-			sync_recv_cv.wait(lock, [this]() {return !this->started_ || sync_recv_status::RESPONDED != this->sr_status;});
+			sync_recv_cv.wait(lock, [this]() {return !this->started_ || sync_recv_status::RESPONDED_FAILURE != this->sr_status;});
 		}
 #endif
 	}
@@ -661,7 +662,7 @@ private:
 	asio::io_context::strand strand;
 
 #ifdef ASCS_SYNC_RECV
-	enum sync_recv_status {NOT_REQUESTED, REQUESTED, RESPONDED};
+	enum sync_recv_status {NOT_REQUESTED, REQUESTED, RESPONDED, RESPONDED_FAILURE};
 	sync_recv_status sr_status;
 
 	std::mutex sync_recv_mutex;

@@ -40,7 +40,7 @@ class socket : public Socket
 #endif
 
 public:
-	template<typename Arg> socket(Arg& arg, asio::ssl::context& ctx) : Socket(arg, ctx) {}
+	template<typename Arg> socket(Arg&& arg, asio::ssl::context& ctx) : Socket(std::forward<Arg>(arg), ctx) {}
 
 protected:
 	virtual void on_recv_error(const asio::error_code& ec)
@@ -168,11 +168,11 @@ private:
 	typedef ascs::object_pool<Object> super;
 
 public:
-	object_pool(service_pump& service_pump_, const asio::ssl::context::method& m) : super(service_pump_), ctx(m) {}
+	object_pool(service_pump& service_pump_, asio::ssl::context::method m) : super(service_pump_), ctx(m) {}
 	asio::ssl::context& context() {return ctx;}
 
 protected:
-	template<typename Arg> typename object_pool::object_type create_object(Arg& arg) {return super::create_object(arg, ctx);}
+	template<typename Arg> typename object_pool::object_type create_object(Arg&& arg) {return super::create_object(std::forward<Arg>(arg), ctx);}
 
 private:
 	asio::ssl::context ctx;

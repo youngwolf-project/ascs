@@ -31,10 +31,10 @@ public:
 	static const typename super::tid TIMER_END = TIMER_BEGIN + 5;
 
 	client_socket_base(asio::io_context& io_context_) : super(io_context_) {first_init();}
-	template<typename Arg> client_socket_base(asio::io_context& io_context_, Arg& arg) : super(io_context_, arg) {first_init();}
+	template<typename Arg> client_socket_base(asio::io_context& io_context_, Arg&& arg) : super(io_context_, std::forward<Arg>(arg)) {first_init();}
 
 	client_socket_base(Matrix& matrix_) : super(matrix_.get_service_pump()) {first_init(&matrix_);}
-	template<typename Arg> client_socket_base(Matrix& matrix_, Arg& arg) : super(matrix_.get_service_pump(), arg) {first_init(&matrix_);}
+	template<typename Arg> client_socket_base(Matrix& matrix_, Arg&& arg) : super(matrix_.get_service_pump(), std::forward<Arg>(arg)) {first_init(&matrix_);}
 
 	virtual const char* type_name() const {return "TCP (client endpoint)";}
 	virtual int type_id() const {return 1;}

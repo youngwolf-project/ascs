@@ -23,7 +23,7 @@ class server_base : public Server, public Pool
 public:
 	server_base(service_pump& service_pump_) : Pool(service_pump_), acceptor(service_pump_) {set_server_addr(ASCS_SERVER_PORT);}
 	template<typename Arg>
-	server_base(service_pump& service_pump_, const Arg& arg) : Pool(service_pump_, arg), acceptor(service_pump_) {set_server_addr(ASCS_SERVER_PORT);}
+	server_base(service_pump& service_pump_, Arg&& arg) : Pool(service_pump_, std::forward<Arg>(arg)), acceptor(service_pump_) {set_server_addr(ASCS_SERVER_PORT);}
 
 	bool set_server_addr(unsigned short port, const std::string& ip = std::string())
 	{
@@ -176,7 +176,7 @@ protected:
 
 protected:
 	typename Pool::object_type create_object() {return Pool::create_object(*this);}
-	template<typename Arg> typename Pool::object_type create_object(Arg& arg) {return Pool::create_object(*this, arg);}
+	template<typename Arg> typename Pool::object_type create_object(Arg&& arg) {return Pool::create_object(*this, std::forward<Arg>(arg));}
 
 	bool add_socket(typename Pool::object_ctype& socket_ptr)
 	{

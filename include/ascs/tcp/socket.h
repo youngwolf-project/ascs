@@ -34,7 +34,7 @@ protected:
 	enum link_status {CONNECTED, FORCE_SHUTTING_DOWN, GRACEFUL_SHUTTING_DOWN, BROKEN};
 
 	socket_base(asio::io_context& io_context_) : super(io_context_), strand(io_context_) {first_init();}
-	template<typename Arg> socket_base(asio::io_context& io_context_, Arg& arg) : super(io_context_, arg), strand(io_context_) {first_init();}
+	template<typename Arg> socket_base(asio::io_context& io_context_, Arg&& arg) : super(io_context_, std::forward<Arg>(arg)), strand(io_context_) {first_init();}
 
 	//helper function, just call it in constructor
 	void first_init() {status = link_status::BROKEN; unpacker_ = std::make_shared<Unpacker>();}

@@ -527,6 +527,8 @@
  * Extract function start_listen from current implementations.
  * Support concurrency hint for io_context if possible.
  * Demonstrate how to accept just one client at server endpoint in demo echo_server.
+ * Demonstrate how to change local address if the binding was failed (in demo udp_test).
+ * Enhance flexibility via rvalue reference and std::forward.
  *
  * DELETION:
  *

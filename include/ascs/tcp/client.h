@@ -27,8 +27,7 @@ private:
 
 public:
 	multi_client_base(service_pump& service_pump_) : super(service_pump_) {}
-	template<typename Arg>
-	multi_client_base(service_pump& service_pump_, const Arg& arg) : super(service_pump_, arg) {}
+	template<typename Arg> multi_client_base(service_pump& service_pump_, Arg&& arg) : super(service_pump_, std::forward<Arg>(arg)) {}
 
 	//connected link size, may smaller than total object size (object_pool::size)
 	size_t valid_size()
@@ -39,7 +38,7 @@ public:
 	}
 
 	typename Pool::object_type create_object() {return Pool::create_object(*this);}
-	template<typename Arg> typename Pool::object_type create_object(Arg& arg) {return Pool::create_object(*this, arg);}
+	template<typename Arg> typename Pool::object_type create_object(Arg&& arg) {return Pool::create_object(*this, std::forward<Arg>(arg));}
 
 	using super::add_socket;
 	typename Pool::object_type add_socket()
