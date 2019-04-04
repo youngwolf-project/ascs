@@ -185,6 +185,8 @@ protected:
 	//DO NOT hold msg_can for future using, just swap its content with your own container in this virtual function.
 	virtual void on_send_error(const asio::error_code& ec, list<typename super::in_msg>& msg_can) {unified_out::error_out("send msg error (%d %s)", ec.value(), ec.message().data());}
 
+	virtual void on_recv_error(const asio::error_code& ec) = 0;
+
 	virtual void on_close()
 	{
 #ifdef ASCS_SYNC_SEND
@@ -207,6 +209,7 @@ private:
 	virtual void send_msg() {this->dispatch_strand(strand, [this]() {this->do_send_msg(false);});}
 
 	using super::close;
+	using super::handle_error;
 	using super::handle_msg;
 	using super::do_direct_send_msg;
 #ifdef ASCS_SYNC_SEND
@@ -272,7 +275,10 @@ private:
 			reading = false; //clear reading flag before call handle_msg() to make sure that recv_msg() can be called successfully in on_msg_handle()
 #endif
 			if (ec)
-				this->on_recv_error(ec);
+			{
+				handle_error();
+				on_recv_error(ec);
+			}
 			else if (handle_msg()) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
 				do_recv_msg(); //receive msg in sequence
 		}
@@ -342,6 +348,9 @@ private:
 		}
 		else
 		{
+#ifdef ASCS_SYNC_SEND
+			ascs::do_something_to_all(last_send_msg, [](typename super::in_msg& item) {if (item.p) {item.p->set_value(sync_call_result::NOT_APPLICABLE);}});
+#endif
 			on_send_error(ec, last_send_msg);
 			last_send_msg.clear(); //clear sending messages after on_send_error, then user can decide how to deal with them in on_send_error
 

@@ -265,8 +265,6 @@ protected:
 
 		return true;
 	}
-
-	virtual void on_recv_error(const asio::error_code& ec) = 0; //receiving error or peer endpoint quit(false ec means okay)
 	virtual bool on_heartbeat_error() = 0; //heartbeat timed out, return true to continue heartbeat function (useful for UDP)
 
 	//if ASCS_DELAY_CLOSE is equal to zero, in this callback, socket guarantee that there's no any other async call associated it,
@@ -354,6 +352,20 @@ protected:
 		return true;
 	}
 
+	void handle_error()
+	{
+#ifdef ASCS_SYNC_RECV
+		std::unique_lock<std::mutex> lock(sync_recv_mutex);
+		if (sync_recv_status::REQUESTED == sr_status)
+		{
+			sr_status = sync_recv_status::RESPONDED_FAILURE;
+			sync_recv_cv.notify_one();
+
+			sync_recv_cv.wait(lock, [this]() {return !this->started_ || sync_recv_status::RESPONDED_FAILURE != this->sr_status;});
+		}
+#endif
+	}
+
 	bool handle_msg()
 	{
 		ascs::do_something_to_all(temp_msg_can, [this](const OutMsgType& item) {this->stat.recv_byte_sum += item.size();});
@@ -437,7 +449,8 @@ protected:
 		}
 
 		auto unused = in_msg(std::move(msg), true);
-		auto f = unused.p->get_future();
+		auto p = unused.p;
+		auto f = p->get_future();
 		send_msg_buffer.enqueue(std::move(unused));
 		if (!sending && is_ready())
 			send_msg();
@@ -621,7 +634,7 @@ private:
 	asio::io_context::strand strand;
 
 #ifdef ASCS_SYNC_RECV
-	enum sync_recv_status {NOT_REQUESTED, REQUESTED, RESPONDED};
+	enum sync_recv_status {NOT_REQUESTED, REQUESTED, RESPONDED, RESPONDED_FAILURE};
 	sync_recv_status sr_status;
 
 	std::mutex sync_recv_mutex;

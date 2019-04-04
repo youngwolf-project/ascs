@@ -176,6 +176,7 @@ private:
 	virtual void send_msg() {this->dispatch_strand(strand, [this]() {this->do_send_msg(false);});}
 
 	using super::close;
+	using super::handle_error;
 	using super::handle_msg;
 	using super::do_direct_send_msg;
 #ifdef ASCS_SYNC_SEND
@@ -242,7 +243,10 @@ private:
 #else
 			if (ec)
 #endif
+			{
+				handle_error();
 				on_recv_error(ec);
+			}
 			else if (handle_msg()) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
 				do_recv_msg(); //receive msg in sequence
 		}
@@ -288,7 +292,13 @@ private:
 #endif
 		}
 		else
+		{
+#ifdef ASCS_SYNC_SEND
+			if (last_send_msg.p)
+				last_send_msg.p->set_value(sync_call_result::NOT_APPLICABLE);
+#endif
 			on_send_error(ec, last_send_msg);
+		}
 		last_send_msg.clear(); //clear sending message after on_send_error, then user can decide how to deal with it in on_send_error
 
 		if (ec && (asio::error::not_socket == ec || asio::error::bad_descriptor == ec))
