@@ -60,7 +60,11 @@ public:
 	typedef const object_type object_ctype;
 	typedef std::list<object_type> container_type;
 
+#if ASIO_VERSION >= 101200
+	service_pump(int concurrency_hint = ASIO_CONCURRENCY_HINT_SAFE) : asio::io_context(concurrency_hint), started(false)
+#else
 	service_pump() : started(false)
+#endif
 #ifdef ASCS_DECREASE_THREAD_AT_RUNTIME
 		, real_thread_num(0), del_thread_num(0)
 #endif

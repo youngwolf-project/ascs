@@ -56,7 +56,6 @@
  * In contrast to non_lock_queue, split message_queue into lock_queue and lock_free_queue.
  * Move container related classes and functions from base.h to container.h.
  * Improve efficiency in scenarios of low throughput like pingpong test.
- * Replaceable packer/unpacker now support replaceable_buffer (an alias of auto_buffer) and shared_buffer to be their message type.
  * Move class statistic and obj_with_begin_time out of ascs::socket to reduce template tiers.
  *
  * 2016.11.1	version 1.1.2
@@ -511,6 +510,32 @@
  *
  * REPLACEMENTS:
  *
+ * ===============================================================
+ * 2019.4.6		version 1.4.1
+ *
+ * SPECIAL ATTENTION (incompatible with old editions):
+ * Rename replaceable_unpacker to unpacker2, replaceable_udp_unpacker to udp_unpacker2, replaceable_packer to packer2, because their names confuse
+ *  users, any packer or unpacker is replaceable for those packer or unpacker that has the same msg_type.
+ *
+ * HIGHLIGHT:
+ *
+ * FIX:
+ * Fix corrupt std::future because of the deletion of the owner (std::promise).
+ * Fix infinite waiting after sync message sending or receiving failed.
+ *
+ * ENHANCEMENTS:
+ * Extract function start_listen from current implementations.
+ * Support concurrency hint for io_context if possible.
+ * Demonstrate how to accept just one client at server endpoint in demo echo_server.
+ * Demonstrate how to change local address if the binding was failed (in demo udp_test).
+ * Enhance flexibility via rvalue reference and std::forward.
+ *
+ * DELETION:
+ *
+ * REFACTORING:
+ *
+ * REPLACEMENTS:
+ *
  */
 
 #ifndef _ASCS_CONFIG_H_
@@ -520,8 +545,8 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#define ASCS_VER		10400	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.4.0"
+#define ASCS_VER		10401	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.4.1"
 
 //asio and compiler check
 #ifdef _MSC_VER

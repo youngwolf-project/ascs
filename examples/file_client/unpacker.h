@@ -9,7 +9,7 @@ using namespace ascs::tcp;
 
 extern std::atomic_int_fast64_t received_size;
 
-class data_unpacker : public i_unpacker<replaceable_buffer>
+class data_unpacker : public i_unpacker<std::string>
 {
 public:
 	data_unpacker(FILE* file, fl_type data_len)  : _file(file), _data_len(data_len)

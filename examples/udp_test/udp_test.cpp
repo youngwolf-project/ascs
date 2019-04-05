@@ -5,15 +5,17 @@
 #define ASCS_DELAY_CLOSE 1 //this demo not used object pool and doesn't need life cycle management,
 						   //so, define this to avoid hooks for async call (and slightly improve efficiency),
 						   //any value which is bigger than zero is okay.
+#define ASCS_NOT_REUSE_ADDRESS
 #define ASCS_SYNC_RECV
 #define ASCS_SYNC_SEND
 #define ASCS_PASSIVE_RECV //if you annotate this definition, this demo will use mix model to receive messages, which means
 						  //some messages will be dispatched via on_msg_handle(), some messages will be returned via sync_recv_msg(),
 						  //type more than one messages (separate them by space) in one line with ENTER key to send them,
 						  //you will see them cross together on the receiver's screen.
-//#define ASCS_DEFAULT_UDP_UNPACKER replaceable_udp_unpacker<>
-#define ASCS_HEARTBEAT_INTERVAL 5 //neither udp_unpacker nor replaceable_udp_unpacker support heartbeat message,
-								  //so heartbeat will be treated as normal message.
+						  //with this macro, if heartbeat not applied, macro ASCS_AVOID_AUTO_STOP_SERVICE must be defined to avoid the service_pump run out.
+#define ASCS_AVOID_AUTO_STOP_SERVICE
+//#define ASCS_HEARTBEAT_INTERVAL 5 //neither udp_unpacker nor udp_unpacker2 support heartbeat message, so heartbeat will be treated as normal message.
+//#define ASCS_DEFAULT_UDP_UNPACKER udp_unpacker2<>
 //configuration
 
 #include <ascs/ext/udp.h>
@@ -64,6 +66,13 @@ int main(int argc, const char* argv[])
 //	service.lowest_layer().open(ASCS_UDP_DEFAULT_IP_VERSION);
 //	service.lowest_layer().set_option(asio::ip::multicast::join_group(asio::ip::address::from_string("x.x.x.x")));
 //	sp.start_service();
+
+	//demonstrate how to change local address if the binding was failed.
+	if (!service.is_started())
+	{
+		service.set_local_addr(6666);
+		sp.start_service(&service);
+	}
 
 	auto t = create_sync_recv_thread(service);
 	while(sp.is_running())

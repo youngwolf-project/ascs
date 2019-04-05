@@ -121,14 +121,16 @@ protected:
 #define CREATE_OBJECT_1_ARG(first_way) \
 auto object_ptr = first_way(); \
 if (!object_ptr) \
-	try {object_ptr = std::make_shared<Object>(arg);} catch (const std::exception& e) {unified_out::error_out("cannot create object (%s)", e.what());} \
+	try {object_ptr = std::make_shared<Object>(std::forward<Arg>(arg));} \
+	catch (const std::exception& e) {unified_out::error_out("cannot create object (%s)", e.what());} \
 init_object(object_ptr); \
 return object_ptr;
 
 #define CREATE_OBJECT_2_ARG(first_way) \
 auto object_ptr = first_way(); \
 if (!object_ptr) \
-	try {object_ptr = std::make_shared<Object>(arg1, arg2);} catch (const std::exception& e) {unified_out::error_out("cannot create object (%s)", e.what());} \
+	try {object_ptr = std::make_shared<Object>(std::forward<Arg1>(arg1), std::forward<Arg2>(arg2));} \
+	catch (const std::exception& e) {unified_out::error_out("cannot create object (%s)", e.what());} \
 init_object(object_ptr); \
 return object_ptr;
 
@@ -142,11 +144,11 @@ return object_ptr;
 		return object_ptr;
 	}
 
-	template<typename Arg> object_type create_object(Arg& arg) {CREATE_OBJECT_1_ARG(reuse_object);}
-	template<typename Arg1, typename Arg2> object_type create_object(Arg1& arg1, Arg2& arg2) {CREATE_OBJECT_2_ARG(reuse_object);}
+	template<typename Arg> object_type create_object(Arg&& arg) {CREATE_OBJECT_1_ARG(reuse_object);}
+	template<typename Arg1, typename Arg2> object_type create_object(Arg1&& arg1, Arg2&& arg2) {CREATE_OBJECT_2_ARG(reuse_object);}
 #else
-	template<typename Arg> object_type create_object(Arg& arg) {CREATE_OBJECT_1_ARG(object_type);}
-	template<typename Arg1, typename Arg2> object_type create_object(Arg1& arg1, Arg2& arg2) {CREATE_OBJECT_2_ARG(object_type);}
+	template<typename Arg> object_type create_object(Arg&& arg) {CREATE_OBJECT_1_ARG(object_type);}
+	template<typename Arg1, typename Arg2> object_type create_object(Arg1&& arg1, Arg2&& arg2) {CREATE_OBJECT_2_ARG(object_type);}
 #endif
 
 public:
