@@ -373,6 +373,7 @@ protected:
 	{
 		auto size_in_byte = ascs::get_size_in_byte(temp_msg_can);
 		auto msg_num = temp_msg_can.size();
+		auto left_msg_num = msg_num;
 		stat.recv_msg_sum += msg_num;
 		stat.recv_byte_sum += size_in_byte;
 #ifdef ASCS_SYNC_RECV
@@ -389,33 +390,33 @@ protected:
 				return handled_msg(); //sync_recv_msg() has consumed temp_msg_can
 		}
 		lock.unlock();
-		msg_num = temp_msg_can.size();
+		left_msg_num = temp_msg_can.size();
 #endif
 #ifdef ASCS_SYNC_DISPATCH
 #ifndef ASCS_PASSIVE_RECV
-		if (msg_num > 0)
+		if (left_msg_num > 0)
 #endif
 		{
 			auto_duration dur(stat.handle_time_sum);
 			on_msg(temp_msg_can);
-			msg_num = temp_msg_can.size();
+			left_msg_num = temp_msg_can.size();
 		}
 #elif defined(ASCS_PASSIVE_RECV)
-		if (0 == msg_num)
+		if (0 == left_msg_num)
 		{
-			msg_num = 1;
+			left_msg_num = 1;
 			temp_msg_can.emplace_back(); //empty message, let you always having the chance to call recv_msg()
 		}
 #endif
-		if (msg_num > 0)
+		if (left_msg_num > 0)
 		{
-			out_container_type temp_buffer(msg_num);
+			out_container_type temp_buffer(left_msg_num);
 			auto op_iter = temp_buffer.begin();
 			for (auto iter = temp_msg_can.begin(); iter != temp_msg_can.end(); ++op_iter, ++iter)
 				op_iter->swap(*iter);
 			temp_msg_can.clear();
 
-			recv_msg_buffer.move_items_in(temp_buffer, size_in_byte);
+			recv_msg_buffer.move_items_in(temp_buffer, left_msg_num < msg_num ? 0 : size_in_byte);
 			dispatch_msg();
 		}
 
