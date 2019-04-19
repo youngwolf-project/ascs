@@ -246,7 +246,7 @@ public:
 		sr_status = sync_recv_status::REQUESTED;
 		auto re = sync_recv_waiting(lock, duration);
 		if (sync_call_result::SUCCESS == re)
-			msg_can.splice(std::end(msg_can), temp_msg_can);
+			msg_can.splice_after(temp_msg_can);
 
 		sr_status = sync_recv_status::NOT_REQUESTED;
 		sync_recv_cv.notify_one();

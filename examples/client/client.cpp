@@ -169,3 +169,122 @@ int main(int argc, const char* argv[])
 
 	return 0;
 }
+/*
+#include <ascs/list.h>
+using namespace ascs;
+
+void print_list(const list<int>& l)
+{
+	if (!l.empty())
+	{
+		for (auto& item : l)
+			printf("%d ", item);
+		printf(": %d %Iu\n", l.back(), l.size());
+	}
+	else
+		printf("empty list: %Iu\n", l.size());
+}
+
+void test1()
+{
+	list<int> l;
+	l.push_back(0);
+	l.push_back(1);
+	l.push_back(2);
+	print_list(l);
+
+	list<int> l2;
+	l2.push_back(10);
+	l2.push_back(11);
+	l2.push_back(12);
+	print_list(l2);
+
+	l.splice_after(l2);
+	print_list(l);
+	print_list(l2);
+}
+
+void test2()
+{
+	list<int> l;
+	l.push_back(0);
+	l.push_back(1);
+	l.push_back(2);
+	print_list(l);
+
+	list<int> l2;
+	l2.push_back(10);
+	l2.push_back(11);
+	l2.push_back(12);
+	print_list(l2);
+
+	l.splice_after_until(l2, std::begin(l2));
+	print_list(l);
+	print_list(l2);
+}
+
+void test3()
+{
+	list<int> l;
+	l.push_back(0);
+	l.push_back(1);
+	l.push_back(2);
+	print_list(l);
+
+	list<int> l2;
+	l2.push_back(10);
+	l2.push_back(11);
+	l2.push_back(12);
+	print_list(l2);
+
+	auto iter = std::begin(l2);
+	l.splice_after_until(l2, ++iter);
+	print_list(l);
+	print_list(l2);
+}
+
+void test4()
+{
+	list<int> l;
+	l.push_back(0);
+	l.push_back(1);
+	l.push_back(2);
+	print_list(l);
+
+	list<int> l2;
+	l2.push_back(10);
+	l2.push_back(11);
+	l2.push_back(12);
+	print_list(l2);
+
+	l.splice_after_until(l2, std::end(l2));
+	print_list(l);
+	print_list(l2);
+}
+
+void test5()
+{
+	list<int> l, l2;
+	l2.push_back(10);
+	l2.push_back(11);
+	l2.push_back(12);
+	print_list(l2);
+
+	l.splice_after_until(l2, std::end(l2));
+	print_list(l);
+	print_list(l2);
+}
+
+int main(int argc, const char* argv[])
+{
+	typedef void (*TEST_FUN) ();
+	TEST_FUN tests[] = {&test1, &test2, &test3, &test4, &test5};
+	for (size_t i = 0; i < sizeof(tests) / sizeof(TEST_FUN); ++i)
+	{
+		(*tests[i])();
+		puts("");
+	}
+
+	return 0;
+}
+*/

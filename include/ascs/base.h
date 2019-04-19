@@ -16,7 +16,6 @@
 #include <stdio.h>
 #include <stdarg.h>
 
-#include <list>
 #include <mutex>
 #include <vector>
 #include <chrono>
@@ -35,6 +34,7 @@
 #include <asio.hpp>
 
 #include "config.h"
+#include "list.h"
 
 namespace ascs
 {
@@ -158,9 +158,6 @@ public:
 protected:
 	buffer_type buffer;
 };
-
-//ascs requires that container must take one and only one template argument
-template<typename T> using list = std::list<T>;
 
 //packer concept
 template<typename MsgType>

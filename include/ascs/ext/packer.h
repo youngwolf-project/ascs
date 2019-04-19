@@ -125,7 +125,7 @@ public:
 
 		auto head_len = packer_helper::pack_header(len);
 		out.emplace_back((const char*) &head_len, ASCS_HEAD_LEN);
-		out.splice(std::end(out), in);
+		out.splice_after(in);
 
 		return true;
 	}
@@ -193,7 +193,7 @@ public:
 		auto raw_msg = new string_buffer();
 		raw_msg->assign((const char*) &head_len, ASCS_HEAD_LEN);
 		out.emplace_back(raw_msg);
-		out.splice(std::end(out), in);
+		out.splice_after(in);
 
 		return true;
 	}
@@ -293,7 +293,7 @@ public:
 
 		if (!_prefix.empty())
 			out.emplace_back(_prefix);
-		out.splice(std::end(out), in);
+		out.splice_after(in);
 		if (!_suffix.empty())
 			out.emplace_back(_suffix);
 
