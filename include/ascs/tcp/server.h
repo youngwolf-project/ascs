@@ -183,6 +183,9 @@ protected:
 		if (this->add_object(socket_ptr))
 		{
 			socket_ptr->show_info("client:", "arrive.");
+			if (get_service_pump().is_service_started()) //service already started
+				socket_ptr->start();
+
 			return true;
 		}
 
@@ -191,12 +194,13 @@ protected:
 		return false;
 	}
 
+private:
 	void accept_handler(const asio::error_code& ec, typename Pool::object_ctype& socket_ptr)
 	{
 		if (!ec)
 		{
-			if (on_accept(socket_ptr) && add_socket(socket_ptr))
-				socket_ptr->start();
+			if (on_accept(socket_ptr))
+				add_socket(socket_ptr);
 
 			if (is_listening())
 				start_next_accept();
@@ -205,7 +209,6 @@ protected:
 			start_next_accept();
 	}
 
-private:
 	void do_async_accept(typename Pool::object_ctype& socket_ptr)
 		{if (socket_ptr) acceptor.async_accept(socket_ptr->lowest_layer(), [=](const asio::error_code& ec) {this->accept_handler(ec, socket_ptr);});}
 

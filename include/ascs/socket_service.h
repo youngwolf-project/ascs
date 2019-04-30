@@ -27,7 +27,7 @@ public:
 	template<typename Arg> single_socket_service(service_pump& service_pump_, Arg&& arg) : i_service(service_pump_), Socket(service_pump_, std::forward<Arg>(arg)) {}
 
 protected:
-	virtual bool init() {this->reset(); this->start(); return Socket::started();}
+	virtual bool init() {this->start(); return Socket::started();}
 	virtual void uninit() {this->graceful_shutdown();} //if you wanna force shutdown, call force_shutdown before service_pump::stop_service invocation.
 
 private:
@@ -43,7 +43,7 @@ protected:
 
 	virtual bool init()
 	{
-		this->do_something_to_all([](typename Pool::object_ctype& item) {item->reset(); item->start();});
+		this->do_something_to_all([](typename Pool::object_ctype& item) {item->start();});
 		this->start();
 		return true;
 	}
@@ -56,16 +56,12 @@ public:
 	virtual std::shared_ptr<tracked_executor> find_socket(uint_fast64_t id) {return this->find(id);}
 
 	//parameter reset valid only if the service pump already started, or service pump will call object pool's init function before start service pump
-	bool add_socket(typename Pool::object_ctype& socket_ptr, bool reset = true)
+	bool add_socket(typename Pool::object_ctype& socket_ptr)
 	{
 		if (this->add_object(socket_ptr))
 		{
-			if (this->get_service_pump().is_service_started()) //service already started
-			{
-				if (reset)
-					socket_ptr->reset();
+			if (get_service_pump().is_service_started()) //service already started
 				socket_ptr->start();
-			}
 
 			return true;
 		}
