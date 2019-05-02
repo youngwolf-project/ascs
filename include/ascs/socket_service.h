@@ -55,6 +55,9 @@ public:
 	virtual const service_pump& get_service_pump() const {return Pool::get_service_pump();}
 	virtual std::shared_ptr<tracked_executor> find_socket(uint_fast64_t id) {return this->find(id);}
 
+	typename Pool::object_type create_object() {return Pool::create_object(*this);}
+	template<typename Arg> typename Pool::object_type create_object(Arg&& arg) {return Pool::create_object(*this, std::forward<Arg>(arg));}
+
 	//parameter reset valid only if the service pump already started, or service pump will call object pool's init function before start service pump
 	bool add_socket(typename Pool::object_ctype& socket_ptr)
 	{
