@@ -220,8 +220,8 @@ int main(int argc, const char* argv[])
 	//demonstrate how to use singel_service
 	//because of normal_socket, this server cannot support fixed_length_packer/fixed_length_unpacker and prefix_suffix_packer/prefix_suffix_unpacker,
 	//the reason is these packer and unpacker need additional initializations that normal_socket not implemented, see echo_socket's constructor for more details.
-	single_service<normal_server> normal_server_;
-	single_service<server_base<short_connection>> short_server;
+	single_service_pump<normal_server> normal_server_;
+	single_service_pump<server_base<short_connection>> short_server;
 
 	unsigned short port = ASCS_SERVER_PORT;
 	std::string ip;

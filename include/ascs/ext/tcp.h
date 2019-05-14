@@ -19,7 +19,7 @@
 #include "../tcp/client.h"
 #include "../tcp/server_socket.h"
 #include "../tcp/server.h"
-#include "../single_service.h"
+#include "../single_service_pump.h"
 
 #ifndef ASCS_DEFAULT_PACKER
 #define ASCS_DEFAULT_PACKER ascs::ext::packer
