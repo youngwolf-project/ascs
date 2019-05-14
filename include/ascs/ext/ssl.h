@@ -16,6 +16,7 @@
 #include "packer.h"
 #include "unpacker.h"
 #include "../tcp/ssl/ssl.h"
+#include "../single_service.h"
 
 #ifndef ASCS_DEFAULT_PACKER
 #define ASCS_DEFAULT_PACKER ascs::ext::packer

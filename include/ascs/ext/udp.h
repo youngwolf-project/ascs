@@ -17,6 +17,7 @@
 #include "unpacker.h"
 #include "../udp/socket.h"
 #include "../udp/socket_service.h"
+#include "../single_service.h"
 
 #ifndef ASCS_DEFAULT_PACKER
 #define ASCS_DEFAULT_PACKER ascs::ext::packer
