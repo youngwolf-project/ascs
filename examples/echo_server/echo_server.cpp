@@ -243,8 +243,8 @@ int main(int argc, const char* argv[])
 #endif
 
 	sp.start_service(thread_num);
-	normal_server_.start_service();
-	short_server.start_service();
+	normal_server_.start_service(1);
+	short_server.start_service(1);
 	while(sp.is_running())
 	{
 		std::string str;
