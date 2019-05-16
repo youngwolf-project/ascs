@@ -517,7 +517,7 @@
  * Rename replaceable_unpacker to unpacker2, replaceable_udp_unpacker to udp_unpacker2, replaceable_packer to packer2, because their names confuse
  *  users, any packer or unpacker is replaceable for those packer or unpacker that has the same msg_type.
  * Drop the 'reset' parameter in multi_socket_service::add_socket, this means never call reset() for the socket anymore.
- * Don't call reset() in single_socket_service::init() and multi_socket_service::init() anymore.
+ * Don't call reset() in single_socket_service::init() and multi_socket_service::init() any more.
  *
  * HIGHLIGHT:
  *
@@ -537,6 +537,37 @@
  * REFACTORING:
  *
  * REPLACEMENTS:
+ *
+ * ===============================================================
+ * 2019.5.18	version 1.4.2
+ *
+ * SPECIAL ATTENTION (incompatible with old editions):
+ * Rename udp::single_service_base to single_socket_service_base.
+ * Rename udp::multi_service_base to multi_socket_service_base.
+ * Rename ext::udp::single_service to single_socket_service.
+ * Rename ext::udp::multi_service to multi_socket_service.
+ * Rename ext::udp::service to socket_service.
+ * Rename socket::get_pending_send_msg_num to get_pending_send_msg_size and socket::get_pending_recv_msg_num to get_pending_recv_msg_size,
+ *  and the return value not means message entries any more, but total size of all messages.
+ * Change the return type of ascs::socket::on_msg and ascs::socket::on_msg_handle from size_t to bool.
+ *
+ * HIGHLIGHT:
+ * Introduce new class single_service_pump--one service_pump for one service.
+ * Demonstrate how to use single_service_pump in demo echo_server.
+ *
+ * FIX:
+ *
+ * ENHANCEMENTS:
+ * Drop ascs::list, use std::list instead, this can reduce maintenance. So ascs::queue will not provide size() function any more,
+ *  this is because size() function may have linear complexity and race condition in some specific implementations (like gcc before 5.0).
+ *
+ * DELETION:
+ *
+ * REFACTORING:
+ * Move function create_object() from client_base and multi_socket_service_base to multi_socket_service.
+ *
+ * REPLACEMENTS:
+ * Replace ascs::list with std::list.
  *
  */
 

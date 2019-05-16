@@ -45,7 +45,6 @@ private:
 
 //Container must at least has the following functions (like std::list):
 // Container() and Container(size_t) constructor
-// size, must be thread safe, but doesn't have to be consistent
 // empty, must be thread safe, but doesn't have to be consistent
 // clear
 // swap
@@ -66,7 +65,6 @@ public:
 	using typename Container::size_type;
 	using typename Container::reference;
 	using typename Container::const_reference;
-	using Container::size;
 	using Container::empty;
 
 	queue() : buff_size(0) {}
