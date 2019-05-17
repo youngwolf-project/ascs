@@ -553,7 +553,7 @@
  *
  * HIGHLIGHT:
  * Introduce new class single_service_pump--one service_pump for one service.
- * Demonstrate how to use single_service_pump in demo echo_server.
+ * Demonstrate how to use single_service_pump in demo echo_server and client.
  *
  * FIX:
  *
