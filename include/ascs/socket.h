@@ -278,27 +278,27 @@ protected:
 	virtual void after_close() {} //a good case for using this is to reconnect the server, please refer to client_socket_base.
 
 #ifdef ASCS_SYNC_DISPATCH
-	//return true if handled some messages (include all messages), if some msg left behind, socket will re-dispatch them asynchronously
+	//return positive value if handled some messages (include all messages), if some msg left behind, socket will re-dispatch them asynchronously
 	//notice: using inconstant is for the convenience of swapping
-	virtual bool on_msg(list<OutMsgType>& msg_can)
+	virtual size_t on_msg(list<OutMsgType>& msg_can)
 	{
 		//it's always thread safe in this virtual function, because it blocks message receiving
 		ascs::do_something_to_all(msg_can, [](OutMsgType& msg) {unified_out::debug_out("recv(" ASCS_SF "): %s", msg.size(), msg.data());});
 		msg_can.clear(); //have handled all messages
 
-		return true;
+		return 1;
 	}
 #endif
 #ifdef ASCS_DISPATCH_BATCH_MSG
-	//return true if handled some messages (include all messages), if some msg left behind, socket will re-dispatch them asynchronously
+	//return positive value if handled some messages (include all messages), if some msg left behind, socket will re-dispatch them asynchronously
 	//notice: using inconstant is for the convenience of swapping
-	virtual bool on_msg_handle(out_queue_type& msg_can)
+	virtual size_t on_msg_handle(out_queue_type& msg_can)
 	{
 		out_container_type tmp_can;
-		msg_can.swap(tmp_can);
+		msg_can.swap(tmp_can); //must be thread safe, or aovid race condition from your business logic
 
 		ascs::do_something_to_all(tmp_can, [](OutMsgType& msg) {unified_out::debug_out("recv(" ASCS_SF "): %s", msg.size(), msg.data());});
-		return true;
+		return 1;
 	}
 #else
 	//return true means msg been handled, false means msg cannot be handled right now, and socket will re-dispatch it asynchronously
@@ -370,9 +370,8 @@ protected:
 
 	bool handle_msg()
 	{
-		auto changed = false;
 		auto size_in_byte = ascs::get_size_in_byte(temp_msg_can);
-		stat.recv_msg_sum += temp_msg_can.size(); //this can have linear complexity on old gcc or Cygwin and Mingw64, please note.;
+		stat.recv_msg_sum += temp_msg_can.size(); //this can have linear complexity in old gcc or Cygwin and Mingw64, please note.;
 		stat.recv_byte_sum += size_in_byte;
 #ifdef ASCS_SYNC_RECV
 		std::unique_lock<std::mutex> lock(sync_recv_mutex);
@@ -387,7 +386,7 @@ protected:
 			else if (temp_msg_can.empty())
 				return handled_msg(); //sync_recv_msg() has consumed temp_msg_can
 			else
-				changed = true;
+				size_in_byte = 0; //to re-calculate size_in_byte
 		}
 		lock.unlock();
 #endif
@@ -398,7 +397,8 @@ protected:
 #endif
 		{
 			auto_duration dur(stat.handle_time_sum);
-			changed = on_msg(temp_msg_can) || changed;
+			if (on_msg(temp_msg_can) > 0)
+				size_in_byte = 0; //to re-calculate size_in_byte
 			empty = temp_msg_can.empty();
 		}
 #elif defined(ASCS_PASSIVE_RECV)
@@ -415,7 +415,7 @@ protected:
 				temp_buffer.emplace_back(std::move(*iter));
 			temp_msg_can.clear();
 
-			recv_msg_buffer.move_items_in(temp_buffer, changed ? 0 : size_in_byte);
+			recv_msg_buffer.move_items_in(temp_buffer, size_in_byte);
 			dispatch_msg();
 		}
 

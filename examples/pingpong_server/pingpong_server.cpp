@@ -39,7 +39,7 @@ protected:
 	//msg handling: send the original msg back (echo server), must define macro ASCS_SYNC_DISPATCH
 	//do not hold msg_can for further using, access msg_can and return from on_msg as quickly as possible
 	//access msg_can freely within this callback, it's always thread safe.
-	virtual bool on_msg(list<out_msg_type>& msg_can)
+	virtual size_t on_msg(list<out_msg_type>& msg_can)
 	{
 		//if the type of out_msg_type and in_msg_type are not identical, the compilation will fail, then you should use send_native_msg instead.
 		ascs::do_something_to_all(msg_can, [this](out_msg_type& msg) {this->direct_send_msg(std::move(msg));});
@@ -48,7 +48,7 @@ protected:
 		//here we always consumed all messages, so we can use sync message dispatching, otherwise, we should not use sync message dispatching
 		//except we can bear message disordering.
 
-		return true;
+		return 1;
 	}
 	//msg handling end
 };
