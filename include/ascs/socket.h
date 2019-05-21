@@ -371,7 +371,7 @@ protected:
 	bool handle_msg()
 	{
 		auto size_in_byte = ascs::get_size_in_byte(temp_msg_can);
-		stat.recv_msg_sum += temp_msg_can.size(); //this can have linear complexity in old gcc or Cygwin and Mingw64, please note.;
+		stat.recv_msg_sum += temp_msg_can.size(); //this can have linear complexity in old gcc or Cygwin and Mingw64, please note.
 		stat.recv_byte_sum += size_in_byte;
 #ifdef ASCS_SYNC_RECV
 		std::unique_lock<std::mutex> lock(sync_recv_mutex);
@@ -385,8 +385,6 @@ protected:
 				return false;
 			else if (temp_msg_can.empty())
 				return handled_msg(); //sync_recv_msg() has consumed temp_msg_can
-			else
-				size_in_byte = 0; //to re-calculate size_in_byte
 		}
 		lock.unlock();
 #endif
@@ -398,8 +396,10 @@ protected:
 		{
 			auto_duration dur(stat.handle_time_sum);
 			if (on_msg(temp_msg_can) > 0)
+			{
 				size_in_byte = 0; //to re-calculate size_in_byte
-			empty = temp_msg_can.empty();
+				empty = temp_msg_can.empty();
+			}
 		}
 #elif defined(ASCS_PASSIVE_RECV)
 		if (empty)
