@@ -56,13 +56,12 @@ protected:
 	virtual size_t on_msg(list<out_msg_type>& msg_can)
 	{
 		ascs::do_something_to_all(msg_can, [this](out_msg_type& msg) {this->handle_msg(msg);});
-		auto re = msg_can.size();
 		msg_can.clear(); //if we left behind some messages in msg_can, they will be dispatched via on_msg_handle asynchronously, which means it's
 		//possible that on_msg_handle be invoked concurrently with the next on_msg (new messages arrived) and then disorder messages.
 		//here we always consumed all messages, so we can use sync message dispatching, otherwise, we should not use sync message dispatching
 		//except we can bear message disordering.
 
-		return re;
+		return 1;
 	}
 	//msg handling end
 

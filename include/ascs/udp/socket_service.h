@@ -17,24 +17,21 @@
 
 namespace ascs { namespace udp {
 
-template<typename Socket> using single_service_base = single_socket_service<Socket>;
+template<typename Socket> using single_socket_service_base = single_socket_service<Socket>;
 
 template<typename Socket, typename Pool = object_pool<Socket>, typename Matrix = i_matrix>
-class multi_service_base : public multi_socket_service<Socket, Pool, Matrix>
+class multi_socket_service_base : public multi_socket_service<Socket, Pool, Matrix>
 {
 private:
 	typedef multi_socket_service<Socket, Pool, Matrix> super;
 
 public:
-	multi_service_base(service_pump& service_pump_) : super(service_pump_) {}
-
-	typename Pool::object_type create_object() {return Pool::create_object(*this);}
-	template<typename Arg> typename Pool::object_type create_object(Arg&& arg) {return Pool::create_object(*this, std::forward<Arg>(arg));}
+	multi_socket_service_base(service_pump& service_pump_) : super(service_pump_) {}
 
 	using super::add_socket;
 	typename Pool::object_type add_socket(unsigned short port, const std::string& ip = std::string())
 	{
-		auto socket_ptr(create_object());
+		auto socket_ptr(this->create_object());
 		if (!socket_ptr)
 			return socket_ptr;
 
@@ -43,7 +40,7 @@ public:
 	}
 	typename Pool::object_type add_socket(unsigned short port, unsigned short peer_port, const std::string& ip = std::string(), const std::string& peer_ip = std::string())
 	{
-		auto socket_ptr(create_object());
+		auto socket_ptr(this->create_object());
 		if (!socket_ptr)
 			return socket_ptr;
 

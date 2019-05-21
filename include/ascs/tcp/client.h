@@ -37,18 +37,15 @@ public:
 		return size;
 	}
 
-	typename Pool::object_type create_object() {return Pool::create_object(*this);}
-	template<typename Arg> typename Pool::object_type create_object(Arg&& arg) {return Pool::create_object(*this, std::forward<Arg>(arg));}
-
 	using super::add_socket;
 	typename Pool::object_type add_socket()
 	{
-		auto socket_ptr(create_object());
+		auto socket_ptr(this->create_object());
 		return add_socket(socket_ptr) ? socket_ptr : typename Pool::object_type();
 	}
 	typename Pool::object_type add_socket(unsigned short port, const std::string& ip = ASCS_SERVER_IP)
 	{
-		auto socket_ptr(create_object());
+		auto socket_ptr(this->create_object());
 		if (!socket_ptr)
 			return socket_ptr;
 
@@ -57,7 +54,7 @@ public:
 	}
 	typename Pool::object_type add_socket(unsigned short port, unsigned short local_port, const std::string& ip = ASCS_SERVER_IP, const std::string& local_ip = std::string())
 	{
-		auto socket_ptr(create_object());
+		auto socket_ptr(this->create_object());
 		if (!socket_ptr)
 			return socket_ptr;
 

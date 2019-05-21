@@ -517,7 +517,7 @@
  * Rename replaceable_unpacker to unpacker2, replaceable_udp_unpacker to udp_unpacker2, replaceable_packer to packer2, because their names confuse
  *  users, any packer or unpacker is replaceable for those packer or unpacker that has the same msg_type.
  * Drop the 'reset' parameter in multi_socket_service::add_socket, this means never call reset() for the socket anymore.
- * Don't call reset() in single_socket_service::init() and multi_socket_service::init() anymore.
+ * Don't call reset() in single_socket_service::init() and multi_socket_service::init() any more.
  *
  * HIGHLIGHT:
  *
@@ -538,6 +538,36 @@
  *
  * REPLACEMENTS:
  *
+ * ===============================================================
+ * 2019.5.18	version 1.4.2
+ *
+ * SPECIAL ATTENTION (incompatible with old editions):
+ * Rename udp::single_service_base to single_socket_service_base.
+ * Rename udp::multi_service_base to multi_socket_service_base.
+ * Rename ext::udp::single_service to single_socket_service.
+ * Rename ext::udp::multi_service to multi_socket_service.
+ * Rename ext::udp::service to socket_service.
+ * Rename socket::get_pending_send_msg_num to get_pending_send_msg_size and socket::get_pending_recv_msg_num to get_pending_recv_msg_size,
+ *  and the return value not means message entries any more, but total size of all messages.
+ *
+ * HIGHLIGHT:
+ * Introduce new class single_service_pump--one service_pump for one service.
+ * Demonstrate how to use single_service_pump in demo echo_server and client.
+ *
+ * FIX:
+ *
+ * ENHANCEMENTS:
+ * Drop ascs::list, use std::list instead, this can reduce maintenance. So ascs::queue will not provide size() function any more,
+ *  this is because size() function may have linear complexity and race condition in some specific implementations (like gcc before 5.0).
+ *
+ * DELETION:
+ *
+ * REFACTORING:
+ * Move function create_object() from client_base and multi_socket_service_base to multi_socket_service.
+ *
+ * REPLACEMENTS:
+ * Replace ascs::list with std::list.
+ *
  */
 
 #ifndef _ASCS_CONFIG_H_
@@ -547,8 +577,8 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#define ASCS_VER		10401	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.4.1"
+#define ASCS_VER		10402	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.4.2"
 
 //asio and compiler check
 #ifdef _MSC_VER
@@ -868,7 +898,7 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 //If both sync message receiving and async message receiving exist, sync receiving has the priority no matter it was initiated before async receiving or not.
 
 //#define ASCS_SYNC_DISPATCH
-//with this macro, virtual size_t on_msg(list<OutMsgType>& msg_can) will be provided, you can rewrite it and handle all or a part of the
+//with this macro, virtual bool on_msg(list<OutMsgType>& msg_can) will be provided, you can rewrite it and handle all or a part of the
 // messages like virtual function on_msg_handle (with macro ASCS_DISPATCH_BATCH_MSG), if your logic is simple enough (like echo or pingpong test),
 // this feature is recommended because it can slightly improve efficiency.
 //now we have three ways to handle messages (sync_recv_msg, on_msg and on_msg_handle), the invocation order is the same as listed, if messages been successfully

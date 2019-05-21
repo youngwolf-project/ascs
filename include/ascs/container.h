@@ -45,7 +45,6 @@ private:
 
 //Container must at least has the following functions (like std::list):
 // Container() and Container(size_t) constructor
-// size, must be thread safe, but doesn't have to be consistent
 // empty, must be thread safe, but doesn't have to be consistent
 // clear
 // swap
@@ -66,23 +65,22 @@ public:
 	using typename Container::size_type;
 	using typename Container::reference;
 	using typename Container::const_reference;
-	using Container::size;
 	using Container::empty;
 
-	queue() : buff_size(0) {}
-	queue(size_t capacity) : Container(capacity), buff_size(0) {}
+	queue() : total_size(0) {}
+	queue(size_t capacity) : Container(capacity), total_size(0) {}
 
 	//thread safe
 	bool is_thread_safe() const {return Lockable::is_lockable();}
-	size_t size_in_byte() const {return buff_size;}
-	void clear() {typename Lockable::lock_guard lock(*this); Container::clear(); buff_size = 0;}
+	size_t size_in_byte() const {return total_size;}
+	void clear() {typename Lockable::lock_guard lock(*this); Container::clear(); total_size = 0;}
 	void swap(Container& can)
 	{
 		auto size_in_byte = ascs::get_size_in_byte(can);
 
 		typename Lockable::lock_guard lock(*this);
 		Container::swap(can);
-		buff_size = size_in_byte;
+		total_size = size_in_byte;
 	}
 
 	template<typename T> bool enqueue(T&& item) {typename Lockable::lock_guard lock(*this); return enqueue_(std::forward<T>(item));}
@@ -99,9 +97,9 @@ public:
 	{
 		try
 		{
-			auto s = item.size();
+			auto size = item.size();
 			this->emplace_back(std::forward<T>(item));
-			buff_size += s;
+			total_size += size;
 		}
 		catch (const std::exception& e)
 		{
@@ -118,50 +116,39 @@ public:
 			size_in_byte = ascs::get_size_in_byte(src);
 
 		this->splice(this->end(), src);
-		buff_size += size_in_byte;
+		total_size += size_in_byte;
 	}
 
-	bool try_dequeue_(reference item) {if (this->empty()) return false; item.swap(this->front()); this->pop_front(); buff_size -= item.size(); return true;}
+	bool try_dequeue_(reference item) {if (this->empty()) return false; item.swap(this->front()); this->pop_front(); total_size -= item.size(); return true;}
 
 	void move_items_out_(Container& dest, size_t max_item_num = -1)
 	{
 		if ((size_t) -1 == max_item_num)
 		{
 			dest.splice(std::end(dest), *this);
-			buff_size = 0;
+			total_size = 0;
 		}
 		else if (max_item_num > 0)
 		{
-			size_t s = 0, index = 0;
+			size_t size = 0, index = 0;
 			auto end_iter = this->begin();
-			do_something_to_one_([&](const_reference item) {if (++index > max_item_num) return true; s += item.size(); ++end_iter; return false;});
+			do_something_to_one_([&](const_reference item) {if (++index > max_item_num) return true; size += item.size(); ++end_iter; return false;});
 
-			if (end_iter == this->end())
-				dest.splice(std::end(dest), *this);
-			else
-				dest.splice(std::end(dest), *this, this->begin(), end_iter);
-			buff_size -= s;
+			move_items_out(dest, end_iter, size);
 		}
 	}
 
 	void move_items_out_(size_t max_size_in_byte, Container& dest)
 	{
 		if ((size_t) -1 == max_size_in_byte)
-		{
-			dest.splice(std::end(dest), *this);
-			buff_size = 0;
-		}
+			move_items_out_(dest);
 		else
 		{
-			size_t s = 0;
+			size_t size = 0;
 			auto end_iter = this->begin();
-			do_something_to_one_([&](const_reference item) {s += item.size(); ++end_iter; if (s >= max_size_in_byte) return true; return false;});
+			do_something_to_one_([&](const_reference item) {size += item.size(); ++end_iter; if (size >= max_size_in_byte) return true; return false;});
 
-			if (end_iter == this->end())
-				dest.splice(std::end(dest), *this);
-			else
-				dest.splice(std::end(dest), *this, this->begin(), end_iter);
-			buff_size -= s;
+			move_items_out(dest, end_iter, size);
 		}
 	}
 
@@ -176,8 +163,23 @@ public:
 	void do_something_to_one_(const _Predicate& __pred) const {for (auto iter = this->begin(); iter != this->end(); ++iter) if (__pred(*iter)) break;}
 	//not thread safe
 
+protected:
+#if	__GNUC__ > 4 || __GNUC_MINOR__ > 8
+	void move_items_out(Container& dest, typename Container::const_iterator end_iter, size_t size)
+#else
+	void move_items_out(Container& dest, typename Container::iterator end_iter, size_t size) //just satisfy old gcc compilers (before gcc 4.9)
+#endif
+	{
+		if (end_iter == this->end())
+			dest.splice(std::end(dest), *this);
+		else
+			dest.splice(std::end(dest), *this, this->begin(), end_iter);
+
+		total_size -= size;
+	}
+
 private:
-	size_t buff_size; //in use
+	size_t total_size;
 };
 
 //ascs requires that queue must take one and only one template argument

@@ -17,6 +17,7 @@
 #include "unpacker.h"
 #include "../udp/socket.h"
 #include "../udp/socket_service.h"
+#include "../single_service_pump.h"
 
 #ifndef ASCS_DEFAULT_PACKER
 #define ASCS_DEFAULT_PACKER ascs::ext::packer
@@ -29,9 +30,9 @@
 namespace ascs { namespace ext { namespace udp {
 
 typedef ascs::udp::socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UDP_UNPACKER> socket;
-typedef ascs::udp::single_service_base<socket> single_service;
-typedef ascs::udp::multi_service_base<socket> multi_service;
-typedef multi_service service;
+typedef ascs::udp::single_socket_service_base<socket> single_socket_service;
+typedef ascs::udp::multi_socket_service_base<socket> multi_socket_service;
+typedef multi_socket_service socket_service;
 
 }}} //namespace
 

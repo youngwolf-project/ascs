@@ -241,8 +241,8 @@ public:
 #endif
 
 	//how many msgs waiting for sending or dispatching
-	GET_PENDING_MSG_NUM(get_pending_send_msg_num, send_msg_buffer)
-	GET_PENDING_MSG_NUM(get_pending_recv_msg_num, recv_msg_buffer)
+	GET_PENDING_MSG_SIZE(get_pending_send_msg_size, send_msg_buffer)
+	GET_PENDING_MSG_SIZE(get_pending_recv_msg_size, recv_msg_buffer)
 
 #ifdef ASCS_SYNC_SEND
 	POP_FIRST_PENDING_MSG_NOTIFY(pop_first_pending_send_msg, send_msg_buffer, in_msg)
@@ -278,28 +278,27 @@ protected:
 	virtual void after_close() {} //a good case for using this is to reconnect the server, please refer to client_socket_base.
 
 #ifdef ASCS_SYNC_DISPATCH
-	//return the number of handled msg, if some msg left behind, socket will re-dispatch them asynchronously
+	//return positive value if handled some messages (include all messages), if some msg left behind, socket will re-dispatch them asynchronously
 	//notice: using inconstant is for the convenience of swapping
 	virtual size_t on_msg(list<OutMsgType>& msg_can)
 	{
 		//it's always thread safe in this virtual function, because it blocks message receiving
 		ascs::do_something_to_all(msg_can, [](OutMsgType& msg) {unified_out::debug_out("recv(" ASCS_SF "): %s", msg.size(), msg.data());});
-		auto re = msg_can.size();
 		msg_can.clear(); //have handled all messages
 
-		return re;
+		return 1;
 	}
 #endif
 #ifdef ASCS_DISPATCH_BATCH_MSG
-	//return the number of handled msg, if some msg left behind, socket will re-dispatch them asynchronously
+	//return positive value if handled some messages (include all messages), if some msg left behind, socket will re-dispatch them asynchronously
 	//notice: using inconstant is for the convenience of swapping
 	virtual size_t on_msg_handle(out_queue_type& msg_can)
 	{
 		out_container_type tmp_can;
-		msg_can.swap(tmp_can); //must be thread safe
+		msg_can.swap(tmp_can); //must be thread safe, or aovid race condition from your business logic
 
 		ascs::do_something_to_all(tmp_can, [](OutMsgType& msg) {unified_out::debug_out("recv(" ASCS_SF "): %s", msg.size(), msg.data());});
-		return tmp_can.size();
+		return 1;
 	}
 #else
 	//return true means msg been handled, false means msg cannot be handled right now, and socket will re-dispatch it asynchronously
@@ -372,9 +371,7 @@ protected:
 	bool handle_msg()
 	{
 		auto size_in_byte = ascs::get_size_in_byte(temp_msg_can);
-		auto msg_num = temp_msg_can.size();
-		auto left_msg_num = msg_num;
-		stat.recv_msg_sum += msg_num;
+		stat.recv_msg_sum += temp_msg_can.size(); //this can have linear complexity in old gcc or Cygwin and Mingw64, please note.;
 		stat.recv_byte_sum += size_in_byte;
 #ifdef ASCS_SYNC_RECV
 		std::unique_lock<std::mutex> lock(sync_recv_mutex);
@@ -388,35 +385,37 @@ protected:
 				return false;
 			else if (temp_msg_can.empty())
 				return handled_msg(); //sync_recv_msg() has consumed temp_msg_can
+			else
+				size_in_byte = 0; //to re-calculate size_in_byte
 		}
 		lock.unlock();
-		left_msg_num = temp_msg_can.size();
 #endif
+		auto empty = temp_msg_can.empty();
 #ifdef ASCS_SYNC_DISPATCH
 #ifndef ASCS_PASSIVE_RECV
-		if (left_msg_num > 0)
+		if (!empty)
 #endif
 		{
 			auto_duration dur(stat.handle_time_sum);
-			on_msg(temp_msg_can);
-			left_msg_num = temp_msg_can.size();
+			if (on_msg(temp_msg_can) > 0)
+				size_in_byte = 0; //to re-calculate size_in_byte
+			empty = temp_msg_can.empty();
 		}
 #elif defined(ASCS_PASSIVE_RECV)
-		if (0 == left_msg_num)
+		if (empty)
 		{
-			left_msg_num = 1;
+			empty = false;
 			temp_msg_can.emplace_back(); //empty message, let you always having the chance to call recv_msg()
 		}
 #endif
-		if (left_msg_num > 0)
+		if (!empty)
 		{
-			out_container_type temp_buffer(left_msg_num);
-			auto op_iter = temp_buffer.begin();
-			for (auto iter = temp_msg_can.begin(); iter != temp_msg_can.end(); ++op_iter, ++iter)
-				op_iter->swap(*iter);
+			out_container_type temp_buffer;
+			for (auto iter = temp_msg_can.begin(); iter != temp_msg_can.end(); ++iter)
+				temp_buffer.emplace_back(std::move(*iter));
 			temp_msg_can.clear();
 
-			recv_msg_buffer.move_items_in(temp_buffer, left_msg_num < msg_num ? 0 : size_in_byte);
+			recv_msg_buffer.move_items_in(temp_buffer, size_in_byte);
 			dispatch_msg();
 		}
 
