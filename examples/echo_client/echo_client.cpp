@@ -450,7 +450,10 @@ int main(int argc, const char* argv[])
 		else if (STATISTIC == str)
 		{
 			printf("link #: " ASCS_SF ", valid links: " ASCS_SF ", invalid links: " ASCS_SF "\n\n", client.size(), client.valid_size(), client.invalid_object_size());
-			puts(client.get_statistic().to_string().data());
+			static statistic last_stat;
+			statistic this_stat = client.get_statistic();
+			puts((this_stat - last_stat).to_string().data());
+			last_stat = this_stat;
 		}
 		else if (STATUS == str)
 			client.list_all_status();

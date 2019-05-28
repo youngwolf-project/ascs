@@ -8,7 +8,7 @@
 //#define ASCS_SYNC_DISPATCH //do not open this feature, see below for more details
 #define ASCS_DISPATCH_BATCH_MSG
 #define ASCS_ENHANCED_STABILITY
-//#define ASCS_FULL_STATISTIC //full statistic will slightly impact efficiency
+#define ASCS_FULL_STATISTIC //full statistic will slightly impact efficiency
 #define ASCS_USE_STEADY_TIMER
 #define ASCS_ALIGNED_TIMER
 #define ASCS_AVOID_AUTO_STOP_SERVICE
@@ -265,7 +265,10 @@ int main(int argc, const char* argv[])
 		{
 			printf("normal server, link #: " ASCS_SF ", invalid links: " ASCS_SF "\n", normal_server_.size(), normal_server_.invalid_object_size());
 			printf("echo server, link #: " ASCS_SF ", invalid links: " ASCS_SF "\n\n", echo_server_.size(), echo_server_.invalid_object_size());
-			puts(echo_server_.get_statistic().to_string().data());
+			static statistic last_stat;
+			statistic this_stat = echo_server_.get_statistic();
+			puts((this_stat - last_stat).to_string().data());
+			last_stat = this_stat;
 		}
 		else if (STATUS == str)
 		{
