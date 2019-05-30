@@ -370,8 +370,9 @@ protected:
 
 	bool handle_msg()
 	{
-		auto size_in_byte = ascs::get_size_in_byte(temp_msg_can);
-		stat.recv_msg_sum += temp_msg_can.size(); //this can have linear complexity in old gcc or Cygwin and Mingw64, please note.
+		size_t size = 0;
+		auto size_in_byte = ascs::get_size_in_byte(temp_msg_can, size);
+		stat.recv_msg_sum += size;
 		stat.recv_byte_sum += size_in_byte;
 #ifdef ASCS_SYNC_RECV
 		std::unique_lock<std::mutex> lock(sync_recv_mutex);
