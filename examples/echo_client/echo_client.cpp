@@ -9,7 +9,7 @@
 #define ASCS_SYNC_DISPATCH
 #define ASCS_DISPATCH_BATCH_MSG
 //#define ASCS_WANT_MSG_SEND_NOTIFY
-#define ASCS_FULL_STATISTIC //full statistic will slightly impact efficiency
+//#define ASCS_FULL_STATISTIC //full statistic will slightly impact efficiency
 #define ASCS_AVOID_AUTO_STOP_SERVICE
 #define ASCS_DECREASE_THREAD_AT_RUNTIME
 //#define ASCS_MAX_SEND_BUF	65536
