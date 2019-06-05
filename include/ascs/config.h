@@ -670,7 +670,7 @@ static_assert(ASCS_MAX_RECV_BUF > 15, "recv buffer capacity must be bigger than 
 //ascs will hook all async calls to avoid this socket to be reused or freed before all async calls finish
 //or been interrupted (of course, this mechanism will slightly impact efficiency).
 #ifndef ASCS_DELAY_CLOSE
-#define ASCS_DELAY_CLOSE	0 //seconds, guarantee 100% safety when reusing or freeing this socket
+#define ASCS_DELAY_CLOSE	0 //seconds, guarantee 100% safety when reusing or freeing socket objects
 #endif
 static_assert(ASCS_DELAY_CLOSE >= 0, "delay close duration must be bigger than or equal to zero.");
 
