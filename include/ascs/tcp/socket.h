@@ -300,18 +300,16 @@ private:
 #else
 		send_msg_buffer.move_items_out(asio::detail::default_max_transfer_size, last_send_msg);
 #endif
-		std::vector<asio::const_buffer> bufs;
-		bufs.reserve(last_send_msg.size());
-		for (auto iter = std::begin(last_send_msg); iter != std::end(last_send_msg); ++iter)
-		{
-			stat.send_delay_sum += end_time - iter->begin_time;
-			bufs.emplace_back(iter->data(), iter->size());
-		}
+		send_bufs.clear(); //this buffer will not be refreshed according to last_send_msg timely
+		ascs::do_something_to_all(last_send_msg, [this, &end_time](typename super::in_msg& item) {
+			this->stat.send_delay_sum += end_time - item.begin_time;
+			this->send_bufs.emplace_back(item.data(), item.size());
+		});
 
-		if ((sending = !bufs.empty()))
+		if ((sending = !send_bufs.empty()))
 		{
 			last_send_msg.front().restart();
-			asio::async_write(this->next_layer(), bufs, make_strand_handler(strand,
+			asio::async_write(this->next_layer(), send_bufs, make_strand_handler(strand,
 				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);})));
 			return true;
 		}
@@ -327,7 +325,7 @@ private:
 
 			stat.send_byte_sum += bytes_transferred;
 			stat.send_time_sum += statistic::now() - last_send_msg.front().begin_time;
-			stat.send_msg_sum += last_send_msg.size();
+			stat.send_msg_sum += send_bufs.size();
 #ifdef ASCS_SYNC_SEND
 			ascs::do_something_to_all(last_send_msg, [](typename super::in_msg& item) {if (item.p) {item.p->set_value(sync_call_result::SUCCESS);}});
 #endif
@@ -391,6 +389,7 @@ private:
 
 	std::shared_ptr<i_unpacker<out_msg_type>> unpacker_;
 	typename super::in_container_type last_send_msg;
+	std::vector<asio::const_buffer> send_bufs; //just to reduce memory allocation and keep the size of sending items (linear complexity, it's very important)
 	asio::io_context::strand strand;
 };
 

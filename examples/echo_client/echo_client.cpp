@@ -9,7 +9,7 @@
 #define ASCS_SYNC_DISPATCH
 #define ASCS_DISPATCH_BATCH_MSG
 //#define ASCS_WANT_MSG_SEND_NOTIFY
-#define ASCS_FULL_STATISTIC //full statistic will slightly impact efficiency
+//#define ASCS_FULL_STATISTIC //full statistic will slightly impact efficiency
 #define ASCS_AVOID_AUTO_STOP_SERVICE
 #define ASCS_DECREASE_THREAD_AT_RUNTIME
 //#define ASCS_MAX_SEND_BUF	65536
@@ -450,7 +450,10 @@ int main(int argc, const char* argv[])
 		else if (STATISTIC == str)
 		{
 			printf("link #: " ASCS_SF ", valid links: " ASCS_SF ", invalid links: " ASCS_SF "\n\n", client.size(), client.valid_size(), client.invalid_object_size());
-			puts(client.get_statistic().to_string().data());
+			static statistic last_stat;
+			statistic this_stat = client.get_statistic();
+			puts((this_stat - last_stat).to_string().data());
+			last_stat = this_stat;
 		}
 		else if (STATUS == str)
 			client.list_all_status();

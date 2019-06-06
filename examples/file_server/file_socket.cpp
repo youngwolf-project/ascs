@@ -88,7 +88,7 @@ void file_socket::handle_msg(out_msg_ctype& msg)
 			else
 			{
 				memset(std::next(buffer, ORDER_LEN), -1, DATA_LEN);
-				printf("can't not open file %s!\n", std::next(msg.data(), ORDER_LEN));
+				printf("can not open file %s!\n", std::next(msg.data(), ORDER_LEN));
 			}
 
 			send_msg(buffer, sizeof(buffer), true);
