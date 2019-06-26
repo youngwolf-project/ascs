@@ -180,7 +180,6 @@ public:
 	size_t msg_handling_interval() const {return msg_handling_interval_;}
 
 	//in ascs, it's thread safe to access stat without mutex, because for a specific member of stat, ascs will never access it concurrently.
-	//in other words, in a specific thread, ascs just access only one member of stat.
 	//but user can access stat out of ascs via get_statistic function, although user can only read it, there's still a potential risk,
 	//so whether it's thread safe or not depends on std::chrono::system_clock::duration.
 	//i can make it thread safe in ascs, but is it worth to do so? this is a problem.
