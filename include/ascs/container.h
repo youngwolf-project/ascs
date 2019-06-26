@@ -164,10 +164,10 @@ public:
 	//not thread safe
 
 protected:
-#if	__GNUC__ > 4 || __GNUC_MINOR__ > 8
-	void move_items_out(Container& dest, typename Container::const_iterator end_iter, size_t size)
-#else
+#if defined(__GNUC__) && (__GNUC__ < 4 || __GNUC__ == 4 && __GNUC_MINOR__ < 9)
 	void move_items_out(Container& dest, typename Container::iterator end_iter, size_t size) //just satisfy old gcc compilers (before gcc 4.9)
+#else
+	void move_items_out(Container& dest, typename Container::const_iterator end_iter, size_t size)
 #endif
 	{
 		if (end_iter == this->end())
