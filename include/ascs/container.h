@@ -114,6 +114,8 @@ public:
 	{
 		if (0 == size_in_byte)
 			size_in_byte = ascs::get_size_in_byte(src);
+		else
+			assert(ascs::get_size_in_byte(src) == size_in_byte);
 
 		this->splice(this->end(), src);
 		total_size += size_in_byte;

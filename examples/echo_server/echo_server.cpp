@@ -117,6 +117,8 @@ protected:
 		msg_can.clear();
 
 		return 1;
+		//if we indeed handled some messages, do return 1
+		//if we handled nothing, return 1 is also okey but will very slightly impact performance (if msg_can is not empty), return 0 is suggested
 	}
 #endif
 
@@ -135,6 +137,8 @@ protected:
 		//following statement can avoid one memory replication if the type of out_msg_type and in_msg_type are identical.
 		ascs::do_something_to_all(tmp_can, [this](out_msg_type& msg) {this->send_msg(std::move(msg), true);});
 		return 1;
+		//if we indeed handled some messages, do return 1
+		//if we handled nothing, return 1 is also okey but will very slightly impact performance, return 0 is suggested
 	}
 #else
 	//following statement can avoid one memory replication if the type of out_msg_type and in_msg_type are identical.
