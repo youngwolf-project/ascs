@@ -53,7 +53,7 @@ public:
 	{
 		has_bound = false;
 
-		last_send_msg.clear();
+		sending_msg.clear();
 		unpacker_->reset();
 		super::reset();
 	}
@@ -178,7 +178,7 @@ protected:
 	}
 
 #ifdef ASCS_SYNC_SEND
-	virtual void on_close() {if (last_send_msg.p) last_send_msg.p->set_value(sync_call_result::NOT_APPLICABLE); super::on_close();}
+	virtual void on_close() {if (sending_msg.p) sending_msg.p->set_value(sync_call_result::NOT_APPLICABLE); super::on_close();}
 #endif
 
 private:
@@ -257,12 +257,12 @@ private:
 		if (!in_strand && sending)
 			return true;
 
-		if ((sending = send_msg_buffer.try_dequeue(last_send_msg)))
+		if ((sending = send_buffer.try_dequeue(sending_msg)))
 		{
-			stat.send_delay_sum += statistic::now() - last_send_msg.begin_time;
+			stat.send_delay_sum += statistic::now() - sending_msg.begin_time;
 
-			last_send_msg.restart();
-			this->next_layer().async_send_to(asio::buffer(last_send_msg.data(), last_send_msg.size()), last_send_msg.peer_addr, make_strand_handler(strand,
+			sending_msg.restart();
+			this->next_layer().async_send_to(asio::buffer(sending_msg.data(), sending_msg.size()), sending_msg.peer_addr, make_strand_handler(strand,
 				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);})));
 			return true;
 		}
@@ -277,29 +277,29 @@ private:
 			stat.last_send_time = time(nullptr);
 
 			stat.send_byte_sum += bytes_transferred;
-			stat.send_time_sum += statistic::now() - last_send_msg.begin_time;
+			stat.send_time_sum += statistic::now() - sending_msg.begin_time;
 			++stat.send_msg_sum;
 #ifdef ASCS_SYNC_SEND
-			if (last_send_msg.p)
-				last_send_msg.p->set_value(sync_call_result::SUCCESS);
+			if (sending_msg.p)
+				sending_msg.p->set_value(sync_call_result::SUCCESS);
 #endif
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
-			this->on_msg_send(last_send_msg);
+			this->on_msg_send(sending_msg);
 #endif
 #ifdef ASCS_WANT_ALL_MSG_SEND_NOTIFY
-			if (send_msg_buffer.empty())
-				this->on_all_msg_send(last_send_msg);
+			if (send_buffer.empty())
+				this->on_all_msg_send(sending_msg);
 #endif
 		}
 		else
 		{
 #ifdef ASCS_SYNC_SEND
-			if (last_send_msg.p)
-				last_send_msg.p->set_value(sync_call_result::NOT_APPLICABLE);
+			if (sending_msg.p)
+				sending_msg.p->set_value(sync_call_result::NOT_APPLICABLE);
 #endif
-			on_send_error(ec, last_send_msg);
+			on_send_error(ec, sending_msg);
 		}
-		last_send_msg.clear(); //clear sending message after on_send_error, then user can decide how to deal with it in on_send_error
+		sending_msg.clear(); //clear sending message after on_send_error, then user can decide how to deal with it in on_send_error
 
 		if (ec && (asio::error::not_socket == ec || asio::error::bad_descriptor == ec))
 			return;
@@ -307,7 +307,7 @@ private:
 		//send msg in sequence
 		//on windows, sending a msg to addr_any may cause errors, please note
 		//for UDP, sending error will not stop subsequent sending.
-		if (!do_send_msg(true) && !send_msg_buffer.empty())
+		if (!do_send_msg(true) && !send_buffer.empty())
 			do_send_msg(true); //just make sure no pending msgs
 	}
 
@@ -340,7 +340,7 @@ private:
 	using super::packer_;
 	using super::temp_msg_can;
 
-	using super::send_msg_buffer;
+	using super::send_buffer;
 	using super::sending;
 
 #ifdef ASCS_PASSIVE_RECV
@@ -348,7 +348,7 @@ private:
 #endif
 
 	bool has_bound;
-	typename super::in_msg last_send_msg;
+	typename super::in_msg sending_msg;
 	std::shared_ptr<i_unpacker<typename Unpacker::msg_type>> unpacker_;
 	asio::ip::udp::endpoint local_addr;
 	asio::ip::udp::endpoint temp_addr; //used when receiving messages
