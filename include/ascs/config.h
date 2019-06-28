@@ -384,7 +384,7 @@
  * 2018.8.21	version 1.3.2
  *
  * SPECIAL ATTENTION (incompatible with old editions):
- * If macro ASCS_PASSIVE_RECV been defined, you may receive empty messages in on_msg() or on_msg_handle() and sync_recv_msg(), this makes you always having
+ * If macro ASCS_PASSIVE_RECV been defined, you may receive an empty message in on_msg_handle(), this makes you always having
  *  the chance to call recv_msg().
  * i_unpacker has been moved from namespace ascs::tcp and ascs::udp to namespace ascs, and the signature of ascs::udp::i_unpacker::parse_msg
  *  has been changed to obey ascs::tcp::i_unpacker::parse_msg.

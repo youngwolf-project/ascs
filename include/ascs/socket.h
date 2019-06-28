@@ -53,9 +53,6 @@ protected:
 #endif
 		started_ = false;
 		dispatching = false;
-#ifndef ASCS_DISPATCH_BATCH_MSG
-		dispatched = true;
-#endif
 		recv_idle_began = false;
 		msg_resuming_interval_ = ASCS_MSG_RESUMING_INTERVAL;
 		msg_handling_interval_ = ASCS_MSG_HANDLING_INTERVAL;
@@ -82,9 +79,6 @@ protected:
 		sr_status = sync_recv_status::NOT_REQUESTED;
 #endif
 		dispatching = false;
-#ifndef ASCS_DISPATCH_BATCH_MSG
-		dispatched = true;
-#endif
 		recv_idle_began = false;
 		clear_buffer();
 	}
@@ -545,7 +539,7 @@ private:
 			else
 			{
 #else
-		if ((dispatching = !dispatched || recv_msg_buffer.try_dequeue(last_dispatch_msg)))
+		if (dispatching || (dispatching = recv_msg_buffer.try_dequeue(last_dispatch_msg)))
 		{
 			auto begin_time = statistic::now();
 			stat.dispatch_dealy_sum += begin_time - last_dispatch_msg.begin_time;
@@ -560,7 +554,6 @@ private:
 			}
 			else
 			{
-				dispatched = true;
 				last_dispatch_msg.clear();
 #endif
 				dispatching = false;
@@ -620,7 +613,6 @@ private:
 	volatile bool started_; //has started or not
 	volatile bool dispatching;
 #ifndef ASCS_DISPATCH_BATCH_MSG
-	bool dispatched;
 	out_msg last_dispatch_msg;
 #endif
 
