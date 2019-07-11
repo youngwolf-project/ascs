@@ -19,7 +19,7 @@ namespace ascs { namespace tcp {
 
 template <typename Socket, typename Packer, typename Unpacker,
 	template<typename> class InQueue, template<typename> class InContainer, template<typename> class OutQueue, template<typename> class OutContainer>
-class socket_base : public socket<Socket, Packer, typename Packer::msg_type, typename Unpacker::msg_type, InQueue, InContainer, OutQueue, OutContainer>
+class socket_base : public socket2<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer>
 {
 public:
 	typedef typename Packer::msg_type in_msg_type;
@@ -28,16 +28,13 @@ public:
 	typedef typename Unpacker::msg_ctype out_msg_ctype;
 
 private:
-	typedef socket<Socket, Packer, in_msg_type, out_msg_type, InQueue, InContainer, OutQueue, OutContainer> super;
+	typedef socket2<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer> super;
 
 protected:
 	enum link_status {CONNECTED, FORCE_SHUTTING_DOWN, GRACEFUL_SHUTTING_DOWN, BROKEN};
 
-	socket_base(asio::io_context& io_context_) : super(io_context_), strand(io_context_) {first_init();}
-	template<typename Arg> socket_base(asio::io_context& io_context_, Arg&& arg) : super(io_context_, std::forward<Arg>(arg)), strand(io_context_) {first_init();}
-
-	//helper function, just call it in constructor
-	void first_init() {status = link_status::BROKEN; unpacker_ = std::make_shared<Unpacker>();}
+	socket_base(asio::io_context& io_context_) : super(io_context_), status(link_status::BROKEN) {}
+	template<typename Arg> socket_base(asio::io_context& io_context_, Arg&& arg) : super(io_context_, std::forward<Arg>(arg)), status(link_status::BROKEN) {}
 
 public:
 	static const typename super::tid TIMER_BEGIN = super::TIMER_END;
@@ -59,7 +56,7 @@ public:
 	//notice, when reusing this socket, object_pool will invoke this function, so if you want to do some additional initialization
 	// for this socket, do it at here and in the constructor.
 	//for tcp::single_client_base and ssl::single_client_base, this virtual function will never be called, please note.
-	virtual void reset() {status = link_status::BROKEN; sending_msgs.clear(); unpacker_->reset(); super::reset();}
+	virtual void reset() {status = link_status::BROKEN; sending_msgs.clear(); super::reset();}
 
 	//SOCKET status
 	bool is_broken() const {return link_status::BROKEN == status;}
@@ -112,15 +109,6 @@ public:
 #endif
 			this->is_dispatching(), status, this->is_recv_idle());
 	}
-
-	//get or change the unpacker at runtime
-	std::shared_ptr<i_unpacker<out_msg_type>> unpacker() {return unpacker_;}
-	std::shared_ptr<const i_unpacker<out_msg_type>> unpacker() const {return unpacker_;}
-#ifdef ASCS_PASSIVE_RECV
-	//changing unpacker must before calling ascs::socket::recv_msg, and define ASCS_PASSIVE_RECV macro.
-	void unpacker(const std::shared_ptr<i_unpacker<out_msg_type>>& _unpacker_) {unpacker_ = _unpacker_;}
-	virtual void recv_msg() {if (!reading && is_ready()) this->dispatch_strand(strand, [this]() {this->do_recv_msg();});}
-#endif
 
 	///////////////////////////////////////////////////
 	//msg sending interface
@@ -208,11 +196,6 @@ protected:
 	virtual void on_async_shutdown_error() = 0;
 
 private:
-#ifndef ASCS_PASSIVE_RECV
-	virtual void recv_msg() {this->dispatch_strand(strand, [this]() {this->do_recv_msg();});}
-#endif
-	virtual void send_msg() {this->dispatch_strand(strand, [this]() {this->do_send_msg(false);});}
-
 	using super::close;
 	using super::handle_error;
 	using super::handle_msg;
@@ -234,7 +217,7 @@ private:
 		return unpacker_->completion_condition(ec, bytes_transferred);
 	}
 
-	void do_recv_msg()
+	virtual void do_recv_msg()
 	{
 #ifdef ASCS_PASSIVE_RECV
 		if (reading)
@@ -250,7 +233,7 @@ private:
 			reading = true;
 #endif
 			asio::async_read(this->next_layer(), recv_buff,
-				[this](const asio::error_code& ec, size_t bytes_transferred)->size_t {return this->completion_checker(ec, bytes_transferred);}, make_strand_handler(strand,
+				[this](const asio::error_code& ec, size_t bytes_transferred)->size_t {return this->completion_checker(ec, bytes_transferred);}, make_strand_handler(rw_strand,
 					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);})));
 		}
 	}
@@ -289,7 +272,7 @@ private:
 		}
 	}
 
-	bool do_send_msg(bool in_strand)
+	virtual bool do_send_msg(bool in_strand = false)
 	{
 		if (!in_strand && sending)
 			return true;
@@ -309,7 +292,7 @@ private:
 		if ((sending = !sending_buffer.empty()))
 		{
 			sending_msgs.front().restart();
-			asio::async_write(this->next_layer(), sending_buffer, make_strand_handler(strand,
+			asio::async_write(this->next_layer(), sending_buffer, make_strand_handler(rw_strand,
 				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);})));
 			return true;
 		}
@@ -378,6 +361,7 @@ protected:
 private:
 	using super::stat;
 	using super::packer_;
+	using super::unpacker_;
 	using super::temp_msg_can;
 
 	using super::send_buffer;
@@ -386,11 +370,10 @@ private:
 #ifdef ASCS_PASSIVE_RECV
 	using super::reading;
 #endif
+	using super::rw_strand;
 
-	std::shared_ptr<i_unpacker<out_msg_type>> unpacker_;
 	typename super::in_container_type sending_msgs;
 	std::vector<asio::const_buffer> sending_buffer; //just to reduce memory allocation and keep the size of sending items (linear complexity, it's very important).
-	asio::io_context::strand strand;
 };
 
 }} //namespace

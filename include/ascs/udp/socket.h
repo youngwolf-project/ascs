@@ -20,7 +20,7 @@ namespace ascs { namespace udp {
 template <typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = asio::ip::udp::socket,
 	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
-class socket_base : public socket<Socket, Packer, udp_msg<typename Packer::msg_type>, udp_msg<typename Unpacker::msg_type>, InQueue, InContainer, OutQueue, OutContainer>
+class socket_base : public socket4<Socket, Packer, Unpacker, udp_msg, InQueue, InContainer, OutQueue, OutContainer>
 {
 public:
 	typedef udp_msg<typename Packer::msg_type> in_msg_type;
@@ -29,11 +29,11 @@ public:
 	typedef const out_msg_type out_msg_ctype;
 
 private:
-	typedef socket<Socket, Packer, in_msg_type, out_msg_type, InQueue, InContainer, OutQueue, OutContainer> super;
+	typedef socket4<Socket, Packer, Unpacker, udp_msg, InQueue, InContainer, OutQueue, OutContainer> super;
 
 public:
-	socket_base(asio::io_context& io_context_) : super(io_context_), strand(io_context_) {first_init();}
-	socket_base(Matrix& matrix_) : super(matrix_.get_service_pump()), strand(matrix_.get_service_pump()) {first_init(&matrix_);}
+	socket_base(asio::io_context& io_context_) : super(io_context_), has_bound(false), matrix(nullptr) {}
+	socket_base(Matrix& matrix_) : super(matrix_.get_service_pump()), has_bound(false), matrix(&matrix_) {}
 
 	virtual bool is_ready() {return has_bound;}
 	virtual void send_heartbeat()
@@ -54,7 +54,6 @@ public:
 		has_bound = false;
 
 		sending_msg.clear();
-		unpacker_->reset();
 		super::reset();
 	}
 
@@ -64,7 +63,7 @@ public:
 	const asio::ip::udp::endpoint& get_peer_addr() const {return peer_addr;}
 
 	void disconnect() {force_shutdown();}
-	void force_shutdown() {show_info("link:", "been shutting down."); this->dispatch_strand(strand, [this]() {this->shutdown();});}
+	void force_shutdown() {show_info("link:", "been shutting down."); this->dispatch_strand(rw_strand, [this]() {this->shutdown();});}
 	void graceful_shutdown() {force_shutdown();}
 
 	void show_info(const char* head, const char* tail) const {unified_out::info_out("%s %s:%hu %s", head, local_addr.address().to_string().data(), local_addr.port(), tail);}
@@ -86,17 +85,6 @@ public:
 #endif
 			this->is_dispatching(), this->is_recv_idle());
 	}
-
-	//get or change the unpacker at runtime
-	//changing unpacker at runtime is not thread-safe, this operation can only be done in on_msg(), reset() or constructor, please pay special attention
-	//we can resolve this defect via mutex, but i think it's not worth, because this feature is not frequently used
-	std::shared_ptr<i_unpacker<typename Unpacker::msg_type>> unpacker() {return unpacker_;}
-	std::shared_ptr<const i_unpacker<typename Unpacker::msg_type>> unpacker() const {return unpacker_;}
-#ifdef ASCS_PASSIVE_RECV
-	//changing unpacker must before calling ascs::socket::recv_msg, and define ASCS_PASSIVE_RECV macro.
-	void unpacker(const std::shared_ptr<i_unpacker<typename Unpacker::msg_type>>& _unpacker_) {unpacker_ = _unpacker_;}
-	virtual void recv_msg() {if (!reading && is_ready()) this->dispatch_strand(strand, [this]() {this->do_recv_msg();});}
-#endif
 
 	///////////////////////////////////////////////////
 	//msg sending interface
@@ -121,9 +109,6 @@ public:
 	///////////////////////////////////////////////////
 
 protected:
-	//helper function, just call it in constructor
-	void first_init(Matrix* matrix_ = nullptr) {has_bound = false; unpacker_ = std::make_shared<Unpacker>(); matrix = matrix_;}
-
 	Matrix* get_matrix() {return matrix;}
 	const Matrix* get_matrix() const {return matrix;}
 
@@ -182,11 +167,6 @@ protected:
 #endif
 
 private:
-#ifndef ASCS_PASSIVE_RECV
-	virtual void recv_msg() {this->dispatch_strand(strand, [this]() {this->do_recv_msg();});}
-#endif
-	virtual void send_msg() {this->dispatch_strand(strand, [this]() {this->do_send_msg(false);});}
-
 	using super::close;
 	using super::handle_error;
 	using super::handle_msg;
@@ -197,7 +177,7 @@ private:
 
 	void shutdown() {close();}
 
-	void do_recv_msg()
+	virtual void do_recv_msg()
 	{
 #ifdef ASCS_PASSIVE_RECV
 		if (reading)
@@ -212,7 +192,7 @@ private:
 #ifdef ASCS_PASSIVE_RECV
 			reading = true;
 #endif
-			this->next_layer().async_receive_from(recv_buff, temp_addr, make_strand_handler(strand,
+			this->next_layer().async_receive_from(recv_buff, temp_addr, make_strand_handler(rw_strand,
 				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);})));
 		}
 	}
@@ -252,7 +232,7 @@ private:
 		}
 	}
 
-	bool do_send_msg(bool in_strand)
+	virtual bool do_send_msg(bool in_strand = false)
 	{
 		if (!in_strand && sending)
 			return true;
@@ -262,7 +242,7 @@ private:
 			stat.send_delay_sum += statistic::now() - sending_msg.begin_time;
 
 			sending_msg.restart();
-			this->next_layer().async_send_to(asio::buffer(sending_msg.data(), sending_msg.size()), sending_msg.peer_addr, make_strand_handler(strand,
+			this->next_layer().async_send_to(asio::buffer(sending_msg.data(), sending_msg.size()), sending_msg.peer_addr, make_strand_handler(rw_strand,
 				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);})));
 			return true;
 		}
@@ -338,6 +318,7 @@ private:
 private:
 	using super::stat;
 	using super::packer_;
+	using super::unpacker_;
 	using super::temp_msg_can;
 
 	using super::send_buffer;
@@ -346,16 +327,15 @@ private:
 #ifdef ASCS_PASSIVE_RECV
 	using super::reading;
 #endif
+	using super::rw_strand;
 
 	bool has_bound;
 	typename super::in_msg sending_msg;
-	std::shared_ptr<i_unpacker<typename Unpacker::msg_type>> unpacker_;
 	asio::ip::udp::endpoint local_addr;
 	asio::ip::udp::endpoint temp_addr; //used when receiving messages
 	asio::ip::udp::endpoint peer_addr;
 
 	Matrix* matrix;
-	asio::io_context::strand strand;
 };
 
 }} //namespace
