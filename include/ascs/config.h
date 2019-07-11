@@ -880,11 +880,14 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 //if you don't define this macro, the next callback will be called at (xx:xx:xx + 21), please note.
 
 //#define ASCS_SYNC_SEND
-#ifdef ASCS_SYNC_SEND
-	#ifndef ASIO_HAS_STD_FUTURE
-	#define ASIO_HAS_STD_FUTURE	0
+//before 1.12.2, asio has a problem or no ability with the detection of std::future availability with libstdc++.
+#if ASIO_VERSION >= 101202
+	#ifdef ASCS_SYNC_SEND
+		#ifndef ASIO_HAS_STD_FUTURE
+		#define ASIO_HAS_STD_FUTURE	0
+		#endif
+		static_assert(ASIO_HAS_STD_FUTURE == 1, "sync message sending needs std::future.");
 	#endif
-	static_assert(ASIO_HAS_STD_FUTURE == 1, "sync message sending needs std::future.");
 #endif
 //#define ASCS_SYNC_RECV
 //define these macro to gain additional series of sync message sending and receiving, they are:
