@@ -139,7 +139,7 @@ private:
 		{
 			assert(msg.empty());
 
-			auto unp = std::dynamic_pointer_cast<data_unpacker>(unpacker());
+			auto unp = std::dynamic_pointer_cast<file_unpacker>(unpacker());
 			if (!unp || unp->is_finished())
 				trans_end();
 
@@ -185,7 +185,7 @@ private:
 						send_msg(buffer, sizeof(buffer), true);
 
 						fseeko(file, offset, SEEK_SET);
-						unpacker(std::make_shared<data_unpacker>(file, my_length));
+						unpacker(std::make_shared<file_unpacker>(file, my_length));
 					}
 					else
 						trans_end();
