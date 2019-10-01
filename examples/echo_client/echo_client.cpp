@@ -123,6 +123,8 @@ protected:
 		//except we can bear message disordering.
 
 		return 1;
+		//if we indeed handled some messages, do return 1
+		//if we handled nothing, return 1 is also okey but will very slightly impact performance (if msg_can is not empty), return 0 is suggested
 	}
 #endif
 #ifdef ASCS_DISPATCH_BATCH_MSG
@@ -136,6 +138,8 @@ protected:
 
 		ascs::do_something_to_all(tmp_can, [this](out_msg_type& msg) {this->handle_msg(msg);});
 		return 1;
+		//if we indeed handled some messages, do return 1
+		//if we handled nothing, return 1 is also okey but will very slightly impact performance, return 0 is suggested
 	}
 #else
 	virtual bool on_msg_handle(out_msg_type& msg) {handle_msg(msg); return true;}

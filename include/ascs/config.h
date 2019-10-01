@@ -155,7 +155,7 @@
  * HIGHLIGHT:
  *
  * FIX:
- * Fix race condition on member variable last_send_msg in tcp::socket_base.
+ * Fix race condition on member variable sending_msgs in tcp::socket_base.
  *
  * ENHANCEMENTS:
  * Optimize reconnecting mechanism.
@@ -211,7 +211,7 @@
  * ENHANCEMENTS:
  * Optimized and simplified auto_buffer, shared_buffer and ext::basic_buffer.
  * Optimized class obj_with_begin_time.
- * Not use sending buffer (send_msg_buffer) if possible.
+ * Not use sending buffer (send_buffer) if possible.
  * Reduced stopped() invocation (because it needs locks).
  * Introduced asio::io_service::work (asio::executor_work_guard) by defining ASCS_AVOID_AUTO_STOP_SERVICE macro.
  * Add function service_pump::service_thread_num to fetch the real number of service thread (must define ASCS_DECREASE_THREAD_AT_RUNTIME macro).
@@ -568,6 +568,30 @@
  * REPLACEMENTS:
  * Replace ascs::list with std::list.
  *
+ * ===============================================================
+ * 2019.10.1	version 1.4.3
+ *
+ * SPECIAL ATTENTION (incompatible with old editions):
+ *
+ * HIGHLIGHT:
+ *
+ * FIX:
+ * Fix the availability detection of std::future with libstdc++.
+ *
+ * ENHANCEMENTS:
+ * Introduce macro ASCS_EXPOSE_SEND_INTERFACE to expose send_msg() interface, see below for more details.
+ * Introduce some helper classes (ascs::socket2, socket3 and socket4) to reduce the number of template parameters.
+ *
+ * DELETION:
+ *
+ * REFACTORING:
+ * Move unpacker logic from tcp::socket_base and udp::socket_base to ascs::socket.
+ * Move message sending and receiving logic from tcp::socket_base and udp::socket_base to ascs::socket.
+ * Some trivial refactoring in demo file_server and file_client.
+ * Some new comments in demo echo_server, echo_client and file_client to help users to understand on_msg and on_msg_handle interface more.
+ *
+ * REPLACEMENTS:
+ *
  */
 
 #ifndef _ASCS_CONFIG_H_
@@ -854,10 +878,17 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 //call on_msg_handle, if failed, retry it after ASCS_MSG_HANDLING_INTERVAL milliseconds later.
 //this value can be changed via ascs::socket::msg_handling_interval(size_t) at runtime.
 
+//#define ASCS_EXPOSE_SEND_INTERFACE
+//for some reason (i still not met yet), the message sending has stopped but some messages left behind in the sending buffer, they won't be
+// sent until new messages come in, define this macro to expose send_msg() interface, then you can call it manually to fix this situation.
+//during message sending, calling send_msg() will fail, this is by design to avoid asio::io_context using up all virtual memory, this also
+// means that before the sending really started, you can greedily call send_msg() and may exhaust all virtual memory, please note.
+
 //#define ASCS_PASSIVE_RECV
 //to gain the ability of changing the unpacker at runtime, with this macro, ascs will not do message receiving automatically (except the first one),
 // so you need to manually call recv_msg(), if you need to change the unpacker, do it before recv_msg() invocation, please note.
-//during async message receiving, calling recv_msg() will fail, this is by design to avoid asio::io_context using up all virtual memory.
+//during message receiving, calling recv_msg() will fail, this is by design to avoid asio::io_context using up all virtual memory, this also
+// means that before the receiving really started, you can greedily call recv_msg() and may exhaust all virtual memory, please note.
 //because user can greedily call recv_msg(), it's your responsibility to keep the recv buffer from overflowed, please pay special attention.
 //this macro also makes you to be able to pause message receiving, then, if there's no other tasks (like timers), service_pump will stop itself,
 // to avoid this, please define macro ASCS_AVOID_AUTO_STOP_SERVICE.
@@ -873,11 +904,14 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 //if you don't define this macro, the next callback will be called at (xx:xx:xx + 21), please note.
 
 //#define ASCS_SYNC_SEND
-#ifdef ASCS_SYNC_SEND
-	#ifndef ASIO_HAS_STD_FUTURE
-	#define ASIO_HAS_STD_FUTURE	0
+//before 1.12.2, asio has a problem or no ability with the detection of std::future availability with libstdc++.
+#if ASIO_VERSION >= 101202
+	#ifdef ASCS_SYNC_SEND
+		#ifndef ASIO_HAS_STD_FUTURE
+		#define ASIO_HAS_STD_FUTURE	0
+		#endif
+		static_assert(ASIO_HAS_STD_FUTURE == 1, "sync message sending needs std::future.");
 	#endif
-	static_assert(ASIO_HAS_STD_FUTURE == 1, "sync message sending needs std::future.");
 #endif
 //#define ASCS_SYNC_RECV
 //define these macro to gain additional series of sync message sending and receiving, they are:

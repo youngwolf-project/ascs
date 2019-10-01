@@ -20,7 +20,7 @@
 namespace ascs
 {
 
-template<typename Socket, typename Packer, typename InMsgType, typename OutMsgType,
+template<typename Socket, typename Packer, typename Unpacker, typename InMsgType, typename OutMsgType,
 	template<typename> class InQueue, template<typename> class InContainer, template<typename> class OutQueue, template<typename> class OutContainer>
 class socket : public timer<tracked_executor>
 {
@@ -36,15 +36,16 @@ public:
 	static const tid TIMER_END = TIMER_BEGIN + 10;
 
 protected:
-	socket(asio::io_context& io_context_) : super(io_context_), next_layer_(io_context_), strand(io_context_) {first_init();}
-	template<typename Arg>
-	socket(asio::io_context& io_context_, Arg&& arg) : super(io_context_), next_layer_(io_context_, std::forward<Arg>(arg)), strand(io_context_) {first_init();}
+	socket(asio::io_context& io_context_) : super(io_context_), rw_strand(io_context_), next_layer_(io_context_), dis_strand(io_context_) {first_init();}
+	template<typename Arg> socket(asio::io_context& io_context_, Arg&& arg) :
+		super(io_context_), rw_strand(io_context_), next_layer_(io_context_, std::forward<Arg>(arg)), dis_strand(io_context_) {first_init();}
 
 	//helper function, just call it in constructor
 	void first_init()
 	{
 		_id = -1;
 		packer_ = std::make_shared<Packer>();
+		unpacker_ = std::make_shared<Unpacker>();
 		sending = false;
 #ifdef ASCS_PASSIVE_RECV
 		reading = false;
@@ -72,6 +73,7 @@ protected:
 
 		stat.reset();
 		packer_->reset();
+		unpacker_->reset();
 		sending = false;
 #ifdef ASCS_PASSIVE_RECV
 		reading = false;
@@ -87,10 +89,10 @@ protected:
 	void clear_buffer()
 	{
 #ifndef ASCS_DISPATCH_BATCH_MSG
-		last_dispatch_msg.clear();
+		dispatching_msg.clear();
 #endif
-		send_msg_buffer.clear();
-		recv_msg_buffer.clear();
+		send_buffer.clear();
+		recv_buffer.clear();
 	}
 
 public:
@@ -130,6 +132,19 @@ public:
 		}
 	}
 
+#ifdef ASCS_PASSIVE_RECV
+	bool is_reading() const {return reading;}
+	void recv_msg() {if (!reading && is_ready()) dispatch_strand(rw_strand, [this]() {this->do_recv_msg();});}
+#else
+private:
+	void recv_msg() {dispatch_strand(rw_strand, [this]() {this->do_recv_msg();});}
+#endif
+#ifndef ASCS_EXPOSE_SEND_INTERFACE
+private:
+#endif
+	void send_msg() {if (!sending && is_ready()) dispatch_strand(rw_strand, [this]() {this->do_send_msg();});}
+
+public:
 	void start_heartbeat(int interval, int max_absence = ASCS_HEARTBEAT_MAX_ABSENCE)
 	{
 		assert(interval > 0 && max_absence > 0);
@@ -161,9 +176,6 @@ public:
 	}
 
 	bool is_sending() const {return sending;}
-#ifdef ASCS_PASSIVE_RECV
-	bool is_reading() const {return reading;}
-#endif
 	bool is_dispatching() const {return dispatching;}
 	bool is_recv_idle() const {return recv_idle_began;}
 
@@ -174,7 +186,6 @@ public:
 	size_t msg_handling_interval() const {return msg_handling_interval_;}
 
 	//in ascs, it's thread safe to access stat without mutex, because for a specific member of stat, ascs will never access it concurrently.
-	//in other words, in a specific thread, ascs just access only one member of stat.
 	//but user can access stat out of ascs via get_statistic function, although user can only read it, there's still a potential risk,
 	//so whether it's thread safe or not depends on std::chrono::system_clock::duration.
 	//i can make it thread safe in ascs, but is it worth to do so? this is a problem.
@@ -182,18 +193,28 @@ public:
 
 	//get or change the packer at runtime
 	//changing packer at runtime is not thread-safe (if we're sending messages concurrently), please pay special attention,
-	//we can resolve this defect via mutex, but i think it's not worth, because this feature is not frequently used
+	//we can resolve this defect via mutex, but i think it's not worth, because this feature is not commonly needed and you know how to avoid
+	// race condition between message sending and packer replacement (because ascs never send messages automatically except with macro
+	// ASCS_HEARTBEAT_INTERVAL, please note).
 	std::shared_ptr<i_packer<typename Packer::msg_type>> packer() {return packer_;}
 	std::shared_ptr<const i_packer<typename Packer::msg_type>> packer() const {return packer_;}
 	void packer(const std::shared_ptr<i_packer<typename Packer::msg_type>>& _packer_) {packer_ = _packer_;}
 
+	//get or change the unpacker at runtime
+	std::shared_ptr<i_unpacker<typename Unpacker::msg_type>> unpacker() {return unpacker_;}
+	std::shared_ptr<const i_unpacker<typename Unpacker::msg_type>> unpacker() const {return unpacker_;}
+#ifdef ASCS_PASSIVE_RECV
+	//changing unpacker must before calling ascs::socket::recv_msg, and define ASCS_PASSIVE_RECV macro.
+	void unpacker(const std::shared_ptr<i_unpacker<typename Unpacker::msg_type>>& _unpacker_) {unpacker_ = _unpacker_;}
+#endif
+
 	//if you use can_overflow = true to invoke send_msg or send_native_msg, it will always succeed no matter the sending buffer is overflow or not,
 	//this can exhaust all virtual memory, please pay special attentions.
-	bool is_send_buffer_available() const {return send_msg_buffer.size_in_byte() < ASCS_MAX_SEND_BUF;}
+	bool is_send_buffer_available() const {return send_buffer.size_in_byte() < ASCS_MAX_SEND_BUF;}
 
 	//if you define macro ASCS_PASSIVE_RECV and call recv_msg greedily, the receiving buffer may overflow, this can exhaust all virtual memory,
 	//to avoid this problem, call recv_msg only if is_recv_buffer_available() returns true.
-	bool is_recv_buffer_available() const {return recv_msg_buffer.size_in_byte() < ASCS_MAX_RECV_BUF;}
+	bool is_recv_buffer_available() const {return recv_buffer.size_in_byte() < ASCS_MAX_RECV_BUF;}
 
 	//don't use the packer but insert into send buffer directly
 	template<typename T> bool direct_send_msg(T&& msg, bool can_overflow = false)
@@ -235,19 +256,19 @@ public:
 #endif
 
 	//how many msgs waiting for sending or dispatching
-	GET_PENDING_MSG_SIZE(get_pending_send_msg_size, send_msg_buffer)
-	GET_PENDING_MSG_SIZE(get_pending_recv_msg_size, recv_msg_buffer)
+	GET_PENDING_MSG_SIZE(get_pending_send_msg_size, send_buffer)
+	GET_PENDING_MSG_SIZE(get_pending_recv_msg_size, recv_buffer)
 
 #ifdef ASCS_SYNC_SEND
-	POP_FIRST_PENDING_MSG_NOTIFY(pop_first_pending_send_msg, send_msg_buffer, in_msg)
-	POP_ALL_PENDING_MSG_NOTIFY(pop_all_pending_send_msg, send_msg_buffer, in_container_type)
+	POP_FIRST_PENDING_MSG_NOTIFY(pop_first_pending_send_msg, send_buffer, in_msg)
+	POP_ALL_PENDING_MSG_NOTIFY(pop_all_pending_send_msg, send_buffer, in_container_type)
 #else
-	POP_FIRST_PENDING_MSG(pop_first_pending_send_msg, send_msg_buffer, in_msg)
-	POP_ALL_PENDING_MSG(pop_all_pending_send_msg, send_msg_buffer, in_container_type)
+	POP_FIRST_PENDING_MSG(pop_first_pending_send_msg, send_buffer, in_msg)
+	POP_ALL_PENDING_MSG(pop_all_pending_send_msg, send_buffer, in_container_type)
 #endif
 
-	POP_FIRST_PENDING_MSG(pop_first_pending_recv_msg, recv_msg_buffer, out_msg)
-	POP_ALL_PENDING_MSG(pop_all_pending_recv_msg, recv_msg_buffer, out_container_type)
+	POP_FIRST_PENDING_MSG(pop_first_pending_recv_msg, recv_buffer, out_msg)
+	POP_ALL_PENDING_MSG(pop_all_pending_recv_msg, recv_buffer, out_container_type)
 
 protected:
 	virtual bool do_start()
@@ -400,7 +421,7 @@ protected:
 		if (empty)
 		{
 			empty = false;
-			temp_msg_can.emplace_back(); //empty message, let you always having the chance to call recv_msg()
+			temp_msg_can.emplace_back(); //empty message, let user always having the chance to call recv_msg()
 		}
 #endif
 		if (!empty)
@@ -410,7 +431,7 @@ protected:
 				temp_buffer.emplace_back(std::move(*iter));
 			temp_msg_can.clear();
 
-			recv_msg_buffer.move_items_in(temp_buffer, size_in_byte);
+			recv_buffer.move_items_in(temp_buffer, size_in_byte);
 			dispatch_msg();
 		}
 
@@ -421,7 +442,7 @@ protected:
 	{
 		if (msg.empty())
 			unified_out::error_out("found an empty message, please check your packer.");
-		else if (send_msg_buffer.enqueue(std::forward<T>(msg)) && !sending && is_ready())
+		else if (send_buffer.enqueue(std::forward<T>(msg)))
 			send_msg();
 
 		//even if we meet an empty message (because of too big message or insufficient memory, most likely), we still return true, why?
@@ -435,9 +456,8 @@ protected:
 		size_t size_in_byte = 0;
 		in_container_type temp_buffer;
 		ascs::do_something_to_all(msg_can, [&size_in_byte, &temp_buffer](InMsgType& msg) {size_in_byte += msg.size(); temp_buffer.emplace_back(std::move(msg));});
-		send_msg_buffer.move_items_in(temp_buffer, size_in_byte);
-		if (!sending && is_ready())
-			send_msg();
+		send_buffer.move_items_in(temp_buffer, size_in_byte);
+		send_msg();
 
 		return true;
 	}
@@ -456,11 +476,10 @@ protected:
 		auto unused = in_msg(std::forward<T>(msg), true);
 		auto p = unused.p;
 		auto f = p->get_future();
-		if (!send_msg_buffer.enqueue(std::move(unused)))
+		if (!send_buffer.enqueue(std::move(unused)))
 			return sync_call_result::NOT_APPLICABLE;
-		else if (!sending && is_ready())
-			send_msg();
 
+		send_msg();
 		return 0 == duration || std::future_status::ready == f.wait_for(std::chrono::milliseconds(duration)) ? f.get() : sync_call_result::TIMEOUT;
 	}
 
@@ -478,17 +497,16 @@ protected:
 		temp_buffer.back().check_and_create_promise(true);
 		auto p = temp_buffer.back().p;
 		auto f = p->get_future();
-		send_msg_buffer.move_items_in(temp_buffer, size_in_byte);
-		if (!sending && is_ready())
-			send_msg();
+		send_buffer.move_items_in(temp_buffer, size_in_byte);
 
+		send_msg();
 		return 0 == duration || std::future_status::ready == f.wait_for(std::chrono::milliseconds(duration)) ? f.get() : sync_call_result::TIMEOUT;
 	}
 #endif
 
 private:
-	virtual void recv_msg() = 0;
-	virtual void send_msg() = 0;
+	virtual void do_recv_msg() = 0;
+	virtual bool do_send_msg(bool in_strand = false) = 0;
 
 	//please do not change id at runtime via the following function, except this socket is not managed by object_pool,
 	//it should only be used by object_pool when reusing or creating new socket.
@@ -544,52 +562,52 @@ private:
 	}
 
 	//do not use dispatch_strand at here, because the handler (do_dispatch_msg) may call this function, which can lead stack overflow.
-	void dispatch_msg() {if (!dispatching) post_strand(strand, [this]() {this->do_dispatch_msg();});}
+	void dispatch_msg() {if (!dispatching) post_strand(dis_strand, [this]() {this->do_dispatch_msg();});}
 	void do_dispatch_msg()
 	{
 #ifdef ASCS_DISPATCH_BATCH_MSG
-		if ((dispatching = !recv_msg_buffer.empty()))
+		if ((dispatching = !recv_buffer.empty()))
 		{
 			auto begin_time = statistic::now();
 #ifdef ASCS_FULL_STATISTIC
-			recv_msg_buffer.do_something_to_all([&, this](out_msg& msg) {this->stat.dispatch_delay_sum += begin_time - msg.begin_time;});
+			recv_buffer.do_something_to_all([&, this](out_msg& msg) {this->stat.dispatch_delay_sum += begin_time - msg.begin_time;});
 #endif
-			auto re = on_msg_handle(recv_msg_buffer);
+			auto re = on_msg_handle(recv_buffer);
 			auto end_time = statistic::now();
 			stat.handle_time_sum += end_time - begin_time;
 
 			if (0 == re) //dispatch failed, re-dispatch
 			{
 #ifdef ASCS_FULL_STATISTIC
-				recv_msg_buffer.do_something_to_all([&end_time](out_msg& msg) {msg.restart(end_time);});
+				recv_buffer.do_something_to_all([&end_time](out_msg& msg) {msg.restart(end_time);});
 #endif
 				set_timer(TIMER_DISPATCH_MSG, msg_handling_interval_, [this](tid id)->bool {return this->timer_handler(TIMER_DISPATCH_MSG);}); //hold dispatching
 			}
 			else
 			{
 #else
-		if (dispatching || (dispatching = recv_msg_buffer.try_dequeue(last_dispatch_msg)))
+		if (dispatching || (dispatching = recv_buffer.try_dequeue(dispatching_msg)))
 		{
 			auto begin_time = statistic::now();
-			stat.dispatch_delay_sum += begin_time - last_dispatch_msg.begin_time;
-			auto re = on_msg_handle(last_dispatch_msg); //must before next msg dispatching to keep sequence
+			stat.dispatch_delay_sum += begin_time - dispatching_msg.begin_time;
+			auto re = on_msg_handle(dispatching_msg); //must before next msg dispatching to keep sequence
 			auto end_time = statistic::now();
 			stat.handle_time_sum += end_time - begin_time;
 
 			if (!re) //dispatch failed, re-dispatch
 			{
-				last_dispatch_msg.restart(end_time);
+				dispatching_msg.restart(end_time);
 				set_timer(TIMER_DISPATCH_MSG, msg_handling_interval_, [this](tid id)->bool {return this->timer_handler(TIMER_DISPATCH_MSG);}); //hold dispatching
 			}
 			else
 			{
-				last_dispatch_msg.clear();
+				dispatching_msg.clear();
 #endif
 				dispatching = false;
 				dispatch_msg(); //dispatch msg in sequence
 			}
 		}
-		else if (!recv_msg_buffer.empty()) //just make sure no pending msgs
+		else if (!recv_buffer.empty()) //just make sure no pending msgs
 			dispatch_msg();
 	}
 
@@ -628,31 +646,33 @@ private:
 protected:
 	struct statistic stat;
 	std::shared_ptr<i_packer<typename Packer::msg_type>> packer_;
+	std::shared_ptr<i_unpacker<typename Unpacker::msg_type>> unpacker_;
 	list<OutMsgType> temp_msg_can;
 
-	in_queue_type send_msg_buffer;
+	in_queue_type send_buffer;
 	volatile bool sending;
 
 #ifdef ASCS_PASSIVE_RECV
 	volatile bool reading;
 #endif
+	asio::io_context::strand rw_strand;
 
 private:
 	bool recv_idle_began;
 	volatile bool started_; //has started or not
 	volatile bool dispatching;
 #ifndef ASCS_DISPATCH_BATCH_MSG
-	out_msg last_dispatch_msg;
+	out_msg dispatching_msg;
 #endif
 
 	typename statistic::stat_time recv_idle_begin_time;
-	out_queue_type recv_msg_buffer;
+	out_queue_type recv_buffer;
 
 	uint_fast64_t _id;
 	Socket next_layer_;
 
 	std::atomic_flag start_atomic;
-	asio::io_context::strand strand;
+	asio::io_context::strand dis_strand;
 
 #ifdef ASCS_SYNC_RECV
 	enum sync_recv_status {NOT_REQUESTED, REQUESTED, RESPONDED, RESPONDED_FAILURE};
@@ -664,6 +684,18 @@ private:
 
 	unsigned msg_resuming_interval_, msg_handling_interval_;
 };
+
+template<typename Socket, typename Packer, typename Unpacker,
+	template<typename> class InQueue, template<typename> class InContainer, template<typename> class OutQueue, template<typename> class OutContainer>
+using socket2 = socket<Socket, Packer, Unpacker, typename Packer::msg_type, typename Unpacker::msg_type, InQueue, InContainer, OutQueue, OutContainer>;
+
+template<typename Socket, typename Packer, typename Unpacker, template<typename> class InMsgWrapper, template<typename> class OutMsgWrapper,
+	template<typename> class InQueue, template<typename> class InContainer, template<typename> class OutQueue, template<typename> class OutContainer>
+using socket3 = socket<Socket, Packer, Unpacker, InMsgWrapper<typename Packer::msg_type>, OutMsgWrapper<typename Unpacker::msg_type>, InQueue, InContainer, OutQueue, OutContainer>;
+
+template<typename Socket, typename Packer, typename Unpacker, template<typename> class MsgWrapper,
+	template<typename> class InQueue, template<typename> class InContainer, template<typename> class OutQueue, template<typename> class OutContainer>
+using socket4 = socket3<Socket, Packer, Unpacker, MsgWrapper, MsgWrapper, InQueue, InContainer, OutQueue, OutContainer>;
 
 } //namespace
 

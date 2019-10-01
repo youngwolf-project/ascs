@@ -65,9 +65,46 @@ public:
 
 protected:
 	//msg handling
+#ifdef ASCS_SYNC_DISPATCH
+	virtual size_t on_msg(list<out_msg_type>& msg_can)
+	{
+		//ascs will never append empty message automatically for on_msg (if no message nor error returned from the unpacker) even with
+		// macro ASCS_PASSIVE_RECV, but will do it for on_msg_handle (with macro ASCS_PASSIVE_RECV), please note.
+		if (msg_can.empty())
+			handle_msg(out_msg_type()); //we need empty message as a notification, it's just our business logic.
+		else
+		{
+			ascs::do_something_to_all(msg_can, [this](out_msg_type& msg) {this->handle_msg(msg);});
+			msg_can.clear();
+		}
+
+		recv_msg(); //we always handled all messages, so calling recv_msg() at here is very reasonable.
+		return 1;
+		//if we indeed handled some messages, do return 1
+		//if we handled nothing, return 1 is also okey but will very slightly impact performance (if msg_can is not empty), return 0 is suggested
+	}
+#endif
+#ifdef ASCS_DISPATCH_BATCH_MSG
+	virtual size_t on_msg_handle(out_queue_type& msg_can)
+	{
+		//msg_can can't be empty, with macro ASCS_PASSIVE_RECV, ascs will append an empty message automatically for on_msg_handle if no message nor
+		// error returned from the unpacker to provide a chance to call recv_msg (calling recv_msg out of on_msg and on_msg_handle is forbidden), please note.
+		assert(!msg_can.empty());
+		out_container_type tmp_can;
+		msg_can.swap(tmp_can);
+
+		ascs::do_something_to_all(tmp_can, [this](out_msg_type& msg) {this->handle_msg(msg);});
+
+		recv_msg(); //we always handled all messages, so calling recv_msg() at here is very reasonable.
+		return 1;
+		//if we indeed handled some messages, do return 1
+		//if we handled nothing, return 1 is also okey but will very slightly impact performance, return 0 is suggested
+	}
+#else
 	virtual bool on_msg_handle(out_msg_type& msg) {handle_msg(msg); if (0 == get_pending_recv_msg_size()) recv_msg(); return true;}
 	//only raise recv_msg() invocation after recveiving buffer becomes empty, it's very important, otherwise we must use mutex to guarantee that at any time,
 	//there only exists one or zero asynchronous reception.
+#endif
 	//msg handling end
 
 	virtual void on_connect()
@@ -102,7 +139,7 @@ private:
 		{
 			assert(msg.empty());
 
-			auto unp = std::dynamic_pointer_cast<data_unpacker>(unpacker());
+			auto unp = std::dynamic_pointer_cast<file_unpacker>(unpacker());
 			if (!unp || unp->is_finished())
 				trans_end();
 
@@ -148,7 +185,7 @@ private:
 						send_msg(buffer, sizeof(buffer), true);
 
 						fseeko(file, offset, SEEK_SET);
-						unpacker(std::make_shared<data_unpacker>(file, my_length));
+						unpacker(std::make_shared<file_unpacker>(file, my_length));
 					}
 					else
 						trans_end();
