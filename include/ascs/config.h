@@ -568,6 +568,30 @@
  * REPLACEMENTS:
  * Replace ascs::list with std::list.
  *
+ * ===============================================================
+ * 2019.10.1	version 1.4.3
+ *
+ * SPECIAL ATTENTION (incompatible with old editions):
+ *
+ * HIGHLIGHT:
+ *
+ * FIX:
+ * Fix the availability detection of std::future with libstdc++.
+ *
+ * ENHANCEMENTS:
+ * Introduce macro ASCS_EXPOSE_SEND_INTERFACE to expose send_msg() interface, see below for more details.
+ * Introduce some helper classes (ascs::socket2, socket3 and socket4) to reduce the number of template parameters.
+ *
+ * DELETION:
+ *
+ * REFACTORING:
+ * Move unpacker logic from tcp::socket_base and udp::socket_base to ascs::socket.
+ * Move message sending and receiving logic from tcp::socket_base and udp::socket_base to ascs::socket.
+ * Some trivial refactoring in demo file_server and file_client.
+ * Some new comments in demo echo_server, echo_client and file_client to help users to understand on_msg and on_msg_handle interface more.
+ *
+ * REPLACEMENTS:
+ *
  */
 
 #ifndef _ASCS_CONFIG_H_
