@@ -78,7 +78,7 @@ public:
 				msg_can.emplace_back(item.first, item.second);
 		});
 
-		if (unpack_ok && remain_len > 0)
+		if (remain_len > 0 && !msg_pos_can.empty())
 		{
 			auto pnext = std::next(msg_pos_can.back().first, msg_pos_can.back().second);
 			memmove(&*std::begin(raw_buff), pnext, remain_len); //left behind unparsed data

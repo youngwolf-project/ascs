@@ -572,11 +572,14 @@
  * 2019.10.1	version 1.4.3
  *
  * SPECIAL ATTENTION (incompatible with old editions):
+ * Restore the default value of parameter duration and can_overflow in all message sending interfaces.
+ * Always move unparsed data to the head of the buffer in unpacker and unpacker2.
  *
  * HIGHLIGHT:
  *
  * FIX:
  * Fix the availability detection of std::future with libstdc++.
+ * Restore the default value of parameter duration and can_overflow in all message sending interfaces (a defect introduced in version 1.3.0).
  *
  * ENHANCEMENTS:
  * Introduce macro ASCS_EXPOSE_SEND_INTERFACE to expose send_msg() interface, see below for more details.
@@ -601,8 +604,8 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#define ASCS_VER		10402	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.4.2"
+#define ASCS_VER		10403	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.4.3"
 
 //asio and compiler check
 #ifdef _MSC_VER
