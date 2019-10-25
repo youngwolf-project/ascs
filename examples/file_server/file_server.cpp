@@ -2,13 +2,9 @@
 #include <iostream>
 
 //configuration
-#define ASCS_SERVER_PORT		5050
-#define ASCS_RESTORE_OBJECT
-#define ASCS_ENHANCED_STABILITY
-#define ASCS_WANT_MSG_SEND_NOTIFY
-#define ASCS_INPUT_QUEUE non_lock_queue
+//#define ASCS_INPUT_QUEUE non_lock_queue
 //file_server / file_client is a responsive system, before file_server send each message (except talking message,
-//but file_server only receive talking message, not send talking message proactively), the previous message has been
+//but file_server only receive talking message, don't send talking message proactively), the previous message has been
 //sent to file_client, so sending buffer will always be empty, which means we will never operate sending buffer concurrently,
 //so need no locks.
 #if defined(_MSC_VER) && _MSC_VER <= 1800
@@ -16,8 +12,12 @@
 #else
 #define ASCS_DEFAULT_PACKER packer2<>
 #endif
-#define ASCS_RECV_BUFFER_TYPE std::vector<asio::mutable_buffer> //scatter-gather buffer, it's very useful under certain situations (for example, ring buffer).
-#define ASCS_SCATTERED_RECV_BUFFER //used by unpackers, not belongs to ascs
+//#define ASCS_RECV_BUFFER_TYPE std::vector<asio::mutable_buffer> //scatter-gather buffer, it's very useful under certain situations (for example, ring buffer).
+//#define ASCS_SCATTERED_RECV_BUFFER //used by unpackers, not belongs to ascs
+//note, these two macro are not requisite, i'm just showing how to use them.
+
+//all other definitions are in the makefile, because we have two cpp files, defining them in more than one place is riskful (
+// we may define them to different values between the two cpp files)
 //configuration
 
 #include "file_socket.h"
