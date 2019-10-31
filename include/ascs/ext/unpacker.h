@@ -120,6 +120,11 @@ public:
 	virtual buffer_type prepare_next_recv() {assert(remain_len < ASCS_MSG_BUFFER_SIZE); return asio::buffer(asio::buffer(raw_buff) + remain_len);}
 #endif
 
+	//msg must has been unpacked by this unpacker
+	virtual char* raw_data(msg_type& msg) const {return const_cast<char*>(std::next(msg.data(), stripped() ? 0 : ASCS_HEAD_LEN));}
+	virtual const char* raw_data(msg_ctype& msg) const {return std::next(msg.data(), stripped() ? 0 : ASCS_HEAD_LEN);}
+	virtual size_t raw_data_len(msg_ctype& msg) const {return msg.size() - (stripped() ? 0 : ASCS_HEAD_LEN);}
+
 protected:
 	std::array<char, ASCS_MSG_BUFFER_SIZE> raw_buff;
 	size_t cur_msg_len; //-1 means head not received, so msg length is not available.
@@ -171,6 +176,11 @@ public:
 
 	virtual size_t completion_condition(const asio::error_code& ec, size_t bytes_transferred) {return unpacker_.completion_condition(ec, bytes_transferred);}
 	virtual typename super::buffer_type prepare_next_recv() {return unpacker_.prepare_next_recv();}
+
+	//msg must has been unpacked by this unpacker
+	virtual char* raw_data(unpacker::msg_type& msg) const {return unpacker_.raw_data(msg);}
+	virtual const char* raw_data(unpacker::msg_ctype& msg) const {return unpacker_.raw_data(msg);}
+	virtual size_t raw_data_len(unpacker::msg_ctype& msg) const {return unpacker_.raw_data_len(msg);}
 
 protected:
 	unpacker unpacker_;
@@ -439,6 +449,11 @@ public:
 #else
 	virtual buffer_type prepare_next_recv() {assert(remain_len < ASCS_MSG_BUFFER_SIZE); return asio::buffer(asio::buffer(raw_buff) + remain_len);}
 #endif
+
+	//msg must has been unpacked by this unpacker
+	virtual char* raw_data(msg_type& msg) const {return const_cast<char*>(std::next(msg.data(), stripped() ? 0 : _prefix.size()));}
+	virtual const char* raw_data(msg_ctype& msg) const {return std::next(msg.data(), stripped() ? 0 : _prefix.size());}
+	virtual size_t raw_data_len(msg_ctype& msg) const {return msg.size() - (stripped() ? 0 : _prefix.size() + _suffix.size());}
 
 private:
 	std::array<char, ASCS_MSG_BUFFER_SIZE> raw_buff;

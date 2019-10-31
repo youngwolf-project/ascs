@@ -607,6 +607,10 @@
  * Fix mingw-build.bat for demo file_client (macro _FILE_OFFSET_BITS=64 and _LARGEFILE_SOURCE not defined).
  *
  * ENHANCEMENTS:
+ * Add following 3 interfaces to i_unpacker as i_packer did (the default implementation is meaningless as i_packer, just satisfy compilers):
+ *  virtual char* raw_data(msg_type& msg) const
+ *  virtual const char* raw_data(msg_ctype& msg) const
+ *  virtual size_t raw_data_len(msg_ctype& msg) const
  *
  * DELETION:
  *

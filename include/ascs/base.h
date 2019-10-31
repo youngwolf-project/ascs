@@ -182,9 +182,11 @@ public:
 	virtual bool pack_msg(msg_type&& msg1, msg_type&& msg2, container_type& msg_can) {return false;}
 	virtual bool pack_msg(container_type&& in, container_type& out) {return false;}
 	virtual msg_type pack_heartbeat() {return msg_type();}
-	virtual char* raw_data(msg_type& msg) const {return nullptr;}
-	virtual const char* raw_data(msg_ctype& msg) const {return nullptr;}
-	virtual size_t raw_data_len(msg_ctype& msg) const {return 0;}
+
+	//this default implementation is meaningless, just satisfy compilers
+	virtual char* raw_data(msg_type& msg) const {return const_cast<char*>(msg.data());}
+	virtual const char* raw_data(msg_ctype& msg) const {return msg.data();}
+	virtual size_t raw_data_len(msg_ctype& msg) const {return msg.size();}
 
 	msg_type pack_msg(const char* pstr, size_t len, bool native = false) {return pack_msg(&pstr, &len, 1, native);}
 	msg_type pack_msg(const std::string& str, bool native = false) {return pack_msg(str.data(), str.size(), native);}
@@ -225,6 +227,11 @@ public:
 	virtual bool parse_msg(size_t bytes_transferred, container_type& msg_can) = 0;
 	virtual size_t completion_condition(const asio::error_code& ec, size_t bytes_transferred) {return 0;}
 	virtual buffer_type prepare_next_recv() = 0;
+
+	//this default implementation is meaningless, just satisfy compilers
+	virtual char* raw_data(msg_type& msg) const {return const_cast<char*>(msg.data());}
+	virtual const char* raw_data(msg_ctype& msg) const {return msg.data();}
+	virtual size_t raw_data_len(msg_ctype& msg) const {return msg.size();}
 
 private:
 	bool _stripped;
