@@ -595,6 +595,28 @@
  *
  * REPLACEMENTS:
  *
+ * ===============================================================
+ * 2020.x.x		version 1.5.0
+ *
+ * SPECIAL ATTENTION (incompatible with old editions):
+ * Delete macro ASCS_ENHANCED_STABILITY, which means now we always have it, if you really don't want it, define macro ASCS_NO_TRY_CATCH.
+ *
+ * HIGHLIGHT:
+ *
+ * FIX:
+ * Fix mingw-build.bat for demo file_client (macro _FILE_OFFSET_BITS=64 and _LARGEFILE_SOURCE not defined).
+ *
+ * ENHANCEMENTS:
+ *
+ * DELETION:
+ *
+ * REFACTORING:
+ * Move macro definitions from cpp files to makefile (to avoid potential inconsistent definitions between more than one cpp files,
+ *  all other demos have only one cpp file, so have no such potential risk) and mingw-build.bat for demo file_server.
+ *
+ * REPLACEMENTS:
+ * Replace macro ASCS_ENHANCED_STABILITY by ASCS_NO_TRY_CATCH (antonymous).
+ *
  */
 
 #ifndef _ASCS_CONFIG_H_
@@ -685,8 +707,8 @@ static_assert(ASCS_MAX_RECV_BUF > 15, "recv buffer capacity must be bigger than 
 //don't write any logs.
 //#define ASCS_NO_UNIFIED_OUT
 
-//if defined, service_pump will catch exceptions for asio::io_context::run().
-//#define ASCS_ENHANCED_STABILITY
+//if defined, service_pump will not catch exceptions for asio::io_context::run().
+//#define ASCS_NO_TRY_CATCH
 
 //if defined, asio::steady_timer will be used in ascs::timer, otherwise, asio::system_timer will be used.
 //#define ASCS_USE_STEADY_TIMER

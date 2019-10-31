@@ -5,7 +5,6 @@
 #define ASCS_SERVER_PORT		9527
 #define ASCS_REUSE_OBJECT //use objects pool
 #define ASCS_REUSE_SSL_STREAM
-#define ASCS_ENHANCED_STABILITY
 //#if defined(_MSC_VER) && _MSC_VER <= 1800
 //#define ASCS_DEFAULT_PACKER packer2<shared_buffer<i_buffer>>
 //#else
