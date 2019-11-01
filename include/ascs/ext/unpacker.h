@@ -41,10 +41,14 @@ public:
 					unpack_ok = false;
 				else if (remain_len >= cur_msg_len) //one msg received
 				{
-					if (stripped())
-						msg_can.emplace_back(std::next(pnext, ASCS_HEAD_LEN), cur_msg_len - ASCS_HEAD_LEN);
-					else
-						msg_can.emplace_back(pnext, cur_msg_len);
+					if (cur_msg_len > ASCS_HEAD_LEN) //ignore heartbeat
+					{
+						if (stripped())
+							msg_can.emplace_back(std::next(pnext, ASCS_HEAD_LEN), cur_msg_len - ASCS_HEAD_LEN);
+						else
+							msg_can.emplace_back(pnext, cur_msg_len);
+					}
+
 					remain_len -= cur_msg_len;
 					std::advance(pnext, cur_msg_len);
 					cur_msg_len = -1;
@@ -73,10 +77,7 @@ public:
 	{
 		std::list<std::pair<const char*, size_t>> msg_pos_can;
 		auto unpack_ok = parse_msg(bytes_transferred, msg_pos_can);
-		do_something_to_all(msg_pos_can, [&msg_can](decltype(msg_pos_can.front()) item) {
-			if (item.second > 0) //exclude heartbeat
-				msg_can.emplace_back(item.first, item.second);
-		});
+		do_something_to_all(msg_pos_can, [&msg_can](decltype(msg_pos_can.front()) item) {msg_can.emplace_back(item.first, item.second);});
 
 		if (remain_len > 0 && !msg_pos_can.empty())
 		{
@@ -132,6 +133,7 @@ protected:
 };
 
 //protocol: UDP has message boundary, so we don't need a specific protocol to unpack it.
+//this unpacker doesn't support heartbeat, please note.
 class udp_unpacker : public i_unpacker<std::string>
 {
 public:
@@ -221,6 +223,7 @@ protected:
 //let asio write msg directly (no temporary memory needed), not support unstripped messages, please note (you can fix this defect if you like).
 //actually, this unpacker has the worst performance, because it needs 2 read for one message, other unpackers are able to get many messages from just one read.
 //so this unpacker just demonstrates a way to avoid memory replications and temporary memory utilization, it can provide better performance for huge messages.
+//this unpacker only output stripped messages, please note.
 class non_copy_unpacker : public i_unpacker<basic_buffer>
 {
 public:
@@ -300,7 +303,8 @@ private:
 //protocol: fixed length
 //non-copy, let asio write msg directly (no temporary memory needed), actually, this unpacker has poor performance, because it needs one read for one message, other unpackers
 //are able to get many messages from just one read, so this unpacker just demonstrates a way to avoid memory replications and temporary memory utilization, it can provide better
-//performance for huge messages.
+// performance for huge messages.
+//this unpacker doesn't support heartbeat, please note.
 class fixed_length_unpacker : public i_unpacker<basic_buffer>
 {
 public:
@@ -463,6 +467,7 @@ private:
 };
 
 //protocol: stream (non-protocol)
+//this unpacker doesn't support heartbeat, please note.
 class stream_unpacker : public i_unpacker<std::string>
 {
 public:
