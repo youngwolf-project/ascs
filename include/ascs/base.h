@@ -71,6 +71,7 @@ public:
 	virtual service_pump& get_service_pump() = 0;
 	virtual const service_pump& get_service_pump() const = 0;
 
+	virtual bool socket_exist(uint_fast64_t id) = 0;
 	virtual std::shared_ptr<tracked_executor> find_socket(uint_fast64_t id) = 0;
 };
 
