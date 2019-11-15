@@ -41,14 +41,7 @@ public:
 					unpack_ok = false;
 				else if (remain_len >= cur_msg_len) //one msg received
 				{
-					if (cur_msg_len > ASCS_HEAD_LEN) //ignore heartbeat
-					{
-						if (stripped())
-							msg_can.emplace_back(std::next(pnext, ASCS_HEAD_LEN), cur_msg_len - ASCS_HEAD_LEN);
-						else
-							msg_can.emplace_back(pnext, cur_msg_len);
-					}
-
+					msg_can.emplace_back(pnext, cur_msg_len);
 					remain_len -= cur_msg_len;
 					std::advance(pnext, cur_msg_len);
 					cur_msg_len = -1;
@@ -77,7 +70,15 @@ public:
 	{
 		std::list<std::pair<const char*, size_t>> msg_pos_can;
 		auto unpack_ok = parse_msg(bytes_transferred, msg_pos_can);
-		do_something_to_all(msg_pos_can, [&msg_can](decltype(msg_pos_can.front()) item) {msg_can.emplace_back(item.first, item.second);});
+		do_something_to_all(msg_pos_can, [this, &msg_can](decltype(msg_pos_can.front()) item) {
+			if (item.second > ASCS_HEAD_LEN) //ignore heartbeat
+			{
+				if (this->stripped())
+					msg_can.emplace_back(std::next(item.first, ASCS_HEAD_LEN), item.second - ASCS_HEAD_LEN);
+				else
+					msg_can.emplace_back(item.first, item.second);
+			}
+		});
 
 		if (remain_len > 0 && !msg_pos_can.empty())
 		{
