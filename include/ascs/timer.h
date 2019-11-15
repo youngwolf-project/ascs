@@ -19,6 +19,8 @@
 #include <asio/system_timer.hpp>
 #endif
 
+#include <functional>
+
 #include "object.h"
 
 //If you inherit a class from class X, your own timer ids must begin from X::TIMER_END
