@@ -604,7 +604,6 @@
  * HIGHLIGHT:
  *
  * FIX:
- * Fix mingw-build.bat for demo file_client (macro _FILE_OFFSET_BITS=64 and _LARGEFILE_SOURCE not defined).
  *
  * ENHANCEMENTS:
  * Add socket_exist interface to i_matrix, exist function to object_pool to just check the existence of a socket by an given id.
@@ -614,10 +613,11 @@
  *  virtual size_t raw_data_len(msg_ctype& msg) const
  *
  * DELETION:
+ * Delete file mingw-build.bat, use mingw32-make instead.
  *
  * REFACTORING:
- * Move macro definitions from cpp files to makefile (to avoid potential inconsistent definitions between more than one cpp files,
- *  all other demos have only one cpp file, so have no such potential risk) and mingw-build.bat for demo file_server.
+ * Move macro definitions from cpp files to makefile for demo file_server (to avoid potential inconsistent definitions between
+ *  more than one cpp files, all other demos have only one cpp file, so have no such potential risk).
  *
  * REPLACEMENTS:
  * Replace macro ASCS_ENHANCED_STABILITY by ASCS_NO_TRY_CATCH (antonymous).
@@ -631,8 +631,8 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#define ASCS_VER		10403	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.4.3"
+#define ASCS_VER		10500	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.5.0"
 
 //asio and compiler check
 #ifdef _MSC_VER
