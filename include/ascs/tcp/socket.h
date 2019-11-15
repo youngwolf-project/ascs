@@ -261,7 +261,11 @@ private:
 			dur.end();
 
 			if (!unpack_ok)
-				on_unpack_error(); //the user will decide whether to reset the unpacker or not in this callback
+			{
+				on_unpack_error();
+				//reset unpacker's status after on_unpack_error(), so user can get the left half-baked msg in on_unpack_error()
+				unpacker_->reset();
+			}
 
 #ifdef ASCS_PASSIVE_RECV
 			reading = false; //clear reading flag before call handle_msg() to make sure that recv_msg() can be called successfully in on_msg_handle()
