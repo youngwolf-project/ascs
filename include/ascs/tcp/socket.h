@@ -268,7 +268,11 @@ private:
 			dur.end();
 
 			if (!unpack_ok)
-				on_unpack_error(); //the user will decide whether to reset the unpacker or not in this callback
+			{
+				on_unpack_error();
+				//reset unpacker's status after on_unpack_error(), so user can get the left half-baked msg in on_unpack_error()
+				unpacker_->reset();
+			}
 
 			auto msg_num = temp_msg_can.size();
 			if (msg_num > 0)
