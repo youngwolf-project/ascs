@@ -21,6 +21,7 @@
 
 #include <set>
 #include <chrono>
+#include <functional>
 
 #include "object.h"
 

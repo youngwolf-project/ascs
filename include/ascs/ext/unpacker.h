@@ -63,6 +63,8 @@ public:
 				ASCS_HEAD_TYPE head;
 				memcpy(&head, pnext, ASCS_HEAD_LEN);
 				cur_msg_len = ASCS_HEAD_N2H(head);
+				if ((size_t) -1 == cur_msg_len) //avoid dead loop on 32bit system with macro ASCS_HUGE_MSG
+					unpack_ok = false;
 			}
 			else
 				break;
@@ -81,7 +83,7 @@ public:
 		auto unpack_ok = parse_msg(bytes_transferred, msg_pos_can);
 		do_something_to_all(msg_pos_can, [&msg_can](const auto& item) {msg_can.resize(msg_can.size() + 1); msg_can.back().assign(item.first, item.second);});
 
-		if (unpack_ok && remain_len > 0)
+		if (remain_len > 0 && !msg_pos_can.empty())
 		{
 			auto pnext = std::next(msg_pos_can.back().first, msg_pos_can.back().second);
 			memmove(&*std::begin(raw_buff), pnext, remain_len); //left behind unparsed data
