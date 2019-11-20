@@ -818,6 +818,8 @@ public:
 		if (nullptr != head)
 			os << '[' << head << "] ";
 
+		os << '[' << std::this_thread::get_id() << "] ";
+
 		char time_buff[64];
 		auto now = time(nullptr);
 #ifdef _MSC_VER
