@@ -71,7 +71,7 @@ public:
 		{
 			auto remote_ep = this->lowest_layer().remote_endpoint(ec);
 			if (!ec)
-				unified_out::info_out("%s (%s:%hu %s:%hu) %s", head,
+				unified_out::info_out(ASCS_LLF " %s (%s:%hu %s:%hu) %s", this->id(), head,
 					local_ep.address().to_string().data(), local_ep.port(),
 					remote_ep.address().to_string().data(), remote_ep.port(), tail);
 		}
@@ -85,7 +85,7 @@ public:
 		{
 			auto remote_ep = this->lowest_layer().remote_endpoint(ec2);
 			if (!ec2)
-				unified_out::info_out("%s (%s:%hu %s:%hu) %s (%d %s)", head,
+				unified_out::info_out(ASCS_LLF " %s (%s:%hu %s:%hu) %s (%d %s)", this->id(), head,
 					local_ep.address().to_string().data(), local_ep.port(),
 					remote_ep.address().to_string().data(), remote_ep.port(), tail, ec.value(), ec.message().data());
 		}
@@ -155,7 +155,7 @@ protected:
 					std::this_thread::sleep_for(std::chrono::milliseconds(10));
 				if (loop_num < 0) //graceful shutdown is impossible
 				{
-					unified_out::info_out("failed to graceful shutdown within %d seconds", ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION);
+					unified_out::info_out(ASCS_LLF " failed to graceful shutdown within %d seconds", this->id(), ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION);
 					shutdown();
 				}
 			}
@@ -176,7 +176,7 @@ protected:
 	// you must take over them and re-send (at any time) them via direct_send_msg.
 	//DO NOT hold msg_can for future using, just swap its content with your own container in this virtual function.
 	virtual void on_send_error(const asio::error_code& ec, typename super::in_container_type& msg_can)
-		{unified_out::error_out("send msg error (%d %s)", ec.value(), ec.message().data());}
+		{unified_out::error_out(ASCS_LLF " send msg error (%d %s)", this->id(), ec.value(), ec.message().data());}
 
 	virtual void on_recv_error(const asio::error_code& ec) = 0;
 
@@ -226,7 +226,7 @@ private:
 		auto recv_buff = unpacker_->prepare_next_recv();
 		assert(asio::buffer_size(recv_buff) > 0);
 		if (0 == asio::buffer_size(recv_buff))
-			unified_out::error_out("The unpacker returned an empty buffer, quit receiving!");
+			unified_out::error_out(ASCS_LLF " the unpacker returned an empty buffer, quit receiving!", this->id());
 		else
 		{
 #ifdef ASCS_PASSIVE_RECV
@@ -350,7 +350,7 @@ private:
 			}
 			else
 			{
-				unified_out::info_out("failed to graceful shutdown within %d seconds", ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION);
+				unified_out::info_out(ASCS_LLF " failed to graceful shutdown within %d seconds", this->id(), ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION);
 				on_async_shutdown_error();
 			}
 		}

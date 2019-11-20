@@ -289,7 +289,7 @@ protected:
 	// include user timers(created by set_timer()) and user async calls(started via post(), dispatch() or defer()), this means you can clean up any resource
 	// in this socket except this socket itself, because this socket maybe is being maintained by object_pool.
 	//otherwise (bigger than zero), socket simply call this callback ASCS_DELAY_CLOSE seconds later after link down, no any guarantees.
-	virtual void on_close() {unified_out::info_out("on_close()");}
+	virtual void on_close() {unified_out::info_out(ASCS_LLF " on_close()", id());}
 	virtual void after_close() {} //a good case for using this is to reconnect the server, please refer to client_socket_base.
 
 #ifdef ASCS_SYNC_DISPATCH
@@ -298,7 +298,9 @@ protected:
 	virtual size_t on_msg(list<OutMsgType>& msg_can)
 	{
 		//it's always thread safe in this virtual function, because it blocks message receiving
-		ascs::do_something_to_all(msg_can, [](OutMsgType& msg) {unified_out::debug_out("recv(" ASCS_SF "): %s", msg.size(), msg.data());});
+		ascs::do_something_to_all(msg_can, [this](OutMsgType& msg) {
+			unified_out::debug_out(ASCS_LLF " recv(" ASCS_SF "): %s", this->id(), msg.size(), msg.data());
+		});
 		msg_can.clear(); //have handled all messages
 
 		return 1;
@@ -312,12 +314,15 @@ protected:
 		out_container_type tmp_can;
 		msg_can.swap(tmp_can); //must be thread safe, or aovid race condition from your business logic
 
-		ascs::do_something_to_all(tmp_can, [](OutMsgType& msg) {unified_out::debug_out("recv(" ASCS_SF "): %s", msg.size(), msg.data());});
+		ascs::do_something_to_all(tmp_can, [this](OutMsgType& msg) {
+			unified_out::debug_out(ASCS_LLF " recv(" ASCS_SF "): %s", this->id(), msg.size(), msg.data());
+		});
 		return 1;
 	}
 #else
 	//return true means msg been handled, false means msg cannot be handled right now, and socket will re-dispatch it asynchronously
-	virtual bool on_msg_handle(OutMsgType& msg) {unified_out::debug_out("recv(" ASCS_SF "): %s", msg.size(), msg.data()); return true;}
+	virtual bool on_msg_handle(OutMsgType& msg)
+		{unified_out::debug_out(ASCS_LLF " recv(" ASCS_SF "): %s", id(), msg.size(), msg.data()); return true;}
 #endif
 
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
@@ -441,7 +446,7 @@ protected:
 	template<typename T> bool do_direct_send_msg(T&& msg)
 	{
 		if (msg.empty())
-			unified_out::error_out("found an empty message, please check your packer.");
+			unified_out::error_out(ASCS_LLF " found an empty message, please check your packer.", id());
 		else if (send_buffer.enqueue(std::forward<T>(msg)))
 			send_msg();
 
@@ -469,7 +474,7 @@ protected:
 			return sync_call_result::NOT_APPLICABLE;
 		else if (msg.empty())
 		{
-			unified_out::error_out("found an empty message, please check your packer.");
+			unified_out::error_out(ASCS_LLF " found an empty message, please check your packer.", id());
 			return sync_call_result::SUCCESS;
 		}
 

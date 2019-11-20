@@ -600,6 +600,7 @@
  *
  * SPECIAL ATTENTION (incompatible with old editions):
  * Delete macro ASCS_ENHANCED_STABILITY, which means now we always have it, if you really don't want it, define macro ASCS_NO_TRY_CATCH.
+ * Change macro ASCS_LLF from %lu or %llu to %ld or %lld, this can shorten the output during printing invalid ids ((uint_fast64_t) -1).
  *
  * HIGHLIGHT:
  *
@@ -611,6 +612,7 @@
  *  virtual char* raw_data(msg_type& msg) const
  *  virtual const char* raw_data(msg_ctype& msg) const
  *  virtual size_t raw_data_len(msg_ctype& msg) const
+ * Prefix the socket id for all logs if they're available.
  *
  * DELETION:
  * Delete file mingw-build.bat, use mingw32-make instead.
@@ -651,14 +653,14 @@
 
 	#define ASCS_SF "%zu" //format used to print 'size_t'
 	#if defined(__x86_64__) && !defined(__MINGW64__) //terrible mingw
-	#define ASCS_LLF "%lu" //format used to print 'uint_fast64_t'
+	#define ASCS_LLF "%ld" //format used to print 'uint_fast64_t'
 	#endif
 #else
 	#error ascs only support Visual C++, GCC and Clang.
 #endif
 
 #ifndef ASCS_LLF
-#define ASCS_LLF "%llu" //format used to print 'uint_fast64_t'
+#define ASCS_LLF "%lld" //format used to print 'uint_fast64_t'
 #endif
 
 static_assert(ASIO_VERSION >= 101001, "ascs needs asio 1.10.1 or higher.");

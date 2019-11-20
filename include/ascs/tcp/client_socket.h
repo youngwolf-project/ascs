@@ -106,7 +106,7 @@ protected:
 				lowest_object.open(local_addr.protocol(), ec); assert(!ec);
 				if (ec)
 				{
-					unified_out::error_out("cannot create socket: %s", ec.message().data());
+					unified_out::error_out(ASCS_LLF " cannot create socket: %s", this->id(), ec.message().data());
 					return false;
 				}
 			}
@@ -114,7 +114,7 @@ protected:
 			lowest_object.bind(local_addr, ec);
 			if (ec && asio::error::invalid_argument != ec)
 			{
-				unified_out::error_out("cannot bind socket: %s", ec.message().data());
+				unified_out::error_out(ASCS_LLF " cannot bind socket: %s", this->id(), ec.message().data());
 				return false;
 			}
 		}
@@ -133,8 +133,8 @@ protected:
 
 	//after how much time (ms), client_socket_base will try to reconnect the server, negative value means give up.
 	virtual int prepare_reconnect(const asio::error_code& ec) {return ASCS_RECONNECT_INTERVAL;}
-	virtual void on_connect() {unified_out::info_out("connecting success.");}
-	virtual void on_unpack_error() {unified_out::info_out("can not unpack msg."); force_shutdown();}
+	virtual void on_connect() {unified_out::info_out(ASCS_LLF " connecting success.", this->id());}
+	virtual void on_unpack_error() {unified_out::info_out(ASCS_LLF " can not unpack msg.", this->id()); force_shutdown();}
 	virtual void on_recv_error(const asio::error_code& ec)
 	{
 		this->show_info("client link:", "broken/been shut down", ec);
@@ -196,7 +196,7 @@ private:
 #endif
 			if (ec)
 			{
-				unified_out::error_out("invalid IP address %s.", ip.data());
+				unified_out::error_out(ASCS_LLF " invalid IP address %s.", this->id(), ip.data());
 				return false;
 			}
 
