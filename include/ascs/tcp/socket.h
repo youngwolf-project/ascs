@@ -270,6 +270,8 @@ private:
 				handle_error();
 				on_recv_error(ec);
 			}
+			//if you wrote an terrible unpacker whoes completion_condition always returns 0, it will cause ascs to occupies almost all CPU resources
+			// because of following do_recv_msg() invocation, please note.
 			else if (handle_msg()) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
 				do_recv_msg(); //receive msg in sequence
 		}

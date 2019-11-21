@@ -168,6 +168,7 @@ public:
 	virtual bool parse_msg(size_t bytes_transferred, typename super::container_type& msg_can)
 	{
 		unpacker::container_type tmp_can;
+		unpacker_.stripped(this->stripped());
 		auto unpack_ok = unpacker_.parse_msg(bytes_transferred, tmp_can);
 		do_something_to_all(tmp_can, [&msg_can](unpacker::msg_type& item) {
 			auto raw_msg = new string_buffer();
@@ -183,9 +184,9 @@ public:
 	virtual typename super::buffer_type prepare_next_recv() {return unpacker_.prepare_next_recv();}
 
 	//msg must has been unpacked by this unpacker
-	virtual char* raw_data(unpacker::msg_type& msg) const {return unpacker_.raw_data(msg);}
-	virtual const char* raw_data(unpacker::msg_ctype& msg) const {return unpacker_.raw_data(msg);}
-	virtual size_t raw_data_len(unpacker::msg_ctype& msg) const {return unpacker_.raw_data_len(msg);}
+	virtual char* raw_data(typename super::msg_type& msg) const {return const_cast<char*>(this->stripped() ? msg.data() : std::next(msg.data(), ASCS_HEAD_LEN));}
+	virtual const char* raw_data(typename super::msg_ctype& msg) const {return this->stripped() ? msg.data() : std::next(msg.data(), ASCS_HEAD_LEN);}
+	virtual size_t raw_data_len(typename super::msg_ctype& msg) const {return this->stripped() ? msg.size() : msg.size() - ASCS_HEAD_LEN;}
 
 protected:
 	unpacker unpacker_;
