@@ -161,6 +161,7 @@ public:
 	virtual bool parse_msg(size_t bytes_transferred, typename super::container_type& msg_can)
 	{
 		unpacker::container_type tmp_can;
+		unpacker_.stripped(this->stripped());
 		auto unpack_ok = unpacker_.parse_msg(bytes_transferred, tmp_can);
 		do_something_to_all(tmp_can, [&msg_can](unpacker::msg_type& item) {
 			auto raw_msg = new string_buffer();
