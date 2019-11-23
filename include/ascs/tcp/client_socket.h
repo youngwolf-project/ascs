@@ -106,7 +106,7 @@ protected:
 				lowest_object.open(local_addr.protocol(), ec); assert(!ec);
 				if (ec)
 				{
-					unified_out::error_out(ASCS_LLF " cannot create socket: %s", this->id(), ec.message().data());
+					unified_out::error_out("cannot create socket: %s", ec.message().data());
 					return false;
 				}
 			}
@@ -114,7 +114,7 @@ protected:
 			lowest_object.bind(local_addr, ec);
 			if (ec && asio::error::invalid_argument != ec)
 			{
-				unified_out::error_out(ASCS_LLF " cannot bind socket: %s", this->id(), ec.message().data());
+				unified_out::error_out("cannot bind socket: %s", ec.message().data());
 				return false;
 			}
 		}
@@ -196,7 +196,7 @@ private:
 #endif
 			if (ec)
 			{
-				unified_out::error_out(ASCS_LLF " invalid IP address %s.", this->id(), ip.data());
+				unified_out::error_out("invalid IP address %s.", ip.data());
 				return false;
 			}
 
