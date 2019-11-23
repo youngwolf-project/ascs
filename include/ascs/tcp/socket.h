@@ -59,6 +59,7 @@ public:
 	virtual void reset() {status = link_status::BROKEN; sending_msgs.clear(); super::reset();}
 
 	//SOCKET status
+	link_status get_link_status() const {return status;}
 	bool is_broken() const {return link_status::BROKEN == status;}
 	bool is_connected() const {return link_status::CONNECTED == status;}
 	bool is_shutting_down() const {return link_status::FORCE_SHUTTING_DOWN == status || link_status::GRACEFUL_SHUTTING_DOWN == status;}
