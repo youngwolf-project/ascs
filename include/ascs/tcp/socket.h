@@ -172,6 +172,12 @@ protected:
 		return super::do_start();
 	}
 
+#ifdef ASCS_WANT_BATCH_MSG_SEND_NOTIFY
+	//some messages have been sent to the kernel buffer
+	//notice: messages are packed, using inconstant reference is for the ability of swapping
+	virtual void on_msg_send(typename super::in_container_type& msg_can) = 0;
+#endif
+
 	//generally, you don't have to rewrite this to maintain the status of connections
 	//msg_can contains messages that were failed to send and tcp::socket_base will not hold them any more, if you want to re-send them in the future,
 	// you must take over them and re-send (at any time) them via direct_send_msg.
@@ -320,6 +326,8 @@ private:
 #endif
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
 			this->on_msg_send(sending_msgs.front());
+#elif defined(ASCS_WANT_BATCH_MSG_SEND_NOTIFY)
+			on_msg_send(sending_msgs);
 #endif
 #ifdef ASCS_WANT_ALL_MSG_SEND_NOTIFY
 			if (send_buffer.empty())

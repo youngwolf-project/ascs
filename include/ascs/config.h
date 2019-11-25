@@ -604,8 +604,11 @@
  * Apply the same reconnecting mechanism for message unpacking error (before, we always disabled reconnecting mechanism).
  *
  * HIGHLIGHT:
+ * Support batch message sent notification, see new macro ASCS_WANT_BATCH_MSG_SEND_NOTIFY for more details.
  *
  * FIX:
+ * If defined macro ASCS_WANT_MSG_SEND_NOTIFY, virtual function ascs::socket::on_msg_send(InMsgType& msg) must be implemented.
+ * If defined macro ASCS_WANT_ALL_MSG_SEND_NOTIFY, virtual function ascs::socket::on_all_msg_send(InMsgType& msg) must be implemented.
  *
  * ENHANCEMENTS:
  * Add socket_exist interface to i_matrix, exist function to object_pool to just check the existence of a socket by an given id.
@@ -737,10 +740,25 @@ static_assert(ASCS_DELAY_CLOSE >= 0, "delay close duration must be bigger than o
 //full statistic include time consumption, or only numerable informations will be gathered
 //#define ASCS_FULL_STATISTIC
 
-//after every msg sent, call ascs::socket::on_msg_send()
+//after every msg sent, call ascs::socket::on_msg_send(InMsgType& msg)
+//this macro cannot exists with macro ASCS_WANT_BATCH_MSG_SEND_NOTIFY
 //#define ASCS_WANT_MSG_SEND_NOTIFY
+#ifdef ASCS_WANT_MSG_SEND_NOTIFY
+	#ifdef ASCS_WANT_BATCH_MSG_SEND_NOTIFY
+		#error macro ASCS_WANT_MSG_SEND_NOTIFY cannot exists with macro ASCS_WANT_BATCH_MSG_SEND_NOTIFY.
+	#endif
+#endif
 
-//after sending buffer became empty, call ascs::socket::on_all_msg_send()
+//after some msg sent, call tcp::socket_base::on_msg_send(typename super::in_container_type& msg_can)
+//this macro cannot exists with macro ASCS_WANT_MSG_SEND_NOTIFY
+//#define ASCS_WANT_BATCH_MSG_SEND_NOTIFY
+#ifdef ASCS_WANT_BATCH_MSG_SEND_NOTIFY
+	#ifdef ASCS_WANT_MSG_SEND_NOTIFY
+		#error macro ASCS_WANT_BATCH_MSG_SEND_NOTIFY cannot exists with macro ASCS_WANT_MSG_SEND_NOTIFY.
+	#endif
+#endif
+
+//after sending buffer became empty, call ascs::socket::on_all_msg_send(InMsgType& msg)
 //#define ASCS_WANT_ALL_MSG_SEND_NOTIFY
 
 //max number of objects object_pool can hold.
