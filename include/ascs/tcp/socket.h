@@ -173,9 +173,17 @@ protected:
 	}
 
 #ifdef ASCS_WANT_BATCH_MSG_SEND_NOTIFY
+#ifdef ASCS_WANT_MSG_SEND_NOTIFY
+	#ifdef _MSC_VER
+		#pragma message("macro ASCS_WANT_BATCH_MSG_SEND_NOTIFY will not take effect with macro ASCS_WANT_MSG_SEND_NOTIFY.")
+	#else
+		#warning macro ASCS_WANT_BATCH_MSG_SEND_NOTIFY will not take effect with macro ASCS_WANT_MSG_SEND_NOTIFY.
+	#endif
+#else
 	//some messages have been sent to the kernel buffer
 	//notice: messages are packed, using inconstant reference is for the ability of swapping
 	virtual void on_msg_send(typename super::in_container_type& msg_can) = 0;
+#endif
 #endif
 
 	//generally, you don't have to rewrite this to maintain the status of connections
@@ -331,7 +339,19 @@ private:
 #endif
 #ifdef ASCS_WANT_ALL_MSG_SEND_NOTIFY
 			if (send_buffer.empty())
+#if defined(ASCS_WANT_ALL_MSG_SEND_NOTIFY) || !defined(ASCS_WANT_BATCH_MSG_SEND_NOTIFY)
 				this->on_all_msg_send(sending_msgs.back());
+#else
+			{
+				if (!sending_msgs.empty())
+					this->on_all_msg_send(sending_msgs.back());
+				else //on_msg_send consumed all messages
+				{
+					in_msg_type msg;
+					this->on_all_msg_send(msg);
+				}
+			}
+#endif
 #endif
 			sending_msgs.clear();
 			if (!do_send_msg(true) && !send_buffer.empty()) //send msg in sequence

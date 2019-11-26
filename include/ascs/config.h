@@ -743,20 +743,10 @@ static_assert(ASCS_DELAY_CLOSE >= 0, "delay close duration must be bigger than o
 //after every msg sent, call ascs::socket::on_msg_send(InMsgType& msg)
 //this macro cannot exists with macro ASCS_WANT_BATCH_MSG_SEND_NOTIFY
 //#define ASCS_WANT_MSG_SEND_NOTIFY
-#ifdef ASCS_WANT_MSG_SEND_NOTIFY
-	#ifdef ASCS_WANT_BATCH_MSG_SEND_NOTIFY
-		#error macro ASCS_WANT_MSG_SEND_NOTIFY cannot exists with macro ASCS_WANT_BATCH_MSG_SEND_NOTIFY.
-	#endif
-#endif
 
 //after some msg sent, call tcp::socket_base::on_msg_send(typename super::in_container_type& msg_can)
 //this macro cannot exists with macro ASCS_WANT_MSG_SEND_NOTIFY
 //#define ASCS_WANT_BATCH_MSG_SEND_NOTIFY
-#ifdef ASCS_WANT_BATCH_MSG_SEND_NOTIFY
-	#ifdef ASCS_WANT_MSG_SEND_NOTIFY
-		#error macro ASCS_WANT_BATCH_MSG_SEND_NOTIFY cannot exists with macro ASCS_WANT_MSG_SEND_NOTIFY.
-	#endif
-#endif
 
 //after sending buffer became empty, call ascs::socket::on_all_msg_send(InMsgType& msg)
 //#define ASCS_WANT_ALL_MSG_SEND_NOTIFY
