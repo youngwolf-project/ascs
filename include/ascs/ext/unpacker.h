@@ -54,8 +54,10 @@ public:
 				ASCS_HEAD_TYPE head;
 				memcpy(&head, pnext, ASCS_HEAD_LEN);
 				cur_msg_len = ASCS_HEAD_N2H(head);
+#ifdef ASCS_HUGE_MSG
 				if ((size_t) -1 == cur_msg_len) //avoid dead loop on 32bit system with macro ASCS_HUGE_MSG
 					unpack_ok = false;
+#endif
 			}
 			else
 				break;
