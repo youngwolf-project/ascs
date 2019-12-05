@@ -31,7 +31,7 @@ endif
 
 ifneq (, ${findstring mingw, ${target_machine}})
 	cflag += -D__USE_MINGW_ANSI_STDIO=1
-	lflag += -lstdc++ -lws2_32 -lwsock32
+	lflag += -lws2_32 -lwsock32
 	sources = ${shell dir /B *.cpp}
 	ignore = 1>nul
 	make_dir = md ${dir} 2>nul
