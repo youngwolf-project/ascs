@@ -133,7 +133,7 @@ public:
 			this->emplace_front(std::forward<T>(item));
 			total_size += size;
 		}
-		catch (const std::exception & e)
+		catch (const std::exception& e)
 		{
 			unified_out::error_out("cannot hold more objects (%s)", e.what());
 			return false;
