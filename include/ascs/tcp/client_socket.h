@@ -51,6 +51,7 @@ public:
 	//if you want to control the retry times and delay time after reconnecting failed, rewrite prepare_reconnect virtual function.
 	//disconnect(bool), force_shutdown(bool) and graceful_shutdown(bool, bool) can overwrite reconnecting behavior, please note.
 	//reset() virtual function will set reconnecting behavior according to macro ASCS_RECONNECT, please note.
+	//if prepare_reconnect returns negative value, reconnecting will be closed, please note.
 	void open_reconnect() {need_reconnect = true;}
 	void close_reconnect() {need_reconnect = false;}
 
@@ -171,14 +172,12 @@ private:
 			}
 
 			auto delay = prepare_reconnect(ec);
-			if (delay >= 0)
-			{
-				this->set_timer(TIMER_CONNECT, delay, [this](typename super::tid id)->bool {this->do_start(); return false;});
+			if (delay < 0)
+				need_reconnect = false;
+			else if (this->set_timer(TIMER_CONNECT, delay, [this](typename super::tid id)->bool {this->do_start(); return false;}))
 				return true;
-			}
 		}
 
-		need_reconnect = false;
 		unified_out::info_out(ASCS_LLF " reconnectiong abandon.", this->id());
 		super::force_shutdown();
 		return false;
