@@ -602,6 +602,8 @@
  * Delete macro ASCS_ENHANCED_STABILITY, which means now we always have it, if you really don't want it, define macro ASCS_NO_TRY_CATCH.
  * Change macro ASCS_LLF from %lu or %llu to %ld or %lld, this can shorten the output during printing invalid ids ((uint_fast64_t) -1).
  * Apply the same reconnecting mechanism for message unpacking error (before, we always disabled reconnecting mechanism).
+ * Interface i_unpacker::reset now is a pure virtual function, unpackers must explicitly implement it even it's an empty function since you
+ *  have nothing to reset, this urges you to be aware of the importance of the interface.
  *
  * HIGHLIGHT:
  * Support batch message sent notification, see new macro ASCS_WANT_BATCH_MSG_SEND_NOTIFY for more details.

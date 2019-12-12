@@ -129,7 +129,11 @@ public:
 			scope_atomic_lock lock(start_atomic);
 			if (!started_ && lock.locked())
 				started_ = do_start();
+			else
+				unified_out::error_out(ASCS_LLF " starting failed.", id());
 		}
+		else
+			unified_out::error_out(ASCS_LLF " starting failed.", id());
 	}
 
 #ifdef ASCS_PASSIVE_RECV

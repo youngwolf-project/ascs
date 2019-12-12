@@ -178,6 +178,8 @@ private:
 			}
 		}
 
+		need_reconnect = false;
+		unified_out::info_out(ASCS_LLF " reconnectiong abandon.", this->id());
 		super::force_shutdown();
 		return false;
 	}
