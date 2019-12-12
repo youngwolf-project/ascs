@@ -277,7 +277,6 @@ protected:
 #if ASCS_HEARTBEAT_INTERVAL > 0
 		start_heartbeat(ASCS_HEARTBEAT_INTERVAL);
 #endif
-		assert(is_ready());
 		send_msg(); //send buffer may have msgs, send them
 		recv_msg();
 
@@ -357,6 +356,7 @@ protected:
 
 		if (stopped())
 		{
+			unpacker_->reset(); //very important, otherwise, the unpacker will never be able to parse any more messages if its buffer has legacy data
 			on_close();
 			after_close();
 		}
@@ -631,6 +631,7 @@ private:
 				lowest_layer().close(ec);
 			}
 			change_timer_status(TIMER_DELAY_CLOSE, timer_info::TIMER_CANCELED);
+			unpacker_->reset(); //very important, otherwise, the unpacker will never be able to parse any more messages if its buffer has legacy data
 			on_close();
 			after_close();
 			set_async_calling(false);
