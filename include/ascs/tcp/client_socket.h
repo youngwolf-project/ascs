@@ -47,6 +47,7 @@ public:
 	//if you want to control the retry times and delay time after reconnecting failed, rewrite prepare_reconnect virtual function.
 	//disconnect(bool), force_shutdown(bool) and graceful_shutdown(bool, bool) can overwrite reconnecting behavior, please note.
 	//reset() virtual function will open reconnecting, please note.
+	//if prepare_reconnect returns negative value, reconnecting will be closed, please note.
 	void open_reconnect() {need_reconnect = true;}
 	void close_reconnect() {need_reconnect = false;}
 
@@ -139,7 +140,15 @@ protected:
 	//reconnect at here rather than in on_recv_error to make sure no async invocations performed on this socket before reconnecting.
 	//if you don't want to reconnect the server after link broken, rewrite this virtual function and do nothing in it or call close_reconnt().
 	//if you want to control the retry times and delay time after reconnecting failed, rewrite prepare_reconnect virtual function.
-	virtual void after_close() {if (need_reconnect) this->start();}
+	virtual void after_close()
+	{
+		auto unp = this->unpacker();
+		if (unp)
+			unp->reset(); //very important, otherwise, the unpacker will never be able to parse any more messages if its buffer has legacy data
+
+		if (need_reconnect)
+			this->start();
+	}
 
 private:
 	bool prepare_next_reconnect(const asio::error_code& ec)
@@ -155,14 +164,12 @@ private:
 			}
 
 			auto delay = prepare_reconnect(ec);
-			if (delay >= 0)
-			{
-				this->set_timer(TIMER_CONNECT, delay, [this](typename super::tid id)->bool {this->do_start(); return false;});
+			if (delay < 0)
+				need_reconnect = false;
+			else if (this->set_timer(TIMER_CONNECT, delay, [this](typename super::tid id)->bool {this->do_start(); return false;}))
 				return true;
-			}
 		}
 
-		need_reconnect = false;
 		unified_out::info_out("reconnectiong abandon.");
 		super::force_shutdown();
 		return false;
