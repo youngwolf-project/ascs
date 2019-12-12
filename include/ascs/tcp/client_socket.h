@@ -162,6 +162,8 @@ private:
 			}
 		}
 
+		need_reconnect = false;
+		unified_out::info_out("reconnectiong abandon.");
 		super::force_shutdown();
 		return false;
 	}
