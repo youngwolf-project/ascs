@@ -116,7 +116,7 @@ public:
 	bool start_timer(tid id) {auto ti = find_timer(id); return nullptr != ti ? start_timer(*ti) : false;}
 	void stop_timer(tid id) {auto ti = find_timer(id); if (nullptr != ti) stop_timer(*ti);}
 	void stop_all_timer() {do_something_to_all([this](timer_info& item) {this->stop_timer(item);});}
-	void stop_all_timer(tid excepted_id) {do_something_to_all([=](timer_info& item) {if (excepted_id != item.id) this->stop_timer(item);});}
+	void stop_all_timer(tid excepted_id) {do_something_to_all(ASCS_COPY_ALL_AND_THIS(timer_info& item) {if (excepted_id != item.id) this->stop_timer(item);});}
 
 	DO_SOMETHING_TO_ALL_MUTEX(timer_can, timer_can_mutex)
 	DO_SOMETHING_TO_ONE_MUTEX(timer_can, timer_can_mutex)

@@ -655,6 +655,9 @@
 		static_assert(__clang_major__ > 3 || (__clang_major__ == 3 && __clang_minor__ >= 1), "ascs needs Clang 3.1 or higher.");
 	#else
 		static_assert(__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ > 6), "ascs needs GCC 4.7 or higher.");
+		#if __GNUC__ >= 9
+		#define ASCS_COPY_ALL_AND_THIS [=, this]
+		#endif
 	#endif
 
 	#if !defined(__GXX_EXPERIMENTAL_CXX0X__) && (!defined(__cplusplus) || __cplusplus < 201103L)
@@ -667,6 +670,10 @@
 	#endif
 #else
 	#error ascs only support Visual C++, GCC and Clang.
+#endif
+
+#ifndef ASCS_COPY_ALL_AND_THIS
+#define ASCS_COPY_ALL_AND_THIS [=]
 #endif
 
 #ifndef ASCS_LLF
@@ -913,7 +920,7 @@ static_assert(ASCS_HEARTBEAT_MAX_ABSENCE > 0, "heartbeat absence must be bigger 
 #endif
 static_assert(ASCS_MSG_RESUMING_INTERVAL >= 0, "the interval of msg resuming must be bigger than or equal to zero.");
 //msg receiving
-//if receiving buffer is overflow, message receiving will stop and resume after the buffer becomes available, 
+//if receiving buffer is overflow, message receiving will stop and resume after the buffer becomes available,
 //this is the interval of receiving buffer checking.
 //this value can be changed via ascs::socket::msg_resuming_interval(size_t) at runtime.
 
