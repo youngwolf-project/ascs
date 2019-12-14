@@ -210,7 +210,7 @@ private:
 	}
 
 	void do_async_accept(typename Pool::object_ctype& socket_ptr)
-		{if (socket_ptr) acceptor.async_accept(socket_ptr->lowest_layer(), [=](const asio::error_code& ec) {this->accept_handler(ec, socket_ptr);});}
+		{if (socket_ptr) acceptor.async_accept(socket_ptr->lowest_layer(), ASCS_COPY_ALL_AND_THIS(const asio::error_code& ec) {this->accept_handler(ec, socket_ptr);});}
 
 private:
 	asio::ip::tcp::endpoint server_addr;

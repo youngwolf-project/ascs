@@ -72,7 +72,7 @@ public:
 	void begin(float max_delay, size_t msg_len)
 	{
 		do_something_to_all([msg_len](object_ctype& item) {item->begin(msg_len);});
-		set_timer(TIMER_END, 5000, [=](tid id)->bool {this->do_something_to_all([max_delay](object_ctype& item) {item->check_delay(max_delay);}); return true;});
+		set_timer(TIMER_END, 5000, [max_delay, this](tid id)->bool {this->do_something_to_all([max_delay](object_ctype& item) {item->check_delay(max_delay);}); return true;});
 	}
 };
 

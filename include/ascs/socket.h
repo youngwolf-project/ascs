@@ -150,7 +150,7 @@ public:
 		assert(interval > 0 && max_absence > 0);
 
 		if (!is_timer(TIMER_HEARTBEAT_CHECK))
-			set_timer(TIMER_HEARTBEAT_CHECK, interval * 1000, [=](tid id)->bool {return this->check_heartbeat(interval, max_absence);});
+			set_timer(TIMER_HEARTBEAT_CHECK, interval * 1000, ASCS_COPY_ALL_AND_THIS(tid id)->bool {return this->check_heartbeat(interval, max_absence);});
 	}
 
 	//interval's unit is second
