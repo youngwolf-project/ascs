@@ -678,13 +678,12 @@
 		static_assert(__clang_major__ > 3 || (__clang_major__ == 3 && __clang_minor__ >= 1), "ascs needs Clang 3.1 or higher.");
 	#else
 		static_assert(__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ > 6), "ascs needs GCC 4.7 or higher.");
-		#if __GNUC__ >= 9
-		#define ASCS_COPY_ALL_AND_THIS [=, this]
-		#endif
 	#endif
 
 	#if !defined(__GXX_EXPERIMENTAL_CXX0X__) && (!defined(__cplusplus) || __cplusplus < 201103L)
 		#error ascs needs c++11 or higher.
+	#elif __cplusplus > 201703L
+		#define ASCS_COPY_ALL_AND_THIS [=, this]
 	#endif
 
 	#define ASCS_SF "%zu" //format used to print 'size_t'
