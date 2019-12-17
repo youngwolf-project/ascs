@@ -222,28 +222,28 @@ public:
 
 	//don't use the packer but insert into send buffer directly
 	template<typename T> bool direct_send_msg(T&& msg, bool can_overflow = false)
-		{return can_overflow || is_send_buffer_available() ? do_direct_send_msg(std::forward<T>(msg)) : false;}
+		{return can_overflow || shrink_send_buffer() ? do_direct_send_msg(std::forward<T>(msg)) : false;}
 	bool direct_send_msg(list<InMsgType>& msg_can, bool can_overflow = false)
-		{return can_overflow || is_send_buffer_available() ? do_direct_send_msg(msg_can) : false;}
+		{return can_overflow || shrink_send_buffer() ? do_direct_send_msg(msg_can) : false;}
 
 	//don't use the packer but insert into the front of the send buffer directly
 	template<typename T> bool resend_msg(T&& msg, bool can_overflow = false)
-		{return can_overflow || is_send_buffer_available() ? do_resend_msg(std::forward<T>(msg)) : false;}
+		{return can_overflow || shrink_send_buffer() ? do_resend_msg(std::forward<T>(msg)) : false;}
 	bool resend_msg(list<InMsgType>& msg_can, bool can_overflow = false)
-		{return can_overflow || is_send_buffer_available() ? do_resend_msg(msg_can) : false;}
+		{return can_overflow || shrink_send_buffer() ? do_resend_msg(msg_can) : false;}
 
 #ifdef ASCS_SYNC_SEND
 	//don't use the packer but insert into send buffer directly, then wait the sending to finish, unit of the duration is millisecond, 0 means wait infinitely
 	template<typename T> sync_call_result direct_sync_send_msg(T&& msg, unsigned duration = 0, bool can_overflow = false)
-		{return can_overflow || is_send_buffer_available() ? do_direct_sync_send_msg(std::forward<T>(msg), duration) : sync_call_result::NOT_APPLICABLE;}
+		{return can_overflow || shrink_send_buffer() ? do_direct_sync_send_msg(std::forward<T>(msg), duration) : sync_call_result::NOT_APPLICABLE;}
 	sync_call_result direct_sync_send_msg(list<InMsgType>& msg_can, unsigned duration = 0, bool can_overflow = false)
-		{return can_overflow || is_send_buffer_available() ? do_direct_sync_send_msg(msg_can, duration) : sync_call_result::NOT_APPLICABLE;}
+		{return can_overflow || shrink_send_buffer() ? do_direct_sync_send_msg(msg_can, duration) : sync_call_result::NOT_APPLICABLE;}
 
 	//don't use the packer but insert into the front of the send buffer directly, then wait the sending to finish, unit of the duration is millisecond, 0 means wait infinitely
 	template<typename T> sync_call_result sync_resend_msg(T&& msg, unsigned duration = 0, bool can_overflow = false)
-		{return can_overflow || is_send_buffer_available() ? do_sync_resend_msg(std::forward<T>(msg), duration) : sync_call_result::NOT_APPLICABLE;}
+		{return can_overflow || shrink_send_buffer() ? do_sync_resend_msg(std::forward<T>(msg), duration) : sync_call_result::NOT_APPLICABLE;}
 	sync_call_result sync_resend_msg(list<InMsgType>& msg_can, unsigned duration = 0, bool can_overflow = false)
-		{return can_overflow || is_send_buffer_available() ? do_sync_resend_msg(msg_can, duration) : sync_call_result::NOT_APPLICABLE;}
+		{return can_overflow || shrink_send_buffer() ? do_sync_resend_msg(msg_can, duration) : sync_call_result::NOT_APPLICABLE;}
 #endif
 
 #ifdef ASCS_SYNC_RECV
@@ -349,6 +349,37 @@ protected:
 	//send buffer goes empty
 	//notice: the msg is packed, using inconstant reference is for the ability of swapping
 	virtual void on_all_msg_send(InMsgType& msg) = 0;
+#endif
+
+	//return true means send buffer becomes available
+#ifdef ASCS_SHRINK_SEND_BUFFER
+	virtual size_t calc_shrink_size(size_t current_size) {return current_size / 3;}
+	virtual void on_msg_discard(in_container_type& msg_can) {}
+
+	bool shrink_send_buffer()
+	{
+		send_buffer.lock();
+		auto size = send_buffer.size_in_byte();
+		if (size < ASCS_MAX_SEND_BUF)
+		{
+			send_buffer.unlock();
+			return true;
+		}
+		else if (0 == (size = calc_shrink_size(size)))
+		{
+			send_buffer.unlock();
+			return false;
+		}
+
+		in_container_type msg_can;
+		send_buffer.move_items_out_(size, msg_can);
+		send_buffer.unlock();
+
+		on_msg_discard(msg_can);
+		return true;
+	}
+#else
+	bool shrink_send_buffer() const {return is_send_buffer_available();}
 #endif
 
 	//subclass notify shutdown event

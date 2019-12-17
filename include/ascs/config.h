@@ -11,6 +11,15 @@
  *
  * license: http://think-async.com/ (current is www.boost.org/LICENSE_1_0.txt)
  *
+ * Overview:
+ * 1. send_msg (series) means send_msg, send_native_msg, safe_send_msg, safe_send_native_msg,
+ *    direct_send_msg, resend_msg, direct_sync_send_msg, sync_resend_msg,
+ *    broadcast_msg, broadcast_native_msg, safe_broadcast_native_msg.
+ * 2. the top namespace (ascs) usually be omitted, for example, socket indicate ascs::socket, tcp::socket_base indicate ascs::tcp::socket_base.
+ * 3. send_msg (series) success just means the message has been moved (or copied) to ascs, it will be sent in the future automatically.
+ * 4. Messages being sent have been moved out from the input queue, so they cannot be fetched via get_pending_send_msg_size and
+ *     pop_first_pending_send_msg, so does output queue.
+ *
  * Known issues:
  * 1. since 1.1.0 until 1.3, concurrentqueue is not a FIFO queue (it is by design), navigate to the following links for more details:
  *  https://github.com/cameron314/concurrentqueue/issues/6
@@ -607,6 +616,7 @@
  *
  * HIGHLIGHT:
  * Support batch message sent notification, see new macro ASCS_WANT_BATCH_MSG_SEND_NOTIFY for more details.
+ * Support discarding oldest messages before sending message if the send buffer is insufficient, see macro ASCS_SHRINK_SEND_BUFFER for more details.
  *
  * FIX:
  * If defined macro ASCS_WANT_MSG_SEND_NOTIFY, virtual function ascs::socket::on_msg_send(InMsgType& msg) must be implemented.
@@ -719,6 +729,15 @@ static_assert(ASCS_MAX_SEND_BUF > 15, "send buffer capacity must be bigger than 
 #define ASCS_MAX_RECV_BUF		1048576 //1M
 #endif
 static_assert(ASCS_MAX_RECV_BUF > 15, "recv buffer capacity must be bigger than 15.");
+
+//by defining this, virtual function socket::calc_shrink_size will be introduced and be called when send buffer is insufficient before sending message,
+//the return value will be used to determine how many messages (in bytes) will be discarded (from the oldest one), 0 means don't shrink send buffer,
+//you can rewrite it or accept the default implementation---1/3 of the current size.
+//please note:
+// 1. shrink size will be round up to the last discarded message.
+// 2. after shrank the send buffer, virtual function on_msg_discard will be called with discarded messages in the same thread calling the send_msg (series)
+//    before send_msg returns, so most likely, it will be in your thread, this is unlike other callbacks, which will be called in service threads.
+//#define ASCS_SHRINK_SEND_BUFFER
 
 //buffer (on stack) size used when writing logs.
 #ifndef ASCS_UNIFIED_OUT_BUF_NUM

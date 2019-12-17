@@ -593,7 +593,7 @@ template<typename Buffer> TYPE FUNNAME(const Buffer& buffer, bool can_overflow =
 #define TCP_SEND_MSG(FUNNAME, NATIVE) \
 bool FUNNAME(in_msg_type&& msg, bool can_overflow = false) \
 { \
-	if (!can_overflow && !this->is_send_buffer_available()) \
+	if (!can_overflow && !this->shrink_send_buffer()) \
 		return false; \
 	else if (NATIVE) \
 		return do_direct_send_msg(std::move(msg)); \
@@ -605,7 +605,7 @@ bool FUNNAME(in_msg_type&& msg, bool can_overflow = false) \
 } \
 bool FUNNAME(in_msg_type&& msg1, in_msg_type&& msg2, bool can_overflow = false) \
 { \
-	if (!can_overflow && !this->is_send_buffer_available()) \
+	if (!can_overflow && !this->shrink_send_buffer()) \
 		return false; \
 	else if (NATIVE) \
 		return do_direct_send_msg(std::move(msg1)) && do_direct_send_msg(std::move(msg2)); \
@@ -617,7 +617,7 @@ bool FUNNAME(in_msg_type&& msg1, in_msg_type&& msg2, bool can_overflow = false) 
 } \
 bool FUNNAME(typename Packer::container_type& msg_can, bool can_overflow = false)  \
 { \
-	if (!can_overflow && !this->is_send_buffer_available()) \
+	if (!can_overflow && !this->shrink_send_buffer()) \
 		return false; \
 	else if (NATIVE) \
 		return do_direct_send_msg(msg_can); \
@@ -629,7 +629,7 @@ bool FUNNAME(typename Packer::container_type& msg_can, bool can_overflow = false
 } \
 bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) \
 { \
-	if (!can_overflow && !this->is_send_buffer_available()) \
+	if (!can_overflow && !this->shrink_send_buffer()) \
 		return false; \
 	auto_duration dur(stat.pack_time_sum); \
 	auto msg = packer_->pack_msg(pstr, len, num, NATIVE); \
@@ -670,7 +670,7 @@ template<typename Buffer> TYPE FUNNAME(const Buffer& buffer, unsigned duration =
 #define TCP_SYNC_SEND_MSG(FUNNAME, NATIVE) \
 sync_call_result FUNNAME(in_msg_type&& msg, unsigned duration = 0, bool can_overflow = false) \
 { \
-	if (!can_overflow && !this->is_send_buffer_available()) \
+	if (!can_overflow && !this->shrink_send_buffer()) \
 		return sync_call_result::NOT_APPLICABLE; \
 	else if (NATIVE) \
 		return do_direct_sync_send_msg(std::move(msg), duration); \
@@ -682,7 +682,7 @@ sync_call_result FUNNAME(in_msg_type&& msg, unsigned duration = 0, bool can_over
 } \
 sync_call_result FUNNAME(in_msg_type&& msg1, in_msg_type&& msg2, unsigned duration = 0, bool can_overflow = false) \
 { \
-	if (!can_overflow && !this->is_send_buffer_available()) \
+	if (!can_overflow && !this->shrink_send_buffer()) \
 		return sync_call_result::NOT_APPLICABLE; \
 	else if (NATIVE) \
 	{ \
@@ -698,7 +698,7 @@ sync_call_result FUNNAME(in_msg_type&& msg1, in_msg_type&& msg2, unsigned durati
 } \
 sync_call_result FUNNAME(typename Packer::container_type& msg_can, unsigned duration = 0, bool can_overflow = false) \
 { \
-	if (!can_overflow && !this->is_send_buffer_available()) \
+	if (!can_overflow && !this->shrink_send_buffer()) \
 		return sync_call_result::NOT_APPLICABLE; \
 	else if (NATIVE) \
 		return do_direct_sync_send_msg(msg_can, duration); \
@@ -710,7 +710,7 @@ sync_call_result FUNNAME(typename Packer::container_type& msg_can, unsigned dura
 } \
 sync_call_result FUNNAME(const char* const pstr[], const size_t len[], size_t num, unsigned duration = 0, bool can_overflow = false) \
 { \
-	if (!can_overflow && !this->is_send_buffer_available()) \
+	if (!can_overflow && !this->shrink_send_buffer()) \
 		return sync_call_result::NOT_APPLICABLE; \
 	auto_duration dur(stat.pack_time_sum); \
 	auto msg = packer_->pack_msg(pstr, len, num, NATIVE); \
@@ -756,7 +756,7 @@ template<typename Buffer> TYPE FUNNAME(const asio::ip::udp::endpoint& peer_addr,
 bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) {return FUNNAME(peer_addr, pstr, len, num, can_overflow);} \
 bool FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) \
 { \
-	if (!can_overflow && !this->is_send_buffer_available()) \
+	if (!can_overflow && !this->shrink_send_buffer()) \
 		return false; \
 	in_msg_type msg(peer_addr, packer_->pack_msg(pstr, len, num, NATIVE)); \
 	return do_direct_send_msg(std::move(msg)); \
@@ -793,7 +793,7 @@ sync_call_result FUNNAME(const char* const pstr[], const size_t len[], size_t nu
 sync_call_result FUNNAME(const asio::ip::udp::endpoint& peer_addr, const char* const pstr[], const size_t len[], size_t num, \
 	unsigned duration = 0, bool can_overflow = false) \
 { \
-	if (!can_overflow && !this->is_send_buffer_available()) \
+	if (!can_overflow && !this->shrink_send_buffer()) \
 		return sync_call_result::NOT_APPLICABLE; \
 	in_msg_type msg(peer_addr, packer_->pack_msg(pstr, len, num, NATIVE)); \
 	return do_direct_sync_send_msg(std::move(msg), duration); \
