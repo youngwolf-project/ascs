@@ -86,9 +86,7 @@ protected:
 	virtual bool do_start() //connect
 	{
 		assert(!this->is_connected());
-
-		this->lowest_layer().async_connect(server_addr, this->make_handler_error([this](const asio::error_code& ec) {this->connect_handler(ec);}));
-		return true;
+		return this->set_timer(TIMER_CONNECT, 50, [this](timer::tid id)->bool {this->connect(); return false;});
 	}
 
 	virtual void connect_handler(const asio::error_code& ec)
@@ -129,6 +127,8 @@ protected:
 			this->start();
 	}
 
+	void connect() {this->lowest_layer().async_connect(server_addr, this->make_handler_error([this](const asio::error_code& ec) {this->connect_handler(ec);}));}
+
 	bool prepare_next_reconnect(const asio::error_code& ec)
 	{
 		if (this->started() && (asio::error::operation_aborted != ec || need_reconnect) && !this->stopped())
@@ -144,7 +144,7 @@ protected:
 			auto delay = prepare_reconnect(ec);
 			if (delay >= 0)
 			{
-				this->set_timer(TIMER_CONNECT, delay, [this](timer::tid id)->bool {this->do_start(); return false;});
+				this->set_timer(TIMER_CONNECT, delay, [this](timer::tid id)->bool {this->connect(); return false;});
 				return true;
 			}
 		}
