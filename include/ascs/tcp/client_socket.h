@@ -61,7 +61,7 @@ public:
 	{
 		need_reconnect = reconnect;
 
-		if (!this->started() && reconnect)
+		if (reconnect && this->is_broken() && !this->started())
 			return this->start();
 		else if (super::link_status::FORCE_SHUTTING_DOWN != this->status)
 			this->show_info("client link:", "been shut down.");
@@ -77,7 +77,7 @@ public:
 	{
 		need_reconnect = reconnect;
 
-		if (!this->started() && reconnect)
+		if (reconnect && this->is_broken() && !this->started())
 			return this->start();
 		else if (this->is_broken())
 			return force_shutdown(reconnect);
@@ -97,31 +97,7 @@ protected:
 	virtual bool do_start() //connect
 	{
 		assert(!this->is_connected());
-
-		auto& lowest_object = this->lowest_layer();
-		if (0 != local_addr.port() || !local_addr.address().is_unspecified())
-		{
-			asio::error_code ec;
-			if (!lowest_object.is_open()) //user maybe has opened this socket (to set options for example)
-			{
-				lowest_object.open(local_addr.protocol(), ec); assert(!ec);
-				if (ec)
-				{
-					unified_out::error_out("cannot create socket: %s", ec.message().data());
-					return false;
-				}
-			}
-
-			lowest_object.bind(local_addr, ec);
-			if (ec && asio::error::invalid_argument != ec)
-			{
-				unified_out::error_out("cannot bind socket: %s", ec.message().data());
-				return false;
-			}
-		}
-
-		lowest_object.async_connect(server_addr, this->make_handler_error([this](const asio::error_code& ec) {this->connect_handler(ec);}));
-		return true;
+		return this->set_timer(TIMER_CONNECT, 50, [this](typename super::tid id)->bool {this->connect(); return false;});
 	}
 
 	virtual void connect_handler(const asio::error_code& ec)
@@ -159,6 +135,34 @@ protected:
 	virtual void after_close() {if (need_reconnect) this->start();}
 
 private:
+	bool connect()
+	{
+		auto& lowest_object = this->lowest_layer();
+		if (0 != local_addr.port() || !local_addr.address().is_unspecified())
+		{
+			asio::error_code ec;
+			if (!lowest_object.is_open()) //user maybe has opened this socket (to set options for example)
+			{
+				lowest_object.open(local_addr.protocol(), ec); assert(!ec);
+				if (ec)
+				{
+					unified_out::error_out("cannot create socket: %s", ec.message().data());
+					return false;
+				}
+			}
+
+			lowest_object.bind(local_addr, ec);
+			if (ec && asio::error::invalid_argument != ec)
+			{
+				unified_out::error_out("cannot bind socket: %s", ec.message().data());
+				return false;
+			}
+		}
+
+		lowest_object.async_connect(server_addr, this->make_handler_error([this](const asio::error_code& ec) {this->connect_handler(ec);}));
+		return true;
+	}
+
 	bool prepare_next_reconnect(const asio::error_code& ec)
 	{
 		if (need_reconnect && this->started() && !this->stopped())
@@ -174,7 +178,7 @@ private:
 			auto delay = prepare_reconnect(ec);
 			if (delay < 0)
 				need_reconnect = false;
-			else if (this->set_timer(TIMER_CONNECT, delay, [this](typename super::tid id)->bool {this->do_start(); return false;}))
+			else if (this->set_timer(TIMER_CONNECT, delay, [this](typename super::tid id)->bool {this->connect(); return false;}))
 				return true;
 		}
 
