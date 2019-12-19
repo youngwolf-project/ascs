@@ -70,10 +70,13 @@ public:
 	virtual void test() = 0;
 };
 
-class echo_socket : public server_socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UNPACKER, i_echo_server>
+class echo_socket : public server_socket2<i_echo_server>
 {
+private:
+	typedef server_socket2<i_echo_server> super;
+
 public:
-	echo_socket(i_echo_server& server_) : server_socket_base(server_)
+	echo_socket(i_echo_server& server_) : super(server_)
 	{
 		packer(global_packer);
 
@@ -86,7 +89,7 @@ public:
 	//because we use objects pool(REUSE_OBJECT been defined), so, strictly speaking, this virtual
 	//function must be rewrote, but we don't have member variables to initialize but invoke father's
 	//reset() directly, so, it can be omitted, but we keep it for possibly future using
-	virtual void reset() {server_socket_base::reset();}
+	virtual void reset() { super::reset();}
 
 protected:
 	virtual void on_recv_error(const asio::error_code& ec)
@@ -94,7 +97,7 @@ protected:
 		//the type of tcp::server_socket_base::server now can be controlled by derived class(echo_socket),
 		//which is actually i_echo_server, so, we can invoke i_echo_server::test virtual function.
 		get_server().test();
-		server_socket_base::on_recv_error(ec);
+		super::on_recv_error(ec);
 	}
 
 	//msg handling: send the original msg back(echo server)

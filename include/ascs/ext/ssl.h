@@ -35,6 +35,7 @@ typedef ascs::ssl::multi_client_base<client_socket> multi_client;
 typedef multi_client client;
 
 typedef ascs::ssl::server_socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UNPACKER> server_socket;
+template<typename Server = ascs::tcp::i_server> using server_socket2 = ascs::ssl::server_socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UNPACKER, Server>;
 typedef ascs::ssl::server_base<server_socket> server;
 
 }}} //namespace

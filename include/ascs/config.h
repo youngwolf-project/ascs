@@ -15,7 +15,7 @@
  * 1. send_msg (series) means send_msg, send_native_msg, safe_send_msg, safe_send_native_msg,
  *    direct_send_msg, resend_msg, direct_sync_send_msg, sync_resend_msg,
  *    broadcast_msg, broadcast_native_msg, safe_broadcast_native_msg.
- * 2. the top namespace (ascs) usually be omitted, for example, socket indicate ascs::socket, tcp::socket_base indicate ascs::tcp::socket_base.
+ * 2. the top namespace (ascs) usually is omitted, for example, socket indicate ascs::socket, tcp::socket_base indicate ascs::tcp::socket_base.
  * 3. send_msg (series) success just means the message has been moved (or copied) to ascs, it will be sent in the future automatically.
  * 4. Messages being sent have been moved out from the input queue, so they cannot be fetched via get_pending_send_msg_size and
  *     pop_first_pending_send_msg, so does output queue.
