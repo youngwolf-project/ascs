@@ -617,13 +617,14 @@
  * HIGHLIGHT:
  * Support batch message sent notification, see new macro ASCS_WANT_BATCH_MSG_SEND_NOTIFY for more details.
  * Support discarding oldest messages before sending message if the send buffer is insufficient, see macro ASCS_SHRINK_SEND_BUFFER for more details.
+ * Add resend_msg and sync_resend_msg interface to ascs::socket, it takes packed messages and insert them into the front of the send buffer.
  *
  * FIX:
  * If defined macro ASCS_WANT_MSG_SEND_NOTIFY, virtual function ascs::socket::on_msg_send(InMsgType& msg) must be implemented.
  * If defined macro ASCS_WANT_ALL_MSG_SEND_NOTIFY, virtual function ascs::socket::on_all_msg_send(InMsgType& msg) must be implemented.
  *
  * ENHANCEMENTS:
- * Add resend_msg and sync_resend_msg interface to ascs::socket, it takes packed messages and insert them into the front of the send buffer.
+ * Support strict heartbeat sending, see macro ASCS_ALWAYS_SEND_HEARTBEAT for more details.
  * Add socket_exist interface to i_matrix, it calls object_pool::exist to check the existence of a socket by an given id.
  * Add following 3 interfaces to i_unpacker as i_packer did (the default implementation is meaningless as i_packer, just satisfy compilers):
  *  virtual char* raw_data(msg_type& msg) const
@@ -921,6 +922,9 @@ static_assert(ASCS_ASYNC_ACCEPT_NUM > 0, "async accept number must be bigger tha
 #endif
 static_assert(ASCS_HEARTBEAT_MAX_ABSENCE > 0, "heartbeat absence must be bigger than zero.");
 //if no any messages (include heartbeat) been received within ASCS_HEARTBEAT_INTERVAL * ASCS_HEARTBEAT_MAX_ABSENCE second(s), shut down the link.
+
+//#define ASCS_ALWAYS_SEND_HEARTBEAT
+//always send heartbeat in each ASCS_HEARTBEAT_INTERVAL seconds without checking if we're sending other messages or not.
 
 //#define ASCS_REUSE_SSL_STREAM
 //if you need ssl::client_socket_base to be able to reconnect the server, or to open object pool in ssl::object_pool, you must define this macro.

@@ -172,7 +172,9 @@ public:
 				if (!on_heartbeat_error())
 					return false;
 
+#ifndef ASCS_ALWAYS_SEND_HEARTBEAT
 			if (!sending && now - stat.last_send_time >= interval) //don't need to send heartbeat if we're sending messages
+#endif
 				send_heartbeat();
 		}
 
