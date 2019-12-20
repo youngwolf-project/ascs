@@ -12,9 +12,8 @@
  * license: http://think-async.com/ (current is www.boost.org/LICENSE_1_0.txt)
  *
  * Overview:
- * 1. send_msg (series) means send_msg, send_native_msg, safe_send_msg, safe_send_native_msg,
- *    direct_send_msg, resend_msg, direct_sync_send_msg, sync_resend_msg,
- *    broadcast_msg, broadcast_native_msg, safe_broadcast_native_msg.
+ * 1. send_msg (series) means send_msg, send_native_msg, safe_send_msg, safe_send_native_msg, direct_send_msg, direct_sync_send_msg,
+ *    broadcast_msg, broadcast_native_msg, safe_broadcast_msg, safe_broadcast_native_msg.
  * 2. the top namespace (ascs) usually is omitted, for example, socket indicate ascs::socket, tcp::socket_base indicate ascs::tcp::socket_base.
  * 3. send_msg (series) success just means the message has been moved (or copied) to ascs, it will be sent in the future automatically.
  * 4. Messages being sent have been moved out from the input queue, so they cannot be fetched via get_pending_send_msg_size and
@@ -617,7 +616,7 @@
  * HIGHLIGHT:
  * Support batch message sent notification, see new macro ASCS_WANT_BATCH_MSG_SEND_NOTIFY for more details.
  * Support discarding oldest messages before sending message if the send buffer is insufficient, see macro ASCS_SHRINK_SEND_BUFFER for more details.
- * Add resend_msg and sync_resend_msg interface to ascs::socket, it takes packed messages and insert them into the front of the send buffer.
+ * Add a new parameter prior to send_msg (series) function (after can_overflow), if set to true, message will be inserted into the front of the send buffer.
  *
  * FIX:
  * If defined macro ASCS_WANT_MSG_SEND_NOTIFY, virtual function ascs::socket::on_msg_send(InMsgType& msg) must be implemented.

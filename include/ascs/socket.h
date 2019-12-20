@@ -223,29 +223,17 @@ public:
 	bool is_recv_buffer_available() const {return recv_buffer.size_in_byte() < ASCS_MAX_RECV_BUF;}
 
 	//don't use the packer but insert into send buffer directly
-	template<typename T> bool direct_send_msg(T&& msg, bool can_overflow = false)
-		{return can_overflow || shrink_send_buffer() ? do_direct_send_msg(std::forward<T>(msg)) : false;}
-	bool direct_send_msg(list<InMsgType>& msg_can, bool can_overflow = false)
-		{return can_overflow || shrink_send_buffer() ? do_direct_send_msg(msg_can) : false;}
-
-	//don't use the packer but insert into the front of the send buffer directly
-	template<typename T> bool resend_msg(T&& msg, bool can_overflow = false)
-		{return can_overflow || shrink_send_buffer() ? do_resend_msg(std::forward<T>(msg)) : false;}
-	bool resend_msg(list<InMsgType>& msg_can, bool can_overflow = false)
-		{return can_overflow || shrink_send_buffer() ? do_resend_msg(msg_can) : false;}
+	template<typename T> bool direct_send_msg(T&& msg, bool can_overflow = false, bool prior = false)
+		{return can_overflow || shrink_send_buffer() ? do_direct_send_msg(std::forward<T>(msg), prior) : false;}
+	bool direct_send_msg(list<InMsgType>& msg_can, bool can_overflow = false, bool prior = false)
+		{return can_overflow || shrink_send_buffer() ? do_direct_send_msg(msg_can, prior) : false;}
 
 #ifdef ASCS_SYNC_SEND
 	//don't use the packer but insert into send buffer directly, then wait the sending to finish, unit of the duration is millisecond, 0 means wait infinitely
-	template<typename T> sync_call_result direct_sync_send_msg(T&& msg, unsigned duration = 0, bool can_overflow = false)
-		{return can_overflow || shrink_send_buffer() ? do_direct_sync_send_msg(std::forward<T>(msg), duration) : sync_call_result::NOT_APPLICABLE;}
-	sync_call_result direct_sync_send_msg(list<InMsgType>& msg_can, unsigned duration = 0, bool can_overflow = false)
-		{return can_overflow || shrink_send_buffer() ? do_direct_sync_send_msg(msg_can, duration) : sync_call_result::NOT_APPLICABLE;}
-
-	//don't use the packer but insert into the front of the send buffer directly, then wait the sending to finish, unit of the duration is millisecond, 0 means wait infinitely
-	template<typename T> sync_call_result sync_resend_msg(T&& msg, unsigned duration = 0, bool can_overflow = false)
-		{return can_overflow || shrink_send_buffer() ? do_sync_resend_msg(std::forward<T>(msg), duration) : sync_call_result::NOT_APPLICABLE;}
-	sync_call_result sync_resend_msg(list<InMsgType>& msg_can, unsigned duration = 0, bool can_overflow = false)
-		{return can_overflow || shrink_send_buffer() ? do_sync_resend_msg(msg_can, duration) : sync_call_result::NOT_APPLICABLE;}
+	template<typename T> sync_call_result direct_sync_send_msg(T&& msg, unsigned duration = 0, bool can_overflow = false, bool prior = false)
+		{return can_overflow || shrink_send_buffer() ? do_direct_sync_send_msg(std::forward<T>(msg), duration, prior) : sync_call_result::NOT_APPLICABLE;}
+	sync_call_result direct_sync_send_msg(list<InMsgType>& msg_can, unsigned duration = 0, bool can_overflow = false, bool prior = false)
+		{return can_overflow || shrink_send_buffer() ? do_direct_sync_send_msg(msg_can, duration, prior) : sync_call_result::NOT_APPLICABLE;}
 #endif
 
 #ifdef ASCS_SYNC_RECV
@@ -492,11 +480,11 @@ protected:
 		return handled_msg();
 	}
 
-	template<typename T> bool do_direct_send_msg(T&& msg)
+	template<typename T> bool do_direct_send_msg(T&& msg, bool prior = false)
 	{
 		if (msg.empty())
 			unified_out::error_out(ASCS_LLF " found an empty message, please check your packer.", id());
-		else if (send_buffer.enqueue(std::forward<T>(msg)))
+		else if (prior ? send_buffer.enqueue_front(std::forward<T>(msg)) : send_buffer.enqueue(std::forward<T>(msg)))
 			send_msg();
 
 		//even if we meet an empty message (because of too big message or insufficient memory, most likely), we still return true, why?
@@ -505,43 +493,19 @@ protected:
 		return true;
 	}
 
-	bool do_direct_send_msg(list<InMsgType>& msg_can)
+	bool do_direct_send_msg(list<InMsgType>& msg_can, bool prior = false)
 	{
 		size_t size_in_byte = 0;
 		in_container_type temp_buffer;
 		ascs::do_something_to_all(msg_can, [&size_in_byte, &temp_buffer](InMsgType& msg) {size_in_byte += msg.size(); temp_buffer.emplace_back(std::move(msg));});
-		send_buffer.move_items_in(temp_buffer, size_in_byte);
-		send_msg();
-
-		return true;
-	}
-
-	template<typename T> bool do_resend_msg(T&& msg)
-	{
-		if (msg.empty())
-			unified_out::error_out(ASCS_LLF " found an empty message, please check your packer.", id());
-		else if (send_buffer.enqueue_front(std::forward<T>(msg)))
-			send_msg();
-
-		//even if we meet an empty message (because of too big message or insufficient memory, most likely), we still return true, why?
-		//please think about the function safe_send_(native_)msg, if we keep returning false, it will enter a dead loop.
-		//the packer provider has the responsibility to write detailed reasons down when packing message failed.
-		return true;
-	}
-
-	bool do_resend_msg(list<InMsgType>& msg_can)
-	{
-		size_t size_in_byte = 0;
-		in_container_type temp_buffer;
-		ascs::do_something_to_all(msg_can, [&size_in_byte, &temp_buffer](InMsgType& msg) {size_in_byte += msg.size(); temp_buffer.emplace_back(std::move(msg));});
-		send_buffer.move_items_in_front(temp_buffer, size_in_byte);
+		prior ? send_buffer.move_items_in_front(temp_buffer, size_in_byte) : send_buffer.move_items_in(temp_buffer, size_in_byte);
 		send_msg();
 
 		return true;
 	}
 
 #ifdef ASCS_SYNC_SEND
-	template<typename T> sync_call_result do_direct_sync_send_msg(T&& msg, unsigned duration = 0)
+	template<typename T> sync_call_result do_direct_sync_send_msg(T&& msg, unsigned duration = 0, bool prior = false)
 	{
 		if (stopped())
 			return sync_call_result::NOT_APPLICABLE;
@@ -554,14 +518,14 @@ protected:
 		auto unused = in_msg(std::forward<T>(msg), true);
 		auto p = unused.p;
 		auto f = p->get_future();
-		if (!send_buffer.enqueue(std::move(unused)))
+		if (!(prior ? send_buffer.enqueue_front(std::move(unused)) : send_buffer.enqueue(std::move(unused))))
 			return sync_call_result::NOT_APPLICABLE;
 
 		send_msg();
 		return 0 == duration || std::future_status::ready == f.wait_for(std::chrono::milliseconds(duration)) ? f.get() : sync_call_result::TIMEOUT;
 	}
 
-	sync_call_result do_direct_sync_send_msg(list<InMsgType>& msg_can, unsigned duration = 0)
+	sync_call_result do_direct_sync_send_msg(list<InMsgType>& msg_can, unsigned duration = 0, bool prior = false)
 	{
 		if (stopped())
 			return sync_call_result::NOT_APPLICABLE;
@@ -575,47 +539,7 @@ protected:
 		temp_buffer.back().check_and_create_promise(true);
 		auto p = temp_buffer.back().p;
 		auto f = p->get_future();
-		send_buffer.move_items_in(temp_buffer, size_in_byte);
-
-		send_msg();
-		return 0 == duration || std::future_status::ready == f.wait_for(std::chrono::milliseconds(duration)) ? f.get() : sync_call_result::TIMEOUT;
-	}
-
-	template<typename T> sync_call_result do_sync_resend_msg(T&& msg, unsigned duration = 0)
-	{
-		if (stopped())
-			return sync_call_result::NOT_APPLICABLE;
-		else if (msg.empty())
-		{
-			unified_out::error_out(ASCS_LLF " found an empty message, please check your packer.", id());
-			return sync_call_result::SUCCESS;
-		}
-
-		auto unused = in_msg(std::forward<T>(msg), true);
-		auto p = unused.p;
-		auto f = p->get_future();
-		if (!send_buffer.enqueue_front(std::move(unused)))
-			return sync_call_result::NOT_APPLICABLE;
-
-		send_msg();
-		return 0 == duration || std::future_status::ready == f.wait_for(std::chrono::milliseconds(duration)) ? f.get() : sync_call_result::TIMEOUT;
-	}
-
-	sync_call_result do_sync_resend_msg(list<InMsgType>& msg_can, unsigned duration = 0)
-	{
-		if (stopped())
-			return sync_call_result::NOT_APPLICABLE;
-		else if (msg_can.empty())
-			return sync_call_result::SUCCESS;
-
-		size_t size_in_byte = 0;
-		in_container_type temp_buffer;
-		ascs::do_something_to_all(msg_can, [&size_in_byte, &temp_buffer](InMsgType& msg) {size_in_byte += msg.size(); temp_buffer.emplace_back(std::move(msg));});
-
-		temp_buffer.back().check_and_create_promise(true);
-		auto p = temp_buffer.back().p;
-		auto f = p->get_future();
-		send_buffer.move_items_in_front(temp_buffer, size_in_byte);
+		prior ? send_buffer.move_items_in_front(temp_buffer, size_in_byte) : send_buffer.move_items_in(temp_buffer, size_in_byte);
 
 		send_msg();
 		return 0 == duration || std::future_status::ready == f.wait_for(std::chrono::milliseconds(duration)) ? f.get() : sync_call_result::TIMEOUT;

@@ -70,11 +70,11 @@ static bool check_msg;
 ///////////////////////////////////////////////////
 //msg sending interface
 #define TCP_RANDOM_SEND_MSG(FUNNAME, SEND_FUNNAME) \
-bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false) \
+bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false, bool prior = false) \
 { \
 	auto index = (size_t) ((uint64_t) rand() * (size() - 1) / RAND_MAX); \
 	auto socket_ptr = at(index); \
-	return socket_ptr ? socket_ptr->SEND_FUNNAME(pstr, len, num, can_overflow) : false; \
+	return socket_ptr ? socket_ptr->SEND_FUNNAME(pstr, len, num, can_overflow, prior) : false; \
 } \
 TCP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)
 //msg sending interface
