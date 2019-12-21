@@ -592,7 +592,7 @@ bool FUNNAME(in_msg_type&& msg, bool can_overflow = false) \
 	auto_duration dur(stat.pack_time_sum); \
 	auto re = packer_->pack_msg(std::move(msg), msg_can); \
 	dur.end(); \
-	return re ? do_direct_send_msg(msg_can) : FUNNAME(msg, can_overflow); \
+	return re && do_direct_send_msg(msg_can); \
 } \
 bool FUNNAME(in_msg_type&& msg1, in_msg_type&& msg2, bool can_overflow = false) \
 { \
@@ -606,7 +606,7 @@ bool FUNNAME(in_msg_type&& msg1, in_msg_type&& msg2, bool can_overflow = false) 
 	dur.end(); \
 	return re && do_direct_send_msg(msg_can); \
 } \
-bool FUNNAME(typename Packer::container_type& msg_can, bool can_overflow = false)  \
+bool FUNNAME(typename Packer::container_type& msg_can, bool can_overflow = false) \
 { \
 	if (!can_overflow && !this->is_send_buffer_available()) \
 		return false; \
@@ -668,19 +668,18 @@ sync_call_result FUNNAME(in_msg_type&& msg, unsigned duration = 0, bool can_over
 	auto_duration dur(stat.pack_time_sum); \
 	auto re = packer_->pack_msg(std::move(msg), msg_can); \
 	dur.end(); \
-	return re ? do_direct_sync_send_msg(msg_can, duration) : FUNNAME(msg, duration, can_overflow); \
+	return re ? do_direct_sync_send_msg(msg_can, duration) : sync_call_result::NOT_APPLICABLE; \
 } \
 sync_call_result FUNNAME(in_msg_type&& msg1, in_msg_type&& msg2, unsigned duration = 0, bool can_overflow = false) \
 { \
 	if (!can_overflow && !this->is_send_buffer_available()) \
 		return sync_call_result::NOT_APPLICABLE; \
-	else if (NATIVE) \
-	{ \
-		do_direct_sync_send_msg(std::move(msg1), duration); \
-		do_direct_sync_send_msg(std::move(msg2), duration); \
-		return sync_call_result::SUCCESS; /*do_direct_sync_send_msg will always succeed*/ \
-	} \
 	typename Packer::container_type msg_can; \
+	if (NATIVE) \
+	{ \
+		msg_can.emplace_back(std::move(msg1)); msg_can.emplace_back(std::move(msg2)); \
+		return do_direct_sync_send_msg(msg_can, duration); \
+	} \
 	auto_duration dur(stat.pack_time_sum); \
 	auto re = packer_->pack_msg(std::move(msg1), std::move(msg2), msg_can); \
 	dur.end(); \
