@@ -296,7 +296,7 @@ int main(int argc, const char* argv[])
 		{
 //			/*
 			//broadcast series functions call pack_msg for each client respectively, because clients may used different protocols(so different type of packers, of course)
-			normal_server_.broadcast_msg(str.data(), str.size() + 1, false);
+			normal_server_.broadcast_msg(str.data(), str.size() + 1);
 			//send \0 character too, because demo client used basic_buffer as its msg type, it will not append \0 character automatically as std::string does,
 			//so need \0 character when printing it.
 //			*/
@@ -307,11 +307,13 @@ int main(int argc, const char* argv[])
 			//send \0 character too, because demo client used basic_buffer as its msg type, it will not append \0 character automatically as std::string does,
 			//so need \0 character when printing it.
 			if (!msg.empty())
-				normal_server_.do_something_to_all([&msg](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(msg);});
+				((normal_server&) normal_server_).do_something_to_all([&msg](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(msg);});
 			*/
 			/*
 			//if demo client is using stream_unpacker
-			normal_server_.do_something_to_all([&str](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(str);});
+			((normal_server&) normal_server_).do_something_to_all([&str](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(str);});
+			//or
+			normal_server_.broadcast_native_msg(str);
 			*/
 		}
 	}
