@@ -604,10 +604,10 @@
  * REPLACEMENTS:
  *
  * ===============================================================
- * 2020.x.x		version 1.5.0
+ * 2020.1.1		version 1.5.0
  *
  * SPECIAL ATTENTION (incompatible with old editions):
- * Add a new parameter prior to send_msg (series) function (after can_overflow).
+ * Add a new parameter 'prior' to send_msg (series) function (after can_overflow).
  * Delete macro ASCS_ENHANCED_STABILITY, which means now we always have it, if you really don't want it, define macro ASCS_NO_TRY_CATCH.
  * Change macro ASCS_LLF from %lu or %llu to %ld or %lld, this can shorten the output during printing invalid ids ((uint_fast64_t) -1).
  * Apply the same reconnecting mechanism for message unpacking error (before, we always disabled reconnecting mechanism).
@@ -617,7 +617,18 @@
  * HIGHLIGHT:
  * Support batch message sent notification, see new macro ASCS_WANT_BATCH_MSG_SEND_NOTIFY for more details.
  * Support discarding oldest messages before sending message if the send buffer is insufficient, see macro ASCS_SHRINK_SEND_BUFFER for more details.
- * Add a new parameter prior to send_msg (series) function (after can_overflow), if set to true, message will be inserted into the front of the send buffer.
+ *  if you open this feature, you must not call following functions (from the packer) to pack messages:
+ *  virtual bool pack_msg(msg_type&& msg, container_type& msg_can);
+ *  virtual bool pack_msg(msg_type&& msg1, msg_type&& msg2, container_type& msg_can);
+ *  virtual bool pack_msg(container_type&& in, container_type& out);
+ *  or send_msg (series) functions which accept in_msg_type&& or Packer::container_type&& parameters to send messages.
+ * Add a new parameter 'prior' to send_msg (series) function (after can_overflow), it has default value 'false', so legacy code can be compiled
+ *  without any modifications and brings no impacts. if set to true, message will be inserted into the front of the send buffer, so you must
+ *  not call following functions (from the packer) to pack messages:
+ *  virtual bool pack_msg(msg_type&& msg, container_type& msg_can);
+ *  virtual bool pack_msg(msg_type&& msg1, msg_type&& msg2, container_type& msg_can);
+ *  virtual bool pack_msg(container_type&& in, container_type& out);
+ *  or send_msg (series) functions which accept in_msg_type&& or Packer::container_type&& parameters to send messages.
  *
  * FIX:
  * If defined macro ASCS_WANT_MSG_SEND_NOTIFY, virtual function ascs::socket::on_msg_send(InMsgType& msg) must be implemented.
@@ -634,6 +645,7 @@
  * Prefix thread id for all logs.
  * Make the link status available via tcp::socket_base::get_link_status().
  * send_msg (series) support char[] as the input source.
+ * Obey c++0a standard.
  *
  * DELETION:
  * Delete file mingw-build.bat, use mingw32-make instead.

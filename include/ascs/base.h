@@ -619,7 +619,7 @@ bool FUNNAME(in_msg_type&& msg1, in_msg_type&& msg2, bool can_overflow = false, 
 	dur.end(); \
 	return re && do_direct_send_msg(msg_can, prior); \
 } \
-bool FUNNAME(typename Packer::container_type& msg_can, bool can_overflow = false, bool prior = false)  \
+bool FUNNAME(typename Packer::container_type&& msg_can, bool can_overflow = false, bool prior = false)  \
 { \
 	if (!can_overflow && !this->shrink_send_buffer()) \
 		return false; \
@@ -627,7 +627,7 @@ bool FUNNAME(typename Packer::container_type& msg_can, bool can_overflow = false
 		return do_direct_send_msg(msg_can, prior); \
 	typename Packer::container_type out; \
 	auto_duration dur(stat.pack_time_sum); \
-	auto re = packer_->pack_msg(msg_can, out); \
+	auto re = packer_->pack_msg(std::move(msg_can), out); \
 	dur.end(); \
 	return re && do_direct_send_msg(out, prior); \
 } \
@@ -649,8 +649,8 @@ bool FUNNAME(in_msg_type&& msg, bool can_overflow = false, bool prior = false) \
 	{while (!SEND_FUNNAME(std::move(msg), can_overflow, prior)) SAFE_SEND_MSG_CHECK(false) return true;} \
 bool FUNNAME(in_msg_type&& msg1, in_msg_type&& msg2, bool can_overflow = false, bool prior = false) \
 	{while (!SEND_FUNNAME(std::move(msg1), std::move(msg2), can_overflow, prior)) SAFE_SEND_MSG_CHECK(false) return true;} \
-bool FUNNAME(typename Packer::container_type& msg_can, bool can_overflow = false, bool prior = false) \
-	{while (!SEND_FUNNAME(msg_can, can_overflow, prior)) SAFE_SEND_MSG_CHECK(false) return true;} \
+bool FUNNAME(typename Packer::container_type&& msg_can, bool can_overflow = false, bool prior = false) \
+	{while (!SEND_FUNNAME(std::move(msg_can), can_overflow, prior)) SAFE_SEND_MSG_CHECK(false) return true;} \
 bool FUNNAME(const char* const pstr[], const size_t len[], size_t num, bool can_overflow = false, bool prior = false) \
 	{while (!SEND_FUNNAME(pstr, len, num, can_overflow, prior)) SAFE_SEND_MSG_CHECK(false) return true;} \
 TCP_SEND_MSG_CALL_SWITCH(FUNNAME, bool)
@@ -701,7 +701,7 @@ sync_call_result FUNNAME(in_msg_type&& msg1, in_msg_type&& msg2, unsigned durati
 	dur.end(); \
 	return re ? do_direct_sync_send_msg(msg_can, duration, prior) : sync_call_result::NOT_APPLICABLE; \
 } \
-sync_call_result FUNNAME(typename Packer::container_type& msg_can, unsigned duration = 0, bool can_overflow = false, bool prior = false) \
+sync_call_result FUNNAME(typename Packer::container_type&& msg_can, unsigned duration = 0, bool can_overflow = false, bool prior = false) \
 { \
 	if (!can_overflow && !this->shrink_send_buffer()) \
 		return sync_call_result::NOT_APPLICABLE; \
@@ -709,7 +709,7 @@ sync_call_result FUNNAME(typename Packer::container_type& msg_can, unsigned dura
 		return do_direct_sync_send_msg(msg_can, duration, prior); \
 	typename Packer::container_type out; \
 	auto_duration dur(stat.pack_time_sum); \
-	auto re = packer_->pack_msg(msg_can, out); \
+	auto re = packer_->pack_msg(std::move(msg_can), out); \
 	dur.end(); \
 	return re ? do_direct_sync_send_msg(out, duration, prior) : sync_call_result::NOT_APPLICABLE; \
 } \
@@ -733,8 +733,8 @@ sync_call_result FUNNAME(in_msg_type&& msg, unsigned duration = 0, bool can_over
 sync_call_result FUNNAME(in_msg_type&& msg1, in_msg_type&& msg2, unsigned duration = 0, bool can_overflow = false, bool prior = false) \
 	{while (sync_call_result::SUCCESS != SEND_FUNNAME(std::move(msg1), std::move(msg2), duration, can_overflow, prior)) \
 		SAFE_SEND_MSG_CHECK(sync_call_result::NOT_APPLICABLE) return sync_call_result::SUCCESS;} \
-sync_call_result FUNNAME(typename Packer::container_type& msg_can, unsigned duration = 0, bool can_overflow = false, bool prior = false) \
-	{while (sync_call_result::SUCCESS != SEND_FUNNAME(msg_can, duration, can_overflow, prior)) \
+sync_call_result FUNNAME(typename Packer::container_type&& msg_can, unsigned duration = 0, bool can_overflow = false, bool prior = false) \
+	{while (sync_call_result::SUCCESS != SEND_FUNNAME(std::move(msg_can), duration, can_overflow, prior)) \
 		SAFE_SEND_MSG_CHECK(sync_call_result::NOT_APPLICABLE) return sync_call_result::SUCCESS;} \
 sync_call_result FUNNAME(const char* const pstr[], const size_t len[], size_t num, unsigned duration = 0, bool can_overflow = false, bool prior = false) \
 	{while (sync_call_result::SUCCESS != SEND_FUNNAME(pstr, len, num, duration, can_overflow, prior)) \
