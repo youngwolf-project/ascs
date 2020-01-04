@@ -66,7 +66,8 @@ public:
 	void force_shutdown() {show_info("link:", "been shutting down."); this->dispatch_strand(rw_strand, [this]() {this->shutdown();});}
 	void graceful_shutdown() {force_shutdown();}
 
-	void show_info(const char* head, const char* tail) const {unified_out::info_out("%s %s:%hu %s", head, local_addr.address().to_string().data(), local_addr.port(), tail);}
+	void show_info(const char* head, const char* tail) const
+		{unified_out::info_out(ASCS_LLF " %s %s:%hu %s", this->id(), head, local_addr.address().to_string().data(), local_addr.port(), tail);}
 
 	void show_status() const
 	{
@@ -147,18 +148,19 @@ protected:
 	//msg was failed to send and udp::socket_base will not hold it any more, if you want to re-send it in the future,
 	// you must take over it and re-send (at any time) it via direct_send_msg.
 	//DO NOT hold msg for future using, just swap its content with your own message in this virtual function.
-	virtual void on_send_error(const asio::error_code& ec, typename super::in_msg& msg) {unified_out::error_out("send msg error (%d %s)", ec.value(), ec.message().data());}
+	virtual void on_send_error(const asio::error_code& ec, typename super::in_msg& msg)
+		{unified_out::error_out(ASCS_LLF " send msg error (%d %s)", this->id(), ec.value(), ec.message().data());}
 
 	virtual void on_recv_error(const asio::error_code& ec)
 	{
 		if (asio::error::operation_aborted != ec)
-			unified_out::error_out("recv msg error (%d %s)", ec.value(), ec.message().data());
+			unified_out::error_out(ASCS_LLF " recv msg error (%d %s)", this->id(), ec.value(), ec.message().data());
 	}
 
 	virtual bool on_heartbeat_error()
 	{
 		stat.last_recv_time = time(nullptr); //avoid repetitive warnings
-		unified_out::warning_out("%s:%hu is not available", peer_addr.address().to_string().data(), peer_addr.port());
+		unified_out::warning_out(ASCS_LLF " %s:%hu is not available", this->id(), peer_addr.address().to_string().data(), peer_addr.port());
 		return true;
 	}
 
@@ -186,7 +188,7 @@ private:
 		auto recv_buff = unpacker_->prepare_next_recv();
 		assert(asio::buffer_size(recv_buff) > 0);
 		if (0 == asio::buffer_size(recv_buff))
-			unified_out::error_out("The unpacker returned an empty buffer, quit receiving!");
+			unified_out::error_out(ASCS_LLF " the unpacker returned an empty buffer, quit receiving!", this->id());
 		else
 		{
 #ifdef ASCS_PASSIVE_RECV

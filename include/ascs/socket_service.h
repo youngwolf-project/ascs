@@ -53,6 +53,7 @@ public:
 	virtual bool started() const {return this->is_started();}
 	virtual service_pump& get_service_pump() {return Pool::get_service_pump();}
 	virtual const service_pump& get_service_pump() const {return Pool::get_service_pump();}
+	virtual bool socket_exist(uint_fast64_t id) {return this->exist(id);}
 	virtual std::shared_ptr<tracked_executor> find_socket(uint_fast64_t id) {return this->find(id);}
 
 	typename Pool::object_type create_object() {return Pool::create_object(*this);}

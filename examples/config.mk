@@ -15,39 +15,50 @@ else
 endif
 cflag += -DASIO_STANDALONE -DASIO_NO_DEPRECATED
 
-kernel = ${shell uname -s}
-ifeq (${kernel}, SunOS)
+target_machine = ${shell ${CXX} -dumpmachine}
+ifneq (, ${findstring solaris, ${target_machine}})
 	cflag += -pthreads
 	lflag += -pthreads -lsocket -lnsl
 else
 	cflag += -pthread
 	lflag += -pthread
 
-	cygwin = ${findstring CYGWIN, ${kernel}}
-	ifeq (${cygwin}, CYGWIN)
+	ifneq (, ${findstring cygwin, ${target_machine}})
 		cflag += -D__USE_W32_SOCKETS -D_WIN32_WINNT=0x0501
 		lflag += -lws2_32 -lwsock32
 	endif
+endif
+
+ifneq (, ${findstring mingw, ${target_machine}})
+	cflag += -D__USE_MINGW_ANSI_STDIO=1
+	lflag += -lws2_32 -lwsock32
+	sources = ${shell dir /B *.cpp}
+	ignore = 1>nul
+	make_dir = md ${dir} 2>nul
+	del_dirs = -rd /S /Q debug release 2>nul
+else
+	sources = ${shell ls *.cpp}
+	ignore = 1>/dev/null
+	make_dir = mkdir -p ${dir}
+	del_dirs = -rm -rf debug release
 endif
 
 cflag += ${ext_cflag} ${asio_dir} -I../../include/
 lflag += ${ext_libs}
 
 target = ${dir}/${module}
-sources = ${shell ls *.cpp}
 objects = ${patsubst %.cpp,${dir}/%.o,${sources}}
 deps = ${patsubst %.o,%.d,${objects}}
-${shell mkdir -p ${dir}}
+${shell ${make_dir}}
 
 release debug : ${target}
 -include ${deps}
 ${target} : ${objects}
 	${CXX} -o $@ $^ ${lflag}
 ${objects} : ${dir}/%.o : %.cpp
-	${CXX} ${cflag} -E -MMD -w -MT '$@' -MF ${subst .cpp,.d,${dir}/$<} $< 1>/dev/null
+	${CXX} ${cflag} -E -MMD -w -MT '$@' -MF ${subst .cpp,.d,${dir}/$<} $< ${ignore}
 	${CXX} ${cflag} -c $< -o $@
 
 .PHONY : clean
 clean:
-	-rm -rf debug release
-
+	${del_dirs}

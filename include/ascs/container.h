@@ -50,6 +50,8 @@ private:
 // swap
 // template<typename T> emplace_back(const T& item), if you call direct_(sync_)send_msg which accepts other than rvalue reference
 // template<typename T> emplace_back(T&& item)
+// template<typename T> emplace_front(const T& item), if you call (sync_)resend_msg which accepts other than rvalue reference
+// template<typename T> emplace_front(T&& item), if you call (sync_)resend_msg
 // splice(iter, Container&)
 // splice(iter, Container&, iter, iter)
 // front
@@ -85,6 +87,8 @@ public:
 
 	template<typename T> bool enqueue(T&& item) {typename Lockable::lock_guard lock(*this); return enqueue_(std::forward<T>(item));}
 	void move_items_in(Container& src, size_t size_in_byte = 0) {typename Lockable::lock_guard lock(*this); move_items_in_(src, size_in_byte);}
+	template<typename T> bool enqueue_front(T&& item) {typename Lockable::lock_guard lock(*this); return enqueue_front_(std::forward<T>(item));}
+	void move_items_in_front(Container& src, size_t size_in_byte = 0) {typename Lockable::lock_guard lock(*this); move_items_in_front_(src, size_in_byte);}
 	bool try_dequeue(reference item) {typename Lockable::lock_guard lock(*this); return try_dequeue_(item);}
 	void move_items_out(Container& dest, size_t max_item_num = -1) {typename Lockable::lock_guard lock(*this); move_items_out_(dest, max_item_num);}
 	void move_items_out(size_t max_size_in_byte, Container& dest) {typename Lockable::lock_guard lock(*this); move_items_out_(max_size_in_byte, dest);}
@@ -118,6 +122,34 @@ public:
 			assert(ascs::get_size_in_byte(src) == size_in_byte);
 
 		this->splice(this->end(), src);
+		total_size += size_in_byte;
+	}
+
+	template<typename T> bool enqueue_front_(T&& item)
+	{
+		try
+		{
+			auto size = item.size();
+			this->emplace_front(std::forward<T>(item));
+			total_size += size;
+		}
+		catch (const std::exception& e)
+		{
+			unified_out::error_out("cannot hold more objects (%s)", e.what());
+			return false;
+		}
+
+		return true;
+	}
+
+	void move_items_in_front_(Container& src, size_t size_in_byte = 0)
+	{
+		if (0 == size_in_byte)
+			size_in_byte = ascs::get_size_in_byte(src);
+		else
+			assert(ascs::get_size_in_byte(src) == size_in_byte);
+
+		this->splice(this->begin(), src);
 		total_size += size_in_byte;
 	}
 

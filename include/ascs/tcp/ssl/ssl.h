@@ -54,7 +54,7 @@ protected:
 			this->next_layer().shutdown(ec);
 
 			if (ec && asio::error::eof != ec) //the endpoint who initiated a shutdown operation will get error eof.
-				unified_out::info_out("shutdown ssl link failed (maybe intentionally because of reusing)");
+				unified_out::info_out(ASCS_LLF " shutdown ssl link failed (maybe intentionally because of reusing)", this->id());
 		}
 #endif
 
@@ -64,9 +64,9 @@ protected:
 	virtual void on_handshake(const asio::error_code& ec)
 	{
 		if (!ec)
-			unified_out::info_out("handshake success.");
+			unified_out::info_out(ASCS_LLF " handshake success.", this->id());
 		else
-			unified_out::error_out("handshake failed: %s", ec.message().data());
+			unified_out::error_out(ASCS_LLF " handshake failed: %s", this->id(), ec.message().data());
 	}
 
 	void shutdown_ssl(bool sync = true)
@@ -84,7 +84,7 @@ protected:
 			this->show_info("ssl link:", "been shutting down.");
 			this->next_layer().async_shutdown(this->make_handler_error([this](const asio::error_code& ec) {
 				if (ec && asio::error::eof != ec) //the endpoint who initiated a shutdown operation will get error eof.
-					unified_out::info_out("async shutdown ssl link failed (maybe intentionally because of reusing)");
+					unified_out::info_out(ASCS_LLF " async shutdown ssl link failed (maybe intentionally because of reusing)", this->id());
 			}));
 		}
 		else
@@ -94,7 +94,7 @@ protected:
 			this->next_layer().shutdown(ec);
 
 			if (ec && asio::error::eof != ec) //the endpoint who initiated a shutdown operation will get error eof.
-				unified_out::info_out("shutdown ssl link failed (maybe intentionally because of reusing)");
+				unified_out::info_out(ASCS_LLF " shutdown ssl link failed (maybe intentionally because of reusing)", this->id());
 		}
 	}
 
@@ -123,7 +123,7 @@ public:
 	void graceful_shutdown(bool reconnect = false, bool sync = true)
 	{
 		if (reconnect)
-			unified_out::error_out("reconnecting mechanism is not available, please define macro ASCS_REUSE_SSL_STREAM");
+			unified_out::error_out(ASCS_LLF " reconnecting mechanism is not available, please define macro ASCS_REUSE_SSL_STREAM", this->id());
 
 		shutdown_ssl(sync);
 	}
@@ -133,7 +133,7 @@ protected:
 #else
 protected:
 #endif
-	virtual void on_unpack_error() {unified_out::info_out("can not unpack msg."); this->force_shutdown();}
+	virtual void on_unpack_error() {unified_out::info_out(ASCS_LLF " can not unpack msg.", this->id()); this->force_shutdown();}
 
 private:
 	virtual void connect_handler(const asio::error_code& ec) //intercept tcp::client_socket_base::connect_handler
@@ -205,7 +205,7 @@ protected:
 		return true;
 	}
 
-	virtual void on_unpack_error() {unified_out::info_out("can not unpack msg."); this->force_shutdown();}
+	virtual void on_unpack_error() {unified_out::info_out(ASCS_LLF " can not unpack msg.", this->id()); this->force_shutdown();}
 
 private:
 	void handle_handshake(const asio::error_code& ec)

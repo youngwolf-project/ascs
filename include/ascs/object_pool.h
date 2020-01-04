@@ -164,6 +164,12 @@ public:
 		return object_can.size();
 	}
 
+	bool exist(uint_fast64_t id)
+	{
+		ASCS_SHARED_LOCK_TYPE<ASCS_SHARED_MUTEX_TYPE> lock(object_can_mutex);
+		return object_can.count(id) > 0;
+	}
+
 	object_type find(uint_fast64_t id)
 	{
 		ASCS_SHARED_LOCK_TYPE<ASCS_SHARED_MUTEX_TYPE> lock(object_can_mutex);

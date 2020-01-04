@@ -7,7 +7,6 @@
 //#define ASCS_FREE_OBJECT_INTERVAL	60 //it's useless if ASCS_REUSE_OBJECT macro been defined
 //#define ASCS_SYNC_DISPATCH //do not open this feature, see below for more details
 #define ASCS_DISPATCH_BATCH_MSG
-#define ASCS_ENHANCED_STABILITY
 //#define ASCS_FULL_STATISTIC //full statistic will slightly impact efficiency
 #define ASCS_USE_STEADY_TIMER
 #define ASCS_ALIGNED_TIMER
@@ -71,10 +70,13 @@ public:
 	virtual void test() = 0;
 };
 
-class echo_socket : public server_socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UNPACKER, i_echo_server>
+class echo_socket : public server_socket2<i_echo_server>
 {
+private:
+	typedef server_socket2<i_echo_server> super;
+
 public:
-	echo_socket(i_echo_server& server_) : server_socket_base(server_)
+	echo_socket(i_echo_server& server_) : super(server_)
 	{
 		packer(global_packer);
 
@@ -87,7 +89,7 @@ public:
 	//because we use objects pool(REUSE_OBJECT been defined), so, strictly speaking, this virtual
 	//function must be rewrote, but we don't have member variables to initialize but invoke father's
 	//reset() directly, so, it can be omitted, but we keep it for possibly future using
-	virtual void reset() {server_socket_base::reset();}
+	virtual void reset() { super::reset();}
 
 protected:
 	virtual void on_recv_error(const asio::error_code& ec)
@@ -95,7 +97,7 @@ protected:
 		//the type of tcp::server_socket_base::server now can be controlled by derived class(echo_socket),
 		//which is actually i_echo_server, so, we can invoke i_echo_server::test virtual function.
 		get_server().test();
-		server_socket_base::on_recv_error(ec);
+		super::on_recv_error(ec);
 	}
 
 	//msg handling: send the original msg back(echo server)
@@ -294,7 +296,7 @@ int main(int argc, const char* argv[])
 		{
 //			/*
 			//broadcast series functions call pack_msg for each client respectively, because clients may used different protocols(so different type of packers, of course)
-			normal_server_.broadcast_msg(str.data(), str.size() + 1, false);
+			normal_server_.broadcast_msg(str.data(), str.size() + 1);
 			//send \0 character too, because demo client used basic_buffer as its msg type, it will not append \0 character automatically as std::string does,
 			//so need \0 character when printing it.
 //			*/
@@ -305,11 +307,13 @@ int main(int argc, const char* argv[])
 			//send \0 character too, because demo client used basic_buffer as its msg type, it will not append \0 character automatically as std::string does,
 			//so need \0 character when printing it.
 			if (!msg.empty())
-				normal_server_.do_something_to_all([&msg](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(msg);});
+				((normal_server&) normal_server_).do_something_to_all([&msg](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(msg);});
 			*/
 			/*
 			//if demo client is using stream_unpacker
-			normal_server_.do_something_to_all([&str](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(str);});
+			((normal_server&) normal_server_).do_something_to_all([&str](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(str);});
+			//or
+			normal_server_.broadcast_native_msg(str);
 			*/
 		}
 	}

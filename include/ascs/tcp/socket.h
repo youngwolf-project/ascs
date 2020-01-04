@@ -59,6 +59,7 @@ public:
 	virtual void reset() {status = link_status::BROKEN; sending_msgs.clear(); super::reset();}
 
 	//SOCKET status
+	link_status get_link_status() const {return status;}
 	bool is_broken() const {return link_status::BROKEN == status;}
 	bool is_connected() const {return link_status::CONNECTED == status;}
 	bool is_shutting_down() const {return link_status::FORCE_SHUTTING_DOWN == status || link_status::GRACEFUL_SHUTTING_DOWN == status;}
@@ -71,7 +72,7 @@ public:
 		{
 			auto remote_ep = this->lowest_layer().remote_endpoint(ec);
 			if (!ec)
-				unified_out::info_out("%s (%s:%hu %s:%hu) %s", head,
+				unified_out::info_out(ASCS_LLF " %s (%s:%hu %s:%hu) %s", this->id(), head,
 					local_ep.address().to_string().data(), local_ep.port(),
 					remote_ep.address().to_string().data(), remote_ep.port(), tail);
 		}
@@ -85,7 +86,7 @@ public:
 		{
 			auto remote_ep = this->lowest_layer().remote_endpoint(ec2);
 			if (!ec2)
-				unified_out::info_out("%s (%s:%hu %s:%hu) %s (%d %s)", head,
+				unified_out::info_out(ASCS_LLF " %s (%s:%hu %s:%hu) %s (%d %s)", this->id(), head,
 					local_ep.address().to_string().data(), local_ep.port(),
 					remote_ep.address().to_string().data(), remote_ep.port(), tail, ec.value(), ec.message().data());
 		}
@@ -155,7 +156,7 @@ protected:
 					std::this_thread::sleep_for(std::chrono::milliseconds(10));
 				if (loop_num < 0) //graceful shutdown is impossible
 				{
-					unified_out::info_out("failed to graceful shutdown within %d seconds", ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION);
+					unified_out::info_out(ASCS_LLF " failed to graceful shutdown within %d seconds", this->id(), ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION);
 					shutdown();
 				}
 			}
@@ -171,12 +172,26 @@ protected:
 		return super::do_start();
 	}
 
+#ifdef ASCS_WANT_BATCH_MSG_SEND_NOTIFY
+#ifdef ASCS_WANT_MSG_SEND_NOTIFY
+	#ifdef _MSC_VER
+		#pragma message("macro ASCS_WANT_BATCH_MSG_SEND_NOTIFY will not take effect with macro ASCS_WANT_MSG_SEND_NOTIFY.")
+	#else
+		#warning macro ASCS_WANT_BATCH_MSG_SEND_NOTIFY will not take effect with macro ASCS_WANT_MSG_SEND_NOTIFY.
+	#endif
+#else
+	//some messages have been sent to the kernel buffer
+	//notice: messages are packed, using inconstant reference is for the ability of swapping
+	virtual void on_msg_send(typename super::in_container_type& msg_can) = 0;
+#endif
+#endif
+
 	//generally, you don't have to rewrite this to maintain the status of connections
 	//msg_can contains messages that were failed to send and tcp::socket_base will not hold them any more, if you want to re-send them in the future,
 	// you must take over them and re-send (at any time) them via direct_send_msg.
 	//DO NOT hold msg_can for future using, just swap its content with your own container in this virtual function.
 	virtual void on_send_error(const asio::error_code& ec, typename super::in_container_type& msg_can)
-		{unified_out::error_out("send msg error (%d %s)", ec.value(), ec.message().data());}
+		{unified_out::error_out(ASCS_LLF " send msg error (%d %s)", this->id(), ec.value(), ec.message().data());}
 
 	virtual void on_recv_error(const asio::error_code& ec) = 0;
 
@@ -226,7 +241,7 @@ private:
 		auto recv_buff = unpacker_->prepare_next_recv();
 		assert(asio::buffer_size(recv_buff) > 0);
 		if (0 == asio::buffer_size(recv_buff))
-			unified_out::error_out("The unpacker returned an empty buffer, quit receiving!");
+			unified_out::error_out(ASCS_LLF " the unpacker returned an empty buffer, quit receiving!", this->id());
 		else
 		{
 #ifdef ASCS_PASSIVE_RECV
@@ -270,6 +285,8 @@ private:
 				handle_error();
 				on_recv_error(ec);
 			}
+			//if you wrote an terrible unpacker whoes completion_condition always returns 0, it will cause ascs to occupies almost all CPU resources
+			// because of following do_recv_msg() invocation, please note.
 			else if (handle_msg()) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
 				do_recv_msg(); //receive msg in sequence
 		}
@@ -317,10 +334,24 @@ private:
 #endif
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
 			this->on_msg_send(sending_msgs.front());
+#elif defined(ASCS_WANT_BATCH_MSG_SEND_NOTIFY)
+			on_msg_send(sending_msgs);
 #endif
 #ifdef ASCS_WANT_ALL_MSG_SEND_NOTIFY
 			if (send_buffer.empty())
+#if defined(ASCS_WANT_ALL_MSG_SEND_NOTIFY) || !defined(ASCS_WANT_BATCH_MSG_SEND_NOTIFY)
 				this->on_all_msg_send(sending_msgs.back());
+#else
+			{
+				if (!sending_msgs.empty())
+					this->on_all_msg_send(sending_msgs.back());
+				else //on_msg_send consumed all messages
+				{
+					in_msg_type msg;
+					this->on_all_msg_send(msg);
+				}
+			}
+#endif
 #endif
 			sending_msgs.clear();
 			if (!do_send_msg(true) && !send_buffer.empty()) //send msg in sequence
@@ -350,7 +381,7 @@ private:
 			}
 			else
 			{
-				unified_out::info_out("failed to graceful shutdown within %d seconds", ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION);
+				unified_out::info_out(ASCS_LLF " failed to graceful shutdown within %d seconds", this->id(), ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION);
 				on_async_shutdown_error();
 			}
 		}

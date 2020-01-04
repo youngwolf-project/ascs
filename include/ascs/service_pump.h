@@ -219,7 +219,7 @@ protected:
 	}
 	virtual void free(object_type i_service_) {} //if needed, rewrite this to free the service
 
-#ifdef ASCS_ENHANCED_STABILITY
+#ifndef ASCS_NO_TRY_CATCH
 	virtual bool on_exception(const asio::system_error& e)
 	{
 		unified_out::error_out("service pump exception: %s.", e.what());
@@ -253,10 +253,10 @@ protected:
 
 			//we cannot always decrease service thread timely (because run_one can block).
 			size_t this_n = 0;
-#ifdef ASCS_ENHANCED_STABILITY
-			try {this_n = asio::io_context::run_one();} catch (const asio::system_error& e) {if (!on_exception(e)) break;}
-#else
+#ifdef ASCS_NO_TRY_CATCH
 			this_n = asio::io_context::run_one();
+#else
+			try {this_n = asio::io_context::run_one();} catch (const asio::system_error& e) {if (!on_exception(e)) break;}
 #endif
 			if (this_n > 0)
 				n += this_n; //n can overflow, please note.
@@ -272,10 +272,8 @@ protected:
 
 		return n;
 	}
-#else
-#ifdef ASCS_ENHANCED_STABILITY
+#elif !defined(ASCS_NO_TRY_CATCH)
 	size_t run() {while (true) {try {return asio::io_context::run();} catch (const asio::system_error& e) {if (!on_exception(e)) return 0;}}}
-#endif
 #endif
 
 	DO_SOMETHING_TO_ALL_MUTEX(service_can, service_can_mutex)

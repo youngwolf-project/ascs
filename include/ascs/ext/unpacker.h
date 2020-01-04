@@ -54,8 +54,10 @@ public:
 				ASCS_HEAD_TYPE head;
 				memcpy(&head, pnext, ASCS_HEAD_LEN);
 				cur_msg_len = ASCS_HEAD_N2H(head);
+#ifdef ASCS_HUGE_MSG
 				if ((size_t) -1 == cur_msg_len) //avoid dead loop on 32bit system with macro ASCS_HUGE_MSG
 					unpack_ok = false;
+#endif
 			}
 			else
 				break;
@@ -124,6 +126,11 @@ public:
 	virtual buffer_type prepare_next_recv() {assert(remain_len < ASCS_MSG_BUFFER_SIZE); return asio::buffer(asio::buffer(raw_buff) + remain_len);}
 #endif
 
+	//msg must has been unpacked by this unpacker
+	virtual char* raw_data(msg_type& msg) const {return const_cast<char*>(stripped() ? msg.data() : std::next(msg.data(), ASCS_HEAD_LEN));}
+	virtual const char* raw_data(msg_ctype& msg) const {return stripped() ? msg.data() : std::next(msg.data(), ASCS_HEAD_LEN);}
+	virtual size_t raw_data_len(msg_ctype& msg) const {return stripped() ? msg.size() : msg.size() - ASCS_HEAD_LEN;}
+
 protected:
 	std::array<char, ASCS_MSG_BUFFER_SIZE> raw_buff;
 	size_t cur_msg_len; //-1 means head not received, so msg length is not available.
@@ -135,6 +142,7 @@ protected:
 class udp_unpacker : public i_unpacker<std::string>
 {
 public:
+	virtual void reset() {}
 	virtual bool parse_msg(size_t bytes_transferred, container_type& msg_can)
 		{assert(bytes_transferred <= ASCS_MSG_BUFFER_SIZE); msg_can.emplace_back(raw_buff.data(), bytes_transferred); return true;}
 
@@ -178,6 +186,11 @@ public:
 	virtual size_t completion_condition(const asio::error_code& ec, size_t bytes_transferred) {return unpacker_.completion_condition(ec, bytes_transferred);}
 	virtual typename super::buffer_type prepare_next_recv() {return unpacker_.prepare_next_recv();}
 
+	//msg must has been unpacked by this unpacker
+	virtual char* raw_data(typename super::msg_type& msg) const {return const_cast<char*>(this->stripped() ? msg.data() : std::next(msg.data(), ASCS_HEAD_LEN));}
+	virtual const char* raw_data(typename super::msg_ctype& msg) const {return this->stripped() ? msg.data() : std::next(msg.data(), ASCS_HEAD_LEN);}
+	virtual size_t raw_data_len(typename super::msg_ctype& msg) const {return this->stripped() ? msg.size() : msg.size() - ASCS_HEAD_LEN;}
+
 protected:
 	unpacker unpacker_;
 };
@@ -191,6 +204,7 @@ private:
 	typedef ascs::i_unpacker<T> super;
 
 public:
+	virtual void reset() {}
 	virtual bool parse_msg(size_t bytes_transferred, typename super::container_type& msg_can)
 	{
 		assert(bytes_transferred <= ASCS_MSG_BUFFER_SIZE);
@@ -447,6 +461,11 @@ public:
 #else
 	virtual buffer_type prepare_next_recv() {assert(remain_len < ASCS_MSG_BUFFER_SIZE); return asio::buffer(asio::buffer(raw_buff) + remain_len);}
 #endif
+
+	//msg must has been unpacked by this unpacker
+	virtual char* raw_data(msg_type& msg) const {return const_cast<char*>(stripped() ? msg.data() : std::next(msg.data(), _prefix.size()));}
+	virtual const char* raw_data(msg_ctype& msg) const {return stripped() ? msg.data() : std::next(msg.data(), _prefix.size());}
+	virtual size_t raw_data_len(msg_ctype& msg) const {return stripped() ? msg.size() : msg.size() - _prefix.size() - _suffix.size();}
 
 private:
 	std::array<char, ASCS_MSG_BUFFER_SIZE> raw_buff;
