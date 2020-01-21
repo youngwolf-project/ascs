@@ -255,7 +255,10 @@ private:
 
 	void recv_handler(const asio::error_code& ec, size_t bytes_transferred)
 	{
-		if (!ec && bytes_transferred > 0)
+#ifdef ASCS_PASSIVE_RECV
+		reading = false; //clear reading flag before calling handle_msg() to make sure that recv_msg() is available in on_msg() and on_msg_handle()
+#endif
+		if (bytes_transferred > 0)
 		{
 			stat.last_recv_time = time(nullptr);
 
@@ -268,28 +271,22 @@ private:
 				on_unpack_error();
 				unpacker_->reset(); //user can get the left half-baked msg in unpacker's reset()
 			}
-
-#ifdef ASCS_PASSIVE_RECV
-			reading = false; //clear reading flag before calling handle_msg() to make sure that recv_msg() is available in on_msg() and on_msg_handle()
-#endif
-			if (handle_msg()) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
-				do_recv_msg(); //receive msg in sequence
 		}
-		else
+		else if (!ec)
 		{
-#ifdef ASCS_PASSIVE_RECV
-			reading = false; //clear reading flag before calling handle_msg() to make sure that recv_msg() is available in on_msg() and on_msg_handle()
-#endif
-			if (ec)
-			{
-				handle_error();
-				on_recv_error(ec);
-			}
-			//if you wrote an terrible unpacker whoes completion_condition always returns 0, it will cause ascs to occupies almost all CPU resources
-			// because of following do_recv_msg() invocation, please note.
-			else if (handle_msg()) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
-				do_recv_msg(); //receive msg in sequence
+			assert(false);
+			unified_out::error_out(ASCS_LLF " read 0 byte without any errors which is unexpected, please check your unpacker!", this->id());
 		}
+
+		if (ec)
+		{
+			handle_error();
+			on_recv_error(ec);
+		}
+		//if you wrote an terrible unpacker whoes completion_condition always returns 0, it will cause ascs to occupies almost all CPU resources
+		// because of following do_recv_msg() invocation (rapidly and repeatedly), please note.
+		else if (handle_msg()) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
+			do_recv_msg(); //receive msg in sequence
 	}
 
 	virtual bool do_send_msg(bool in_strand = false)
