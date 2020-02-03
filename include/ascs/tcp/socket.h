@@ -235,7 +235,7 @@ private:
 	virtual void do_recv_msg()
 	{
 #ifdef ASCS_PASSIVE_RECV
-		if (reading)
+		if (reading || !is_ready())
 			return;
 #endif
 		auto recv_buff = unpacker_->prepare_next_recv();
@@ -258,6 +258,7 @@ private:
 #ifdef ASCS_PASSIVE_RECV
 		reading = false; //clear reading flag before calling handle_msg() to make sure that recv_msg() is available in on_msg() and on_msg_handle()
 #endif
+		auto need_next_recv = false;
 		if (bytes_transferred > 0)
 		{
 			stat.last_recv_time = time(nullptr);
@@ -271,6 +272,8 @@ private:
 				on_unpack_error();
 				unpacker_->reset(); //user can get the left half-baked msg in unpacker's reset()
 			}
+
+			need_next_recv = handle_msg(); //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
 		}
 		else if (!ec)
 		{
@@ -285,7 +288,7 @@ private:
 		}
 		//if you wrote an terrible unpacker whoes completion_condition always returns 0, it will cause ascs to occupies almost all CPU resources
 		// because of following do_recv_msg() invocation (rapidly and repeatedly), please note.
-		else if (handle_msg()) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
+		else if (need_next_recv)
 			do_recv_msg(); //receive msg in sequence
 	}
 
