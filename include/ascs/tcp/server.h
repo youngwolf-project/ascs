@@ -146,9 +146,9 @@ public:
 
 	//functions with a socket_ptr parameter will remove the link from object pool first, then call corresponding function.
 	void disconnect(typename Pool::object_ctype& socket_ptr) {this->del_object(socket_ptr); socket_ptr->disconnect();}
-	void disconnect() {this->do_something_to_all([=](typename Pool::object_ctype& item) {item->disconnect();});}
+	void disconnect() {this->do_something_to_all([&](typename Pool::object_ctype& item) {item->disconnect();});}
 	void force_shutdown(typename Pool::object_ctype& socket_ptr) {this->del_object(socket_ptr); socket_ptr->force_shutdown();}
-	void force_shutdown() {this->do_something_to_all([=](typename Pool::object_ctype& item) {item->force_shutdown();});}
+	void force_shutdown() {this->do_something_to_all([&](typename Pool::object_ctype& item) {item->force_shutdown();});}
 	void graceful_shutdown(typename Pool::object_ctype& socket_ptr, bool sync = false) {this->del_object(socket_ptr); socket_ptr->graceful_shutdown(sync);}
 	void graceful_shutdown() {this->do_something_to_all([](typename Pool::object_ctype& item) {item->graceful_shutdown();});} //parameter sync must be false (the default value), or dead lock will occur.
 

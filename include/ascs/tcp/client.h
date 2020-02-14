@@ -77,11 +77,11 @@ public:
 	//functions with a socket_ptr parameter will remove the link from object pool first, then call corresponding function, if you want to reconnect to the server,
 	//please call socket_ptr's 'disconnect' 'force_shutdown' or 'graceful_shutdown' with true 'reconnect' directly.
 	void disconnect(typename Pool::object_ctype& socket_ptr) {this->del_object(socket_ptr); socket_ptr->disconnect();}
-	void disconnect(bool reconnect = false) {this->do_something_to_all([=](typename Pool::object_ctype& item) {item->disconnect(reconnect);});}
+	void disconnect(bool reconnect = false) {this->do_something_to_all([&](typename Pool::object_ctype& item) {item->disconnect(reconnect);});}
 	void force_shutdown(typename Pool::object_ctype& socket_ptr) {this->del_object(socket_ptr); socket_ptr->force_shutdown();}
-	void force_shutdown(bool reconnect = false) {this->do_something_to_all([=](typename Pool::object_ctype& item) {item->force_shutdown(reconnect);});}
+	void force_shutdown(bool reconnect = false) {this->do_something_to_all([&](typename Pool::object_ctype& item) {item->force_shutdown(reconnect);});}
 	void graceful_shutdown(typename Pool::object_ctype& socket_ptr, bool sync = true) {this->del_object(socket_ptr); socket_ptr->graceful_shutdown(false, sync);}
-	void graceful_shutdown(bool reconnect = false, bool sync = true) {this->do_something_to_all([=](typename Pool::object_ctype& item) {item->graceful_shutdown(reconnect, sync);});}
+	void graceful_shutdown(bool reconnect = false, bool sync = true) {this->do_something_to_all([&](typename Pool::object_ctype& item) {item->graceful_shutdown(reconnect, sync);});}
 
 protected:
 	virtual void uninit() {this->stop(); force_shutdown();} //if you wanna graceful shutdown, call graceful_shutdown before service_pump::stop_service invocation.
