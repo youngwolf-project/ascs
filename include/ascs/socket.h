@@ -375,11 +375,13 @@ protected:
 	//subclass notify shutdown event
 	bool close()
 	{
-		if (!started_)
-			return false;
-
 		scope_atomic_lock lock(start_atomic);
-		if (!started_ || !lock.locked())
+		while (!lock.locked())
+		{
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+			lock.lock();
+		}
+		if (!started_)
 			return false;
 
 		started_ = false;
