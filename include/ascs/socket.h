@@ -375,11 +375,13 @@ protected:
 	//subclass notify shutdown event
 	bool close()
 	{
-		if (!started_)
-			return false;
-
 		scope_atomic_lock lock(start_atomic);
-		if (!started_ || !lock.locked())
+		while (!lock.locked())
+		{
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+			lock.lock();
+		}
+		if (!started_)
 			return false;
 
 		started_ = false;
@@ -603,7 +605,7 @@ private:
 		return false;
 	}
 
-	//do not use dispatch_strand at here, because the handler (do_dispatch_msg) may call this function, which can lead stack overflow.
+	//do use dis_strand at here, because the handler (do_dispatch_msg) may call this function, which can lead stack overflow.
 	void dispatch_msg() {if (!dispatching) post_strand(dis_strand, [this]() {this->do_dispatch_msg();});}
 	void do_dispatch_msg()
 	{
