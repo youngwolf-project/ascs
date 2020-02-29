@@ -657,6 +657,25 @@
  * REPLACEMENTS:
  * Replace macro ASCS_ENHANCED_STABILITY by ASCS_NO_TRY_CATCH (antonymous).
  *
+ * ===============================================================
+ * 2020.x.x		version 1.5.1
+ *
+ * SPECIAL ATTENTION (incompatible with old editions):
+ *
+ * HIGHLIGHT:
+ * Support changing the send buffer and recv buffer at runtime.
+ *
+ * FIX:
+ *
+ * ENHANCEMENTS:
+ * Try parsing messages even errors occurred.
+ *
+ * DELETION:
+ *
+ * REFACTORING:
+ *
+ * REPLACEMENTS:
+ *
  */
 
 #ifndef _ASCS_CONFIG_H_
@@ -666,8 +685,8 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#define ASCS_VER		10500	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.5.0"
+#define ASCS_VER		10501	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.5.1"
 
 //asio and compiler check
 #ifdef _MSC_VER
@@ -734,13 +753,13 @@ static_assert(ASCS_SERVER_PORT > 0, "server port must be bigger than zero.");
 #ifndef ASCS_MAX_SEND_BUF
 #define ASCS_MAX_SEND_BUF		1048576 //1M
 #endif
-static_assert(ASCS_MAX_SEND_BUF > 15, "send buffer capacity must be bigger than 15.");
+static_assert(ASCS_MAX_SEND_BUF > 0, "send buffer capacity must be bigger than zero.");
 
 //recv buffer's maximum size (bytes), it will be expanded dynamically (not fixed) within this range.
 #ifndef ASCS_MAX_RECV_BUF
 #define ASCS_MAX_RECV_BUF		1048576 //1M
 #endif
-static_assert(ASCS_MAX_RECV_BUF > 15, "recv buffer capacity must be bigger than 15.");
+static_assert(ASCS_MAX_RECV_BUF > 0, "recv buffer capacity must be bigger than zero.");
 
 //by defining this, virtual function socket::calc_shrink_size will be introduced and be called when send buffer is insufficient before sending message,
 //the return value will be used to determine how many messages (in bytes) will be discarded (from the oldest one), 0 means don't shrink send buffer,
