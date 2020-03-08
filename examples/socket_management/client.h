@@ -102,7 +102,7 @@ public:
 	template<typename T> bool send_msg(const std::string& name, T&& msg)
 	{
 		auto socket_ptr = find(find_link(name));
-		return socket_ptr ? send_msg(name, std::forward<T>(msg)) : false;
+		return socket_ptr ? socket_ptr->send_msg(std::forward<T>(msg)) : false;
 	}
 
 protected:
