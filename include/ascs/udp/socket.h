@@ -79,12 +79,15 @@ public:
 			"\n\treading: %d"
 #endif
 			"\n\tdispatching: %d"
-			"\n\trecv suspended: %d",
+			"\n\trecv suspended: %d"
+			"\n\tsend buffer usage: %f"
+			"\n\trecv buffer usage: %f",
 			this->id(), this->started(), this->is_sending(),
 #ifdef ASCS_PASSIVE_RECV
 			this->is_reading(),
 #endif
-			this->is_dispatching(), this->is_recv_idle());
+			this->is_dispatching(), this->is_recv_idle(),
+			this->send_buf_usage(), this->recv_buf_usage());
 	}
 
 	///////////////////////////////////////////////////
