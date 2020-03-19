@@ -66,8 +66,11 @@ public:
 	void force_shutdown() {show_info("link:", "been shutting down."); this->dispatch_strand(rw_strand, [this]() {this->shutdown();});}
 	void graceful_shutdown() {force_shutdown();}
 
-	void show_info(const char* head, const char* tail) const
-		{unified_out::info_out(ASCS_LLF " %s %s:%hu %s", this->id(), head, local_addr.address().to_string().data(), local_addr.port(), tail);}
+	void show_info(const char* head = nullptr, const char* tail = nullptr) const
+	{
+		unified_out::info_out(ASCS_LLF " %s %s:%hu %s",
+			this->id(), nullptr == head ? "" : head, local_addr.address().to_string().data(), local_addr.port(), nullptr == tail ? "" : tail);
+	}
 
 	void show_status() const
 	{

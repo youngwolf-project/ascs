@@ -114,7 +114,7 @@ protected:
 	virtual void on_unpack_error() {unified_out::info_out(ASCS_LLF " can not unpack msg.", this->id()); force_shutdown(need_reconnect);}
 	virtual void on_recv_error(const asio::error_code& ec)
 	{
-		this->show_info("client link:", "broken/been shut down", ec);
+		this->show_info(ec, "client link:", "broken/been shut down");
 
 		force_shutdown(need_reconnect);
 		this->status = super::link_status::BROKEN;

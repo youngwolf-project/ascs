@@ -64,7 +64,7 @@ public:
 	bool is_connected() const {return link_status::CONNECTED == status;}
 	bool is_shutting_down() const {return link_status::FORCE_SHUTTING_DOWN == status || link_status::GRACEFUL_SHUTTING_DOWN == status;}
 
-	void show_info(const char* head, const char* tail) const
+	void show_info(const char* head = nullptr, const char* tail = nullptr) const
 	{
 		asio::error_code ec;
 		auto local_ep = this->lowest_layer().local_endpoint(ec);
@@ -72,13 +72,13 @@ public:
 		{
 			auto remote_ep = this->lowest_layer().remote_endpoint(ec);
 			if (!ec)
-				unified_out::info_out(ASCS_LLF " %s (%s:%hu %s:%hu) %s", this->id(), head,
+				unified_out::info_out(ASCS_LLF " %s (%s:%hu %s:%hu) %s", this->id(), nullptr == head ? "" : head,
 					local_ep.address().to_string().data(), local_ep.port(),
-					remote_ep.address().to_string().data(), remote_ep.port(), tail);
+					remote_ep.address().to_string().data(), remote_ep.port(), nullptr == tail ? "" : tail);
 		}
 	}
 
-	void show_info(const char* head, const char* tail, const asio::error_code& ec) const
+	void show_info(const asio::error_code& ec, const char* head = nullptr, const char* tail = nullptr) const
 	{
 		asio::error_code ec2;
 		auto local_ep = this->lowest_layer().local_endpoint(ec2);
@@ -86,9 +86,9 @@ public:
 		{
 			auto remote_ep = this->lowest_layer().remote_endpoint(ec2);
 			if (!ec2)
-				unified_out::info_out(ASCS_LLF " %s (%s:%hu %s:%hu) %s (%d %s)", this->id(), head,
+				unified_out::info_out(ASCS_LLF " %s (%s:%hu %s:%hu) %s (%d %s)", this->id(), nullptr == head ? "" : head,
 					local_ep.address().to_string().data(), local_ep.port(),
-					remote_ep.address().to_string().data(), remote_ep.port(), tail, ec.value(), ec.message().data());
+					remote_ep.address().to_string().data(), remote_ep.port(), nullptr == tail ? "" : tail, ec.value(), ec.message().data());
 		}
 	}
 
