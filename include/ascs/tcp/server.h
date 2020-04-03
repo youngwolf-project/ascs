@@ -98,7 +98,7 @@ public:
 	const asio::ip::tcp::acceptor& next_layer() const {return acceptor;}
 
 	//implement i_server's pure virtual functions
-	virtual bool started() const {return this->is_started();}
+	virtual bool started() const {return this->service_started();}
 	virtual service_pump& get_service_pump() {return Pool::get_service_pump();}
 	virtual const service_pump& get_service_pump() const {return Pool::get_service_pump();}
 	virtual bool socket_exist(uint_fast64_t id) {return this->exist(id);}

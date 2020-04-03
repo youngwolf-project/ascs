@@ -661,6 +661,7 @@
  * 2020.x.x		version 1.5.1
  *
  * SPECIAL ATTENTION (incompatible with old editions):
+ * Rename function i_service::is_started() to i_service::service_started().
  *
  * HIGHLIGHT:
  * Support changing the send buffer and recv buffer at runtime.
