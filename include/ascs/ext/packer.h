@@ -139,7 +139,7 @@ public:
 
 //protocol: length + body
 //T can be auto_buffer or shared_buffer, the latter makes output messages seemingly copyable.
-template<typename T = auto_buffer<i_buffer>>
+template<typename T = auto_buffer<i_buffer>, typename C = string_buffer>
 class packer2 : public i_packer<T>
 {
 private:
@@ -149,7 +149,7 @@ public:
 	using super::pack_msg;
 	virtual typename super::msg_type pack_msg(const char* const pstr[], const size_t len[], size_t num, bool native = false)
 	{
-		auto raw_msg = new string_buffer();
+		auto raw_msg = new C();
 		auto str = packer().pack_msg(pstr, len, num, native);
 		raw_msg->swap(str);
 		return typename super::msg_type(raw_msg);
@@ -161,7 +161,7 @@ public:
 			return false;
 
 		auto head_len = packer_helper::pack_header(len);
-		auto raw_msg = new string_buffer();
+		auto raw_msg = new C();
 		raw_msg->assign((const char*) &head_len, ASCS_HEAD_LEN);
 		msg_can.emplace_back(raw_msg);
 		msg_can.emplace_back(std::move(msg));
@@ -175,7 +175,7 @@ public:
 			return false;
 
 		auto head_len = packer_helper::pack_header(len);
-		auto raw_msg = new string_buffer();
+		auto raw_msg = new C();
 		raw_msg->assign((const char*) &head_len, ASCS_HEAD_LEN);
 		msg_can.emplace_back(raw_msg);
 		msg_can.emplace_back(std::move(msg1));
@@ -190,7 +190,7 @@ public:
 			return false;
 
 		auto head_len = packer_helper::pack_header(len);
-		auto raw_msg = new string_buffer();
+		auto raw_msg = new C();
 		raw_msg->assign((const char*) &head_len, ASCS_HEAD_LEN);
 		out.emplace_back(raw_msg);
 		out.splice(std::end(out), in);
@@ -199,7 +199,7 @@ public:
 	}
 	virtual typename super::msg_type pack_heartbeat()
 	{
-		auto raw_msg = new string_buffer();
+		auto raw_msg = new C();
 		auto str = packer().pack_heartbeat();
 		raw_msg->swap(str);
 		return typename super::msg_type(raw_msg);

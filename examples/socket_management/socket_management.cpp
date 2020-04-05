@@ -18,9 +18,9 @@
 
 #if 1 == PACKER_UNPACKER_TYPE
 #if defined(_MSC_VER) && _MSC_VER <= 1800
-#define ASCS_DEFAULT_PACKER packer2<shared_buffer<i_buffer>>
+#define ASCS_DEFAULT_PACKER packer2<shared_buffer<std::string>, std::string>
 #else
-#define ASCS_DEFAULT_PACKER packer2<>
+#define ASCS_DEFAULT_PACKER packer2<auto_buffer<std::string>, std::string>
 #endif
 #define ASCS_DEFAULT_UNPACKER unpacker2<>
 #elif 2 == PACKER_UNPACKER_TYPE
