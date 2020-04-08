@@ -584,8 +584,8 @@ private:
 				asio::error_code ec;
 				lowest_layer().close(ec);
 			}
-			change_timer_status(TIMER_DELAY_CLOSE, timer_info::TIMER_CANCELED);
 			on_close();
+			change_timer_status(TIMER_DELAY_CLOSE, timer_info::TIMER_CANCELED);
 			after_close();
 			set_async_calling(false);
 			break;
