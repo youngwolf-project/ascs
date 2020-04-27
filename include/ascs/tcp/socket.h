@@ -312,14 +312,16 @@ private:
 			this->sending_buffer.emplace_back(item.data(), item.size());
 		});
 
-		if ((sending = !sending_buffer.empty()))
+		if (!sending_buffer.empty())
 		{
+			sending = true;
 			sending_msgs.front().restart();
 			asio::async_write(this->next_layer(), sending_buffer, make_strand_handler(rw_strand,
 				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);})));
 			return true;
 		}
 
+		sending = false;
 		return false;
 	}
 

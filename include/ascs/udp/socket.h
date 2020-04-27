@@ -245,16 +245,17 @@ private:
 		if (!in_strand && sending)
 			return true;
 
-		if ((sending = send_buffer.try_dequeue(sending_msg)))
+		if (send_buffer.try_dequeue(sending_msg))
 		{
+			sending = true;
 			stat.send_delay_sum += statistic::now() - sending_msg.begin_time;
-
 			sending_msg.restart();
 			this->next_layer().async_send_to(asio::buffer(sending_msg.data(), sending_msg.size()), sending_msg.peer_addr, make_strand_handler(rw_strand,
 				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);})));
 			return true;
 		}
 
+		sending = false;
 		return false;
 	}
 

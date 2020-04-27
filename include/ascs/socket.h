@@ -622,8 +622,9 @@ private:
 	void do_dispatch_msg()
 	{
 #ifdef ASCS_DISPATCH_BATCH_MSG
-		if ((dispatching = !recv_buffer.empty()))
+		if (!recv_buffer.empty())
 		{
+			dispatching = true;
 			auto begin_time = statistic::now();
 #ifdef ASCS_FULL_STATISTIC
 			recv_buffer.do_something_to_all([&, this](out_msg& msg) {this->stat.dispatch_delay_sum += begin_time - msg.begin_time;});
@@ -642,8 +643,9 @@ private:
 			else
 			{
 #else
-		if (dispatching || (dispatching = recv_buffer.try_dequeue(dispatching_msg)))
+		if (dispatching || recv_buffer.try_dequeue(dispatching_msg))
 		{
+			dispatching = true;
 			auto begin_time = statistic::now();
 			stat.dispatch_delay_sum += begin_time - dispatching_msg.begin_time;
 			auto re = on_msg_handle(dispatching_msg); //must before next msg dispatching to keep sequence
@@ -663,8 +665,8 @@ private:
 				dispatch_msg(); //dispatch msg in sequence
 			}
 		}
-		else if (!recv_buffer.empty()) //just make sure no pending msgs
-			dispatch_msg();
+		else
+			dispatching = false;
 	}
 
 	bool timer_handler(tid id)
