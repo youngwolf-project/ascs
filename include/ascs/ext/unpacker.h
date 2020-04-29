@@ -174,9 +174,7 @@ public:
 		unpacker_.stripped(this->stripped());
 		auto unpack_ok = unpacker_.parse_msg(bytes_transferred, tmp_can);
 		do_something_to_all(tmp_can, [&msg_can](unpacker::msg_type& item) {
-			auto raw_msg = new std::string();
-			raw_msg->swap(item);
-			msg_can.emplace_back(raw_msg);
+			msg_can.emplace_back(new std::string(std::move(item)));
 		});
 
 		//if unpacking failed, successfully parsed msgs will still returned via msg_can(sticky package), please note.
@@ -209,9 +207,7 @@ public:
 	{
 		assert(bytes_transferred <= ASCS_MSG_BUFFER_SIZE);
 
-		auto raw_msg = new std::string();
-		raw_msg->assign(raw_buff.data(), bytes_transferred);
-		msg_can.emplace_back(raw_msg);
+		msg_can.emplace_back(new std::string(raw_buff.data(), bytes_transferred));
 		return true;
 	}
 
