@@ -81,7 +81,7 @@ namespace tcp
 	{
 	public:
 		virtual bool del_socket(const std::shared_ptr<tracked_executor>& socket_ptr) = 0;
-		virtual bool restore_socket(const std::shared_ptr<tracked_executor>& socket_ptr, uint_fast64_t id) = 0;
+		virtual bool restore_socket(const std::shared_ptr<tracked_executor>& socket_ptr, uint_fast64_t id, bool init) = 0;
 	};
 } //namespace
 
