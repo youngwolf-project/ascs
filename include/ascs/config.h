@@ -658,7 +658,7 @@
  * Replace macro ASCS_ENHANCED_STABILITY by ASCS_NO_TRY_CATCH (antonymous).
  *
  * ===============================================================
- * 2020.x.x		version 1.5.1
+ * 2020.5.24	version 1.5.1
  *
  * SPECIAL ATTENTION (incompatible with old editions):
  * Rename function i_service::is_started() to i_service::service_started().
