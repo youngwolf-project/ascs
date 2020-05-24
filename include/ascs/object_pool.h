@@ -36,8 +36,11 @@ public:
 	static const tid TIMER_CLEAR_SOCKET = TIMER_BEGIN + 1;
 	static const tid TIMER_END = TIMER_BEGIN + 10;
 
+public:
+	void set_start_object_id(uint_fast64_t id) {cur_id.store(id - 1, std::memory_order_relaxed);} //call this right after object_pool been constructed
+
 protected:
-	object_pool(service_pump& service_pump_) : i_service(service_pump_), timer<executor>(service_pump_), cur_id(-1), max_size_(ASCS_MAX_OBJECT_NUM) {}
+	object_pool(service_pump& service_pump_) : i_service(service_pump_), timer<executor>(service_pump_), cur_id(ASCS_START_OBJECT_ID - 1), max_size_(ASCS_MAX_OBJECT_NUM) {}
 
 	void start()
 	{
@@ -94,25 +97,41 @@ protected:
 			unified_out::error_out("create object failed!");
 	}
 
+	bool init_object_id(object_ctype& object_ptr, uint_fast64_t id)
+	{
+		assert(object_ptr && !object_ptr->is_equal_to(-1));
+
+		if (object_ptr->is_equal_to(id))
+			return true;
+
+		std::lock_guard<ASCS_SHARED_MUTEX_TYPE> lock(object_can_mutex);
+		auto& stub = object_can[id];
+		if (stub)
+			return false;
+
+		object_can.erase(object_ptr->id());
+		object_ptr->id(id);
+		stub = object_ptr; //must succeed
+
+		return true;
+	}
+
 	//change object_ptr's id to id, and reinsert it into object_can.
 	//there MUST exist an object in invalid_object_can whose id is equal to id to guarantee the id has been abandoned
 	// (checking existence of such object in object_can is NOT enough, because there are some sockets used by async
 	// acceptance, they don't exist in object_can nor invalid_object_can), further more, the invalid object MUST be
-	//obsoleted and has no additional reference.
+	// obsoleted and has no additional reference.
 	//return the invalid object (null means failure), please note that the invalid object has been removed from invalid_object_can.
 	object_type change_object_id(object_ctype& object_ptr, uint_fast64_t id)
 	{
 		assert(object_ptr && !object_ptr->is_equal_to(-1));
 
 		auto old_object_ptr = invalid_object_pop(id);
-		if (old_object_ptr)
+		if (old_object_ptr && !init_object_id(object_ptr, id))
 		{
-			assert(!find(id));
-
-			std::lock_guard<ASCS_SHARED_MUTEX_TYPE> lock(object_can_mutex);
-			object_can.erase(object_ptr->id());
-			object_ptr->id(id);
-			object_can.emplace(id, object_ptr); //must succeed
+			std::lock_guard<std::mutex> lock(invalid_object_can_mutex);
+			invalid_object_can.push_back(old_object_ptr);
+			old_object_ptr.reset();
 		}
 
 		return old_object_ptr;
@@ -195,7 +214,7 @@ public:
 	object_type invalid_object_find(uint_fast64_t id)
 	{
 		std::lock_guard<std::mutex> lock(invalid_object_can_mutex);
-		auto iter = std::find_if(std::begin(invalid_object_can), std::end(invalid_object_can), [id](object_ctype& item) {return item->is_equal_to(id);});
+		auto iter = std::find_if(std::begin(invalid_object_can), std::end(invalid_object_can), [&id](object_ctype& item) {return item->is_equal_to(id);});
 		return iter == std::end(invalid_object_can) ? object_type() : *iter;
 	}
 
@@ -211,7 +230,7 @@ public:
 	object_type invalid_object_pop(uint_fast64_t id)
 	{
 		std::lock_guard<std::mutex> lock(invalid_object_can_mutex);
-		auto iter = std::find_if(std::begin(invalid_object_can), std::end(invalid_object_can), [id](object_ctype& item) {return item->is_equal_to(id);});
+		auto iter = std::find_if(std::begin(invalid_object_can), std::end(invalid_object_can), [&id](object_ctype& item) {return item->is_equal_to(id);});
 		if (iter != std::end(invalid_object_can) && (*iter).unique() && (*iter)->obsoleted())
 		{
 			auto object_ptr(std::move(*iter));
@@ -305,7 +324,7 @@ public:
 
 	statistic get_statistic() {statistic stat; do_something_to_all([&](object_ctype& item) {stat += item->get_statistic();}); return stat;}
 	void list_all_status() {do_something_to_all([](object_ctype& item) {item->show_status();});}
-	void list_all_object() {do_something_to_all([](object_ctype& item) {item->show_info("", "");});}
+	void list_all_object() {do_something_to_all([](object_ctype& item) {item->show_info();});}
 
 	template<typename _Predicate> void do_something_to_all(const _Predicate& __pred)
 		{ASCS_SHARED_LOCK_TYPE<ASCS_SHARED_MUTEX_TYPE> lock(object_can_mutex); for (auto& item : object_can) __pred(item.second);}

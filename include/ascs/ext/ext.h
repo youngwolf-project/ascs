@@ -42,7 +42,7 @@ static_assert(ASCS_MSG_BUFFER_SIZE > 0, "message buffer size must be bigger than
 
 namespace ascs { namespace ext {
 
-//implement i_buffer interface, then string_buffer can be wrapped by auto_buffer or shared_buffer
+//implement i_buffer interface, then protocol can be changed at runtime, see file_server and file_client for more details.
 class string_buffer : public std::string, public i_buffer
 {
 public:

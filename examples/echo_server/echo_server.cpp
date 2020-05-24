@@ -27,9 +27,9 @@
 
 #if 1 == PACKER_UNPACKER_TYPE
 #if defined(_MSC_VER) && _MSC_VER <= 1800
-#define ASCS_DEFAULT_PACKER packer2<shared_buffer<i_buffer>>
+#define ASCS_DEFAULT_PACKER packer2<shared_buffer<std::string>, std::string>
 #else
-#define ASCS_DEFAULT_PACKER packer2<>
+#define ASCS_DEFAULT_PACKER packer2<auto_buffer<std::string>, std::string>
 #endif
 #define ASCS_DEFAULT_UNPACKER unpacker2<>
 #elif 2 == PACKER_UNPACKER_TYPE
@@ -89,7 +89,7 @@ public:
 	//because we use objects pool(REUSE_OBJECT been defined), so, strictly speaking, this virtual
 	//function must be rewrote, but we don't have member variables to initialize but invoke father's
 	//reset() directly, so, it can be omitted, but we keep it for possibly future using
-	virtual void reset() { super::reset();}
+	virtual void reset() {super::reset();}
 
 protected:
 	virtual void on_recv_error(const asio::error_code& ec)
@@ -182,7 +182,7 @@ public:
 	normal_server(service_pump& service_pump_) : server_base(service_pump_) {}
 
 protected:
-	virtual int async_accept_num() {return 1;} //this make on_accept to be called in single thread, because stop_listen() is not thread safe
+	virtual int async_accept_num() {return 1;}
 	virtual bool on_accept(object_ctype& socket_ptr) {stop_listen(); return true;}
 };
 

@@ -66,8 +66,11 @@ public:
 	void force_shutdown() {show_info("link:", "been shutting down."); this->dispatch_strand(rw_strand, [this]() {this->shutdown();});}
 	void graceful_shutdown() {force_shutdown();}
 
-	void show_info(const char* head, const char* tail) const
-		{unified_out::info_out(ASCS_LLF " %s %s:%hu %s", this->id(), head, local_addr.address().to_string().data(), local_addr.port(), tail);}
+	void show_info(const char* head = nullptr, const char* tail = nullptr) const
+	{
+		unified_out::info_out(ASCS_LLF " %s %s:%hu %s",
+			this->id(), nullptr == head ? "" : head, local_addr.address().to_string().data(), local_addr.port(), nullptr == tail ? "" : tail);
+	}
 
 	void show_status() const
 	{
@@ -79,12 +82,15 @@ public:
 			"\n\treading: %d"
 #endif
 			"\n\tdispatching: %d"
-			"\n\trecv suspended: %d",
+			"\n\trecv suspended: %d"
+			"\n\tsend buffer usage: %.2f%%"
+			"\n\trecv buffer usage: %.2f%%",
 			this->id(), this->started(), this->is_sending(),
 #ifdef ASCS_PASSIVE_RECV
 			this->is_reading(),
 #endif
-			this->is_dispatching(), this->is_recv_idle());
+			this->is_dispatching(), this->is_recv_idle(),
+			this->send_buf_usage() * 100.f, this->recv_buf_usage() * 100.f);
 	}
 
 	///////////////////////////////////////////////////
@@ -239,16 +245,17 @@ private:
 		if (!in_strand && sending)
 			return true;
 
-		if ((sending = send_buffer.try_dequeue(sending_msg)))
+		if (send_buffer.try_dequeue(sending_msg))
 		{
+			sending = true;
 			stat.send_delay_sum += statistic::now() - sending_msg.begin_time;
-
 			sending_msg.restart();
 			this->next_layer().async_send_to(asio::buffer(sending_msg.data(), sending_msg.size()), sending_msg.peer_addr, make_strand_handler(rw_strand,
 				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);})));
 			return true;
 		}
 
+		sending = false;
 		return false;
 	}
 

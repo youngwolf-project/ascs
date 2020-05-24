@@ -657,6 +657,37 @@
  * REPLACEMENTS:
  * Replace macro ASCS_ENHANCED_STABILITY by ASCS_NO_TRY_CATCH (antonymous).
  *
+ * ===============================================================
+ * 2020.5.24	version 1.5.1
+ *
+ * SPECIAL ATTENTION (incompatible with old editions):
+ * Rename function i_service::is_started() to i_service::service_started().
+ * A additional parameter named 'init' is added to interface i_server::restore_socket, now it has following signature:
+ *  virtual bool i_server::restore_socket(const std::shared_ptr<tracked_executor>& socket_ptr, uint_fast64_t id, bool init)
+ *  you use init = true to initialize the server_socket's id (use macro ASCS_START_OBJECT_ID to separate your id rang from object_pool's id rang),
+ *  use init = false to restore a server_socket after client_socket reconnected to the server.
+ *
+ * HIGHLIGHT:
+ * Introduce new macro ASCS_START_OBJECT_ID to set the start id that object_pool used to assign object ids, and the new function
+ *  object_pool::set_start_object_id(uint_fast64_t) with the same purpose, please call it as immediately as possible.
+ * Support changing the size of send buffer and recv buffer at runtime.
+ * Make function server_base::start_listen() and server_base::stop_listen() thread safe.
+ * packer2 now can customize the real message type (before, it's always string_buffer).
+ * Optimize unpacker2.
+ *
+ * FIX:
+ * Fix race condition during call acceptor::async_accept concurrently.
+ *
+ * ENHANCEMENTS:
+ * Try parsing messages even errors occurred.
+ * The usage rate of send buffer and recv buffer now can be fetched via send_buf_usage(), recv_buf_usage() or show_status().
+ *
+ * DELETION:
+ *
+ * REFACTORING:
+ *
+ * REPLACEMENTS:
+ *
  */
 
 #ifndef _ASCS_CONFIG_H_
@@ -666,8 +697,8 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#define ASCS_VER		10500	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.5.0"
+#define ASCS_VER		10501	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.5.1"
 
 //asio and compiler check
 #ifdef _MSC_VER
@@ -734,13 +765,13 @@ static_assert(ASCS_SERVER_PORT > 0, "server port must be bigger than zero.");
 #ifndef ASCS_MAX_SEND_BUF
 #define ASCS_MAX_SEND_BUF		1048576 //1M
 #endif
-static_assert(ASCS_MAX_SEND_BUF > 15, "send buffer capacity must be bigger than 15.");
+static_assert(ASCS_MAX_SEND_BUF > 0, "send buffer capacity must be bigger than zero.");
 
 //recv buffer's maximum size (bytes), it will be expanded dynamically (not fixed) within this range.
 #ifndef ASCS_MAX_RECV_BUF
 #define ASCS_MAX_RECV_BUF		1048576 //1M
 #endif
-static_assert(ASCS_MAX_RECV_BUF > 15, "recv buffer capacity must be bigger than 15.");
+static_assert(ASCS_MAX_RECV_BUF > 0, "recv buffer capacity must be bigger than zero.");
 
 //by defining this, virtual function socket::calc_shrink_size will be introduced and be called when send buffer is insufficient before sending message,
 //the return value will be used to determine how many messages (in bytes) will be discarded (from the oldest one), 0 means don't shrink send buffer,
@@ -791,6 +822,11 @@ static_assert(ASCS_DELAY_CLOSE >= 0, "delay close duration must be bigger than o
 
 //after sending buffer became empty, call ascs::socket::on_all_msg_send(InMsgType& msg)
 //#define ASCS_WANT_ALL_MSG_SEND_NOTIFY
+
+//object_pool will asign object ids (used to distinguish objects) from this
+#ifndef ASCS_START_OBJECT_ID
+#define ASCS_START_OBJECT_ID	0
+#endif
 
 //max number of objects object_pool can hold.
 #ifndef ASCS_MAX_OBJECT_NUM

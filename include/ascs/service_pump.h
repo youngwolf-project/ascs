@@ -24,15 +24,15 @@ public:
 	class i_service
 	{
 	protected:
-		i_service(service_pump& service_pump_) : sp(service_pump_), started(false), id_(0), data(nullptr) {service_pump_.add(this);}
+		i_service(service_pump& service_pump_) : sp(service_pump_), started_(false), id_(0), data(nullptr) {service_pump_.add(this);}
 		virtual ~i_service() {}
 
 	public:
 		//for the same i_service, start_service and stop_service are not thread safe,
 		//to resolve this defect, we must add a mutex member variable to i_service, it's not worth
-		void start_service() {if (!started) started = init();}
-		void stop_service() {if (started) uninit(); started = false;}
-		bool is_started() const {return started;}
+		void start_service() {if (!started_) started_ = init();}
+		void stop_service() {if (started_) uninit(); started_ = false;}
+		bool service_started() const {return started_;}
 
 		void id(int id) {id_ = id;}
 		int id() const {return id_;}
@@ -50,7 +50,7 @@ public:
 		service_pump& sp;
 
 	private:
-		bool started;
+		bool started_;
 		int id_;
 		void* data; //magic data, you can use it in any way
 	};
@@ -81,7 +81,7 @@ public:
 	object_type find(int id)
 	{
 		std::lock_guard<std::mutex> lock(service_can_mutex);
-		auto iter = std::find_if(std::begin(service_can), std::end(service_can), [id](object_ctype& item) {return id == item->id();});
+		auto iter = std::find_if(std::begin(service_can), std::end(service_can), [&id](object_ctype& item) {return id == item->id();});
 		return iter == std::end(service_can) ? nullptr : *iter;
 	}
 
@@ -99,7 +99,7 @@ public:
 	void remove(int id)
 	{
 		std::unique_lock<std::mutex> lock(service_can_mutex);
-		auto iter = std::find_if(std::begin(service_can), std::end(service_can), [id](object_ctype& item) {return id == item->id();});
+		auto iter = std::find_if(std::begin(service_can), std::end(service_can), [&id](object_ctype& item) {return id == item->id();});
 		if (iter != std::end(service_can))
 		{
 			auto i_service_ = *iter;

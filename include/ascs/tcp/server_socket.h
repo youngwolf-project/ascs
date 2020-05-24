@@ -66,7 +66,7 @@ protected:
 	//do not forget to force_shutdown this socket(in del_socket(), there's a force_shutdown() invocation)
 	virtual void on_recv_error(const asio::error_code& ec)
 	{
-		this->show_info("server link:", "broken/been shut down", ec);
+		this->show_info(ec, "server link:", "broken/been shut down");
 
 #ifdef ASCS_CLEAR_OBJECT_INTERVAL
 		force_shutdown();

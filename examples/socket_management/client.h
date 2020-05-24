@@ -62,7 +62,7 @@ public:
 			if (add_socket(socket_ptr)) //exceed ASCS_MAX_OBJECT_NUM
 			{
 				printf("add socket %s.\n", name.data());
-				link_map[name] = socket_ptr->id();
+				link_map[name] = socket_ptr;
 
 				return true;
 			}
@@ -71,37 +71,37 @@ public:
 		return false;
 	}
 
-	uint_fast64_t find_link(const std::string& name)
+	object_type find_link(const std::string& name)
 	{
 		std::lock_guard<std::mutex> lock(link_map_mutex);
 		auto iter = link_map.find(name);
-		return iter != std::end(link_map) ? iter->second : -1;
+		return iter != std::end(link_map) ? iter->second : object_type();
 	}
 
-	uint_fast64_t find_and_remove_link(const std::string& name)
+	object_type find_and_remove_link(const std::string& name)
 	{
-		uint_fast64_t id = -1;
+		object_type socket_ptr;
 
 		std::lock_guard<std::mutex> lock(link_map_mutex);
 		auto iter = link_map.find(name);
 		if (iter != std::end(link_map))
 		{
-			id = iter->second;
+			socket_ptr = iter->second;
 			link_map.erase(iter);
 		}
 
-		return id;
+		return socket_ptr;
 	}
 
 	bool shutdown_link(const std::string& name)
 	{
-		auto socket_ptr = find(find_and_remove_link(name));
+		auto socket_ptr = find_and_remove_link(name);
 		return socket_ptr ? (socket_ptr->force_shutdown(), true) : false;
 	}
 
 	template<typename T> bool send_msg(const std::string& name, T&& msg)
 	{
-		auto socket_ptr = find(find_link(name));
+		auto socket_ptr = find_link(name);
 		return socket_ptr ? socket_ptr->send_msg(std::forward<T>(msg)) : false;
 	}
 
@@ -114,7 +114,7 @@ protected:
 	}
 
 private:
-	std::map<std::string, uint_fast64_t> link_map;
+	std::map<std::string, object_type> link_map;
 	std::mutex link_map_mutex;
 };
 

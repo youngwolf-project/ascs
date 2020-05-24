@@ -109,7 +109,7 @@ class echo_client : public multi_client_base<echo_socket>
 public:
 	echo_client(service_pump& service_pump_) : multi_client_base<echo_socket>(service_pump_) {}
 
-	void begin(size_t msg_num, const char* msg, size_t msg_len) {do_something_to_all([=](object_ctype& item) {item->begin(msg_num, msg, msg_len);});}
+	void begin(size_t msg_num, const char* msg, size_t msg_len) {do_something_to_all([&](object_ctype& item) {item->begin(msg_num, msg, msg_len);});}
 };
 
 int main(int argc, const char* argv[])

@@ -49,6 +49,10 @@ public:
 
 	bool start_listen()
 	{
+		std::lock_guard<std::mutex> lock(mutex);
+		if (is_listening())
+			return false;
+
 		asio::error_code ec;
 		if (!acceptor.is_open()) {acceptor.open(server_addr.protocol(), ec); assert(!ec);} //user maybe has opened this acceptor (to set options for example)
 #ifndef ASCS_NOT_REUSE_ADDRESS
@@ -88,13 +92,13 @@ public:
 		return true;
 	}
 	bool is_listening() const {return acceptor.is_open();}
-	void stop_listen() {asio::error_code ec; acceptor.cancel(ec); acceptor.close(ec);}
+	void stop_listen() {std::lock_guard<std::mutex> lock(mutex); asio::error_code ec; acceptor.cancel(ec); acceptor.close(ec);}
 
 	asio::ip::tcp::acceptor& next_layer() {return acceptor;}
 	const asio::ip::tcp::acceptor& next_layer() const {return acceptor;}
 
 	//implement i_server's pure virtual functions
-	virtual bool started() const {return this->is_started();}
+	virtual bool started() const {return this->service_started();}
 	virtual service_pump& get_service_pump() {return Pool::get_service_pump();}
 	virtual const service_pump& get_service_pump() const {return Pool::get_service_pump();}
 	virtual bool socket_exist(uint_fast64_t id) {return this->exist(id);}
@@ -109,24 +113,32 @@ public:
 		raw_socket_ptr->force_shutdown();
 		return this->del_object(raw_socket_ptr);
 	}
-	//restore the invalid socket whose id is equal to id, if successful, socket_ptr's take_over function will be invoked,
+	//restore the invalid socket whose id is equal to 'id', if successful, socket_ptr's take_over function will be invoked,
 	//you can restore the invalid socket to socket_ptr, everything can be restored except socket::next_layer_ (on the other
 	//hand, restore socket::next_layer_ doesn't make any sense).
-	virtual bool restore_socket(const std::shared_ptr<tracked_executor>& socket_ptr, uint_fast64_t id)
+	virtual bool restore_socket(const std::shared_ptr<tracked_executor>& socket_ptr, uint_fast64_t id, bool init)
 	{
 		auto raw_socket_ptr(std::dynamic_pointer_cast<Socket>(socket_ptr));
 		if (!raw_socket_ptr)
 			return false;
 
 		auto this_id = raw_socket_ptr->id();
-		auto old_socket_ptr = this->change_object_id(raw_socket_ptr, id);
-		if (old_socket_ptr)
+		if (!init)
 		{
-			assert(raw_socket_ptr->id() == old_socket_ptr->id());
+			auto old_socket_ptr = this->change_object_id(raw_socket_ptr, id);
+			if (old_socket_ptr)
+			{
+				assert(raw_socket_ptr->id() == old_socket_ptr->id());
 
-			unified_out::info_out("object id " ASCS_LLF " been reused, id " ASCS_LLF " been discarded.", raw_socket_ptr->id(), this_id);
-			raw_socket_ptr->take_over(old_socket_ptr);
+				unified_out::info_out("object id " ASCS_LLF " been reused, id " ASCS_LLF " been discarded.", raw_socket_ptr->id(), this_id);
+				raw_socket_ptr->take_over(old_socket_ptr);
 
+				return true;
+			}
+		}
+		else if (this->init_object_id(raw_socket_ptr, id))
+		{
+			unified_out::info_out("object id " ASCS_LLF " been set to " ASCS_LLF, this_id, raw_socket_ptr->id());
 			return true;
 		}
 
@@ -146,9 +158,9 @@ public:
 
 	//functions with a socket_ptr parameter will remove the link from object pool first, then call corresponding function.
 	void disconnect(typename Pool::object_ctype& socket_ptr) {this->del_object(socket_ptr); socket_ptr->disconnect();}
-	void disconnect() {this->do_something_to_all([=](typename Pool::object_ctype& item) {item->disconnect();});}
+	void disconnect() {this->do_something_to_all([&](typename Pool::object_ctype& item) {item->disconnect();});}
 	void force_shutdown(typename Pool::object_ctype& socket_ptr) {this->del_object(socket_ptr); socket_ptr->force_shutdown();}
-	void force_shutdown() {this->do_something_to_all([=](typename Pool::object_ctype& item) {item->force_shutdown();});}
+	void force_shutdown() {this->do_something_to_all([&](typename Pool::object_ctype& item) {item->force_shutdown();});}
 	void graceful_shutdown(typename Pool::object_ctype& socket_ptr, bool sync = false) {this->del_object(socket_ptr); socket_ptr->graceful_shutdown(sync);}
 	void graceful_shutdown() {this->do_something_to_all([](typename Pool::object_ctype& item) {item->graceful_shutdown();});} //parameter sync must be false (the default value), or dead lock will occur.
 
@@ -158,7 +170,7 @@ protected:
 	virtual void uninit() {this->stop(); stop_listen(); force_shutdown();} //if you wanna graceful shutdown, call graceful_shutdown before service_pump::stop_service invocation.
 
 	virtual bool on_accept(typename Pool::object_ctype& socket_ptr) {return true;}
-	virtual void start_next_accept() {do_async_accept(create_object());}
+	virtual void start_next_accept() {std::lock_guard<std::mutex> lock(mutex); do_async_accept(create_object());}
 
 	//if you want to ignore this error and continue to accept new connections immediately, return true in this virtual function;
 	//if you want to ignore this error and continue to accept new connections after a specific delay, start a timer immediately and return false (don't call stop_listen()),
@@ -190,7 +202,7 @@ protected:
 			return true;
 		}
 
-		socket_ptr->show_info("client:", "been refused because of too many clients.");
+		socket_ptr->show_info("client:", "been refused because of too many clients or id conflict.");
 		return false;
 	}
 
@@ -215,6 +227,7 @@ private:
 private:
 	asio::ip::tcp::endpoint server_addr;
 	asio::ip::tcp::acceptor acceptor;
+	std::mutex mutex;
 };
 
 }} //namespace

@@ -27,9 +27,9 @@
 
 #if 1 == PACKER_UNPACKER_TYPE
 #if defined(_MSC_VER) && _MSC_VER <= 1800
-#define ASCS_DEFAULT_PACKER packer2<shared_buffer<i_buffer>>
+#define ASCS_DEFAULT_PACKER packer2<shared_buffer<std::string>, std::string>
 #else
-#define ASCS_DEFAULT_PACKER packer2<>
+#define ASCS_DEFAULT_PACKER packer2<auto_buffer<std::string>, std::string>
 #endif
 #define ASCS_DEFAULT_UNPACKER unpacker2<>
 #elif 2 == PACKER_UNPACKER_TYPE
@@ -197,7 +197,7 @@ public:
 	}
 
 	void clear_status() {do_something_to_all([](object_ctype& item) {item->clear_status();});}
-	void begin(size_t msg_num, size_t msg_len, char msg_fill) {do_something_to_all([=](object_ctype& item) {item->begin(msg_num, msg_len, msg_fill);});}
+	void begin(size_t msg_num, size_t msg_len, char msg_fill) {do_something_to_all([&](object_ctype& item) {item->begin(msg_num, msg_len, msg_fill);});}
 
 	void shutdown_some_client(size_t n)
 	{
@@ -335,14 +335,14 @@ void send_msg_concurrently(echo_client& client, size_t send_thread_num, size_t m
 
 	cpu_timer begin_time;
 	std::list<std::thread> threads;
-	do_something_to_all(link_groups, [&threads, msg_num, msg_len, msg_fill](const std::list<echo_client::object_type>& item) {
+	do_something_to_all(link_groups, [&threads, &msg_num, &msg_len, &msg_fill](const std::list<echo_client::object_type>& item) {
 		threads.emplace_back([&item, msg_num, msg_len, msg_fill]() {
 			auto buff = new char[msg_len];
 			memset(buff, msg_fill, msg_len);
 			for (size_t i = 0; i < msg_num; ++i)
 			{
 				memcpy(buff, &i, sizeof(size_t)); //seq
-				do_something_to_all(item, [buff, msg_len](echo_client::object_ctype& item2) {item2->safe_send_msg(buff, msg_len, false);}); //can_overflow is false, it's important
+				do_something_to_all(item, [&buff, &msg_len](echo_client::object_ctype& item2) {item2->safe_send_msg(buff, msg_len, false);}); //can_overflow is false, it's important
 			}
 			delete[] buff;
 		});
@@ -430,7 +430,7 @@ int main(int argc, const char* argv[])
 	//method #2, add clients first without any arguments, then set the server address.
 	for (size_t i = 1; i < link_num / 2; ++i)
 		client.add_socket();
-	client.do_something_to_all([port, &ip](echo_client::object_ctype& item) {item->set_server_addr(port, ip);});
+	client.do_something_to_all([&port, &ip](echo_client::object_ctype& item) {item->set_server_addr(port, ip);});
 
 	//method #3, add clients and set server address in one invocation.
 	for (auto i = std::max((size_t) 1, link_num / 2); i < link_num; ++i)

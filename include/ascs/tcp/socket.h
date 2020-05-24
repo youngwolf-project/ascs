@@ -64,7 +64,7 @@ public:
 	bool is_connected() const {return link_status::CONNECTED == status;}
 	bool is_shutting_down() const {return link_status::FORCE_SHUTTING_DOWN == status || link_status::GRACEFUL_SHUTTING_DOWN == status;}
 
-	void show_info(const char* head, const char* tail) const
+	void show_info(const char* head = nullptr, const char* tail = nullptr) const
 	{
 		asio::error_code ec;
 		auto local_ep = this->lowest_layer().local_endpoint(ec);
@@ -72,13 +72,13 @@ public:
 		{
 			auto remote_ep = this->lowest_layer().remote_endpoint(ec);
 			if (!ec)
-				unified_out::info_out(ASCS_LLF " %s (%s:%hu %s:%hu) %s", this->id(), head,
+				unified_out::info_out(ASCS_LLF " %s (%s:%hu %s:%hu) %s", this->id(), nullptr == head ? "" : head,
 					local_ep.address().to_string().data(), local_ep.port(),
-					remote_ep.address().to_string().data(), remote_ep.port(), tail);
+					remote_ep.address().to_string().data(), remote_ep.port(), nullptr == tail ? "" : tail);
 		}
 	}
 
-	void show_info(const char* head, const char* tail, const asio::error_code& ec) const
+	void show_info(const asio::error_code& ec, const char* head = nullptr, const char* tail = nullptr) const
 	{
 		asio::error_code ec2;
 		auto local_ep = this->lowest_layer().local_endpoint(ec2);
@@ -86,9 +86,9 @@ public:
 		{
 			auto remote_ep = this->lowest_layer().remote_endpoint(ec2);
 			if (!ec2)
-				unified_out::info_out(ASCS_LLF " %s (%s:%hu %s:%hu) %s (%d %s)", this->id(), head,
+				unified_out::info_out(ASCS_LLF " %s (%s:%hu %s:%hu) %s (%d %s)", this->id(), nullptr == head ? "" : head,
 					local_ep.address().to_string().data(), local_ep.port(),
-					remote_ep.address().to_string().data(), remote_ep.port(), tail, ec.value(), ec.message().data());
+					remote_ep.address().to_string().data(), remote_ep.port(), nullptr == tail ? "" : tail, ec.value(), ec.message().data());
 		}
 	}
 
@@ -103,12 +103,15 @@ public:
 #endif
 			"\n\tdispatching: %d"
 			"\n\tlink status: %d"
-			"\n\trecv suspended: %d",
+			"\n\trecv suspended: %d"
+			"\n\tsend buffer usage: %.2f%%"
+			"\n\trecv buffer usage: %.2f%%",
 			this->id(), this->started(), this->is_sending(),
 #ifdef ASCS_PASSIVE_RECV
 			this->is_reading(),
 #endif
-			this->is_dispatching(), status, this->is_recv_idle());
+			this->is_dispatching(), status, this->is_recv_idle(),
+			this->send_buf_usage() * 100.f, this->recv_buf_usage() * 100.f);
 	}
 
 	///////////////////////////////////////////////////
@@ -235,7 +238,7 @@ private:
 	virtual void do_recv_msg()
 	{
 #ifdef ASCS_PASSIVE_RECV
-		if (reading)
+		if (reading || !is_ready())
 			return;
 #endif
 		auto recv_buff = unpacker_->prepare_next_recv();
@@ -255,7 +258,11 @@ private:
 
 	void recv_handler(const asio::error_code& ec, size_t bytes_transferred)
 	{
-		if (!ec && bytes_transferred > 0)
+#ifdef ASCS_PASSIVE_RECV
+		reading = false; //clear reading flag before calling handle_msg() to make sure that recv_msg() is available in on_msg() and on_msg_handle()
+#endif
+		auto need_next_recv = false;
+		if (bytes_transferred > 0)
 		{
 			stat.last_recv_time = time(nullptr);
 
@@ -269,27 +276,23 @@ private:
 				unpacker_->reset(); //user can get the left half-baked msg in unpacker's reset()
 			}
 
-#ifdef ASCS_PASSIVE_RECV
-			reading = false; //clear reading flag before calling handle_msg() to make sure that recv_msg() is available in on_msg() and on_msg_handle()
-#endif
-			if (handle_msg()) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
-				do_recv_msg(); //receive msg in sequence
+			need_next_recv = handle_msg(); //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
 		}
-		else
+		else if (!ec)
 		{
-#ifdef ASCS_PASSIVE_RECV
-			reading = false; //clear reading flag before calling handle_msg() to make sure that recv_msg() is available in on_msg() and on_msg_handle()
-#endif
-			if (ec)
-			{
-				handle_error();
-				on_recv_error(ec);
-			}
-			//if you wrote an terrible unpacker whoes completion_condition always returns 0, it will cause ascs to occupies almost all CPU resources
-			// because of following do_recv_msg() invocation, please note.
-			else if (handle_msg()) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
-				do_recv_msg(); //receive msg in sequence
+			assert(false);
+			unified_out::error_out(ASCS_LLF " read 0 byte without any errors which is unexpected, please check your unpacker!", this->id());
 		}
+
+		if (ec)
+		{
+			handle_error();
+			on_recv_error(ec);
+		}
+		//if you wrote an terrible unpacker whoes completion_condition always returns 0, it will cause ascs to occupies almost all CPU resources
+		// because of following do_recv_msg() invocation (rapidly and repeatedly), please note.
+		else if (need_next_recv)
+			do_recv_msg(); //receive msg in sequence
 	}
 
 	virtual bool do_send_msg(bool in_strand = false)
@@ -309,14 +312,16 @@ private:
 			this->sending_buffer.emplace_back(item.data(), item.size());
 		});
 
-		if ((sending = !sending_buffer.empty()))
+		if (!sending_buffer.empty())
 		{
+			sending = true;
 			sending_msgs.front().restart();
 			asio::async_write(this->next_layer(), sending_buffer, make_strand_handler(rw_strand,
 				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);})));
 			return true;
 		}
 
+		sending = false;
 		return false;
 	}
 
