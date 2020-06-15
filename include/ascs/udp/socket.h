@@ -38,7 +38,7 @@ public:
 	virtual bool is_ready() {return has_bound;}
 	virtual void send_heartbeat()
 	{
-		in_msg_type msg(peer_addr, packer_->pack_heartbeat());
+		in_msg_type msg(peer_addr, this->packer()->pack_heartbeat());
 		do_direct_send_msg(std::move(msg));
 	}
 	virtual const char* type_name() const {return "UDP";}
@@ -191,7 +191,7 @@ private:
 		if (reading)
 			return;
 #endif
-		auto recv_buff = unpacker_->prepare_next_recv();
+		auto recv_buff = this->unpacker()->prepare_next_recv();
 		assert(asio::buffer_size(recv_buff) > 0);
 		if (0 == asio::buffer_size(recv_buff))
 			unified_out::error_out(ASCS_LLF " the unpacker returned an empty buffer, quit receiving!", this->id());
@@ -212,7 +212,7 @@ private:
 			stat.last_recv_time = time(nullptr);
 
 			typename Unpacker::container_type msg_can;
-			unpacker_->parse_msg(bytes_transferred, msg_can);
+			this->unpacker()->parse_msg(bytes_transferred, msg_can);
 
 #ifdef ASCS_PASSIVE_RECV
 			reading = false; //clear reading flag before call handle_msg() to make sure that recv_msg() can be called successfully in on_msg_handle()
@@ -326,8 +326,6 @@ private:
 
 private:
 	using super::stat;
-	using super::packer_;
-	using super::unpacker_;
 	using super::temp_msg_can;
 
 	using super::send_buffer;

@@ -704,8 +704,6 @@ private:
 
 protected:
 	struct statistic stat;
-	std::shared_ptr<i_packer<typename Packer::msg_type>> packer_;
-	std::shared_ptr<i_unpacker<typename Unpacker::msg_type>> unpacker_;
 	list<OutMsgType> temp_msg_can;
 
 	in_queue_type send_buffer;
@@ -717,6 +715,9 @@ protected:
 	asio::io_context::strand rw_strand;
 
 private:
+	std::shared_ptr<i_packer<typename Packer::msg_type>> packer_;
+	std::shared_ptr<i_unpacker<typename Unpacker::msg_type>> unpacker_;
+
 	bool recv_idle_began;
 	volatile bool started_; //has started or not
 	volatile bool dispatching;

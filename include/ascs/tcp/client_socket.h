@@ -111,7 +111,7 @@ protected:
 	//after how much time (ms), client_socket_base will try to reconnect the server, negative value means give up.
 	virtual int prepare_reconnect(const asio::error_code& ec) {return ASCS_RECONNECT_INTERVAL;}
 	virtual void on_connect() {unified_out::info_out(ASCS_LLF " connecting success.", this->id());}
-	virtual void on_unpack_error() {unified_out::info_out(ASCS_LLF " can not unpack msg.", this->id()); force_shutdown(need_reconnect);}
+	virtual void on_unpack_error() {unified_out::info_out(ASCS_LLF " can not unpack msg.", this->id()); this->unpacker()->dump_left_data(); force_shutdown(need_reconnect);}
 	virtual void on_recv_error(const asio::error_code& ec)
 	{
 		this->show_info(ec, "client link:", "broken/been shut down");

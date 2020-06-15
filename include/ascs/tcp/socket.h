@@ -46,7 +46,7 @@ public:
 	virtual void send_heartbeat()
 	{
 		auto_duration dur(stat.pack_time_sum);
-		auto msg = packer_->pack_heartbeat();
+		auto msg = this->packer()->pack_heartbeat();
 		dur.end();
 		do_direct_send_msg(std::move(msg));
 	}
@@ -232,7 +232,7 @@ private:
 	size_t completion_checker(const asio::error_code& ec, size_t bytes_transferred)
 	{
 		auto_duration dur(stat.unpack_time_sum);
-		return unpacker_->completion_condition(ec, bytes_transferred);
+		return this->unpacker()->completion_condition(ec, bytes_transferred);
 	}
 
 	virtual void do_recv_msg()
@@ -241,7 +241,7 @@ private:
 		if (reading || !is_ready())
 			return;
 #endif
-		auto recv_buff = unpacker_->prepare_next_recv();
+		auto recv_buff = this->unpacker()->prepare_next_recv();
 		assert(asio::buffer_size(recv_buff) > 0);
 		if (0 == asio::buffer_size(recv_buff))
 			unified_out::error_out(ASCS_LLF " the unpacker returned an empty buffer, quit receiving!", this->id());
@@ -267,7 +267,7 @@ private:
 			stat.last_recv_time = time(nullptr);
 
 			auto_duration dur(stat.unpack_time_sum);
-			auto unpack_ok = unpacker_->parse_msg(bytes_transferred, temp_msg_can);
+			auto unpack_ok = this->unpacker()->parse_msg(bytes_transferred, temp_msg_can);
 			dur.end();
 
 			if (!unpack_ok)
@@ -275,7 +275,7 @@ private:
 				if (!ec)
 					on_unpack_error();
 
-				unpacker_->reset(); //user can get the left half-baked msg in unpacker's reset()
+				this->unpacker()->reset(); //user can get the left half-baked msg in unpacker's reset()
 			}
 
 			need_next_recv = handle_msg(); //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
@@ -401,8 +401,6 @@ protected:
 
 private:
 	using super::stat;
-	using super::packer_;
-	using super::unpacker_;
 	using super::temp_msg_can;
 
 	using super::send_buffer;

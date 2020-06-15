@@ -62,7 +62,7 @@ protected:
 	Server& get_server() {return server;}
 	const Server& get_server() const {return server;}
 
-	virtual void on_unpack_error() {unified_out::error_out(ASCS_LLF " can not unpack msg.", this->id()); force_shutdown();}
+	virtual void on_unpack_error() {unified_out::error_out(ASCS_LLF " can not unpack msg.", this->id()); this->unpacker()->dump_left_data(); force_shutdown();}
 	//do not forget to force_shutdown this socket(in del_socket(), there's a force_shutdown() invocation)
 	virtual void on_recv_error(const asio::error_code& ec)
 	{
