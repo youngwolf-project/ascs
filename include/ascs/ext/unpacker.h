@@ -207,9 +207,7 @@ public:
 		unpacker::container_type tmp_can;
 		unpacker_.stripped(this->stripped());
 		auto unpack_ok = unpacker_.parse_msg(bytes_transferred, tmp_can);
-		do_something_to_all(tmp_can, [&msg_can](unpacker::msg_type& item) {
-			msg_can.emplace_back(new std::string(std::move(item)));
-		});
+		do_something_to_all(tmp_can, [&msg_can](unpacker::msg_type& item) {msg_can.emplace_back(new std::string(std::move(item)));});
 
 		//if unpacking failed, successfully parsed msgs will still returned via msg_can(sticky package), please note.
 		return unpack_ok;
