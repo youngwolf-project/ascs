@@ -617,7 +617,7 @@ private:
 		return false;
 	}
 
-	//do use dis_strand at here, because the handler (do_dispatch_msg) may call this function, which can lead stack overflow.
+	//do not use dispatch_strand at here, because the handler (do_dispatch_msg) may call this function, which can lead stack overflow.
 	void dispatch_msg() {if (!dispatching) post_strand(dis_strand, [this]() {this->do_dispatch_msg();});}
 	void do_dispatch_msg()
 	{
