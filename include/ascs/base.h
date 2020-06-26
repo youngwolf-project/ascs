@@ -339,11 +339,11 @@ struct statistic
 		recv_msg_sum = 0;
 		recv_byte_sum = 0;
 
-		last_send_time = 0;
-		last_recv_time = 0;
-
 		establish_time = 0;
 		break_time = 0;
+
+		last_send_time = 0;
+		last_recv_time = 0;
 	}
 
 #ifdef ASCS_FULL_STATISTIC
@@ -418,11 +418,11 @@ struct statistic
 	std::string to_string() const
 	{
 		std::ostringstream s;
-		s << "send corresponding statistic:\nmessage sum: " << send_msg_sum << std::endl << "size in bytes: " << send_byte_sum << std::endl
+		s << "send relevant statistic:\nmessage sum: " << send_msg_sum << std::endl << "size in bytes: " << send_byte_sum << std::endl
 #ifdef ASCS_FULL_STATISTIC
 			<< "send delay: " << send_delay_sum << std::endl << "send duration: " << send_time_sum << std::endl << "pack duration: " << pack_time_sum << std::endl
 #endif
-			<< "\nrecv corresponding statistic:\nmessage sum: " << recv_msg_sum << std::endl << "size in bytes: " << recv_byte_sum
+			<< "\nrecv relevant statistic:\nmessage sum: " << recv_msg_sum << std::endl << "size in bytes: " << recv_byte_sum
 #ifdef ASCS_FULL_STATISTIC
 			<< "\ndispatch delay: " << dispatch_delay_sum << std::endl << "recv idle duration: " << recv_idle_sum << std::endl
 			<< "msg handling duration: " << handle_time_sum << std::endl << "unpack duration: " << unpack_time_sum
@@ -430,7 +430,7 @@ struct statistic
 		;return s.str();
 	}
 
-	//send corresponding statistic
+	//send relevant statistic
 	uint_fast64_t send_msg_sum; //not counted msgs in sending buffer
 	uint_fast64_t send_byte_sum; //include data added by packer, not counted msgs in sending buffer
 	stat_duration send_delay_sum; //from send_(native_)msg (exclude msg packing) to asio::async_write
@@ -438,7 +438,7 @@ struct statistic
 	//above two items indicate your network's speed or load
 	stat_duration pack_time_sum; //udp::socket_base will not gather this item
 
-	//recv corresponding statistic
+	//recv relevant statistic
 	uint_fast64_t recv_msg_sum; //msgs returned by i_unpacker::parse_msg
 	uint_fast64_t recv_byte_sum; //msgs (in bytes) returned by i_unpacker::parse_msg
 	stat_duration dispatch_delay_sum; //from parse_msg(exclude msg unpacking) to on_msg_handle
@@ -446,11 +446,11 @@ struct statistic
 	stat_duration handle_time_sum; //on_msg_handle (and on_msg) consumed time, this indicate the efficiency of msg handling
 	stat_duration unpack_time_sum; //udp::socket_base will not gather this item
 
-	time_t last_send_time; //include heartbeat
-	time_t last_recv_time; //include heartbeat
-
 	time_t establish_time; //time of link establishment
 	time_t break_time; //time of link broken
+
+	time_t last_send_time; //include heartbeat
+	time_t last_recv_time; //include heartbeat
 };
 
 class auto_duration

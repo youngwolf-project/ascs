@@ -94,6 +94,47 @@ public:
 
 	void show_status() const
 	{
+		std::ostringstream s;
+		char time_buff[64];
+		if (stat.establish_time > stat.break_time)
+		{
+#ifdef _MSC_VER
+			ctime_s(time_buff, sizeof(time_buff), &stat.establish_time);
+#else
+			ctime_r(&stat.establish_time, time_buff);
+#endif
+			s << "\n\testablish time: " << time_buff;
+		}
+		else if (stat.break_time > 0)
+		{
+#ifdef _MSC_VER
+			ctime_s(time_buff, sizeof(time_buff), &stat.break_time);
+#else
+			ctime_r(&stat.break_time, time_buff);
+#endif
+			s << "\n\tbreak time: " << time_buff;
+		}
+
+		if (stat.last_send_time > 0)
+		{
+#ifdef _MSC_VER
+			ctime_s(time_buff, sizeof(time_buff), &stat.last_send_time);
+#else
+			ctime_r(&stat.last_send_time, time_buff);
+#endif
+			s << "\n\tlast send time: " << time_buff;
+		}
+
+		if (stat.last_recv_time > 0)
+		{
+#ifdef _MSC_VER
+			ctime_s(time_buff, sizeof(time_buff), &stat.last_recv_time);
+#else
+			ctime_r(&stat.last_recv_time, time_buff);
+#endif
+			s << "\n\tlast recv time: " << time_buff;
+		}
+
 		unified_out::info_out(
 			"\n\tid: " ASCS_LLF
 			"\n\tstarted: %d"
@@ -105,13 +146,14 @@ public:
 			"\n\tlink status: %d"
 			"\n\trecv suspended: %d"
 			"\n\tsend buffer usage: %.2f%%"
-			"\n\trecv buffer usage: %.2f%%",
+			"\n\trecv buffer usage: %.2f%%"
+			"%s",
 			this->id(), this->started(), this->is_sending(),
 #ifdef ASCS_PASSIVE_RECV
 			this->is_reading(),
 #endif
 			this->is_dispatching(), status, this->is_recv_idle(),
-			this->send_buf_usage() * 100.f, this->recv_buf_usage() * 100.f);
+			this->send_buf_usage() * 100.f, this->recv_buf_usage() * 100.f, s.str().data());
 	}
 
 	///////////////////////////////////////////////////
