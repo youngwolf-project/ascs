@@ -829,6 +829,22 @@ UDP_SYNC_SEND_MSG_CALL_SWITCH(FUNNAME, sync_call_result)
 class log_formater
 {
 public:
+	static void to_time_str(time_t time, std::stringstream& os)
+	{
+		char time_buff[64];
+#ifdef _MSC_VER
+		ctime_s(time_buff, sizeof(time_buff), &time);
+#else
+		ctime_r(&time, time_buff);
+#endif
+		auto len = strlen(time_buff);
+		assert(len > 0);
+		if ('\n' == *std::next(time_buff, --len))
+			*std::next(time_buff, len) = '\0';
+
+		os << time_buff;
+	}
+
 	static void all_out(const char* head, char* buff, size_t buff_len, const char* fmt, va_list& ap)
 	{
 		assert(nullptr != buff && buff_len > 0);
@@ -838,27 +854,15 @@ public:
 
 		if (nullptr != head)
 			os << '[' << head << "] ";
-
 		os << '[' << std::this_thread::get_id() << "] ";
 
-		char time_buff[64];
-		auto now = time(nullptr);
-#ifdef _MSC_VER
-		ctime_s(time_buff, sizeof(time_buff), &now);
-#else
-		ctime_r(&now, time_buff);
-#endif
-		auto len = strlen(time_buff);
-		assert(len > 0);
-		if ('\n' == *std::next(time_buff, --len))
-			*std::next(time_buff, len) = '\0';
-
-		os << time_buff << " -> ";
+		to_time_str(time(nullptr), os);
+		os << " -> ";
 
 #if defined _MSC_VER || (defined __unix__ && !defined __linux__)
 		os.rdbuf()->sgetn(buff, buff_len);
 #endif
-		len = (size_t) os.tellp();
+		auto len = (size_t) os.tellp();
 		if (len >= buff_len)
 			*std::next(buff, buff_len - 1) = '\0';
 		else

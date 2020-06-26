@@ -94,45 +94,29 @@ public:
 
 	void show_status() const
 	{
-		std::ostringstream s;
-		char time_buff[64];
+		std::stringstream s;
+
 		if (stat.establish_time > stat.break_time)
 		{
-#ifdef _MSC_VER
-			ctime_s(time_buff, sizeof(time_buff), &stat.establish_time);
-#else
-			ctime_r(&stat.establish_time, time_buff);
-#endif
-			s << "\n\testablish time: " << time_buff;
+			s << "\n\testablish time: ";
+			log_formater::to_time_str(stat.establish_time, s);
 		}
 		else if (stat.break_time > 0)
 		{
-#ifdef _MSC_VER
-			ctime_s(time_buff, sizeof(time_buff), &stat.break_time);
-#else
-			ctime_r(&stat.break_time, time_buff);
-#endif
-			s << "\n\tbreak time: " << time_buff;
+			s << "\n\tbreak time: ";
+			log_formater::to_time_str(stat.break_time, s);
 		}
 
 		if (stat.last_send_time > 0)
 		{
-#ifdef _MSC_VER
-			ctime_s(time_buff, sizeof(time_buff), &stat.last_send_time);
-#else
-			ctime_r(&stat.last_send_time, time_buff);
-#endif
-			s << "\n\tlast send time: " << time_buff;
+			s << "\n\tlast send time: ";
+			log_formater::to_time_str(stat.last_send_time, s);
 		}
 
 		if (stat.last_recv_time > 0)
 		{
-#ifdef _MSC_VER
-			ctime_s(time_buff, sizeof(time_buff), &stat.last_recv_time);
-#else
-			ctime_r(&stat.last_recv_time, time_buff);
-#endif
-			s << "\n\tlast recv time: " << time_buff;
+			s << "\n\tlast recv time: ";
+			log_formater::to_time_str(stat.last_recv_time, s);
 		}
 
 		unified_out::info_out(
