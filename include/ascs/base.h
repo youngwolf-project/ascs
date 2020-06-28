@@ -96,69 +96,48 @@ public:
 };
 
 //convert '->' operation to '.' operation
-//user need to allocate object, and auto_buffer will free it
-template<typename T> class auto_buffer
-#if defined(_MSC_VER) && _MSC_VER <= 1800
-	: public asio::noncopyable
-#endif
+//user needs to allocate object, and object_buffer will free it
+//A can be std::unique_ptr or std::shared_ptr
+//T is the object that represent a buffer (a buffer must at least has those interfaces in i_buffer, or inherit from i_buffer).
+template<template<typename T> class A, typename T> class object_buffer
 {
 public:
-	typedef T* buffer_type;
+	typedef A<T> buffer_type;
 	typedef const buffer_type buffer_ctype;
 
-	auto_buffer() : buffer(nullptr) {}
-	auto_buffer(buffer_type _buffer) : buffer(_buffer) {}
-	auto_buffer(auto_buffer&& other) : buffer(other.buffer) {other.buffer = nullptr;}
-	~auto_buffer() {clear();}
-
-	auto_buffer& operator=(auto_buffer&& other) {clear(); swap(other); return *this;}
-
-	buffer_type raw_buffer() const {return buffer;}
-	void raw_buffer(buffer_type _buffer) {clear(); buffer = _buffer;}
-
-	//the following five functions are needed by ascs
-	bool empty() const {return nullptr == buffer || buffer->empty();}
-	size_t size() const {return nullptr == buffer ? 0 : buffer->size();}
-	const char* data() const {return nullptr == buffer ? nullptr : buffer->data();}
-	void swap(auto_buffer& other) {std::swap(buffer, other.buffer);}
-	void clear() {delete buffer; buffer = nullptr;}
-
-protected:
-	buffer_type buffer;
-};
-
-//convert '->' operation to '.' operation
-//user need to allocate object, and shared_buffer will free it
-//not like auto_buffer, shared_buffer is copyable (seemingly), but auto_buffer is a bit more efficient.
-template<typename T> class shared_buffer
-{
-public:
-	typedef std::shared_ptr<T> buffer_type;
-	typedef const buffer_type buffer_ctype;
-
-	shared_buffer() {}
-	shared_buffer(T* _buffer) {buffer.reset(_buffer);}
-	shared_buffer(buffer_type _buffer) : buffer(_buffer) {}
+	object_buffer() {}
+	object_buffer(T* _buffer) : buffer(_buffer) {}
+	object_buffer(buffer_type&& _buffer) : buffer(std::forward<buffer_type>(_buffer)) {}
 
 #if defined(_MSC_VER) && _MSC_VER <= 1800
-	shared_buffer(shared_buffer&& other) : buffer(std::move(other.buffer)) {}
-	shared_buffer& operator=(shared_buffer&& other) {clear(); swap(other); return *this;}
+	object_buffer(object_buffer&& other) : buffer(std::move(other.buffer)) {}
+	object_buffer& operator=(object_buffer&& other) {clear(); buffer = std::move(other.buffer); return *this;}
 #endif
 
-	buffer_type raw_buffer() const {return buffer;}
+	buffer_ctype& raw_buffer() const {return buffer;}
 	void raw_buffer(T* _buffer) {buffer.reset(_buffer);}
-	void raw_buffer(buffer_ctype _buffer) {buffer = _buffer;}
+	void raw_buffer(buffer_type&& _buffer) {buffer = std::forward<buffer_type>(_buffer);}
 
 	//the following five functions are needed by ascs
 	bool empty() const {return !buffer || buffer->empty();}
 	size_t size() const {return !buffer ? 0 : buffer->size();}
 	const char* data() const {return !buffer ? nullptr : buffer->data();}
-	void swap(shared_buffer& other) {buffer.swap(other.buffer);}
+	void swap(object_buffer& other) {std::swap(buffer, other.buffer);}
 	void clear() {buffer.reset();}
 
 protected:
 	buffer_type buffer;
 };
+
+#ifdef _MSC_VER
+template<typename T> using unique_ptr = std::unique_ptr<T, std::default_delete<T>>;
+#else
+template<typename T> using unique_ptr = std::unique_ptr<T>;
+#endif
+
+template<typename T> using unique_buffer = object_buffer<unique_ptr, T>;
+//unlike unique_buffer, shared_buffer is copyable (seemingly), but unique_buffer is a bit more efficient.
+template<typename T> using shared_buffer = object_buffer<std::shared_ptr, T>;
 
 //ascs requires that container must take one and only one template argument
 template<typename T> using list = std::list<T>;

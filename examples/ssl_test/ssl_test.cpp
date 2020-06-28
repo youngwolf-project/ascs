@@ -8,7 +8,7 @@
 //#if defined(_MSC_VER) && _MSC_VER <= 1800
 //#define ASCS_DEFAULT_PACKER packer2<shared_buffer<std::string>, std::string>
 //#else
-//#define ASCS_DEFAULT_PACKER packer2<auto_buffer<std::string>, std::string>
+//#define ASCS_DEFAULT_PACKER packer2<unique_buffer<std::string>, std::string>
 //#endif
 //#define ASCS_DEFAULT_UNPACKER unpacker2<>
 #define ASCS_HEARTBEAT_INTERVAL	5 //SSL has supported heartbeat because we used user data instead of OOB to implement

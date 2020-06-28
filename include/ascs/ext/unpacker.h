@@ -192,7 +192,7 @@ protected:
 };
 
 //protocol: length + body
-//T can be auto_buffer<std::string> or shared_buffer<std::string>, the latter makes output messages seemingly copyable.
+//T can be unique_buffer<std::string> or shared_buffer<std::string>, the latter makes output messages seemingly copyable.
 template<typename T = shared_buffer<std::string>>
 class unpacker2 : public ascs::i_unpacker<T>
 {
@@ -226,7 +226,7 @@ protected:
 };
 
 //protocol: UDP has message boundary, so we don't need a specific protocol to unpack it.
-//T can be auto_buffer<std::string> or shared_buffer<std::string>, the latter makes output messages seemingly copyable.
+//T can be unique_buffer<std::string> or shared_buffer<std::string>, the latter makes output messages seemingly copyable.
 template<typename T = shared_buffer<std::string>>
 class udp_unpacker2 : public ascs::i_unpacker<T>
 {
