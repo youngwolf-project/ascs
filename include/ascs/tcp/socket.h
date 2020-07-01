@@ -94,6 +94,31 @@ public:
 
 	void show_status() const
 	{
+		std::stringstream s;
+
+		if (stat.establish_time > stat.break_time)
+		{
+			s << "\n\testablish time: ";
+			log_formater::to_time_str(stat.establish_time, s);
+		}
+		else if (stat.break_time > 0)
+		{
+			s << "\n\tbreak time: ";
+			log_formater::to_time_str(stat.break_time, s);
+		}
+
+		if (stat.last_send_time > 0)
+		{
+			s << "\n\tlast send time: ";
+			log_formater::to_time_str(stat.last_send_time, s);
+		}
+
+		if (stat.last_recv_time > 0)
+		{
+			s << "\n\tlast recv time: ";
+			log_formater::to_time_str(stat.last_recv_time, s);
+		}
+
 		unified_out::info_out(
 			"\n\tid: " ASCS_LLF
 			"\n\tstarted: %d"
@@ -105,13 +130,14 @@ public:
 			"\n\tlink status: %d"
 			"\n\trecv suspended: %d"
 			"\n\tsend buffer usage: %.2f%%"
-			"\n\trecv buffer usage: %.2f%%",
+			"\n\trecv buffer usage: %.2f%%"
+			"%s",
 			this->id(), this->started(), this->is_sending(),
 #ifdef ASCS_PASSIVE_RECV
 			this->is_reading(),
 #endif
 			this->is_dispatching(), status, this->is_recv_idle(),
-			this->send_buf_usage() * 100.f, this->recv_buf_usage() * 100.f);
+			this->send_buf_usage() * 100.f, this->recv_buf_usage() * 100.f, s.str().data());
 	}
 
 	///////////////////////////////////////////////////

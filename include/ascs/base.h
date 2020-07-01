@@ -96,69 +96,48 @@ public:
 };
 
 //convert '->' operation to '.' operation
-//user need to allocate object, and auto_buffer will free it
-template<typename T> class auto_buffer
-#if defined(_MSC_VER) && _MSC_VER <= 1800
-	: public asio::noncopyable
-#endif
+//user needs to allocate object, and object_buffer will free it
+//A can be std::unique_ptr or std::shared_ptr
+//T is the object that represent a buffer (a buffer must at least has those interfaces in i_buffer, or inherit from i_buffer).
+template<template<typename T> class A, typename T> class object_buffer
 {
 public:
-	typedef T* buffer_type;
+	typedef A<T> buffer_type;
 	typedef const buffer_type buffer_ctype;
 
-	auto_buffer() : buffer(nullptr) {}
-	auto_buffer(buffer_type _buffer) : buffer(_buffer) {}
-	auto_buffer(auto_buffer&& other) : buffer(other.buffer) {other.buffer = nullptr;}
-	~auto_buffer() {clear();}
-
-	auto_buffer& operator=(auto_buffer&& other) {clear(); swap(other); return *this;}
-
-	buffer_type raw_buffer() const {return buffer;}
-	void raw_buffer(buffer_type _buffer) {clear(); buffer = _buffer;}
-
-	//the following five functions are needed by ascs
-	bool empty() const {return nullptr == buffer || buffer->empty();}
-	size_t size() const {return nullptr == buffer ? 0 : buffer->size();}
-	const char* data() const {return nullptr == buffer ? nullptr : buffer->data();}
-	void swap(auto_buffer& other) {std::swap(buffer, other.buffer);}
-	void clear() {delete buffer; buffer = nullptr;}
-
-protected:
-	buffer_type buffer;
-};
-
-//convert '->' operation to '.' operation
-//user need to allocate object, and shared_buffer will free it
-//not like auto_buffer, shared_buffer is copyable (seemingly), but auto_buffer is a bit more efficient.
-template<typename T> class shared_buffer
-{
-public:
-	typedef std::shared_ptr<T> buffer_type;
-	typedef const buffer_type buffer_ctype;
-
-	shared_buffer() {}
-	shared_buffer(T* _buffer) {buffer.reset(_buffer);}
-	shared_buffer(buffer_type _buffer) : buffer(_buffer) {}
+	object_buffer() {}
+	object_buffer(T* _buffer) : buffer(_buffer) {}
+	object_buffer(buffer_type&& _buffer) : buffer(std::forward<buffer_type>(_buffer)) {}
 
 #if defined(_MSC_VER) && _MSC_VER <= 1800
-	shared_buffer(shared_buffer&& other) : buffer(std::move(other.buffer)) {}
-	shared_buffer& operator=(shared_buffer&& other) {clear(); swap(other); return *this;}
+	object_buffer(object_buffer&& other) : buffer(std::move(other.buffer)) {}
+	object_buffer& operator=(object_buffer&& other) {clear(); buffer = std::move(other.buffer); return *this;}
 #endif
 
-	buffer_type raw_buffer() const {return buffer;}
+	buffer_ctype& raw_buffer() const {return buffer;}
 	void raw_buffer(T* _buffer) {buffer.reset(_buffer);}
-	void raw_buffer(buffer_ctype _buffer) {buffer = _buffer;}
+	void raw_buffer(buffer_type&& _buffer) {buffer = std::forward<buffer_type>(_buffer);}
 
 	//the following five functions are needed by ascs
 	bool empty() const {return !buffer || buffer->empty();}
 	size_t size() const {return !buffer ? 0 : buffer->size();}
 	const char* data() const {return !buffer ? nullptr : buffer->data();}
-	void swap(shared_buffer& other) {buffer.swap(other.buffer);}
+	void swap(object_buffer& other) {std::swap(buffer, other.buffer);}
 	void clear() {buffer.reset();}
 
 protected:
 	buffer_type buffer;
 };
+
+#ifdef _MSC_VER
+template<typename T> using unique_ptr = std::unique_ptr<T, std::default_delete<T>>;
+#else
+template<typename T> using unique_ptr = std::unique_ptr<T>;
+#endif
+
+template<typename T> using unique_buffer = object_buffer<unique_ptr, T>;
+//unlike unique_buffer, shared_buffer is copyable (seemingly), but unique_buffer is a bit more efficient.
+template<typename T> using shared_buffer = object_buffer<std::shared_ptr, T>;
 
 //ascs requires that container must take one and only one template argument
 template<typename T> using list = std::list<T>;
@@ -339,11 +318,11 @@ struct statistic
 		recv_msg_sum = 0;
 		recv_byte_sum = 0;
 
-		last_send_time = 0;
-		last_recv_time = 0;
-
 		establish_time = 0;
 		break_time = 0;
+
+		last_send_time = 0;
+		last_recv_time = 0;
 	}
 
 #ifdef ASCS_FULL_STATISTIC
@@ -418,11 +397,11 @@ struct statistic
 	std::string to_string() const
 	{
 		std::ostringstream s;
-		s << "send corresponding statistic:\nmessage sum: " << send_msg_sum << std::endl << "size in bytes: " << send_byte_sum << std::endl
+		s << "send relevant statistic:\nmessage sum: " << send_msg_sum << std::endl << "size in bytes: " << send_byte_sum << std::endl
 #ifdef ASCS_FULL_STATISTIC
 			<< "send delay: " << send_delay_sum << std::endl << "send duration: " << send_time_sum << std::endl << "pack duration: " << pack_time_sum << std::endl
 #endif
-			<< "\nrecv corresponding statistic:\nmessage sum: " << recv_msg_sum << std::endl << "size in bytes: " << recv_byte_sum
+			<< "\nrecv relevant statistic:\nmessage sum: " << recv_msg_sum << std::endl << "size in bytes: " << recv_byte_sum
 #ifdef ASCS_FULL_STATISTIC
 			<< "\ndispatch delay: " << dispatch_delay_sum << std::endl << "recv idle duration: " << recv_idle_sum << std::endl
 			<< "msg handling duration: " << handle_time_sum << std::endl << "unpack duration: " << unpack_time_sum
@@ -430,7 +409,7 @@ struct statistic
 		;return s.str();
 	}
 
-	//send corresponding statistic
+	//send relevant statistic
 	uint_fast64_t send_msg_sum; //not counted msgs in sending buffer
 	uint_fast64_t send_byte_sum; //include data added by packer, not counted msgs in sending buffer
 	stat_duration send_delay_sum; //from send_(native_)msg (exclude msg packing) to asio::async_write
@@ -438,7 +417,7 @@ struct statistic
 	//above two items indicate your network's speed or load
 	stat_duration pack_time_sum; //udp::socket_base will not gather this item
 
-	//recv corresponding statistic
+	//recv relevant statistic
 	uint_fast64_t recv_msg_sum; //msgs returned by i_unpacker::parse_msg
 	uint_fast64_t recv_byte_sum; //msgs (in bytes) returned by i_unpacker::parse_msg
 	stat_duration dispatch_delay_sum; //from parse_msg(exclude msg unpacking) to on_msg_handle
@@ -446,11 +425,11 @@ struct statistic
 	stat_duration handle_time_sum; //on_msg_handle (and on_msg) consumed time, this indicate the efficiency of msg handling
 	stat_duration unpack_time_sum; //udp::socket_base will not gather this item
 
-	time_t last_send_time; //include heartbeat
-	time_t last_recv_time; //include heartbeat
-
 	time_t establish_time; //time of link establishment
 	time_t break_time; //time of link broken
+
+	time_t last_send_time; //include heartbeat
+	time_t last_recv_time; //include heartbeat
 };
 
 class auto_duration
@@ -829,6 +808,22 @@ UDP_SYNC_SEND_MSG_CALL_SWITCH(FUNNAME, sync_call_result)
 class log_formater
 {
 public:
+	static void to_time_str(time_t time, std::stringstream& os)
+	{
+		char time_buff[64];
+#ifdef _MSC_VER
+		ctime_s(time_buff, sizeof(time_buff), &time);
+#else
+		ctime_r(&time, time_buff);
+#endif
+		auto len = strlen(time_buff);
+		assert(len > 0);
+		if ('\n' == *std::next(time_buff, --len))
+			*std::next(time_buff, len) = '\0';
+
+		os << time_buff;
+	}
+
 	static void all_out(const char* head, char* buff, size_t buff_len, const char* fmt, va_list& ap)
 	{
 		assert(nullptr != buff && buff_len > 0);
@@ -838,27 +833,15 @@ public:
 
 		if (nullptr != head)
 			os << '[' << head << "] ";
-
 		os << '[' << std::this_thread::get_id() << "] ";
 
-		char time_buff[64];
-		auto now = time(nullptr);
-#ifdef _MSC_VER
-		ctime_s(time_buff, sizeof(time_buff), &now);
-#else
-		ctime_r(&now, time_buff);
-#endif
-		auto len = strlen(time_buff);
-		assert(len > 0);
-		if ('\n' == *std::next(time_buff, --len))
-			*std::next(time_buff, len) = '\0';
-
-		os << time_buff << " -> ";
+		to_time_str(time(nullptr), os);
+		os << " -> ";
 
 #if defined _MSC_VER || (defined __unix__ && !defined __linux__)
 		os.rdbuf()->sgetn(buff, buff_len);
 #endif
-		len = (size_t) os.tellp();
+		auto len = (size_t) os.tellp();
 		if (len >= buff_len)
 			*std::next(buff, buff_len - 1) = '\0';
 		else

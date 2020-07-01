@@ -661,7 +661,9 @@
  * 2020.5.24	version 1.5.1
  *
  * SPECIAL ATTENTION (incompatible with old editions):
+ * Rename auto_buffer to unique_buffer.
  * Rename function i_service::is_started() to i_service::service_started().
+ * Introduce new interface i_unpacker::dump_left_data() to dump unparsed data when unpacking failed in on_unpack_error().
  * A additional parameter named 'init' is added to interface i_server::restore_socket, now it has following signature:
  *  virtual bool i_server::restore_socket(const std::shared_ptr<tracked_executor>& socket_ptr, uint_fast64_t id, bool init)
  *  you use init = true to initialize the server_socket's id (use macro ASCS_START_OBJECT_ID to separate your id rang from object_pool's id rang),
@@ -677,14 +679,20 @@
  *
  * FIX:
  * Fix race condition during call acceptor::async_accept concurrently.
+ * Fix possibility of memory leaks for unique_buffer.
+ * Supplement packer2's static functon -- get_max_msg_size().
  *
  * ENHANCEMENTS:
  * Try parsing messages even errors occurred.
  * The usage rate of send buffer and recv buffer now can be fetched via send_buf_usage(), recv_buf_usage() or show_status().
+ * Show establishment time, broken time, last send time and last recv time in show_status().
+ * Standardize unique_buffer and shared_buffer.
+ * Enhance basic_buffer to support pre-allocated buffers.
  *
  * DELETION:
  *
  * REFACTORING:
+ * unique_buffer and shared_buffer.
  *
  * REPLACEMENTS:
  *

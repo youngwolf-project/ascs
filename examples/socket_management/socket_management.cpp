@@ -17,12 +17,8 @@
 //3-prefix and/or suffix packer and unpacker
 
 #if 1 == PACKER_UNPACKER_TYPE
-#if defined(_MSC_VER) && _MSC_VER <= 1800
-#define ASCS_DEFAULT_PACKER packer2<shared_buffer<std::string>, std::string>
-#else
-#define ASCS_DEFAULT_PACKER packer2<auto_buffer<std::string>, std::string>
-#endif
-#define ASCS_DEFAULT_UNPACKER unpacker2<>
+#define ASCS_DEFAULT_PACKER packer2<unique_buffer<std::string>, std::string>
+#define ASCS_DEFAULT_UNPACKER unpacker2<unique_buffer<std::string>>
 #elif 2 == PACKER_UNPACKER_TYPE
 #undef ASCS_HEARTBEAT_INTERVAL
 #define ASCS_HEARTBEAT_INTERVAL	0 //not support heartbeat
