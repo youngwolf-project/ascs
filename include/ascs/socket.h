@@ -20,7 +20,7 @@
 namespace ascs
 {
 
-template<typename Socket, typename Packer, typename Unpacker, typename InMsgType, typename OutMsgType,
+template<typename Socket, typename Family, typename Packer, typename Unpacker, typename InMsgType, typename OutMsgType,
 	template<typename> class InQueue, template<typename> class InContainer, template<typename> class OutQueue, template<typename> class OutContainer>
 class socket : public timer<tracked_executor>
 {
@@ -237,19 +237,19 @@ public:
 	//don't use the packer but insert into send buffer directly
 	template<typename T> bool direct_send_msg(T&& msg, bool can_overflow = false, bool prior = false)
 		{return can_overflow || shrink_send_buffer() ? do_direct_send_msg(std::forward<T>(msg), prior) : false;}
-	bool direct_send_msg(list<InMsgType>& msg_can, bool can_overflow = false, bool prior = false)
+	bool direct_send_msg(std::list<InMsgType>& msg_can, bool can_overflow = false, bool prior = false)
 		{return can_overflow || shrink_send_buffer() ? do_direct_send_msg(msg_can, prior) : false;}
 
 #ifdef ASCS_SYNC_SEND
 	//don't use the packer but insert into send buffer directly, then wait the sending to finish, unit of the duration is millisecond, 0 means wait infinitely
 	template<typename T> sync_call_result direct_sync_send_msg(T&& msg, unsigned duration = 0, bool can_overflow = false, bool prior = false)
 		{return can_overflow || shrink_send_buffer() ? do_direct_sync_send_msg(std::forward<T>(msg), duration, prior) : sync_call_result::NOT_APPLICABLE;}
-	sync_call_result direct_sync_send_msg(list<InMsgType>& msg_can, unsigned duration = 0, bool can_overflow = false, bool prior = false)
+	sync_call_result direct_sync_send_msg(std::list<InMsgType>& msg_can, unsigned duration = 0, bool can_overflow = false, bool prior = false)
 		{return can_overflow || shrink_send_buffer() ? do_direct_sync_send_msg(msg_can, duration, prior) : sync_call_result::NOT_APPLICABLE;}
 #endif
 
 #ifdef ASCS_SYNC_RECV
-	sync_call_result sync_recv_msg(list<OutMsgType>& msg_can, unsigned duration = 0) //unit of the duration is millisecond, 0 means wait infinitely
+	sync_call_result sync_recv_msg(std::list<OutMsgType>& msg_can, unsigned duration = 0) //unit of the duration is millisecond, 0 means wait infinitely
 	{
 		if (stopped())
 			return sync_call_result::NOT_APPLICABLE;
@@ -312,7 +312,7 @@ protected:
 #ifdef ASCS_SYNC_DISPATCH
 	//return positive value if handled some messages (include all messages), if some msg left behind, socket will re-dispatch them asynchronously
 	//notice: using inconstant reference is for the ability of swapping
-	virtual size_t on_msg(list<OutMsgType>& msg_can)
+	virtual size_t on_msg(std::list<OutMsgType>& msg_can)
 	{
 		//it's always thread safe in this virtual function, because it blocks message receiving
 		ascs::do_something_to_all(msg_can, [this](OutMsgType& msg) {
@@ -329,7 +329,7 @@ protected:
 	virtual size_t on_msg_handle(out_queue_type& msg_can)
 	{
 		out_container_type tmp_can;
-		msg_can.swap(tmp_can); //must be thread safe, or aovid race condition from your business logic
+		msg_can.swap(tmp_can); //must be thread safe, or avoid race condition from your business logic
 
 		ascs::do_something_to_all(tmp_can, [this](OutMsgType& msg) {
 			unified_out::debug_out(ASCS_LLF " recv(" ASCS_SF "): %s", this->id(), msg.size(), msg.data());
@@ -405,7 +405,7 @@ protected:
 		if (lowest_layer().is_open())
 		{
 			asio::error_code ec;
-			lowest_layer().shutdown(asio::ip::tcp::socket::shutdown_both, ec);
+			lowest_layer().shutdown(Family::socket::shutdown_both, ec);
 
 			stat.break_time = time(nullptr);
 		}
@@ -507,7 +507,7 @@ protected:
 		return true;
 	}
 
-	bool do_direct_send_msg(list<InMsgType>& msg_can, bool prior = false)
+	bool do_direct_send_msg(std::list<InMsgType>& msg_can, bool prior = false)
 	{
 		size_t size_in_byte = 0;
 		in_container_type temp_buffer;
@@ -539,7 +539,7 @@ protected:
 		return 0 == duration || std::future_status::ready == f.wait_for(std::chrono::milliseconds(duration)) ? f.get() : sync_call_result::TIMEOUT;
 	}
 
-	sync_call_result do_direct_sync_send_msg(list<InMsgType>& msg_can, unsigned duration = 0, bool prior = false)
+	sync_call_result do_direct_sync_send_msg(std::list<InMsgType>& msg_can, unsigned duration = 0, bool prior = false)
 	{
 		if (stopped())
 			return sync_call_result::NOT_APPLICABLE;
@@ -704,7 +704,7 @@ private:
 
 protected:
 	struct statistic stat;
-	list<OutMsgType> temp_msg_can;
+	std::list<OutMsgType> temp_msg_can;
 
 	in_queue_type send_buffer;
 	volatile bool sending;
@@ -746,17 +746,17 @@ private:
 	unsigned msg_resuming_interval_, msg_handling_interval_;
 };
 
-template<typename Socket, typename Packer, typename Unpacker,
+template<typename Socket, typename Family, typename Packer, typename Unpacker,
 	template<typename> class InQueue, template<typename> class InContainer, template<typename> class OutQueue, template<typename> class OutContainer>
-using socket2 = socket<Socket, Packer, Unpacker, typename Packer::msg_type, typename Unpacker::msg_type, InQueue, InContainer, OutQueue, OutContainer>;
+using socket2 = socket<Socket, Family, Packer, Unpacker, typename Packer::msg_type, typename Unpacker::msg_type, InQueue, InContainer, OutQueue, OutContainer>;
 
-template<typename Socket, typename Packer, typename Unpacker, template<typename> class InMsgWrapper, template<typename> class OutMsgWrapper,
+template<typename Socket, typename Family, typename Packer, typename Unpacker, template<typename, typename> class InMsgWrapper, template<typename, typename> class OutMsgWrapper,
 	template<typename> class InQueue, template<typename> class InContainer, template<typename> class OutQueue, template<typename> class OutContainer>
-using socket3 = socket<Socket, Packer, Unpacker, InMsgWrapper<typename Packer::msg_type>, OutMsgWrapper<typename Unpacker::msg_type>, InQueue, InContainer, OutQueue, OutContainer>;
+using socket3 = socket<Socket, Family, Packer, Unpacker, InMsgWrapper<typename Packer::msg_type, Family>, OutMsgWrapper<typename Unpacker::msg_type, Family>, InQueue, InContainer, OutQueue, OutContainer>;
 
-template<typename Socket, typename Packer, typename Unpacker, template<typename> class MsgWrapper,
+template<typename Socket, typename Family, typename Packer, typename Unpacker, template<typename, typename> class MsgWrapper,
 	template<typename> class InQueue, template<typename> class InContainer, template<typename> class OutQueue, template<typename> class OutContainer>
-using socket4 = socket3<Socket, Packer, Unpacker, MsgWrapper, MsgWrapper, InQueue, InContainer, OutQueue, OutContainer>;
+using socket4 = socket3<Socket, Family, Packer, Unpacker, MsgWrapper, MsgWrapper, InQueue, InContainer, OutQueue, OutContainer>;
 
 } //namespace
 

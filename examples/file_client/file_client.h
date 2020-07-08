@@ -66,7 +66,7 @@ public:
 protected:
 	//msg handling
 #ifdef ASCS_SYNC_DISPATCH
-	virtual size_t on_msg(list<out_msg_type>& msg_can)
+	virtual size_t on_msg(std::list<out_msg_type>& msg_can)
 	{
 		//ascs will never append empty message automatically for on_msg (if no message nor error returned from the unpacker) even with
 		// macro ASCS_PASSIVE_RECV, but will do it for on_msg_handle (with macro ASCS_PASSIVE_RECV), please note.
@@ -97,8 +97,8 @@ protected:
 
 		recv_msg(); //we always handled all messages, so calling recv_msg() at here is very reasonable.
 		return 1;
-		//if we indeed handled some messages, do return 1
-		//if we handled nothing, return 1 is also okey but will very slightly impact performance, return 0 is suggested
+		//if we indeed handled some messages, do return 1, else, return 0
+		//if we handled nothing, but want to re-dispatch messages immediately, return 1
 	}
 #else
 	virtual bool on_msg_handle(out_msg_type& msg) {handle_msg(msg); if (0 == get_pending_recv_msg_size()) recv_msg(); return true;}

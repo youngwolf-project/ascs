@@ -20,6 +20,8 @@ release debug clean :
 	cd concurrent_server && ${ASCS_MAKE}
 	cd concurrent_client && ${ASCS_MAKE}
 	cd socket_management && ${ASCS_MAKE}
+	cd unix_socket && ${ASCS_MAKE}
 	cd udp_test && ${ASCS_MAKE}
+	cd unix_udp_test && ${ASCS_MAKE}
 	cd ssl_test && ${ASCS_MAKE}
 

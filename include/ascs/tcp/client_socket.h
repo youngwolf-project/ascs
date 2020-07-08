@@ -17,24 +17,24 @@
 
 namespace ascs { namespace tcp {
 
-template <typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = asio::ip::tcp::socket,
+template <typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = asio::ip::tcp::socket, typename Family = asio::ip::tcp,
 	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
-class client_socket_base : public socket_base<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer>
+class generic_client_socket : public socket_base<Socket, Family, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer>
 {
 private:
-	typedef socket_base<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer> super;
+	typedef socket_base<Socket, Family, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer> super;
 
 public:
 	static const typename super::tid TIMER_BEGIN = super::TIMER_END;
 	static const typename super::tid TIMER_CONNECT = TIMER_BEGIN;
 	static const typename super::tid TIMER_END = TIMER_BEGIN + 5;
 
-	client_socket_base(asio::io_context& io_context_) : super(io_context_) {first_init();}
-	template<typename Arg> client_socket_base(asio::io_context& io_context_, Arg&& arg) : super(io_context_, std::forward<Arg>(arg)) {first_init();}
+	generic_client_socket(asio::io_context& io_context_) : super(io_context_) {first_init();}
+	template<typename Arg> generic_client_socket(asio::io_context& io_context_, Arg&& arg) : super(io_context_, std::forward<Arg>(arg)) {first_init();}
 
-	client_socket_base(Matrix& matrix_) : super(matrix_.get_service_pump()) {first_init(&matrix_);}
-	template<typename Arg> client_socket_base(Matrix& matrix_, Arg&& arg) : super(matrix_.get_service_pump(), std::forward<Arg>(arg)) {first_init(&matrix_);}
+	generic_client_socket(Matrix& matrix_) : super(matrix_.get_service_pump()) {first_init(&matrix_);}
+	template<typename Arg> generic_client_socket(Matrix& matrix_, Arg&& arg) : super(matrix_.get_service_pump(), std::forward<Arg>(arg)) {first_init(&matrix_);}
 
 	virtual const char* type_name() const {return "TCP (client endpoint)";}
 	virtual int type_id() const {return 1;}
@@ -42,9 +42,8 @@ public:
 	virtual void reset() {need_reconnect = ASCS_RECONNECT; super::reset();}
 
 	bool set_server_addr(unsigned short port, const std::string& ip = ASCS_SERVER_IP) {return set_addr(server_addr, port, ip);}
-	const asio::ip::tcp::endpoint& get_server_addr() const {return server_addr;}
-	bool set_local_addr(unsigned short port, const std::string& ip = std::string()) {return set_addr(local_addr, port, ip);}
-	const asio::ip::tcp::endpoint& get_local_addr() const {return local_addr;}
+	bool set_server_addr(const std::string& file_name) {server_addr = typename Family::endpoint(file_name); return true;}
+	const typename Family::endpoint& get_server_addr() const {return server_addr;}
 
 	//if you don't want to reconnect to the server after link broken, define macro ASCS_RECONNECT as false, call close_reconnect() in on_connect()
 	// or rewrite after_close() virtual function and do nothing in it.
@@ -55,7 +54,7 @@ public:
 	void open_reconnect() {need_reconnect = true;}
 	void close_reconnect() {need_reconnect = false;}
 
-	//if the connection is broken unexpectedly, client_socket_base will try to reconnect to the server automatically (if need_reconnect is true).
+	//if the connection is broken unexpectedly, generic_client_socket will try to reconnect to the server automatically (if need_reconnect is true).
 	void disconnect(bool reconnect = false) {force_shutdown(reconnect);}
 	void force_shutdown(bool reconnect = false)
 	{
@@ -89,10 +88,34 @@ public:
 
 protected:
 	//helper function, just call it in constructor
-	void first_init(Matrix* matrix_ = nullptr) {need_reconnect = ASCS_RECONNECT; matrix = matrix_; set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
+	void first_init(Matrix* matrix_ = nullptr) {need_reconnect = ASCS_RECONNECT; matrix = matrix_;}
 
 	Matrix* get_matrix() {return matrix;}
 	const Matrix* get_matrix() const {return matrix;}
+
+	bool set_addr(asio::ip::tcp::endpoint& endpoint, unsigned short port, const std::string& ip)
+	{
+		if (ip.empty())
+			endpoint = asio::ip::tcp::endpoint(ASCS_TCP_DEFAULT_IP_VERSION, port);
+		else
+		{
+			asio::error_code ec;
+#if ASIO_VERSION >= 101100
+			auto addr = asio::ip::make_address(ip, ec); assert(!ec);
+#else
+			auto addr = asio::ip::address::from_string(ip, ec); assert(!ec);
+#endif
+			if (ec)
+			{
+				unified_out::error_out("invalid IP address %s.", ip.data());
+				return false;
+			}
+
+			endpoint = asio::ip::tcp::endpoint(addr, port);
+		}
+
+		return true;
+	}
 
 	virtual bool do_start() //connect
 	{
@@ -108,7 +131,7 @@ protected:
 			prepare_next_reconnect(ec);
 	}
 
-	//after how much time (ms), client_socket_base will try to reconnect the server, negative value means give up.
+	//after how much time (ms), generic_client_socket will try to reconnect the server, negative value means give up.
 	virtual int prepare_reconnect(const asio::error_code& ec) {return ASCS_RECONNECT_INTERVAL;}
 	virtual void on_connect() {unified_out::info_out(ASCS_LLF " connecting success.", this->id());}
 	virtual void on_unpack_error() {unified_out::info_out(ASCS_LLF " can not unpack msg.", this->id()); this->unpacker()->dump_left_data(); force_shutdown(need_reconnect);}
@@ -134,32 +157,15 @@ protected:
 	//if you want to control the retry times and delay time after reconnecting failed, rewrite prepare_reconnect virtual function.
 	virtual void after_close() {if (need_reconnect) this->start();}
 
+	virtual bool bind() {return true;}
+
 private:
 	bool connect()
 	{
-		auto& lowest_object = this->lowest_layer();
-		if (0 != local_addr.port() || !local_addr.address().is_unspecified())
-		{
-			asio::error_code ec;
-			if (!lowest_object.is_open()) //user maybe has opened this socket (to set options for example)
-			{
-				lowest_object.open(local_addr.protocol(), ec); assert(!ec);
-				if (ec)
-				{
-					unified_out::error_out("cannot create socket: %s", ec.message().data());
-					return false;
-				}
-			}
+		if (!bind())
+			return false;
 
-			lowest_object.bind(local_addr, ec);
-			if (ec && asio::error::invalid_argument != ec)
-			{
-				unified_out::error_out("cannot bind socket: %s", ec.message().data());
-				return false;
-			}
-		}
-
-		lowest_object.async_connect(server_addr, this->make_handler_error([this](const asio::error_code& ec) {this->connect_handler(ec);}));
+		this->lowest_layer().async_connect(server_addr, this->make_handler_error([this](const asio::error_code& ec) {this->connect_handler(ec);}));
 		return true;
 	}
 
@@ -187,37 +193,70 @@ private:
 		return false;
 	}
 
-	bool set_addr(asio::ip::tcp::endpoint& endpoint, unsigned short port, const std::string& ip)
+private:
+	bool need_reconnect;
+	typename Family::endpoint server_addr;
+
+	Matrix* matrix;
+};
+
+template <typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = asio::ip::tcp::socket,
+	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
+	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
+class client_socket_base : public generic_client_socket<Packer, Unpacker, Matrix, Socket, asio::ip::tcp, InQueue, InContainer, OutQueue, OutContainer>
+{
+private:
+	typedef generic_client_socket<Packer, Unpacker, Matrix, Socket, asio::ip::tcp, InQueue, InContainer, OutQueue, OutContainer> super;
+
+public:
+	client_socket_base(asio::io_context& io_context_) : super(io_context_) {}
+	template<typename Arg> client_socket_base(asio::io_context& io_context_, Arg&& arg) : super(io_context_, std::forward<Arg>(arg)) {this->set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
+
+	client_socket_base(Matrix& matrix_) : super(matrix_.get_service_pump()) {}
+	template<typename Arg> client_socket_base(Matrix& matrix_, Arg&& arg) : super(matrix_.get_service_pump(), std::forward<Arg>(arg)) {this->set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
+
+	bool set_local_addr(unsigned short port, const std::string& ip = std::string()) {return super::set_addr(local_addr, port, ip);}
+	const asio::ip::tcp::endpoint& get_local_addr() const {return local_addr;}
+
+protected:
+	virtual bool bind()
 	{
-		if (ip.empty())
-			endpoint = asio::ip::tcp::endpoint(ASCS_TCP_DEFAULT_IP_VERSION, port);
-		else
+		if (0 != local_addr.port() || !local_addr.address().is_unspecified())
 		{
+			auto& lowest_object = this->lowest_layer();
+
 			asio::error_code ec;
-#if ASIO_VERSION >= 101100
-			auto addr = asio::ip::make_address(ip, ec); assert(!ec);
-#else
-			auto addr = asio::ip::address::from_string(ip, ec); assert(!ec);
-#endif
-			if (ec)
+			if (!lowest_object.is_open()) //user maybe has opened this socket (to set options for example)
 			{
-				unified_out::error_out("invalid IP address %s.", ip.data());
-				return false;
+				lowest_object.open(local_addr.protocol(), ec); assert(!ec);
+				if (ec)
+				{
+					unified_out::error_out("cannot create socket: %s", ec.message().data());
+					return false;
+				}
 			}
 
-			endpoint = asio::ip::tcp::endpoint(addr, port);
+			lowest_object.bind(local_addr, ec);
+			if (ec && asio::error::invalid_argument != ec)
+			{
+				unified_out::error_out("cannot bind socket: %s", ec.message().data());
+				return false;
+			}
 		}
 
 		return true;
 	}
 
 private:
-	bool need_reconnect;
-	asio::ip::tcp::endpoint server_addr;
 	asio::ip::tcp::endpoint local_addr;
-
-	Matrix* matrix;
 };
+
+#ifdef ASIO_HAS_LOCAL_SOCKETS
+template <typename Packer, typename Unpacker, typename Matrix = i_matrix,
+	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
+	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
+using unix_client_socket_base = generic_client_socket<Packer, Unpacker, Matrix, asio::local::stream_protocol::socket, asio::local::stream_protocol, InQueue, InContainer, OutQueue, OutContainer>;
+#endif
 
 }} //namespace
 

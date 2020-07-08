@@ -34,6 +34,12 @@ typedef ascs::udp::single_socket_service_base<socket> single_socket_service;
 typedef ascs::udp::multi_socket_service_base<socket> multi_socket_service;
 typedef multi_socket_service socket_service;
 
+#ifdef ASIO_HAS_LOCAL_SOCKETS
+typedef ascs::udp::unix_socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UDP_UNPACKER> unix_socket;
+typedef ascs::udp::single_socket_service_base<unix_socket> unix_single_socket_service;
+typedef ascs::udp::multi_socket_service_base<unix_socket> unix_multi_socket_service;
+#endif
+
 }}} //namespace
 
 #endif /* _ASCS_EXT_UDP_H_ */

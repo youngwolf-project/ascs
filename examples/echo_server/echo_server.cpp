@@ -100,7 +100,7 @@ protected:
 #ifdef ASCS_SYNC_DISPATCH //do not open this feature
 	//do not hold msg_can for further using, return from on_msg as quickly as possible
 	//access msg_can freely within this callback, it's always thread safe.
-	virtual size_t on_msg(list<out_msg_type>& msg_can)
+	virtual size_t on_msg(std::list<out_msg_type>& msg_can)
 	{
 		if (!is_send_buffer_available())
 			return 0;
@@ -135,8 +135,8 @@ protected:
 		//following statement can avoid one memory replication if the type of out_msg_type and in_msg_type are identical.
 		ascs::do_something_to_all(tmp_can, [this](out_msg_type& msg) {this->send_msg(std::move(msg), true);});
 		return 1;
-		//if we indeed handled some messages, do return 1
-		//if we handled nothing, return 1 is also okey but will very slightly impact performance, return 0 is suggested
+		//if we indeed handled some messages, do return 1, else, return 0
+		//if we handled nothing, but want to re-dispatch messages immediately, return 1
 	}
 #else
 	//following statement can avoid one memory replication if the type of out_msg_type and in_msg_type are identical.
@@ -156,13 +156,13 @@ protected:
 };
 
 #if ASCS_HEARTBEAT_INTERVAL > 0
-typedef server_socket_base<packer, unpacker> normal_socket;
+typedef server_socket_base<ext::packer, ext::unpacker> normal_socket;
 #else
 //demonstrate how to open heartbeat function without defining macro ASCS_HEARTBEAT_INTERVAL
-class normal_socket : public server_socket_base<packer, unpacker>
+class normal_socket : public server_socket_base<ext::packer, ext::unpacker>
 {
 public:
-	normal_socket(i_server& server_) : server_socket_base(server_) {}
+	normal_socket(i_server& server_) : server_socket_base<ext::packer, ext::unpacker>(server_) {}
 
 protected:
 	//demo client needs heartbeat (macro ASCS_HEARTBEAT_INTERVAL been defined), please note that the interval (here is 5) must be equal to
@@ -182,26 +182,29 @@ protected:
 	virtual bool on_accept(object_ctype& socket_ptr) {stop_listen(); return true;}
 };
 
-class short_connection : public server_socket_base<packer, unpacker>
+class short_connection : public server_socket_base<ext::packer, ext::unpacker>
 {
+private:
+	typedef server_socket_base<ext::packer, ext::unpacker> super;
+
 public:
-	short_connection(i_server& server_) : server_socket_base(server_) {}
+	short_connection(i_server& server_) : super(server_) {}
 
 protected:
 	//msg handling
 #ifdef ASCS_SYNC_DISPATCH
 	//do not hold msg_can for further using, return from on_msg as quickly as possible
 	//access msg_can freely within this callback, it's always thread safe.
-	virtual size_t on_msg(list<out_msg_type>& msg_can) {auto re = server_socket_base::on_msg(msg_can); force_shutdown(); return re;}
+	virtual size_t on_msg(std::list<out_msg_type>& msg_can) {auto re = super::on_msg(msg_can); force_shutdown(); return re;}
 #endif
 
 #ifdef ASCS_DISPATCH_BATCH_MSG
 	//do not hold msg_can for further using, access msg_can and return from on_msg_handle as quickly as possible
 	//can only access msg_can via functions that marked as 'thread safe', if you used non-lock queue, its your responsibility to guarantee
 	// that new messages will not come until we returned from this callback (for example, pingpong test).
-	virtual size_t on_msg_handle(out_queue_type& msg_can) {auto re = server_socket_base::on_msg_handle(msg_can); force_shutdown(); return re;}
+	virtual size_t on_msg_handle(out_queue_type& msg_can) {auto re = super::on_msg_handle(msg_can); force_shutdown(); return re;}
 #else
-	virtual bool on_msg_handle(out_msg_type& msg) {auto re = server_socket_base::on_msg_handle(msg); force_shutdown(); return re;}
+	virtual bool on_msg_handle(out_msg_type& msg) {auto re = super::on_msg_handle(msg); force_shutdown(); return re;}
 #endif
 	//msg handling end
 };
