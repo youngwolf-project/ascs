@@ -26,6 +26,11 @@ int main(int argc, const char* argv[])
 	server.set_server_addr(UNIX_SOCKET_NAME);
 	client.set_server_addr(UNIX_SOCKET_NAME);
 
+	//demonstrate how to set/get single client's id, and how to set/get i_service's id.
+	//we need specific conversion for i_service because it has the same function name as single client does.
+	client.id(10000);
+	std::cout << client.id() << " : " << ((service_pump::i_service&) client).id() << std::endl;
+
 	sp.start_service();
 	while(sp.is_running())
 	{

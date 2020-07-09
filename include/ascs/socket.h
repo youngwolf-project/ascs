@@ -566,7 +566,8 @@ private:
 
 	//please do not change id at runtime via the following function, except this socket is not managed by object_pool,
 	//it should only be used by object_pool when reusing or creating new socket.
-	template<typename Object> friend class object_pool;
+	template<typename> friend class object_pool;
+	template<typename> friend class single_socket_service;
 	void id(uint_fast64_t id) {_id = id;}
 
 #ifdef ASCS_SYNC_RECV
