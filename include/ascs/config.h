@@ -680,7 +680,7 @@
  * FIX:
  * Fix race condition during call acceptor::async_accept concurrently.
  * Fix possibility of memory leaks for unique_buffer.
- * Supplement packer2's static functon -- get_max_msg_size().
+ * Supplement packer2's static function -- get_max_msg_size().
  *
  * ENHANCEMENTS:
  * Try parsing messages even errors occurred.

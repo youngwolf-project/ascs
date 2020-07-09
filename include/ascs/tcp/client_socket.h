@@ -30,6 +30,30 @@ public:
 	static const typename super::tid TIMER_CONNECT = TIMER_BEGIN;
 	static const typename super::tid TIMER_END = TIMER_BEGIN + 5;
 
+	static bool set_addr(asio::ip::tcp::endpoint& endpoint, unsigned short port, const std::string& ip)
+	{
+		if (ip.empty())
+			endpoint = asio::ip::tcp::endpoint(ASCS_TCP_DEFAULT_IP_VERSION, port);
+		else
+		{
+			asio::error_code ec;
+#if ASIO_VERSION >= 101100
+			auto addr = asio::ip::make_address(ip, ec); assert(!ec);
+#else
+			auto addr = asio::ip::address::from_string(ip, ec); assert(!ec);
+#endif
+			if (ec)
+			{
+				unified_out::error_out("invalid IP address %s.", ip.data());
+				return false;
+			}
+
+			endpoint = asio::ip::tcp::endpoint(addr, port);
+		}
+
+		return true;
+	}
+
 	generic_client_socket(asio::io_context& io_context_) : super(io_context_) {first_init();}
 	template<typename Arg> generic_client_socket(asio::io_context& io_context_, Arg&& arg) : super(io_context_, std::forward<Arg>(arg)) {first_init();}
 
@@ -92,30 +116,6 @@ protected:
 
 	Matrix* get_matrix() {return matrix;}
 	const Matrix* get_matrix() const {return matrix;}
-
-	bool set_addr(asio::ip::tcp::endpoint& endpoint, unsigned short port, const std::string& ip)
-	{
-		if (ip.empty())
-			endpoint = asio::ip::tcp::endpoint(ASCS_TCP_DEFAULT_IP_VERSION, port);
-		else
-		{
-			asio::error_code ec;
-#if ASIO_VERSION >= 101100
-			auto addr = asio::ip::make_address(ip, ec); assert(!ec);
-#else
-			auto addr = asio::ip::address::from_string(ip, ec); assert(!ec);
-#endif
-			if (ec)
-			{
-				unified_out::error_out("invalid IP address %s.", ip.data());
-				return false;
-			}
-
-			endpoint = asio::ip::tcp::endpoint(addr, port);
-		}
-
-		return true;
-	}
 
 	virtual bool do_start() //connect
 	{
@@ -210,10 +210,11 @@ private:
 
 public:
 	client_socket_base(asio::io_context& io_context_) : super(io_context_) {}
-	template<typename Arg> client_socket_base(asio::io_context& io_context_, Arg&& arg) : super(io_context_, std::forward<Arg>(arg)) {this->set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
+	template<typename Arg>
+	client_socket_base(asio::io_context& io_context_, Arg&& arg) : super(io_context_, std::forward<Arg>(arg)) {this->set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
 
-	client_socket_base(Matrix& matrix_) : super(matrix_.get_service_pump()) {}
-	template<typename Arg> client_socket_base(Matrix& matrix_, Arg&& arg) : super(matrix_.get_service_pump(), std::forward<Arg>(arg)) {this->set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
+	client_socket_base(Matrix& matrix_) : super(matrix_) {}
+	template<typename Arg> client_socket_base(Matrix& matrix_, Arg&& arg) : super(matrix_, std::forward<Arg>(arg)) {this->set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
 
 	bool set_local_addr(unsigned short port, const std::string& ip = std::string()) {return super::set_addr(local_addr, port, ip);}
 	const asio::ip::tcp::endpoint& get_local_addr() const {return local_addr;}

@@ -21,10 +21,14 @@ int main(int argc, const char* argv[])
 
 	unix_server server(sp);
 	unix_single_client client(sp);
+	//unix_multi_client client(sp);
 
 	unlink(UNIX_SOCKET_NAME);
 	server.set_server_addr(UNIX_SOCKET_NAME);
 	client.set_server_addr(UNIX_SOCKET_NAME);
+	//auto socket_ptr = client.create_object();
+	//socket_ptr->set_server_addr(UNIX_SOCKET_NAME);
+	//client.add_socket(socket_ptr);
 
 	//demonstrate how to set/get single client's id, and how to set/get i_service's id.
 	//we need specific conversion for i_service because it has the same function name as single client does.
@@ -43,6 +47,7 @@ int main(int argc, const char* argv[])
 		else
 		{
 			client.send_msg("client says: " + str);
+			//client.broadcast_msg("client says: " + str);
 			server.broadcast_msg("server says: " + str);
 		}
 	}

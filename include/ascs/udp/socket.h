@@ -32,6 +32,30 @@ private:
 	typedef socket4<Socket, Family, Packer, Unpacker, udp_msg, InQueue, InContainer, OutQueue, OutContainer> super;
 
 public:
+	static bool set_addr(asio::ip::udp::endpoint& endpoint, unsigned short port, const std::string& ip)
+	{
+		if (ip.empty())
+			endpoint = asio::ip::udp::endpoint(ASCS_UDP_DEFAULT_IP_VERSION, port);
+		else
+		{
+			asio::error_code ec;
+#if ASIO_VERSION >= 101100
+			auto addr = asio::ip::make_address(ip, ec); assert(!ec);
+#else
+			auto addr = asio::ip::address::from_string(ip, ec); assert(!ec);
+#endif
+			if (ec)
+			{
+				unified_out::error_out("invalid IP address %s.", ip.data());
+				return false;
+			}
+
+			endpoint = asio::ip::udp::endpoint(addr, port);
+		}
+
+		return true;
+	}
+
 	generic_socket(asio::io_context& io_context_) : super(io_context_), has_bound(false), matrix(nullptr) {}
 	generic_socket(Matrix& matrix_) : super(matrix_.get_service_pump()), has_bound(false), matrix(&matrix_) {}
 
@@ -57,7 +81,7 @@ public:
 		super::reset();
 	}
 
-	bool set_local_addr(unsigned short port, const std::string& ip = std::string()) {return this->set_addr(local_addr, port, ip);}
+	bool set_local_addr(unsigned short port, const std::string& ip = std::string()) {return set_addr(local_addr, port, ip);}
 	bool set_local_addr(const std::string& file_name) {local_addr = typename Family::endpoint(file_name); return true;}
 	const typename Family::endpoint& get_local_addr() const {return local_addr;}
 
@@ -141,30 +165,6 @@ public:
 protected:
 	Matrix* get_matrix() {return matrix;}
 	const Matrix* get_matrix() const {return matrix;}
-
-	bool set_addr(asio::ip::udp::endpoint& endpoint, unsigned short port, const std::string& ip)
-	{
-		if (ip.empty())
-			endpoint = asio::ip::udp::endpoint(ASCS_UDP_DEFAULT_IP_VERSION, port);
-		else
-		{
-			asio::error_code ec;
-#if ASIO_VERSION >= 101100
-			auto addr = asio::ip::make_address(ip, ec); assert(!ec);
-#else
-			auto addr = asio::ip::address::from_string(ip, ec); assert(!ec);
-#endif
-			if (ec)
-			{
-				unified_out::error_out("invalid IP address %s.", ip.data());
-				return false;
-			}
-
-			endpoint = asio::ip::udp::endpoint(addr, port);
-		}
-
-		return true;
-	}
 
 	virtual bool bind(const typename Family::endpoint& local_addr) {return true;}
 
