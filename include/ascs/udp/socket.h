@@ -90,7 +90,7 @@ public:
 	const typename Family::endpoint& get_peer_addr() const {return peer_addr;}
 
 	void disconnect() {force_shutdown();}
-	virtual void force_shutdown() {shutdown();}
+	void force_shutdown() {show_info("link:", "been shutting down."); this->dispatch_strand(rw_strand, [this]() {this->shutdown();});}
 	void graceful_shutdown() {force_shutdown();}
 
 	std::string endpoint_to_string(const asio::ip::udp::endpoint& ep) const {return ep.address().to_string() + ':' + std::to_string(ep.port());}
@@ -166,7 +166,7 @@ protected:
 	Matrix* get_matrix() {return matrix;}
 	const Matrix* get_matrix() const {return matrix;}
 
-	void shutdown(bool use_close = false) {show_info("link:", "been shutting down."); this->dispatch_strand(rw_strand, ASCS_COPY_ALL_AND_THIS() {this->close(use_close);});}
+	virtual void shutdown() {this->close();}
 
 	virtual bool bind(const typename Family::endpoint& local_addr) {return true;}
 
@@ -218,7 +218,6 @@ protected:
 #endif
 
 private:
-	using super::close;
 	using super::handle_error;
 	using super::handle_msg;
 	using super::do_direct_send_msg;
@@ -405,7 +404,7 @@ public:
 	unix_socket_base(asio::io_context& io_context_) : super(io_context_) {}
 	unix_socket_base(Matrix& matrix_) : super(matrix_) {}
 
-	virtual void force_shutdown() {this->shutdown(true);}
+	virtual void shutdown() {this->close(true);}
 
 protected:
 	virtual bool bind(const asio::local::datagram_protocol::endpoint& local_addr)
