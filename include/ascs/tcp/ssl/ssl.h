@@ -168,7 +168,7 @@ private:
 	typedef ascs::object_pool<Object> super;
 
 public:
-	object_pool(service_pump& service_pump_, asio::ssl::context::method m) : super(service_pump_), ctx(m) {}
+	object_pool(service_pump& service_pump_, asio::ssl::context::method&& m) : super(service_pump_), ctx(std::forward<asio::ssl::context::method>(m)) {}
 	asio::ssl::context& context() {return ctx;}
 
 protected:
