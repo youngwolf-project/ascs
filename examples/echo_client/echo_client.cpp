@@ -111,7 +111,7 @@ protected:
 #ifdef ASCS_SYNC_DISPATCH
 	//do not hold msg_can for further using, return from on_msg as quickly as possible
 	//access msg_can freely within this callback, it's always thread safe.
-	virtual size_t on_msg(list<out_msg_type>& msg_can)
+	virtual size_t on_msg(std::list<out_msg_type>& msg_can)
 	{
 		ascs::do_something_to_all(msg_can, [this](out_msg_type& msg) {this->handle_msg(msg);});
 		msg_can.clear(); //if we left behind some messages in msg_can, they will be dispatched via on_msg_handle asynchronously, which means it's
@@ -135,8 +135,8 @@ protected:
 
 		ascs::do_something_to_all(tmp_can, [this](out_msg_type& msg) {this->handle_msg(msg);});
 		return 1;
-		//if we indeed handled some messages, do return 1
-		//if we handled nothing, return 1 is also okey but will very slightly impact performance, return 0 is suggested
+		//if we indeed handled some messages, do return 1, else, return 0
+		//if we handled nothing, but want to re-dispatch messages immediately, return 1
 	}
 #else
 	virtual bool on_msg_handle(out_msg_type& msg) {handle_msg(msg); return true;}

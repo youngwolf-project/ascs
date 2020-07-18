@@ -17,9 +17,9 @@
 
 namespace ascs { namespace tcp {
 
-template <typename Socket, typename Packer, typename Unpacker,
+template <typename Socket, typename Family, typename Packer, typename Unpacker,
 	template<typename> class InQueue, template<typename> class InContainer, template<typename> class OutQueue, template<typename> class OutContainer>
-class socket_base : public socket2<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer>
+class socket_base : public socket2<Socket, Family, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer>
 {
 public:
 	typedef typename Packer::msg_type in_msg_type;
@@ -28,7 +28,7 @@ public:
 	typedef typename Unpacker::msg_ctype out_msg_ctype;
 
 private:
-	typedef socket2<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer> super;
+	typedef socket2<Socket, Family, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer> super;
 
 protected:
 	enum link_status {CONNECTED, FORCE_SHUTTING_DOWN, GRACEFUL_SHUTTING_DOWN, BROKEN};
@@ -64,6 +64,11 @@ public:
 	bool is_connected() const {return link_status::CONNECTED == status;}
 	bool is_shutting_down() const {return link_status::FORCE_SHUTTING_DOWN == status || link_status::GRACEFUL_SHUTTING_DOWN == status;}
 
+	std::string endpoint_to_string(const asio::ip::tcp::endpoint& ep) const {return ep.address().to_string() + ':' + std::to_string(ep.port());}
+#ifdef ASIO_HAS_LOCAL_SOCKETS
+	std::string endpoint_to_string(const asio::local::stream_protocol::endpoint& ep) const {return ep.path();}
+#endif
+
 	void show_info(const char* head = nullptr, const char* tail = nullptr) const
 	{
 		asio::error_code ec;
@@ -72,9 +77,8 @@ public:
 		{
 			auto remote_ep = this->lowest_layer().remote_endpoint(ec);
 			if (!ec)
-				unified_out::info_out(ASCS_LLF " %s (%s:%hu %s:%hu) %s", this->id(), nullptr == head ? "" : head,
-					local_ep.address().to_string().data(), local_ep.port(),
-					remote_ep.address().to_string().data(), remote_ep.port(), nullptr == tail ? "" : tail);
+				unified_out::info_out(ASCS_LLF " %s (%s %s) %s", this->id(), nullptr == head ? "" : head,
+					endpoint_to_string(local_ep).data(), endpoint_to_string(remote_ep).data(), nullptr == tail ? "" : tail);
 		}
 	}
 
@@ -86,9 +90,8 @@ public:
 		{
 			auto remote_ep = this->lowest_layer().remote_endpoint(ec2);
 			if (!ec2)
-				unified_out::info_out(ASCS_LLF " %s (%s:%hu %s:%hu) %s (%d %s)", this->id(), nullptr == head ? "" : head,
-					local_ep.address().to_string().data(), local_ep.port(),
-					remote_ep.address().to_string().data(), remote_ep.port(), nullptr == tail ? "" : tail, ec.value(), ec.message().data());
+				unified_out::info_out(ASCS_LLF " %s (%s %s) %s (%d %s)", this->id(), nullptr == head ? "" : head,
+					endpoint_to_string(local_ep).data(), endpoint_to_string(remote_ep).data(), nullptr == tail ? "" : tail, ec.value(), ec.message().data());
 		}
 	}
 
@@ -173,7 +176,7 @@ protected:
 			status = link_status::GRACEFUL_SHUTTING_DOWN;
 
 			asio::error_code ec;
-			this->lowest_layer().shutdown(asio::ip::tcp::socket::shutdown_send, ec);
+			this->lowest_layer().shutdown(Family::socket::shutdown_send, ec);
 			if (ec) //graceful shutdown is impossible
 				shutdown();
 			else if (!sync)

@@ -41,6 +41,16 @@ typedef ascs::tcp::server_socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UNPACKER
 template<typename Server = ascs::tcp::i_server> using server_socket2 = ascs::tcp::server_socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UNPACKER, Server>;
 typedef ascs::tcp::server_base<server_socket> server;
 
+#ifdef ASIO_HAS_LOCAL_SOCKETS
+typedef ascs::tcp::unix_client_socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UNPACKER> unix_client_socket;
+typedef ascs::tcp::single_client_base<unix_client_socket> unix_single_client;
+typedef ascs::tcp::multi_client_base<unix_client_socket> unix_multi_client;
+
+typedef ascs::tcp::unix_server_socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UNPACKER> unix_server_socket;
+template<typename Server = ascs::tcp::i_server> using unix_server_socket2 = ascs::tcp::unix_server_socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UNPACKER, Server>;
+typedef ascs::tcp::unix_server_base<unix_server_socket> unix_server;
+#endif
+
 }}} //namespace
 
 #endif /* _ASCS_EXT_TCP_H_ */

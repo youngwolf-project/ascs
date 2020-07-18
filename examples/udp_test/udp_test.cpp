@@ -27,7 +27,7 @@ using namespace ascs::ext::udp;
 std::thread create_sync_recv_thread(single_socket_service& service)
 {
 	return std::thread([&service]() {
-		ascs::list<single_socket_service::out_msg_type> msg_can;
+		std::list<single_socket_service::out_msg_type> msg_can;
 		auto re = ascs::sync_call_result::SUCCESS;
 		do
 		{

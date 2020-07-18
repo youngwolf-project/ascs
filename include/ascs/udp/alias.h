@@ -17,7 +17,7 @@
 
 namespace ascs { namespace udp {
 
-template<typename Socket, typename Pool = object_pool<Socket>> using service_base = multi_service_base<Socket, Pool>;
+template<typename Socket, typename Pool = object_pool<Socket>, typename Matrix = i_matrix> using service_base = multi_socket_service_base<Socket, Pool, Matrix>;
 
 }} //namespace
 

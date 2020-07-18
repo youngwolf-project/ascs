@@ -17,18 +17,17 @@
 
 namespace ascs { namespace tcp {
 
-template<typename Socket, typename Pool = object_pool<Socket>, typename Server = i_server>
-class server_base : public Server, public Pool
+template<typename Socket, typename Family = asio::ip::tcp, typename Pool = object_pool<Socket>, typename Server = i_server>
+class generic_server : public Server, public Pool
 {
 public:
-	server_base(service_pump& service_pump_) : Pool(service_pump_), acceptor(service_pump_) {set_server_addr(ASCS_SERVER_PORT);}
-	template<typename Arg>
-	server_base(service_pump& service_pump_, Arg&& arg) : Pool(service_pump_, std::forward<Arg>(arg)), acceptor(service_pump_) {set_server_addr(ASCS_SERVER_PORT);}
+	generic_server(service_pump& service_pump_) : Pool(service_pump_), acceptor(service_pump_) {}
+	template<typename Arg> generic_server(service_pump& service_pump_, Arg&& arg) : Pool(service_pump_, std::forward<Arg>(arg)), acceptor(service_pump_) {}
 
 	bool set_server_addr(unsigned short port, const std::string& ip = std::string())
 	{
 		if (ip.empty())
-			server_addr = asio::ip::tcp::endpoint(ASCS_TCP_DEFAULT_IP_VERSION, port);
+			server_addr = typename Family::endpoint(ASCS_TCP_DEFAULT_IP_VERSION, port);
 		else
 		{
 			asio::error_code ec;
@@ -45,7 +44,8 @@ public:
 
 		return true;
 	}
-	const asio::ip::tcp::endpoint& get_server_addr() const {return server_addr;}
+	bool set_server_addr(const std::string& file_name) {server_addr = typename Family::endpoint(file_name); return true;}
+	const typename Family::endpoint& get_server_addr() const {return server_addr;}
 
 	bool start_listen()
 	{
@@ -56,7 +56,7 @@ public:
 		asio::error_code ec;
 		if (!acceptor.is_open()) {acceptor.open(server_addr.protocol(), ec); assert(!ec);} //user maybe has opened this acceptor (to set options for example)
 #ifndef ASCS_NOT_REUSE_ADDRESS
-		acceptor.set_option(asio::ip::tcp::acceptor::reuse_address(true), ec); assert(!ec);
+		acceptor.set_option(typename Family::acceptor::reuse_address(true), ec); assert(!ec);
 #endif
 		acceptor.bind(server_addr, ec); assert(!ec);
 		if (ec) {unified_out::error_out("bind failed."); return false;}
@@ -82,9 +82,9 @@ public:
 			unified_out::info_out("finished pre-creating server sockets.");
 
 #if ASIO_VERSION >= 101100
-		acceptor.listen(asio::ip::tcp::acceptor::max_listen_connections, ec); assert(!ec);
+		acceptor.listen(Family::acceptor::max_listen_connections, ec); assert(!ec);
 #else
-		acceptor.listen(asio::ip::tcp::acceptor::max_connections, ec); assert(!ec);
+		acceptor.listen(Family::acceptor::max_connections, ec); assert(!ec);
 #endif
 		if (ec) {unified_out::error_out("listen failed."); return false;}
 
@@ -94,8 +94,8 @@ public:
 	bool is_listening() const {return acceptor.is_open();}
 	void stop_listen() {std::lock_guard<std::mutex> lock(mutex); asio::error_code ec; acceptor.cancel(ec); acceptor.close(ec);}
 
-	asio::ip::tcp::acceptor& next_layer() {return acceptor;}
-	const asio::ip::tcp::acceptor& next_layer() const {return acceptor;}
+	typename Family::acceptor& next_layer() {return acceptor;}
+	const typename Family::acceptor& next_layer() const {return acceptor;}
 
 	//implement i_server's pure virtual functions
 	virtual bool started() const {return this->service_started();}
@@ -162,20 +162,21 @@ public:
 	void force_shutdown(typename Pool::object_ctype& socket_ptr) {this->del_object(socket_ptr); socket_ptr->force_shutdown();}
 	void force_shutdown() {this->do_something_to_all([&](typename Pool::object_ctype& item) {item->force_shutdown();});}
 	void graceful_shutdown(typename Pool::object_ctype& socket_ptr, bool sync = false) {this->del_object(socket_ptr); socket_ptr->graceful_shutdown(sync);}
-	void graceful_shutdown() {this->do_something_to_all([](typename Pool::object_ctype& item) {item->graceful_shutdown();});} //parameter sync must be false (the default value), or dead lock will occur.
+	void graceful_shutdown() {this->do_something_to_all([](typename Pool::object_ctype& item) {item->graceful_shutdown();});}
+	//for the last function, parameter sync must be false (the default value), or dead lock will occur.
 
 protected:
 	virtual int async_accept_num() {return ASCS_ASYNC_ACCEPT_NUM;}
 	virtual bool init() {return start_listen() ? (this->start(), true) : false;}
-	virtual void uninit() {this->stop(); stop_listen(); force_shutdown();} //if you wanna graceful shutdown, call graceful_shutdown before service_pump::stop_service invocation.
+	virtual void uninit() {this->stop(); stop_listen(); force_shutdown();} //if you wanna graceful shutdown, call graceful_shutdown before stop_service.
 
 	virtual bool on_accept(typename Pool::object_ctype& socket_ptr) {return true;}
 	virtual void start_next_accept() {std::lock_guard<std::mutex> lock(mutex); do_async_accept(create_object());}
 
 	//if you want to ignore this error and continue to accept new connections immediately, return true in this virtual function;
-	//if you want to ignore this error and continue to accept new connections after a specific delay, start a timer immediately and return false (don't call stop_listen()),
-	// after the timer exhausts, call start_next_accept() in the callback function.
-	//otherwise, don't rewrite this virtual function or call server_base::on_accept_error() directly after your code.
+	//if you want to ignore this error and continue to accept new connections after a specific delay, start a timer immediately and return false
+	// (don't call stop_listen()), after the timer exhausts, call start_next_accept() in the callback function.
+	//otherwise, don't rewrite this virtual function or call generic_server::on_accept_error() directly after your code.
 	virtual bool on_accept_error(const asio::error_code& ec, typename Pool::object_ctype& socket_ptr)
 	{
 		if (asio::error::operation_aborted != ec)
@@ -225,10 +226,26 @@ private:
 		{if (socket_ptr) acceptor.async_accept(socket_ptr->lowest_layer(), ASCS_COPY_ALL_AND_THIS(const asio::error_code& ec) {this->accept_handler(ec, socket_ptr);});}
 
 private:
-	asio::ip::tcp::endpoint server_addr;
-	asio::ip::tcp::acceptor acceptor;
+	typename Family::endpoint server_addr;
+	typename Family::acceptor acceptor;
 	std::mutex mutex;
 };
+
+template<typename Socket, typename Pool = object_pool<Socket>, typename Server = i_server>
+class server_base : public generic_server<Socket, asio::ip::tcp, Pool, Server>
+{
+private:
+	typedef generic_server<Socket, asio::ip::tcp, Pool, Server> super;
+
+public:
+	server_base(service_pump& service_pump_) : super(service_pump_) {this->set_server_addr(ASCS_SERVER_PORT);}
+	template<typename Arg> server_base(service_pump& service_pump_, Arg&& arg) : super(service_pump_, std::forward<Arg>(arg)) {this->set_server_addr(ASCS_SERVER_PORT);}
+};
+
+#ifdef ASIO_HAS_LOCAL_SOCKETS
+template<typename Socket, typename Pool = object_pool<Socket>, typename Server = i_server>
+using unix_server_base = generic_server<Socket, asio::local::stream_protocol, Pool, Server>;
+#endif
 
 }} //namespace
 

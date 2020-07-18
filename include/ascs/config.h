@@ -676,11 +676,14 @@
  * Make function server_base::start_listen() and server_base::stop_listen() thread safe.
  * packer2 now can customize the real message type (before, it's always string_buffer).
  * Optimize unpacker2.
+ * Support UNIX domain socket.
+ * Introduce new demo unix_socket and unix_udp_test.
  *
  * FIX:
  * Fix race condition during call acceptor::async_accept concurrently.
  * Fix possibility of memory leaks for unique_buffer.
- * Supplement packer2's static functon -- get_max_msg_size().
+ * Supplement packer2's static function -- get_max_msg_size().
+ * Fix alias.
  *
  * ENHANCEMENTS:
  * Try parsing messages even errors occurred.
@@ -688,6 +691,7 @@
  * Show establishment time, broken time, last send time and last recv time in show_status().
  * Standardize unique_buffer and shared_buffer.
  * Enhance basic_buffer to support pre-allocated buffers.
+ * Release ascs::socket's function void id(uint_fast64_t id) for single client (both tcp and udp).
  *
  * DELETION:
  *
@@ -695,6 +699,7 @@
  * unique_buffer and shared_buffer.
  *
  * REPLACEMENTS:
+ * Use std::list instead of ascs::list except the container type of the input queue and out queue in ascs::socket.
  *
  */
 
@@ -1064,7 +1069,7 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 //If both sync message receiving and async message receiving exist, sync receiving has the priority no matter it was initiated before async receiving or not.
 
 //#define ASCS_SYNC_DISPATCH
-//with this macro, virtual bool on_msg(list<OutMsgType>& msg_can) will be provided, you can rewrite it and handle all or a part of the
+//with this macro, virtual bool on_msg(std::list<OutMsgType>& msg_can) will be provided, you can rewrite it and handle all or a part of the
 // messages like virtual function on_msg_handle (with macro ASCS_DISPATCH_BATCH_MSG), if your logic is simple enough (like echo or pingpong test),
 // this feature is recommended because it can slightly improve efficiency.
 //now we have three ways to handle messages (sync_recv_msg, on_msg and on_msg_handle), the invocation order is the same as listed, if messages been successfully
