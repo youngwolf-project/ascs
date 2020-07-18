@@ -676,11 +676,14 @@
  * Make function server_base::start_listen() and server_base::stop_listen() thread safe.
  * packer2 now can customize the real message type (before, it's always string_buffer).
  * Optimize unpacker2.
+ * Support UNIX domain socket.
+ * Introduce new demo unix_socket and unix_udp_test.
  *
  * FIX:
  * Fix race condition during call acceptor::async_accept concurrently.
  * Fix possibility of memory leaks for unique_buffer.
  * Supplement packer2's static function -- get_max_msg_size().
+ * Fix alias.
  *
  * ENHANCEMENTS:
  * Try parsing messages even errors occurred.
@@ -688,6 +691,7 @@
  * Show establishment time, broken time, last send time and last recv time in show_status().
  * Standardize unique_buffer and shared_buffer.
  * Enhance basic_buffer to support pre-allocated buffers.
+ * Release ascs::socket's function void id(uint_fast64_t id) for single client (both tcp and udp).
  *
  * DELETION:
  *
@@ -695,6 +699,7 @@
  * unique_buffer and shared_buffer.
  *
  * REPLACEMENTS:
+ * Use std::list instead of ascs::list except the container type of the input queue and out queue in ascs::socket.
  *
  */
 
