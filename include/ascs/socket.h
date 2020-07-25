@@ -214,13 +214,13 @@ public:
 	//we can resolve this defect via mutex, but i think it's not worth, because this feature is not commonly needed and you know how to avoid
 	// race condition between message sending and packer replacement (because ascs never send messages automatically except with macro
 	// ASCS_HEARTBEAT_INTERVAL, please note).
-	std::shared_ptr<i_packer<typename Packer::msg_type>> packer() {return packer_;}
-	std::shared_ptr<const i_packer<typename Packer::msg_type>> packer() const {return packer_;}
+	const std::shared_ptr<i_packer<typename Packer::msg_type>>& packer() {return packer_;}
+	const std::shared_ptr<const i_packer<typename Packer::msg_type>>& packer() const {return packer_;}
 	void packer(const std::shared_ptr<i_packer<typename Packer::msg_type>>& _packer_) {packer_ = _packer_;}
 
 	//get or change the unpacker at runtime
-	std::shared_ptr<i_unpacker<typename Unpacker::msg_type>> unpacker() {return unpacker_;}
-	std::shared_ptr<const i_unpacker<typename Unpacker::msg_type>> unpacker() const {return unpacker_;}
+	const std::shared_ptr<i_unpacker<typename Unpacker::msg_type>>& unpacker() {return unpacker_;}
+	const std::shared_ptr<const i_unpacker<typename Unpacker::msg_type>>& unpacker() const {return unpacker_;}
 #ifdef ASCS_PASSIVE_RECV
 	//changing unpacker must before calling ascs::socket::recv_msg, and define ASCS_PASSIVE_RECV macro.
 	void unpacker(const std::shared_ptr<i_unpacker<typename Unpacker::msg_type>>& _unpacker_) {unpacker_ = _unpacker_;}
