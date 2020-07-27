@@ -56,9 +56,11 @@ public:
 		return true;
 	}
 
+protected:
 	generic_socket(asio::io_context& io_context_) : super(io_context_), has_bound(false), matrix(nullptr) {}
 	generic_socket(Matrix& matrix_) : super(matrix_.get_service_pump()), has_bound(false), matrix(&matrix_) {}
 
+public:
 	virtual bool is_ready() {return has_bound;}
 	virtual void send_heartbeat()
 	{
@@ -166,8 +168,6 @@ protected:
 	Matrix* get_matrix() {return matrix;}
 	const Matrix* get_matrix() const {return matrix;}
 
-	virtual void shutdown() {this->close();}
-
 	virtual bool bind(const typename Family::endpoint& local_addr) {return true;}
 
 	virtual bool do_start()
@@ -224,6 +224,8 @@ private:
 #ifdef ASCS_SYNC_SEND
 	using super::do_direct_sync_send_msg;
 #endif
+
+	virtual void shutdown() {this->close();}
 
 	virtual void do_recv_msg()
 	{
@@ -389,6 +391,9 @@ protected:
 
 		return true;
 	}
+
+private:
+	using super::close;
 };
 
 #ifdef ASIO_HAS_LOCAL_SOCKETS
@@ -404,21 +409,26 @@ public:
 	unix_socket_base(asio::io_context& io_context_) : super(io_context_) {}
 	unix_socket_base(Matrix& matrix_) : super(matrix_) {}
 
-	virtual void shutdown() {this->close(true);}
-
 protected:
 	virtual bool bind(const asio::local::datagram_protocol::endpoint& local_addr)
 	{
-		asio::error_code ec;
-		this->lowest_layer().bind(local_addr, ec);
-		if (ec && asio::error::invalid_argument != ec)
+		if (!local_addr.path().empty())
 		{
-			unified_out::error_out("cannot bind socket: %s", ec.message().data());
-			return false;
+			asio::error_code ec;
+			this->lowest_layer().bind(local_addr, ec);
+			if (ec && asio::error::invalid_argument != ec)
+			{
+				unified_out::error_out("cannot bind socket: %s", ec.message().data());
+				return false;
+			}
 		}
 
 		return true;
 	}
+
+private:
+	using super::close;
+	virtual void shutdown() {close(true);}
 };
 #endif
 

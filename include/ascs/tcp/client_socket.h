@@ -54,12 +54,14 @@ public:
 		return true;
 	}
 
+protected:
 	generic_client_socket(asio::io_context& io_context_) : super(io_context_) {first_init();}
 	template<typename Arg> generic_client_socket(asio::io_context& io_context_, Arg&& arg) : super(io_context_, std::forward<Arg>(arg)) {first_init();}
 
 	generic_client_socket(Matrix& matrix_) : super(matrix_.get_service_pump()) {first_init(&matrix_);}
 	template<typename Arg> generic_client_socket(Matrix& matrix_, Arg&& arg) : super(matrix_.get_service_pump(), std::forward<Arg>(arg)) {first_init(&matrix_);}
 
+public:
 	virtual const char* type_name() const {return "TCP (client endpoint)";}
 	virtual int type_id() const {return 1;}
 
@@ -209,11 +211,11 @@ private:
 	typedef generic_client_socket<Packer, Unpacker, Matrix, Socket, asio::ip::tcp, InQueue, InContainer, OutQueue, OutContainer> super;
 
 public:
-	client_socket_base(asio::io_context& io_context_) : super(io_context_) {}
+	client_socket_base(asio::io_context& io_context_) : super(io_context_) {this->set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
 	template<typename Arg>
 	client_socket_base(asio::io_context& io_context_, Arg&& arg) : super(io_context_, std::forward<Arg>(arg)) {this->set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
 
-	client_socket_base(Matrix& matrix_) : super(matrix_) {}
+	client_socket_base(Matrix& matrix_) : super(matrix_) {this->set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
 	template<typename Arg> client_socket_base(Matrix& matrix_, Arg&& arg) : super(matrix_, std::forward<Arg>(arg)) {this->set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
 
 	bool set_local_addr(unsigned short port, const std::string& ip = std::string()) {return super::set_addr(local_addr, port, ip);}
@@ -256,7 +258,15 @@ private:
 template <typename Packer, typename Unpacker, typename Matrix = i_matrix,
 	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
-using unix_client_socket_base = generic_client_socket<Packer, Unpacker, Matrix, asio::local::stream_protocol::socket, asio::local::stream_protocol, InQueue, InContainer, OutQueue, OutContainer>;
+class unix_client_socket_base : public generic_client_socket<Packer, Unpacker, Matrix, asio::local::stream_protocol::socket, asio::local::stream_protocol, InQueue, InContainer, OutQueue, OutContainer>
+{
+private:
+	typedef generic_client_socket<Packer, Unpacker, Matrix, asio::local::stream_protocol::socket, asio::local::stream_protocol, InQueue, InContainer, OutQueue, OutContainer> super;
+
+public:
+	unix_client_socket_base(asio::io_context& io_context_) : super(io_context_) {this->set_server_addr("./ascs-unix-socket");}
+	unix_client_socket_base(Matrix& matrix_) : super(matrix_) {this->set_server_addr("./ascs-unix-socket");}
+};
 #endif
 
 }} //namespace
