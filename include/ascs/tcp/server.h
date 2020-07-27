@@ -20,10 +20,11 @@ namespace ascs { namespace tcp {
 template<typename Socket, typename Family = asio::ip::tcp, typename Pool = object_pool<Socket>, typename Server = i_server>
 class generic_server : public Server, public Pool
 {
-public:
+protected:
 	generic_server(service_pump& service_pump_) : Pool(service_pump_), acceptor(service_pump_) {}
 	template<typename Arg> generic_server(service_pump& service_pump_, Arg&& arg) : Pool(service_pump_, std::forward<Arg>(arg)), acceptor(service_pump_) {}
 
+public:
 	bool set_server_addr(unsigned short port, const std::string& ip = std::string())
 	{
 		if (ip.empty())
@@ -244,7 +245,14 @@ public:
 
 #ifdef ASIO_HAS_LOCAL_SOCKETS
 template<typename Socket, typename Pool = object_pool<Socket>, typename Server = i_server>
-using unix_server_base = generic_server<Socket, asio::local::stream_protocol, Pool, Server>;
+class unix_server_base : public generic_server<Socket, asio::local::stream_protocol, Pool, Server>
+{
+private:
+	typedef generic_server<Socket, asio::local::stream_protocol, Pool, Server> super;
+
+public:
+	unix_server_base(service_pump& service_pump_) : super(service_pump_) {this->set_server_addr("./ascs-unix-socket");}
+};
 #endif
 
 }} //namespace
