@@ -218,6 +218,7 @@ protected:
 #endif
 
 private:
+	using super::close;
 	using super::handle_error;
 	using super::handle_msg;
 	using super::do_direct_send_msg;
@@ -225,7 +226,11 @@ private:
 	using super::do_direct_sync_send_msg;
 #endif
 
-	virtual void shutdown() {this->close();}
+#ifdef _MSC_VER
+	void shutdown() {close(true);}
+#else
+	void shutdown() {close();}
+#endif
 
 	virtual void do_recv_msg()
 	{
@@ -270,15 +275,21 @@ private:
 #endif
 #if defined(_MSC_VER) || defined(__CYGWIN__) || defined(__MINGW32__) || defined(__MINGW64__)
 			if (ec && asio::error::connection_refused != ec && asio::error::connection_reset != ec)
-#else
-			if (ec)
-#endif
 			{
 				handle_error();
 				on_recv_error(ec);
 			}
 			else if (handle_msg()) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
 				do_recv_msg(); //receive msg in sequence
+#else
+			if (ec)
+			{
+				handle_error();
+				on_recv_error(ec);
+			}
+			else if (bytes_transferred > 0 && handle_msg()) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
+				do_recv_msg(); //receive msg in sequence
+#endif
 		}
 	}
 
@@ -391,9 +402,6 @@ protected:
 
 		return true;
 	}
-
-private:
-	using super::close;
 };
 
 #ifdef ASIO_HAS_LOCAL_SOCKETS
@@ -425,10 +433,6 @@ protected:
 
 		return true;
 	}
-
-private:
-	using super::close;
-	virtual void shutdown() {close(true);}
 };
 #endif
 
