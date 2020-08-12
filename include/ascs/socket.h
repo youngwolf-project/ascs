@@ -405,7 +405,14 @@ protected:
 		if (lowest_layer().is_open())
 		{
 			asio::error_code ec;
-			use_close ? lowest_layer().close(ec) : lowest_layer().shutdown(Family::socket::shutdown_both, ec);
+			if (use_close)
+				lowest_layer().close(ec);
+			else
+			{
+				lowest_layer().shutdown(Family::socket::shutdown_both, ec);
+				if (asio::error::not_connected == ec)
+					lowest_layer().close(ec);
+			}
 
 			stat.break_time = time(nullptr);
 		}
