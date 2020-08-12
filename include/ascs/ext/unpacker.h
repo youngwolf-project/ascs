@@ -152,8 +152,10 @@ public:
 	//this is just to satisfy the compiler, it's not a real scatter-gather buffer,
 	//if you introduce a ring buffer, then you will have the chance to provide a real scatter-gather buffer.
 	virtual buffer_type prepare_next_recv() {assert(remain_len < ASCS_MSG_BUFFER_SIZE); return buffer_type(1, asio::buffer(raw_buff) + remain_len);}
-#else
+#elif ASIO_VERSION < 101100
 	virtual buffer_type prepare_next_recv() {assert(remain_len < ASCS_MSG_BUFFER_SIZE); return asio::buffer(asio::buffer(raw_buff) + remain_len);}
+#else
+	virtual buffer_type prepare_next_recv() {assert(remain_len < ASCS_MSG_BUFFER_SIZE); return asio::buffer(raw_buff) + remain_len;}
 #endif
 
 	//msg must has been unpacked by this unpacker
@@ -500,8 +502,10 @@ public:
 	//if you introduce a ring buffer, then you will have the chance to provide a real scatter-gather buffer.
 #ifdef ASCS_SCATTERED_RECV_BUFFER
 	virtual buffer_type prepare_next_recv() {assert(remain_len < ASCS_MSG_BUFFER_SIZE); return buffer_type(1, asio::buffer(raw_buff) + remain_len);}
-#else
+#elif ASIO_VERSION < 101100
 	virtual buffer_type prepare_next_recv() {assert(remain_len < ASCS_MSG_BUFFER_SIZE); return asio::buffer(asio::buffer(raw_buff) + remain_len);}
+#else
+	virtual buffer_type prepare_next_recv() {assert(remain_len < ASCS_MSG_BUFFER_SIZE); return asio::buffer(raw_buff) + remain_len;}
 #endif
 
 	//msg must has been unpacked by this unpacker
