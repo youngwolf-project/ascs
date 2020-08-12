@@ -331,7 +331,7 @@ protected:
 #endif
 
 	//subclass notify shutdown event
-	bool close()
+	bool close(bool use_close = false) //if not use_close, shutdown (both direction) will be used
 	{
 		scope_atomic_lock lock(start_atomic);
 		while (!lock.locked())
@@ -351,7 +351,14 @@ protected:
 		if (lowest_layer().is_open())
 		{
 			asio::error_code ec;
-			lowest_layer().shutdown(asio::ip::tcp::socket::shutdown_both, ec);
+			if (use_close)
+				lowest_layer().close(ec);
+			else
+			{
+				lowest_layer().shutdown(asio::socket_base::shutdown_both, ec);
+				if (asio::error::not_connected == ec)
+					lowest_layer().close(ec);
+			}
 
 			stat.break_time = time(nullptr);
 		}
