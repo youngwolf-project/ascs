@@ -625,8 +625,7 @@ private:
 		switch (id)
 		{
 		case TIMER_DISPATCH_MSG:
-			dispatching = false;
-			dispatch_msg();
+			post_strand(dis_strand, [this]() {this->do_dispatch_msg();});
 			break;
 		case TIMER_DELAY_CLOSE:
 			if (!is_last_async_call())
