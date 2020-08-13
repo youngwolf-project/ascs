@@ -63,7 +63,7 @@ public:
 	const asio::ip::udp::endpoint& get_peer_addr() const {return peer_addr;}
 
 	void disconnect() {force_shutdown();}
-	void force_shutdown() {show_info("link:", "been shutting down."); this->dispatch_strand(rw_strand, [this]() {this->shutdown();});}
+	void force_shutdown() {show_info("link:", "been shutting down."); this->dispatch_strand(rw_strand, [this]() {this->close(true);});}
 	void graceful_shutdown() {force_shutdown();}
 
 	void show_info(const char* head, const char* tail) const {unified_out::info_out("%s %s:%hu %s", head, local_addr.address().to_string().data(), local_addr.port(), tail);}
@@ -175,12 +175,6 @@ private:
 	using super::do_direct_sync_send_msg;
 #endif
 
-#ifdef _MSC_VER
-	void shutdown() {close(true);}
-#else
-	void shutdown() {close();}
-#endif
-
 	virtual void do_recv_msg()
 	{
 #ifdef ASCS_PASSIVE_RECV
@@ -224,21 +218,15 @@ private:
 #endif
 #if defined(_MSC_VER) || defined(__CYGWIN__) || defined(__MINGW32__) || defined(__MINGW64__)
 			if (ec && asio::error::connection_refused != ec && asio::error::connection_reset != ec)
+#else
+			if (ec)
+#endif
 			{
 				handle_error();
 				on_recv_error(ec);
 			}
 			else if (handle_msg()) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
 				do_recv_msg(); //receive msg in sequence
-#else
-			if (ec)
-			{
-				handle_error();
-				on_recv_error(ec);
-			}
-			else if (bytes_transferred > 0 && handle_msg()) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
-				do_recv_msg(); //receive msg in sequence
-#endif
 		}
 	}
 
