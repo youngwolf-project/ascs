@@ -49,8 +49,21 @@ protected:
 	//msg handling end
 };
 
-int main()
+int main(int argc, const char* argv[])
 {
+	auto daemon = false;
+	if (argc >= 2 && 0 == strcmp(argv[1], "-d"))
+	{
+#ifdef _MSC_VER
+		puts("on windows, -d is not supported!");
+		return 1;
+#endif
+
+		//setbuf(stdout, nullptr);
+		setvbuf(stdout, nullptr, _IOLBF, 0);
+		daemon = true;
+	}
+
 	puts("echo server with length (2 bytes big endian) + body protocol: 9527\n"
 		"echo server with non-protocol: 9528\n"
 		"echo server udp: 9528\n"
@@ -63,6 +76,15 @@ int main()
 
 	echo_stream_server.set_server_addr(9528);
 	udp_service.set_local_addr(9528);
+
+	if (daemon)
+	{
+		asio::signal_set signal_receiver(sp, SIGINT, SIGTERM);
+		signal_receiver.async_wait([&sp](const asio::error_code& ec, int signal_number) {sp.end_service();});
+
+		sp.run_service();
+		return 0;
+	}
 
 	sp.start_service();
 	while (sp.is_running())
