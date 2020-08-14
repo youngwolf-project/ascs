@@ -15,6 +15,32 @@ using namespace ascs::ext;
 using namespace ascs::ext::tcp;
 
 #define QUIT_COMMAND	"quit"
+#define STATUS			"status"
+
+template<typename Object>
+class timed_object_pool : public object_pool<Object>
+{
+private:
+	typedef object_pool<Object> super;
+
+protected:
+	timed_object_pool(service_pump& service_pump_) : super(service_pump_) {}
+
+	void start()
+	{
+		super::start();
+
+		this->set_timer(super::TIMER_END, 1000 * 60, [this](typename super::tid id)->bool {
+			auto now = time(nullptr);
+			this->do_something_to_all([&now](typename super::object_ctype& object_ptr) {
+				if (object_ptr->get_statistic().last_recv_time + 10 * 60 < now)
+					object_ptr->force_shutdown();
+			});
+
+			return true;
+		});
+	}
+};
 
 class echo_socket : public server_socket
 {
@@ -70,21 +96,37 @@ int main(int argc, const char* argv[])
 		"type " QUIT_COMMAND " to end.");
 
 	service_pump sp;
-	server_base<echo_socket> echo_server(sp);
-	server_base<echo_stream_socket> echo_stream_server(sp);
+	server_base<echo_socket, timed_object_pool<echo_socket>> echo_server(sp);
+	server_base<echo_stream_socket, timed_object_pool<echo_stream_socket>> echo_stream_server(sp);
 	single_udp_service udp_service(sp);
 
 	echo_stream_server.set_server_addr(9528);
 	udp_service.set_local_addr(9528);
 
+#ifndef _MSC_VER
 	if (daemon)
 	{
-		asio::signal_set signal_receiver(sp, SIGINT, SIGTERM);
-		signal_receiver.async_wait([&sp](const asio::error_code& ec, int signal_number) {sp.end_service();});
+		asio::signal_set signal_receiver(sp, SIGINT, SIGTERM, SIGUSR1);
+		std::function<void (const asio::error_code&, int)> signal_handler = [&](const asio::error_code& ec, int signal_number) {
+			if (!ec)
+			{
+				if (SIGUSR1 == signal_number)
+				{
+					echo_server.list_all_status();
+					echo_stream_server.list_all_status();
+				}
+				else
+					return sp.end_service();
+			}
+
+			signal_receiver.async_wait([&signal_handler](const asio::error_code& ec, int signal_number) {signal_handler(ec, signal_number);});
+		};
+		signal_receiver.async_wait([&signal_handler](const asio::error_code& ec, int signal_number) {signal_handler(ec, signal_number);});
 
 		sp.run_service();
 		return 0;
 	}
+#endif
 
 	sp.start_service();
 	while (sp.is_running())
@@ -95,6 +137,11 @@ int main(int argc, const char* argv[])
 			;
 		else if (QUIT_COMMAND == str)
 			sp.stop_service();
+		else if (STATUS == str)
+		{
+			echo_server.list_all_status();
+			echo_stream_server.list_all_status();
+		}
 		else
 		{
 		}
