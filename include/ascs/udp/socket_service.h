@@ -58,7 +58,7 @@ public:
 	void graceful_shutdown() {this->do_something_to_all([](typename Pool::object_ctype& item) {item->graceful_shutdown();});}
 
 protected:
-	virtual void uninit() {this->stop(); graceful_shutdown();}
+	virtual void uninit() {this->stop(); force_shutdown();}
 };
 
 }} //namespace

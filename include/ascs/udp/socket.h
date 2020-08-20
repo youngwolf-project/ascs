@@ -204,6 +204,10 @@ protected:
 	{
 		if (asio::error::operation_aborted != ec)
 			unified_out::error_out(ASCS_LLF " recv msg error (%d %s)", this->id(), ec.value(), ec.message().data());
+#ifndef ASCS_CLEAR_OBJECT_INTERVAL
+		else if (nullptr != matrix)
+			matrix->del_socket(this->id());
+#endif
 	}
 
 	virtual bool on_heartbeat_error()
