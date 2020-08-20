@@ -71,6 +71,9 @@ public:
 	//success at here just means put the msg into tcp::socket_base's send buffer
 	TCP_BROADCAST_MSG(safe_broadcast_msg, safe_send_msg)
 	TCP_BROADCAST_MSG(safe_broadcast_native_msg, safe_send_native_msg)
+
+	template<typename T> void direct_broadcast_msg(const T& msg, bool can_overflow = false, bool prior = false)
+		{this->do_something_to_all([&](typename Pool::object_ctype& item) {item->direct_send_msg(msg, can_overflow, prior);});}
 	//msg sending interface
 	///////////////////////////////////////////////////
 
