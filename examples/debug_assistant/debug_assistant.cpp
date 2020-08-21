@@ -22,6 +22,7 @@ class timed_object_pool : public object_pool<Object>
 {
 private:
 	typedef object_pool<Object> super;
+	typedef typename super::tid tid; //old gcc needs this
 
 protected:
 	timed_object_pool(service_pump& service_pump_) : super(service_pump_) {}
@@ -30,7 +31,7 @@ protected:
 	{
 		super::start();
 
-		this->set_timer(super::TIMER_END, 1000 * 60, [this](typename super::tid id)->bool {
+		this->set_timer(super::TIMER_END, 1000 * 60, [this](tid id)->bool {
 			auto now = time(nullptr);
 			this->do_something_to_all([&now](typename super::object_ctype& object_ptr) {
 				if (object_ptr->get_statistic().last_recv_time + 10 * 60 < now)
