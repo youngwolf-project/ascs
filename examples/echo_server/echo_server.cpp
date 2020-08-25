@@ -313,8 +313,6 @@ int main(int argc, const char* argv[])
 			((normal_server&) normal_server_).do_something_to_all([&str](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(str);});
 			//or
 			normal_server_.broadcast_native_msg(str);
-			//or
-			normal_server_.direct_broadcast_msg(str);
 			*/
 		}
 	}
