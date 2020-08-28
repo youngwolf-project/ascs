@@ -80,8 +80,11 @@ namespace tcp
 {
 	class i_server : public i_matrix
 	{
+	private:
+		virtual	bool del_socket(uint_fast64_t id) {return false;} //implement and hide i_matrix::del_socket
+
 	public:
-		virtual bool del_socket(const std::shared_ptr<tracked_executor>& socket_ptr) = 0; //hide i_matrix::del_socket
+		virtual bool del_socket(const std::shared_ptr<tracked_executor>& socket_ptr) = 0;
 		virtual bool restore_socket(const std::shared_ptr<tracked_executor>& socket_ptr, uint_fast64_t id, bool init) = 0;
 	};
 } //namespace

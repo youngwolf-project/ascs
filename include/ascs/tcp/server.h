@@ -105,8 +105,6 @@ public:
 
 	virtual bool socket_exist(uint_fast64_t id) {return this->exist(id);}
 	virtual std::shared_ptr<tracked_executor> find_socket(uint_fast64_t id) {return this->find(id);}
-	virtual bool del_socket(uint_fast64_t id) {unified_out::error_out("use bool del_socket(const std::shared_ptr<tracked_executor>&) please."); assert(false); return false;}
-
 	virtual bool del_socket(const std::shared_ptr<tracked_executor>& socket_ptr)
 	{
 		auto raw_socket_ptr(std::dynamic_pointer_cast<Socket>(socket_ptr));
