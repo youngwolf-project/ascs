@@ -72,7 +72,8 @@ public:
 
 protected:
 	//msg handling: send the original msg back(echo server)
-	virtual bool on_msg_handle(out_msg_type& msg) {return send_native_msg(msg.peer_addr, msg);}
+	virtual bool on_msg_handle(out_msg_type& msg) {return direct_send_msg(std::move(msg));} //packer and unpacker have the same type of message
+	//virtual bool on_msg_handle(out_msg_type& msg) {return send_native_msg(msg.peer_addr, std::move(msg));} //packer and unpacker have different types of message
 	//msg handling end
 };
 
