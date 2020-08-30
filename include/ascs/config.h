@@ -701,6 +701,30 @@
  * REPLACEMENTS:
  * Use std::list instead of ascs::list except the container type of the input queue and out queue in ascs::socket.
  *
+ * ===============================================================
+ * 2020.10.1	version 1.5.2
+ *
+ * SPECIAL ATTENTION (incompatible with old editions):
+ * In bool i_packer::bool pack_msg(container_type&&, container_type&), the parameter 'container_type&&' has been changed to 'container_type&'.
+ *
+ * HIGHLIGHT:
+ * Add SOCKS4 and SOCKS5 proxy support.
+ *
+ * FIX:
+ * Call the unpacker's dump_left_data() for SSL socket too.
+ * Fix hex printing in function dump_left_data.
+ *
+ * ENHANCEMENTS:
+ * Add new demo debug_assistant.
+ * server_base and multi_client_base support directly broadcast messages (via broadcast_native_msg).
+ * A small optimization for message sending (use message replication rather than parsing message).
+ *
+ * DELETION:
+ *
+ * REFACTORING:
+ *
+ * REPLACEMENTS:
+ *
  */
 
 #ifndef _ASCS_CONFIG_H_
@@ -710,8 +734,8 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#define ASCS_VER		10501	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.5.1"
+#define ASCS_VER		10502	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.5.2"
 
 //asio and compiler check
 #ifdef _MSC_VER

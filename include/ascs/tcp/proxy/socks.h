@@ -34,22 +34,23 @@ public:
 	virtual const char* type_name() const {return "SOCKS4 (client endpoint)";}
 	virtual int type_id() const {return 5;}
 
-	bool set_peer_addr(unsigned short port, const std::string& ip)
+	bool set_target_addr(unsigned short port, const std::string& ip)
 	{
 		req_len = 0;
-		if (!super::set_addr(peer_addr, port, ip) || !peer_addr.address().is_v4())
+		if (0 == port || ip.empty() || !super::set_addr(target_addr, port, ip) || !target_addr.address().is_v4())
 			return false;
 
+		unified_out::info_out("connected to the proxy server, begin to negotiate with it.");
 		req[0] = 4;
 		req[1] = 1;
-		*((unsigned short*) std::next(req, 2)) = htons(peer_addr.port());
-		memcpy(std::next(req, 4), peer_addr.address().to_v4().to_bytes().data(), 4);
+		*((unsigned short*) std::next(req, 2)) = htons(target_addr.port());
+		memcpy(std::next(req, 4), target_addr.address().to_v4().to_bytes().data(), 4);
 		memcpy(std::next(req, 8), "ascs", sizeof("ascs"));
 		req_len = 8 + sizeof("ascs");
 
 		return true;
 	}
-	const asio::ip::tcp::endpoint& get_peer_addr() const {return peer_addr;}
+	const asio::ip::tcp::endpoint& get_target_addr() const {return target_addr;}
 
 private:
 	virtual void connect_handler(const asio::error_code& ec) //intercept tcp::client_socket_base::connect_handler
@@ -93,7 +94,7 @@ private:
 	char req[16], res[8];
 	size_t req_len;
 
-	asio::ip::tcp::endpoint peer_addr;
+	asio::ip::tcp::endpoint target_addr;
 };
 
 }
@@ -109,26 +110,29 @@ private:
 	typedef ascs::tcp::client_socket_base<Packer, Unpacker, Matrix, Socket, InQueue, InContainer, OutQueue, OutContainer> super;
 
 public:
-	client_socket_base(asio::io_context& io_context_) : super(io_context_), req_len(0), res_len(0), step(-1) {}
-	client_socket_base(Matrix& matrix_) : super(matrix_), req_len(0), res_len(0), step(-1) {}
+	client_socket_base(asio::io_context& io_context_) : super(io_context_), req_len(0), res_len(0), step(-1), target_port(0) {}
+	client_socket_base(Matrix& matrix_) : super(matrix_), req_len(0), res_len(0), step(-1), target_port(0) {}
 
-	virtual const char* type_name() const {return "SOCKS4 (client endpoint)";}
-	virtual int type_id() const {return 5;}
+	virtual const char* type_name() const {return "SOCKS5 (client endpoint)";}
+	virtual int type_id() const {return 6;}
 
-	bool set_peer_addr(unsigned short port, const std::string& ip)
+	bool set_target_addr(unsigned short port, const std::string& ip)
 	{
 		step = -1;
-		if (ip.empty())
+		if (0 == port || ip.empty())
 			return false;
-		else if (!super::set_addr(peer_addr, port, ip))
-			peer_domain = ip;
-		else if (!peer_addr.address().is_v4() && !peer_addr.address().is_v6())
+		else if (!super::set_addr(target_addr, port, ip))
+		{
+			target_domain = ip;
+			target_port = port;
+		}
+		else if (!target_addr.address().is_v4() && !target_addr.address().is_v6())
 			return false;
 
 		step = 0;
 		return true;
 	}
-	const asio::ip::tcp::endpoint& get_peer_addr() const {return peer_addr;}
+	const asio::ip::tcp::endpoint& get_target_addr() const {return target_addr;}
 
 	void set_auth(const std::string& usr, const std::string& pwd) {username = usr, password = pwd;}
 
@@ -138,6 +142,7 @@ private:
 		if (ec || -1 == step)
 			return super::connect_handler(ec);
 
+		unified_out::info_out("connected to the proxy server, begin to negotiate with it.");
 		step = 0;
 		send_method();
 	}
@@ -173,7 +178,7 @@ private:
 		memcpy(std::next(req, 2), username.data(), (size_t) req[1]);
 		req[2 + req[1]] = (char) std::min(password.size(), (size_t) 8);
 		memcpy(std::next(req, 3 + req[1]), password.data(), (size_t) req[2 + req[1]]);
-		req_len = 1 + 1 + req[1] + 1 + req[2 + req[1]];
+		req_len = 2 + req[1] + 1 + req[2 + req[1]];
 
 		asio::async_write(this->next_layer(), asio::buffer(req, req_len),
 			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);}));
@@ -186,26 +191,26 @@ private:
 		req[0] = 5;
 		req[1] = 1;
 		req[2] = 0;
-		if (!peer_domain.empty())
+		if (!target_domain.empty())
 		{
 			req[3] = 3;
-			req[4] = (char) std::min(peer_domain.size(), sizeof(req) - 7);
-			memcpy(std::next(req, 5), peer_domain.data(), (size_t) req[4]);
-			*((unsigned short*) std::next(req, 5 + req[4])) = htons(peer_port);
+			req[4] = (char) std::min(target_domain.size(), sizeof(req) - 7);
+			memcpy(std::next(req, 5), target_domain.data(), (size_t) req[4]);
+			*((unsigned short*) std::next(req, 5 + req[4])) = htons(target_port);
 			req_len = 7 + req[4];
 		}
-		else if (peer_addr.address().is_v4())
+		else if (target_addr.address().is_v4())
 		{
 			req[3] = 1;
-			memcpy(std::next(req, 4), peer_addr.address().to_v4().to_bytes().data(), 4);
-			*((unsigned short*) std::next(req, 8)) = htons(peer_addr.port());
+			memcpy(std::next(req, 4), target_addr.address().to_v4().to_bytes().data(), 4);
+			*((unsigned short*) std::next(req, 8)) = htons(target_addr.port());
 			req_len = 10;
 		}
 		else //ipv6
 		{
 			req[3] = 4;
-			memcpy(std::next(req, 4), peer_addr.address().to_v6().to_bytes().data(), 16);
-			*((unsigned short*) std::next(req, 20)) = htons(peer_addr.port());
+			memcpy(std::next(req, 4), target_addr.address().to_v6().to_bytes().data(), 16);
+			*((unsigned short*) std::next(req, 20)) = htons(target_addr.port());
 			req_len = 22;
 		}
 
@@ -233,7 +238,7 @@ private:
 		res_len += bytes_transferred;
 		if (ec)
 		{
-			unified_out::error_out(ASCS_LLF " socks5 write error", this->id());
+			unified_out::error_out(ASCS_LLF " socks5 read error", this->id());
 			this->force_shutdown(false);
 		}
 		else
@@ -328,9 +333,9 @@ private:
 	size_t req_len, res_len;
 	int step;
 
-	asio::ip::tcp::endpoint peer_addr;
-	std::string peer_domain;
-	unsigned short peer_port;
+	asio::ip::tcp::endpoint target_addr;
+	std::string target_domain;
+	unsigned short target_port;
 	std::string username, password;
 };
 

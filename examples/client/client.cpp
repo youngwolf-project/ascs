@@ -75,7 +75,7 @@ public:
 			return false;
 
 		//without following setting, socks4::client_socket will be downgraded to normal client_socket
-		//socket_ptr->set_peer_addr(6000, "127.0.0.1"); //target server address, original server address becomes SOCK4 server address
+		//socket_ptr->set_target_addr(6000, "127.0.0.1"); //target server address, original server address becomes SOCK4 server address
 		return socket_ptr->send_msg(std::move(msg));
 	}
 
@@ -84,7 +84,7 @@ private:
 	std::string ip;
 };
 
-std::thread create_sync_recv_thread(socks5::single_client& client)
+std::thread create_sync_recv_thread(client_socket& client)
 {
 	return std::thread([&client]() {
 		ASCS_DEFAULT_UNPACKER::container_type msg_can;
@@ -125,8 +125,8 @@ int main(int argc, const char* argv[])
 		ip = argv[2];
 
 	client.set_server_addr(port, ip);
-	//without following settings, socks5::single_client will be downgraded to normal single_client
-	//client.set_peer_addr(6000, "127.0.0.1"); //target server address, original server address becomes SOCK4 server address
+	//without following setting, socks5::single_client will be downgraded to normal single_client
+	//client.set_target_addr(6000, "127.0.0.1"); //target server address, original server address becomes SOCK4 server address
 	//client.set_auth("ascs", "ascs"); //can be omitted if the SOCKS5 server support non-auth
 	client2.set_server_addr(port + 100, ip);
 
