@@ -2,9 +2,6 @@
 #include <iostream>
 
 //configuration
-#define ASCS_DELAY_CLOSE 1 //this demo not used object pool and doesn't need life cycle management,
-						   //so, define this to avoid hooks for async call (and slightly improve efficiency),
-						   //any value which is bigger than zero is okay.
 #define ASCS_NOT_REUSE_ADDRESS
 #define ASCS_SYNC_RECV
 #define ASCS_SYNC_SEND
