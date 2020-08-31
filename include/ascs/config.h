@@ -680,6 +680,9 @@
  * Introduce new demo unix_socket and unix_udp_test.
  *
  * FIX:
+ * Fix fatal bug: message can be lost during normal dispatching (one by one).
+ * Fix bug: shutdown operation causes async_connect invocation to return successful.
+ * Fix the closure of UDP socket.
  * Fix race condition during call acceptor::async_accept concurrently.
  * Fix possibility of memory leaks for unique_buffer.
  * Supplement packer2's static function -- get_max_msg_size().
@@ -692,6 +695,7 @@
  * Standardize unique_buffer and shared_buffer.
  * Enhance basic_buffer to support pre-allocated buffers.
  * Release ascs::socket's function void id(uint_fast64_t id) for single client (both tcp and udp).
+ * Catch more general exceptions (std::exception instead of asio::system_error) in service_pump.
  *
  * DELETION:
  *
