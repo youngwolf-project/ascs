@@ -48,7 +48,7 @@ protected:
 #ifndef ASCS_REUSE_SSL_STREAM
 		if (this->is_ready())
 		{
-			status = Socket::link_status::GRACEFUL_SHUTTING_DOWN;
+			this->status = Socket::link_status::GRACEFUL_SHUTTING_DOWN;
 			this->show_info("ssl link:", "been shut down.");
 			asio::error_code ec;
 			this->next_layer().shutdown(ec);
@@ -77,7 +77,7 @@ protected:
 			return;
 		}
 
-		status = Socket::link_status::GRACEFUL_SHUTTING_DOWN;
+		this->status = Socket::link_status::GRACEFUL_SHUTTING_DOWN;
 
 		if (!sync)
 		{
@@ -97,9 +97,6 @@ protected:
 				unified_out::info_out("shutdown ssl link failed (maybe intentionally because of reusing)");
 		}
 	}
-
-private:
-	using Socket::status;
 };
 
 template <typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = asio::ssl::stream<asio::ip::tcp::socket>,
@@ -139,7 +136,10 @@ private:
 	virtual void connect_handler(const asio::error_code& ec) //intercept tcp::client_socket_base::connect_handler
 	{
 		if (!ec)
+		{
+			this->status = super::link_status::HANDSHAKING;
 			this->next_layer().async_handshake(asio::ssl::stream_base::client, this->make_handler_error([this](const asio::error_code& ec) {this->handle_handshake(ec);}));
+		}
 		else
 			super::connect_handler(ec);
 	}
@@ -201,6 +201,7 @@ public:
 protected:
 	virtual bool do_start() //intercept tcp::server_socket_base::do_start (to add handshake)
 	{
+		this->status = super::link_status::HANDSHAKING;
 		this->next_layer().async_handshake(asio::ssl::stream_base::server, this->make_handler_error([this](const asio::error_code& ec) {this->handle_handshake(ec);}));
 		return true;
 	}
