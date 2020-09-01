@@ -31,7 +31,7 @@ private:
 	typedef socket2<Socket, Family, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer> super;
 
 protected:
-	enum link_status {CONNECTED, FORCE_SHUTTING_DOWN, GRACEFUL_SHUTTING_DOWN, BROKEN};
+	enum link_status {CONNECTED, FORCE_SHUTTING_DOWN, GRACEFUL_SHUTTING_DOWN, BROKEN, HANDSHAKING};
 
 	socket_base(asio::io_context& io_context_) : super(io_context_), status(link_status::BROKEN) {}
 	template<typename Arg> socket_base(asio::io_context& io_context_, Arg&& arg) : super(io_context_, std::forward<Arg>(arg)), status(link_status::BROKEN) {}
@@ -254,7 +254,7 @@ private:
 	void shutdown()
 	{
 		if (is_broken())
-			close(true);
+			this->dispatch_strand(rw_strand, [this]() {this->close(true);});
 		else
 		{
 			status = link_status::FORCE_SHUTTING_DOWN; //not thread safe because of this assignment
