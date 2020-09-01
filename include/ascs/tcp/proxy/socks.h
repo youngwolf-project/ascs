@@ -40,7 +40,6 @@ public:
 		if (0 == port || ip.empty() || !super::set_addr(target_addr, port, ip) || !target_addr.address().is_v4())
 			return false;
 
-		unified_out::info_out("connected to the proxy server, begin to negotiate with it.");
 		req[0] = 4;
 		req[1] = 1;
 		*((unsigned short*) std::next(req, 2)) = htons(target_addr.port());
@@ -58,6 +57,8 @@ private:
 		if (ec || 0 == req_len)
 			return super::connect_handler(ec);
 
+		unified_out::info_out("connected to the proxy server, begin to negotiate with it.");
+		this->status = super::link_status::HANDSHAKING;
 		asio::async_write(this->next_layer(), asio::buffer(req, req_len),
 			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);}));
 	}
@@ -143,6 +144,7 @@ private:
 			return super::connect_handler(ec);
 
 		unified_out::info_out("connected to the proxy server, begin to negotiate with it.");
+		this->status = super::link_status::HANDSHAKING;
 		step = 0;
 		send_method();
 	}

@@ -254,7 +254,7 @@ private:
 	void shutdown()
 	{
 		if (is_broken())
-			close(true);
+			this->dispatch_strand(rw_strand, [this]() {this->close(true);});
 		else
 		{
 			status = link_status::FORCE_SHUTTING_DOWN; //not thread safe because of this assignment
