@@ -40,11 +40,11 @@ public:
 		if (0 == port || ip.empty() || !super::set_addr(target_addr, port, ip) || !target_addr.address().is_v4())
 			return false;
 
-		req[0] = 4;
-		req[1] = 1;
-		*((unsigned short*) std::next(req, 2)) = htons(target_addr.port());
-		memcpy(std::next(req, 4), target_addr.address().to_v4().to_bytes().data(), 4);
-		memcpy(std::next(req, 8), "ascs", sizeof("ascs"));
+		buff[0] = 4;
+		buff[1] = 1;
+		*((unsigned short*) std::next(buff, 2)) = htons(target_addr.port());
+		memcpy(std::next(buff, 4), target_addr.address().to_v4().to_bytes().data(), 4);
+		memcpy(std::next(buff, 8), "ascs", sizeof("ascs"));
 		req_len = 8 + sizeof("ascs");
 
 		return true;
@@ -59,7 +59,7 @@ private:
 
 		unified_out::info_out("connected to the proxy server, begin to negotiate with it.");
 		this->status = super::link_status::HANDSHAKING;
-		asio::async_write(this->next_layer(), asio::buffer(req, req_len),
+		asio::async_write(this->next_layer(), asio::buffer(buff, req_len),
 			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);}));
 	}
 
@@ -71,20 +71,20 @@ private:
 			this->force_shutdown(false);
 		}
 		else
-			asio::async_read(this->next_layer(), asio::buffer(res, sizeof(res)),
+			asio::async_read(this->next_layer(), asio::buffer(buff, 8),
 				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);}));
 	}
 
 	void recv_handler(const asio::error_code& ec, size_t bytes_transferred)
 	{
-		if (ec || sizeof(res) != bytes_transferred)
+		if (ec || 8 != bytes_transferred)
 		{
 			unified_out::error_out(ASCS_LLF " socks4 read error", this->id());
 			this->force_shutdown(false);
 		}
-		else if (90 != res[1])
+		else if (90 != buff[1])
 		{
-			unified_out::info_out(ASCS_LLF " socks4 server error: %d", this->id(), (int) (unsigned char) res[1]);
+			unified_out::info_out(ASCS_LLF " socks4 server error: %d", this->id(), (int) (unsigned char) buff[1]);
 			this->force_shutdown(false);
 		}
 		else
@@ -92,7 +92,7 @@ private:
 	}
 
 private:
-	char req[16], res[8];
+	char buff[16];
 	size_t req_len;
 
 	asio::ip::tcp::endpoint target_addr;
@@ -153,21 +153,21 @@ private:
 	{
 		res_len = 0;
 
-		req[0] = 5;
+		buff[0] = 5;
 		if (username.empty() && password.empty())
 		{
-			req[1] = 1;
+			buff[1] = 1;
 			req_len = 3;
 		}
 		else
 		{
-			req[1] = 2;
-			req[3] = 2;
+			buff[1] = 2;
+			buff[3] = 2;
 			req_len = 4;
 		}
-		req[2] = 0;
+		buff[2] = 0;
 
-		asio::async_write(this->next_layer(), asio::buffer(req, req_len),
+		asio::async_write(this->next_layer(), asio::buffer(buff, req_len),
 			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);}));
 	}
 
@@ -175,14 +175,14 @@ private:
 	{
 		res_len = 0;
 
-		req[0] = 1;
-		req[1] = (char) std::min(username.size(), (size_t) 16);
-		memcpy(std::next(req, 2), username.data(), (size_t) req[1]);
-		req[2 + req[1]] = (char) std::min(password.size(), (size_t) 16);
-		memcpy(std::next(req, 3 + req[1]), password.data(), (size_t) req[2 + req[1]]);
-		req_len = 1 + 1 + req[1] + 1 + req[2 + req[1]];
+		buff[0] = 1;
+		buff[1] = (char) std::min(username.size(), (size_t) 30);
+		memcpy(std::next(buff, 2), username.data(), (size_t) buff[1]);
+		buff[2 + buff[1]] = (char) std::min(password.size(), (size_t) 30);
+		memcpy(std::next(buff, 3 + buff[1]), password.data(), (size_t) buff[2 + buff[1]]);
+		req_len = 1 + 1 + buff[1] + 1 + buff[2 + buff[1]];
 
-		asio::async_write(this->next_layer(), asio::buffer(req, req_len),
+		asio::async_write(this->next_layer(), asio::buffer(buff, req_len),
 			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);}));
 	}
 
@@ -190,33 +190,33 @@ private:
 	{
 		res_len = 0;
 
-		req[0] = 5;
-		req[1] = 1;
-		req[2] = 0;
+		buff[0] = 5;
+		buff[1] = 1;
+		buff[2] = 0;
 		if (!target_domain.empty())
 		{
-			req[3] = 3;
-			req[4] = (char) std::min(target_domain.size(), sizeof(req) - 7);
-			memcpy(std::next(req, 5), target_domain.data(), (size_t) req[4]);
-			*((unsigned short*) std::next(req, 5 + req[4])) = htons(target_port);
-			req_len = 7 + req[4];
+			buff[3] = 3;
+			buff[4] = (char) std::min(target_domain.size(), sizeof(buff) - 7);
+			memcpy(std::next(buff, 5), target_domain.data(), (size_t)buff[4]);
+			*((unsigned short*) std::next(buff, 5 + buff[4])) = htons(target_port);
+			req_len = 7 + buff[4];
 		}
 		else if (target_addr.address().is_v4())
 		{
-			req[3] = 1;
-			memcpy(std::next(req, 4), target_addr.address().to_v4().to_bytes().data(), 4);
-			*((unsigned short*) std::next(req, 8)) = htons(target_addr.port());
+			buff[3] = 1;
+			memcpy(std::next(buff, 4), target_addr.address().to_v4().to_bytes().data(), 4);
+			*((unsigned short*) std::next(buff, 8)) = htons(target_addr.port());
 			req_len = 10;
 		}
 		else //ipv6
 		{
-			req[3] = 4;
-			memcpy(std::next(req, 4), target_addr.address().to_v6().to_bytes().data(), 16);
-			*((unsigned short*) std::next(req, 20)) = htons(target_addr.port());
+			buff[3] = 4;
+			memcpy(std::next(buff, 4), target_addr.address().to_v6().to_bytes().data(), 16);
+			*((unsigned short*) std::next(buff, 20)) = htons(target_addr.port());
 			req_len = 22;
 		}
 
-		asio::async_write(this->next_layer(), asio::buffer(req, req_len),
+		asio::async_write(this->next_layer(), asio::buffer(buff, req_len),
 			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);}));
 	}
 
@@ -230,7 +230,7 @@ private:
 		else
 		{
 			++step;
-			this->next_layer().async_read_some(asio::buffer(res, sizeof(res)),
+			this->next_layer().async_read_some(asio::buffer(buff, sizeof(buff)),
 				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);}));
 		}
 	}
@@ -256,16 +256,16 @@ private:
 					unified_out::info_out(ASCS_LLF " socks5 server error", this->id());
 					succ = false;
 				}
-				else if (0 == res[1])
+				else if (0 == buff[1])
 				{
 					++step; //skip auth step
 					return send_request();
 				}
-				else if (2 == res[1])
+				else if (2 == buff[1])
 					return send_auth();
 				else
 				{
-					unified_out::error_out(ASCS_LLF " unsupported socks5 auth %d", this->id(), (int) (unsigned char) res[1]);
+					unified_out::error_out(ASCS_LLF " unsupported socks5 auth %d", this->id(), (int) (unsigned char) buff[1]);
 					succ = false;
 				}
 			}
@@ -278,7 +278,7 @@ private:
 					unified_out::info_out(ASCS_LLF " socks5 server error", this->id());
 					succ = false;
 				}
-				else if (0 == res[1])
+				else if (0 == buff[1])
 					return send_request();
 				else
 				{
@@ -291,13 +291,13 @@ private:
 				size_t len = 6;
 				if (res_len < len)
 					continue_read = true;
-				else if (0 == res[1])
+				else if (0 == buff[1])
 				{
-					if (1 == res[3])
+					if (1 == buff[3])
 						len += 4;
-					else if (3 == res[3])
-						len += 1 + res[4];
-					else if (4 == res[3])
+					else if (3 == buff[3])
+						len += 1 + buff[4];
+					else if (4 == buff[3])
 						len += 16;
 
 					if (res_len < len)
@@ -323,7 +323,7 @@ private:
 			if (!succ)
 				this->force_shutdown(false);
 			else if (continue_read)
-				this->next_layer().async_read_some(asio::buffer(res, sizeof(res) + res_len),
+				this->next_layer().async_read_some(asio::buffer(buff, sizeof(buff)) + res_len,
 					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);}));
 			else
 				super::connect_handler(ec);
@@ -331,7 +331,7 @@ private:
 	}
 
 private:
-	char req[40], res[24];
+	char buff[64];
 	size_t req_len, res_len;
 	int step;
 
