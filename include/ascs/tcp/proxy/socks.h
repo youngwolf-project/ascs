@@ -176,11 +176,11 @@ private:
 		res_len = 0;
 
 		req[0] = 1;
-		req[1] = (char) std::min(username.size(), (size_t) 8);
+		req[1] = (char) std::min(username.size(), (size_t) 16);
 		memcpy(std::next(req, 2), username.data(), (size_t) req[1]);
-		req[2 + req[1]] = (char) std::min(password.size(), (size_t) 8);
+		req[2 + req[1]] = (char) std::min(password.size(), (size_t) 16);
 		memcpy(std::next(req, 3 + req[1]), password.data(), (size_t) req[2 + req[1]]);
-		req_len = 2 + req[1] + 1 + req[2 + req[1]];
+		req_len = 1 + 1 + req[1] + 1 + req[2 + req[1]];
 
 		asio::async_write(this->next_layer(), asio::buffer(req, req_len),
 			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);}));
@@ -331,7 +331,7 @@ private:
 	}
 
 private:
-	char req[24], res[24];
+	char req[40], res[24];
 	size_t req_len, res_len;
 	int step;
 
