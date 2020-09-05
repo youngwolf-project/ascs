@@ -135,7 +135,15 @@ public:
 	}
 	const asio::ip::tcp::endpoint& get_target_addr() const {return target_addr;}
 
-	void set_auth(const std::string& usr, const std::string& pwd) {username = usr, password = pwd;}
+	bool set_auth(const std::string& usr, const std::string& pwd)
+	{
+		if (usr.empty() || pwd.empty() || usr.size() + pwd.size() > 60)
+			return false;
+
+		username = usr;
+		password = pwd;
+		return true;
+	}
 
 private:
 	virtual void connect_handler(const asio::error_code& ec) //intercept tcp::client_socket_base::connect_handler
@@ -176,11 +184,11 @@ private:
 		res_len = 0;
 
 		buff[0] = 1;
-		buff[1] = (char) std::min(username.size(), (size_t) 30);
-		memcpy(std::next(buff, 2), username.data(), (size_t) buff[1]);
-		buff[2 + buff[1]] = (char) std::min(password.size(), (size_t) 30);
-		memcpy(std::next(buff, 3 + buff[1]), password.data(), (size_t) buff[2 + buff[1]]);
-		req_len = 1 + 1 + buff[1] + 1 + buff[2 + buff[1]];
+		buff[1] = (char) username.size();
+		memcpy(std::next(buff, 2), username.data(), username.size());
+		buff[2 + username.size()] = (char) password.size();
+		memcpy(std::next(buff, 3 + username.size()), password.data(), password.size());
+		req_len = 1 + 1 + username.size() + 1 + password.size();
 
 		asio::async_write(this->next_layer(), asio::buffer(buff, req_len),
 			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);}));
@@ -322,11 +330,16 @@ private:
 
 			if (!succ)
 				this->force_shutdown(false);
-			else if (continue_read)
+			else if (!continue_read)
+				super::connect_handler(ec);
+			else if (res_len > 22)
+			{
+				unified_out::info_out(ASCS_LLF " socks5 server error", this->id());
+				this->force_shutdown(false);
+			}
+			else
 				this->next_layer().async_read_some(asio::buffer(buff, sizeof(buff)) + res_len,
 					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);}));
-			else
-				super::connect_handler(ec);
 		}
 	}
 
