@@ -205,7 +205,7 @@ private:
 		{
 			buff[3] = 3;
 			buff[4] = (char) std::min(target_domain.size(), sizeof(buff) - 7);
-			memcpy(std::next(buff, 5), target_domain.data(), (size_t)buff[4]);
+			memcpy(std::next(buff, 5), target_domain.data(), (size_t) buff[4]);
 			*((unsigned short*) std::next(buff, 5 + buff[4])) = htons(target_port);
 			req_len = 7 + buff[4];
 		}
@@ -332,7 +332,7 @@ private:
 				this->force_shutdown(false);
 			else if (!continue_read)
 				super::connect_handler(ec);
-			else if (res_len > 22)
+			else if (res_len >= sizeof(buff))
 			{
 				unified_out::info_out(ASCS_LLF " socks5 server error", this->id());
 				this->force_shutdown(false);
