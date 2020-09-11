@@ -1,6 +1,6 @@
 
 # If your compiler cannot find asio, please specify it explicitly like this:
-#asio_dir = -I/path of asio/
+asio_dir = -I../../asio/asio/include/
 # asio.hpp and asio directory should be available in this place.
 
 # If possible, -std=c++14 or -std=c++1y would be better.
