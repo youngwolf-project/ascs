@@ -27,6 +27,10 @@ template<typename Object>
 class object_pool : public service_pump::i_service, protected timer<executor>
 {
 public:
+	typedef typename Object::in_msg_type in_msg_type;
+	typedef typename Object::in_msg_ctype in_msg_ctype;
+	typedef typename Object::out_msg_type out_msg_type;
+	typedef typename Object::out_msg_ctype out_msg_ctype;
 	typedef std::shared_ptr<Object> object_type;
 	typedef const object_type object_ctype;
 	typedef std::unordered_map<uint_fast64_t, object_type> container_type;
@@ -81,6 +85,28 @@ protected:
 		}
 
 		return exist;
+	}
+
+	bool del_object(uint_fast64_t id)
+	{
+		auto object_ptr = object_type();
+
+		std::unique_lock<ASCS_SHARED_MUTEX_TYPE> lock(object_can_mutex);
+		auto iter = object_can.find(id);
+		if (iter != std::end(object_can))
+		{
+			object_ptr = iter->second;
+			object_can.erase(iter);
+		}
+		lock.unlock();
+
+		if (object_ptr)
+		{
+			std::lock_guard<std::mutex> lock(invalid_object_can_mutex);
+			try {invalid_object_can.emplace_back(object_ptr);} catch (const std::exception& e) {unified_out::error_out("cannot hold more objects (%s)", e.what());}
+		}
+
+		return !!object_ptr;
 	}
 
 	//you can do some statistic about object creations at here

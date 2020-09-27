@@ -143,6 +143,11 @@ protected:
 
 		force_shutdown(need_reconnect);
 		this->status = super::link_status::BROKEN;
+
+#ifndef ASCS_CLEAR_OBJECT_INTERVAL
+		if (!need_reconnect && nullptr != matrix)
+			matrix->del_socket(this->id());
+#endif
 	}
 
 	virtual void on_async_shutdown_error() {force_shutdown(need_reconnect);}

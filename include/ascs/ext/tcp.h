@@ -16,6 +16,7 @@
 #include "packer.h"
 #include "unpacker.h"
 #include "../tcp/client_socket.h"
+#include "../tcp/proxy/socks.h"
 #include "../tcp/client.h"
 #include "../tcp/server_socket.h"
 #include "../tcp/server.h"
@@ -50,6 +51,26 @@ typedef ascs::tcp::unix_server_socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UNP
 template<typename Server = ascs::tcp::i_server> using unix_server_socket2 = ascs::tcp::unix_server_socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UNPACKER, Server>;
 typedef ascs::tcp::unix_server_base<unix_server_socket> unix_server;
 #endif
+
+namespace proxy {
+
+namespace socks4 {
+	typedef ascs::tcp::proxy::socks4::client_socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UNPACKER> client_socket;
+	typedef client_socket connector;
+	typedef ascs::tcp::single_client_base<client_socket> single_client;
+	typedef ascs::tcp::multi_client_base<client_socket> multi_client;
+	typedef multi_client client;
+}
+
+namespace socks5 {
+	typedef ascs::tcp::proxy::socks5::client_socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UNPACKER> client_socket;
+	typedef client_socket connector;
+	typedef ascs::tcp::single_client_base<client_socket> single_client;
+	typedef ascs::tcp::multi_client_base<client_socket> multi_client;
+	typedef multi_client client;
+}
+
+}
 
 }}} //namespace
 

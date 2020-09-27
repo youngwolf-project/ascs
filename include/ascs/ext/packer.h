@@ -117,7 +117,7 @@ public:
 
 		return true;
 	}
-	virtual bool pack_msg(container_type&& in, container_type& out)
+	virtual bool pack_msg(container_type& in, container_type& out)
 	{
 		auto len = ascs::get_size_in_byte(in);
 		if (len > get_max_msg_size()) //not considered overflow
@@ -185,7 +185,7 @@ public:
 
 		return true;
 	}
-	virtual bool pack_msg(typename super::container_type&& in, typename super::container_type& out)
+	virtual bool pack_msg(typename super::container_type& in, typename super::container_type& out)
 	{
 		auto len = ascs::get_size_in_byte(in);
 		if (len > get_max_msg_size()) //not considered overflow
@@ -221,7 +221,7 @@ public:
 	virtual msg_type pack_msg(const char* const pstr[], const size_t len[], size_t num, bool native = true) {return packer::pack_msg(pstr, len, num, true);}
 	virtual bool pack_msg(msg_type&& msg, container_type& msg_can) {msg_can.emplace_back(std::move(msg)); return true;}
 	virtual bool pack_msg(msg_type&& msg1, msg_type&& msg2, container_type& msg_can) {msg_can.emplace_back(std::move(msg1)); msg_can.emplace_back(std::move(msg2)); return true;}
-	virtual bool pack_msg(container_type&& in, container_type& out) {in.swap(out); return true;}
+	virtual bool pack_msg(container_type& in, container_type& out) {in.swap(out); return true;}
 	//not support heartbeat because fixed_length_unpacker cannot recognize heartbeat message
 };
 
@@ -284,7 +284,7 @@ public:
 
 		return true;
 	}
-	virtual bool pack_msg(container_type&& in, container_type& out)
+	virtual bool pack_msg(container_type& in, container_type& out)
 	{
 		auto len = _prefix.size() + _suffix.size() + ascs::get_size_in_byte(in);
 		if (len > ASCS_MSG_BUFFER_SIZE) //not considered overflow
