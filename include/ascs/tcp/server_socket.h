@@ -71,8 +71,8 @@ protected:
 #ifdef ASCS_CLEAR_OBJECT_INTERVAL
 		force_shutdown();
 #else
-		this->status = super::link_status::BROKEN;
 		server.del_socket(this->shared_from_this());
+		this->status = super::link_status::BROKEN;
 #endif
 	}
 
