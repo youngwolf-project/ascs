@@ -30,6 +30,7 @@ else
 endif
 
 ifneq (, ${findstring mingw, ${target_machine}})
+	SHELL = cmd
 	cflag += -D__USE_MINGW_ANSI_STDIO=1
 	lflag += -lws2_32 -lwsock32
 	sources = ${shell dir /B *.cpp}
