@@ -357,7 +357,7 @@ void send_msg_concurrently(echo_client& client, size_t send_thread_num, size_t m
 			fflush(stdout);
 		}
 	} while (percent < 100);
-	do_something_to_all(threads, [](std::thread& t) {t.join();});
+	do_something_to_all(threads, [](std::thread& t) {if (t.joinable()) t.join();});
 	begin_time.stop();
 
 	printf(" finished in %f seconds, TPS: %f(*2), speed: %f(*2) MBps.\n",
