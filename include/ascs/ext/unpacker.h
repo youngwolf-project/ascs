@@ -55,12 +55,8 @@ public:
 	unpacker() {reset();}
 	size_t current_msg_length() const {return cur_msg_len;} //current msg's total length, -1 means not available
 
-	bool parse_msg(size_t bytes_transferred, std::list<std::pair<const char*, size_t>>& msg_can)
+	bool parse_msg(std::list<std::pair<const char*, size_t>>& msg_can)
 	{
-		//length + msg
-		remain_len += bytes_transferred;
-		assert(remain_len <= ASCS_MSG_BUFFER_SIZE);
-
 		auto pnext = &*std::begin(raw_buff);
 		auto unpack_ok = true;
 		while (unpack_ok) //considering sticky package problem, we need a loop
@@ -102,8 +98,12 @@ public:
 	virtual void dump_left_data() const {unpacker_helper::dump_left_data(raw_buff.data(), cur_msg_len, remain_len);}
 	virtual bool parse_msg(size_t bytes_transferred, container_type& msg_can)
 	{
+		//length + msg
+		remain_len += bytes_transferred;
+		assert(remain_len <= ASCS_MSG_BUFFER_SIZE);
+
 		std::list<std::pair<const char*, size_t>> msg_pos_can;
-		auto unpack_ok = parse_msg(bytes_transferred, msg_pos_can);
+		auto unpack_ok = parse_msg(msg_pos_can);
 		do_something_to_all(msg_pos_can, [this, &msg_can](decltype(msg_pos_can.front()) item) {
 			if (item.second > ASCS_HEAD_LEN) //ignore heartbeat
 			{
@@ -144,7 +144,7 @@ public:
 				return 0;
 		}
 
-		return data_len >= cur_msg_len ? 0 : asio::detail::default_max_transfer_size;
+		return data_len >= cur_msg_len ? 0 : ASCS_MSG_BUFFER_SIZE;
 		//read as many as possible except that we have already got an entire msg
 	}
 
@@ -316,12 +316,12 @@ public:
 		if (0 == step) //want the head
 		{
 			assert(raw_buff.empty());
-			return asio::detail::default_max_transfer_size;
+			return ASCS_HEAD_LEN;
 		}
 		else if (1 == step) //want the body
 		{
 			assert(!raw_buff.empty());
-			return asio::detail::default_max_transfer_size;
+			return raw_buff.size();
 		}
 		else
 			assert(false);
@@ -377,8 +377,7 @@ public:
 
 	//a return value of 0 indicates that the read operation is complete. a non-zero value indicates the maximum number
 	//of bytes to be read on the next call to the stream's async_read_some function. ---asio::async_read
-	virtual size_t completion_condition(const asio::error_code& ec, size_t bytes_transferred)
-		{return ec || bytes_transferred == raw_buff.size() ? 0 : asio::detail::default_max_transfer_size;}
+	virtual size_t completion_condition(const asio::error_code& ec, size_t bytes_transferred) {return ec || bytes_transferred == raw_buff.size() ? 0 : _fixed_length;}
 
 	//this is just to satisfy the compiler, it's not a real scatter-gather buffer,
 	//if you introduce a ring buffer, then you will have the chance to provide a real scatter-gather buffer.
@@ -433,7 +432,7 @@ public:
 				return 0; //invalid msg, stop reading
 		}
 
-		return asio::detail::default_max_transfer_size; //read as many as possible
+		return ASCS_MSG_BUFFER_SIZE; //read as many as possible
 	}
 
 	//like strstr, except support \0 in the middle of mem and sub_mem
@@ -537,7 +536,7 @@ public:
 		return true;
 	}
 
-	virtual size_t completion_condition(const asio::error_code& ec, size_t bytes_transferred) {return ec || bytes_transferred > 0 ? 0 : asio::detail::default_max_transfer_size;}
+	virtual size_t completion_condition(const asio::error_code& ec, size_t bytes_transferred) {return ec || bytes_transferred > 0 ? 0 : ASCS_MSG_BUFFER_SIZE;}
 
 	//this is just to satisfy the compiler, it's not a real scatter-gather buffer,
 	//if you introduce a ring buffer, then you will have the chance to provide a real scatter-gather buffer.
