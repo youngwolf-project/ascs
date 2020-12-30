@@ -23,7 +23,6 @@
 #ifndef ASCS_MSG_BUFFER_SIZE
 #define ASCS_MSG_BUFFER_SIZE	4000
 #endif
-static_assert(ASCS_MSG_BUFFER_SIZE > 0, "message buffer size must be bigger than zero.");
 
 //#define ASCS_SCATTERED_RECV_BUFFER
 //define this macro will introduce scatter-gather buffers when doing async read, it's very useful under certain situations (for example, ring buffer).
@@ -38,7 +37,9 @@ static_assert(ASCS_MSG_BUFFER_SIZE > 0, "message buffer size must be bigger than
 #define ASCS_HEAD_H2N	htons
 #define ASCS_HEAD_N2H	ntohs
 #endif
+
 #define ASCS_HEAD_LEN	(sizeof(ASCS_HEAD_TYPE))
+static_assert(100 * 1024 * 1024 >= ASCS_MSG_BUFFER_SIZE && ASCS_MSG_BUFFER_SIZE >= ASCS_HEAD_LEN, "invalid message buffer size.");
 
 namespace ascs { namespace ext {
 
