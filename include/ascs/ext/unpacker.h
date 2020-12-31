@@ -379,7 +379,7 @@ protected:
 
 //protocol: length + body
 //T can be unique_buffer<std::string> or shared_buffer<std::string>, the latter makes output messages seemingly copyable.
-template<typename T = shared_buffer<std::string>>
+template<typename T = shared_buffer<std::string>, typename Unpacker = unpacker>
 class unpacker2 : public ascs::i_unpacker<T>
 {
 private:
@@ -390,10 +390,10 @@ public:
 	virtual void dump_left_data() const {unpacker_.dump_left_data();}
 	virtual bool parse_msg(size_t bytes_transferred, typename super::container_type& msg_can)
 	{
-		unpacker::container_type tmp_can;
+		typename Unpacker::container_type tmp_can;
 		unpacker_.stripped(this->stripped());
 		auto unpack_ok = unpacker_.parse_msg(bytes_transferred, tmp_can);
-		do_something_to_all(tmp_can, [&msg_can](unpacker::msg_type& item) {msg_can.emplace_back(new std::string(std::move(item)));});
+		do_something_to_all(tmp_can, [&msg_can](typename Unpacker::msg_type& item) {msg_can.emplace_back(new std::string(std::move(item)));});
 
 		//if unpacking failed, successfully parsed msgs will still returned via msg_can(sticky package), please note.
 		return unpack_ok;
@@ -408,7 +408,7 @@ public:
 	virtual size_t raw_data_len(typename super::msg_ctype& msg) const {return this->stripped() ? msg.size() : msg.size() - ASCS_HEAD_LEN;}
 
 protected:
-	unpacker unpacker_;
+	Unpacker unpacker_;
 };
 
 //protocol: UDP has message boundary, so we don't need a specific protocol to unpack it.
