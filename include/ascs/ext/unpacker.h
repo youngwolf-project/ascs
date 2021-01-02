@@ -107,7 +107,7 @@ public:
 		do_something_to_all(msg_pos_can, [this, &msg_can](decltype(msg_pos_can.front()) item) {
 			if (item.second > ASCS_HEAD_LEN) //ignore heartbeat
 			{
-				if (this->stripped())
+				if (stripped())
 					msg_can.emplace_back(std::next(item.first, ASCS_HEAD_LEN), item.second - ASCS_HEAD_LEN);
 				else
 					msg_can.emplace_back(item.first, item.second);
@@ -253,7 +253,7 @@ public:
 		do_something_to_all(msg_pos_can, [this, &msg_can](decltype(msg_pos_can.front()) item) {
 			if (item.second > ASCS_HEAD_LEN) //ignore heartbeat
 			{
-				if (this->stripped())
+				if (stripped())
 					msg_can.emplace_back(std::next(item.first, ASCS_HEAD_LEN), item.second - ASCS_HEAD_LEN);
 				else
 					msg_can.emplace_back(item.first, item.second);
@@ -338,7 +338,7 @@ private:
 	void extern_buffer()
 	{
 		auto step = 0;
-		if (this->stripped())
+		if (stripped())
 		{
 			cur_msg_len -= ASCS_HEAD_LEN;
 			remain_len -= ASCS_HEAD_LEN;
@@ -380,18 +380,19 @@ protected:
 //protocol: length + body
 //T can be unique_buffer<std::string> or shared_buffer<std::string>, the latter makes output messages seemingly copyable.
 template<typename T = shared_buffer<std::string>, typename Unpacker = unpacker>
-class unpacker2 : public ascs::i_unpacker<T>
+class unpacker2 : public i_unpacker<T>
 {
 private:
-	typedef ascs::i_unpacker<T> super;
+	typedef i_unpacker<T> super;
 
 public:
+	virtual void stripped(bool stripped_) {super::stripped(stripped_); unpacker_.stripped(stripped_);}
+
 	virtual void reset() {unpacker_.reset();}
 	virtual void dump_left_data() const {unpacker_.dump_left_data();}
 	virtual bool parse_msg(size_t bytes_transferred, typename super::container_type& msg_can)
 	{
 		typename Unpacker::container_type tmp_can;
-		unpacker_.stripped(this->stripped());
 		auto unpack_ok = unpacker_.parse_msg(bytes_transferred, tmp_can);
 		do_something_to_all(tmp_can, [&msg_can](typename Unpacker::msg_type& item) {msg_can.emplace_back(new std::string(std::move(item)));});
 
@@ -403,9 +404,9 @@ public:
 	virtual typename super::buffer_type prepare_next_recv() {return unpacker_.prepare_next_recv();}
 
 	//msg must has been unpacked by this unpacker
-	virtual char* raw_data(typename super::msg_type& msg) const {return const_cast<char*>(this->stripped() ? msg.data() : std::next(msg.data(), ASCS_HEAD_LEN));}
-	virtual const char* raw_data(typename super::msg_ctype& msg) const {return this->stripped() ? msg.data() : std::next(msg.data(), ASCS_HEAD_LEN);}
-	virtual size_t raw_data_len(typename super::msg_ctype& msg) const {return this->stripped() ? msg.size() : msg.size() - ASCS_HEAD_LEN;}
+	virtual char* raw_data(typename super::msg_type& msg) const {return const_cast<char*>(super::stripped() ? msg.data() : std::next(msg.data(), ASCS_HEAD_LEN));}
+	virtual const char* raw_data(typename super::msg_ctype & msg) const {return super::stripped() ? msg.data() : std::next(msg.data(), ASCS_HEAD_LEN);}
+	virtual size_t raw_data_len(typename super::msg_ctype & msg) const {return super::stripped() ? msg.size() : msg.size() - ASCS_HEAD_LEN;}
 
 protected:
 	Unpacker unpacker_;
@@ -414,10 +415,10 @@ protected:
 //protocol: UDP has message boundary, so we don't need a specific protocol to unpack it.
 //T can be unique_buffer<std::string> or shared_buffer<std::string>, the latter makes output messages seemingly copyable.
 template<typename T = shared_buffer<std::string>>
-class udp_unpacker2 : public ascs::i_unpacker<T>
+class udp_unpacker2 : public i_unpacker<T>
 {
 private:
-	typedef ascs::i_unpacker<T> super;
+	typedef i_unpacker<T> super;
 
 public:
 	virtual void reset() {}
@@ -445,14 +446,19 @@ protected:
 //let asio write msg directly (no temporary memory needed), not support unstripped messages, please note (you can fix this defect if you like).
 //actually, this unpacker has the worst performance, because it needs 2 read for one message, other unpackers are able to get many messages from just one read.
 //so this unpacker just demonstrates a way to avoid memory replications and temporary memory utilization, it can provide better performance for huge messages.
-//this unpacker only output stripped messages, please note.
 class non_copy_unpacker : public i_unpacker<basic_buffer>
 {
+private:
+	typedef i_unpacker<basic_buffer> super;
+
 public:
 	non_copy_unpacker() {reset();}
 	size_t current_msg_length() const {return raw_buff.size();} //current msg's total length(not include the head), 0 means not available
 
 public:
+	virtual void stripped(bool stripped_)
+		{if (!stripped_) unified_out::error_out("non_copy_unpacker doesn't support unstripped messages"); else super::stripped(stripped_);}
+
 	virtual void reset() {raw_buff.clear(); step = 0;}
 	virtual bool parse_msg(size_t bytes_transferred, container_type& msg_can)
 	{
