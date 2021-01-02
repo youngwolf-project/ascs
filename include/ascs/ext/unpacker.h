@@ -404,9 +404,9 @@ public:
 	virtual typename super::buffer_type prepare_next_recv() {return unpacker_.prepare_next_recv();}
 
 	//msg must has been unpacked by this unpacker
-	virtual char* raw_data(typename super::msg_type& msg) const {return const_cast<char*>(super::stripped() ? msg.data() : std::next(msg.data(), ASCS_HEAD_LEN));}
-	virtual const char* raw_data(typename super::msg_ctype & msg) const {return super::stripped() ? msg.data() : std::next(msg.data(), ASCS_HEAD_LEN);}
-	virtual size_t raw_data_len(typename super::msg_ctype & msg) const {return super::stripped() ? msg.size() : msg.size() - ASCS_HEAD_LEN;}
+	virtual char* raw_data(typename super::msg_type& msg) const {return unpacker_.raw_data(*msg.raw_buffer());}
+	virtual const char* raw_data(typename super::msg_ctype& msg) const {return unpacker_.raw_data(*msg.raw_buffer());}
+	virtual size_t raw_data_len(typename super::msg_ctype& msg) const {return unpacker_.raw_data_len(*msg.raw_buffer());}
 
 protected:
 	Unpacker unpacker_;
