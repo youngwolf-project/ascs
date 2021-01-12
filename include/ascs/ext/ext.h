@@ -60,35 +60,34 @@ class basic_buffer
 public:
 	basic_buffer() {do_detach();}
 	basic_buffer(size_t len) {do_assign(len);}
-	basic_buffer(char* buff, size_t len) {do_attach(buff, len, len);}
-	basic_buffer(basic_buffer&& other) {do_attach(other.buff, other.len, other.buff_len); other.do_detach();}
-	~basic_buffer() {clear();}
+	basic_buffer(char* buff, size_t len) {do_attach(buff, len);} //take the ownership of the buff
+	basic_buffer(const char* _buff, size_t len) {do_assign(len); memcpy(buff, _buff, len);} //allocate buffer and copy data from _buff to it
+	basic_buffer(basic_buffer&& other) {do_attach(other.buff, other.len); other.do_detach();}
+	virtual ~basic_buffer() {clear();}
 
 	basic_buffer& operator=(basic_buffer&& other) {clear(); swap(other); return *this;}
+	void resize(size_t len) {assign(len);} //this function doesn't work as std::string::resize, it's just for flexible_unpacker, please note.
 	void assign(size_t len) {clear(); do_assign(len);}
-	void attach(char* buff, size_t len) {clear(); do_attach(buff, len, len);}
+	void attach(char* buff, size_t len) {clear(); do_attach(buff, len);}
 
 	//the following five functions are needed by ascs
 	bool empty() const {return 0 == len || nullptr == buff;}
 	size_t size() const {return nullptr == buff ? 0 : len;}
 	const char* data() const {return buff;}
-	void swap(basic_buffer& other) {std::swap(buff, other.buff); std::swap(len, other.len); std::swap(buff_len, other.buff_len);}
+	void swap(basic_buffer& other) {std::swap(buff, other.buff); std::swap(len, other.len);}
 	void clear() {delete[] buff; do_detach();}
 
 	//functions needed by packer and unpacker
 	char* data() {return buff;}
 
-	bool shrink_size(size_t _len) {assert(_len <= buff_len); return (_len <= buff_len) ? (len = _len, true) : false;}
-	size_t buffer_size() const {return nullptr == buff ? 0 : buff_len;}
-
 protected:
-	void do_assign(size_t len) {do_attach(new char[len], len, len);}
-	void do_attach(char* _buff, size_t _len, size_t _buff_len) {buff = _buff; len = _len; buff_len = _buff_len;}
-	void do_detach() {buff = nullptr; len = buff_len = 0;}
+	void do_assign(size_t len) {do_attach(new char[len], len);}
+	void do_attach(char* _buff, size_t _len) {buff = _buff; len = _len;}
+	void do_detach() {buff = nullptr; len = 0;}
 
 protected:
 	char* buff;
-	size_t len, buff_len;
+	size_t len;
 };
 
 class cpu_timer //a substitute of boost::timer::cpu_timer

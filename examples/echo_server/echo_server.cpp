@@ -30,12 +30,12 @@
 #define ASCS_MSG_BUFFER_SIZE 1000000
 #define ASCS_MAX_SEND_BUF (10 * ASCS_MSG_BUFFER_SIZE)
 #define ASCS_MAX_RECV_BUF (10 * ASCS_MSG_BUFFER_SIZE)
-#define ASCS_DEFAULT_UNPACKER flexible_unpacker
+#define ASCS_DEFAULT_UNPACKER flexible_unpacker<basic_buffer>
 //this unpacker only pre-allocated a buffer of 4000 bytes, but it can parse messages up to ST_ASIO_MSG_BUFFER_SIZE (here is 1000000) bytes,
 //it works as the default unpacker for messages <= 4000, otherwise, it works as non_copy_unpacker
 #elif 1 == PACKER_UNPACKER_TYPE
 #define ASCS_DEFAULT_PACKER packer2<unique_buffer<std::string>, std::string>
-#define ASCS_DEFAULT_UNPACKER unpacker2<unique_buffer<std::string>>
+#define ASCS_DEFAULT_UNPACKER unpacker2<unique_buffer, basic_buffer, flexible_unpacker<basic_buffer>>
 #elif 2 == PACKER_UNPACKER_TYPE
 #undef ASCS_HEARTBEAT_INTERVAL
 #define ASCS_HEARTBEAT_INTERVAL	0 //not support heartbeat

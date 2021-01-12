@@ -172,8 +172,13 @@ protected:
 //protocol: length + body
 //this unpacker has a fixed buffer (4000 bytes), if messages can be held in it, then this unpacker works just as the default unpacker,
 // otherwise, a dynamic std::string will be created to hold big messages, then this unpacker works just as the non_copy_unpacker.
-class flexible_unpacker : public i_unpacker<std::string>
+//T can be std::string or basic_buffer, the latter will not fill its buffer in resize invocation, so is more efficient.
+template<typename T = std::string>
+class flexible_unpacker : public i_unpacker<T>
 {
+private:
+	typedef i_unpacker<T> super;
+
 public:
 	flexible_unpacker() {reset();}
 	size_t current_msg_length() const {return cur_msg_len;} //current msg's total length, -1 means not available
@@ -219,7 +224,7 @@ public:
 public:
 	virtual void reset() {big_msg.clear(); cur_msg_len = -1; remain_len = 0;}
 	virtual void dump_left_data() const {unpacker_helper::dump_left_data(big_msg.empty() ? raw_buff.data() : big_msg.data(), cur_msg_len, remain_len);}
-	virtual bool parse_msg(size_t bytes_transferred, container_type& msg_can)
+	virtual bool parse_msg(size_t bytes_transferred, typename super::container_type& msg_can)
 	{
 		//length + msg
 		remain_len += bytes_transferred;
@@ -253,7 +258,7 @@ public:
 		do_something_to_all(msg_pos_can, [this, &msg_can](decltype(msg_pos_can.front()) item) {
 			if (item.second > ASCS_HEAD_LEN) //ignore heartbeat
 			{
-				if (stripped())
+				if (this->stripped())
 					msg_can.emplace_back(std::next(item.first, ASCS_HEAD_LEN), item.second - ASCS_HEAD_LEN);
 				else
 					msg_can.emplace_back(item.first, item.second);
@@ -301,16 +306,16 @@ public:
 #ifdef ASCS_SCATTERED_RECV_BUFFER
 	//this is just to satisfy the compiler, it's not a real scatter-gather buffer,
 	//if you introduce a ring buffer, then you will have the chance to provide a real scatter-gather buffer.
-	virtual buffer_type prepare_next_recv()
+	virtual typename super::buffer_type prepare_next_recv()
 	{
 		assert(remain_len < cur_msg_len);
 		if (big_msg.empty())
-			return buffer_type(1, asio::buffer(raw_buff) + remain_len);
+			return typename super::buffer_type(1, asio::buffer(raw_buff) + remain_len);
 
-		return buffer_type(1, asio::buffer(const_cast<char*>(big_msg.data()), big_msg.size()) + remain_len);
+		return typename super::buffer_type(1, asio::buffer(const_cast<char*>(big_msg.data()), big_msg.size()) + remain_len);
 	}
 #elif ASIO_VERSION < 101100
-	virtual buffer_type prepare_next_recv()
+	virtual typename super::buffer_type prepare_next_recv()
 	{
 		assert(remain_len < cur_msg_len);
 		if (big_msg.empty())
@@ -319,7 +324,7 @@ public:
 		return asio::buffer(asio::buffer(const_cast<char*>(big_msg.data()), big_msg.size()) + remain_len);
 	}
 #else
-	virtual buffer_type prepare_next_recv()
+	virtual typename super::buffer_type prepare_next_recv()
 	{
 		assert(remain_len < cur_msg_len);
 		if (big_msg.empty())
@@ -330,28 +335,28 @@ public:
 #endif
 
 	//msg must has been unpacked by this unpacker
-	virtual char* raw_data(msg_type& msg) const {return const_cast<char*>(stripped() ? msg.data() : std::next(msg.data(), ASCS_HEAD_LEN));}
-	virtual const char* raw_data(msg_ctype& msg) const {return stripped() ? msg.data() : std::next(msg.data(), ASCS_HEAD_LEN);}
-	virtual size_t raw_data_len(msg_ctype& msg) const {return stripped() ? msg.size() : msg.size() - ASCS_HEAD_LEN;}
+	virtual char* raw_data(typename super::msg_type& msg) const {return const_cast<char*>(this->stripped() ? msg.data() : std::next(msg.data(), ASCS_HEAD_LEN));}
+	virtual const char* raw_data(typename super::msg_ctype& msg) const {return this->stripped() ? msg.data() : std::next(msg.data(), ASCS_HEAD_LEN);}
+	virtual size_t raw_data_len(typename super::msg_ctype& msg) const {return this->stripped() ? msg.size() : msg.size() - ASCS_HEAD_LEN;}
 
 private:
 	void extern_buffer()
 	{
 		auto step = 0;
-		if (stripped())
+		if (this->stripped())
 		{
 			cur_msg_len -= ASCS_HEAD_LEN;
 			remain_len -= ASCS_HEAD_LEN;
 			step = ASCS_HEAD_LEN;
 		}
 
-		big_msg.resize(cur_msg_len); //this will fill big_msg, which is totally not necessary, but this is the only way to change std::string's size.
+		big_msg.resize(cur_msg_len); //std::string will fill big_msg, which is totally not necessary for this scenario, but basic_buffer won't.
 		memcpy(const_cast<char*>(big_msg.data()), std::next(raw_buff.data(), step), remain_len);
 	}
 
 protected:
 	std::array<char, 4000> raw_buff;
-	msg_type big_msg;
+	typename super::msg_type big_msg;
 	size_t cur_msg_len; //-1 means head not received, so msg length is not available.
 	size_t remain_len; //half-baked msg
 };
@@ -379,11 +384,11 @@ protected:
 
 //protocol: length + body
 //T can be unique_buffer<std::string> or shared_buffer<std::string>, the latter makes output messages seemingly copyable.
-template<typename T = shared_buffer<std::string>, typename Unpacker = unpacker>
-class unpacker2 : public i_unpacker<T>
+template<template<typename> class Buffer = shared_buffer, typename T = std::string, typename Unpacker = unpacker>
+class unpacker2 : public i_unpacker<Buffer<T>>
 {
 private:
-	typedef i_unpacker<T> super;
+	typedef i_unpacker<Buffer<T>> super;
 
 public:
 	virtual void stripped(bool stripped_) {super::stripped(stripped_); unpacker_.stripped(stripped_);}
@@ -394,7 +399,7 @@ public:
 	{
 		typename Unpacker::container_type tmp_can;
 		auto unpack_ok = unpacker_.parse_msg(bytes_transferred, tmp_can);
-		do_something_to_all(tmp_can, [&msg_can](typename Unpacker::msg_type& item) {msg_can.emplace_back(new std::string(std::move(item)));});
+		do_something_to_all(tmp_can, [&msg_can](typename Unpacker::msg_type& item) {msg_can.emplace_back(new T(std::move(item)));});
 
 		//if unpacking failed, successfully parsed msgs will still returned via msg_can(sticky package), please note.
 		return unpack_ok;
