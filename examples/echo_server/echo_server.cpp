@@ -34,7 +34,7 @@
 //this unpacker only pre-allocated a buffer of 4000 bytes, but it can parse messages up to ST_ASIO_MSG_BUFFER_SIZE (here is 1000000) bytes,
 //it works as the default unpacker for messages <= 4000, otherwise, it works as non_copy_unpacker
 #elif 1 == PACKER_UNPACKER_TYPE
-#define ASCS_DEFAULT_PACKER packer2<unique_buffer<std::string>, std::string>
+#define ASCS_DEFAULT_PACKER packer2<unique_buffer<basic_buffer>, basic_buffer, packer<basic_buffer>>
 #define ASCS_DEFAULT_UNPACKER unpacker2<unique_buffer, basic_buffer, flexible_unpacker<basic_buffer>>
 #elif 2 == PACKER_UNPACKER_TYPE
 #undef ASCS_HEARTBEAT_INTERVAL
@@ -167,10 +167,10 @@ protected:
 typedef server_socket_base<ext::packer, ext::unpacker> normal_socket;
 #else
 //demonstrate how to open heartbeat function without defining macro ASCS_HEARTBEAT_INTERVAL
-class normal_socket : public server_socket_base<ext::packer, ext::unpacker>
+class normal_socket : public server_socket_base<ext::packer<>, ext::unpacker<>>
 {
 public:
-	normal_socket(i_server& server_) : server_socket_base<ext::packer, ext::unpacker>(server_) {}
+	normal_socket(i_server& server_) : server_socket_base<ext::packer<>, ext::unpacker<>>(server_) {}
 
 protected:
 	//demo client needs heartbeat (macro ASCS_HEARTBEAT_INTERVAL been defined), please note that the interval (here is 5) must be equal to
@@ -190,10 +190,10 @@ protected:
 	virtual bool on_accept(object_ctype& socket_ptr) {stop_listen(); return true;}
 };
 
-class short_connection : public server_socket_base<ext::packer, ext::unpacker>
+class short_connection : public server_socket_base<ext::packer<>, ext::unpacker<>>
 {
 private:
-	typedef server_socket_base<ext::packer, ext::unpacker> super;
+	typedef server_socket_base<ext::packer<>, ext::unpacker<>> super;
 
 public:
 	short_connection(i_server& server_) : super(server_) {}

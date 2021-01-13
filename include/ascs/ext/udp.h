@@ -20,7 +20,7 @@
 #include "../single_service_pump.h"
 
 #ifndef ASCS_DEFAULT_PACKER
-#define ASCS_DEFAULT_PACKER ascs::ext::packer
+#define ASCS_DEFAULT_PACKER ascs::ext::packer<>
 #endif
 
 #ifndef ASCS_DEFAULT_UDP_UNPACKER

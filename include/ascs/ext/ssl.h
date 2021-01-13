@@ -19,11 +19,11 @@
 #include "../single_service_pump.h"
 
 #ifndef ASCS_DEFAULT_PACKER
-#define ASCS_DEFAULT_PACKER ascs::ext::packer
+#define ASCS_DEFAULT_PACKER ascs::ext::packer<>
 #endif
 
 #ifndef ASCS_DEFAULT_UNPACKER
-#define ASCS_DEFAULT_UNPACKER ascs::ext::unpacker
+#define ASCS_DEFAULT_UNPACKER ascs::ext::unpacker<>
 #endif
 
 namespace ascs { namespace ext { namespace ssl {

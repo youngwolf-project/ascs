@@ -49,8 +49,13 @@ public:
 };
 
 //protocol: length + body
-class unpacker : public i_unpacker<std::string>
+//T can be std::string or basic_buffer
+template<typename T = std::string>
+class unpacker : public i_unpacker<T>
 {
+private:
+	typedef i_unpacker<T> super;
+
 public:
 	unpacker() {reset();}
 	size_t current_msg_length() const {return cur_msg_len;} //current msg's total length, -1 means not available
@@ -96,7 +101,7 @@ public:
 public:
 	virtual void reset() {cur_msg_len = -1; remain_len = 0;}
 	virtual void dump_left_data() const {unpacker_helper::dump_left_data(raw_buff.data(), cur_msg_len, remain_len);}
-	virtual bool parse_msg(size_t bytes_transferred, container_type& msg_can)
+	virtual bool parse_msg(size_t bytes_transferred, typename super::container_type& msg_can)
 	{
 		//length + msg
 		remain_len += bytes_transferred;
@@ -107,7 +112,7 @@ public:
 		do_something_to_all(msg_pos_can, [this, &msg_can](decltype(msg_pos_can.front()) item) {
 			if (item.second > ASCS_HEAD_LEN) //ignore heartbeat
 			{
-				if (stripped())
+				if (this->stripped())
 					msg_can.emplace_back(std::next(item.first, ASCS_HEAD_LEN), item.second - ASCS_HEAD_LEN);
 				else
 					msg_can.emplace_back(item.first, item.second);
@@ -151,17 +156,17 @@ public:
 #ifdef ASCS_SCATTERED_RECV_BUFFER
 	//this is just to satisfy the compiler, it's not a real scatter-gather buffer,
 	//if you introduce a ring buffer, then you will have the chance to provide a real scatter-gather buffer.
-	virtual buffer_type prepare_next_recv() {assert(remain_len < ASCS_MSG_BUFFER_SIZE); return buffer_type(1, asio::buffer(raw_buff) + remain_len);}
+	virtual typename super::buffer_type prepare_next_recv() {assert(remain_len < ASCS_MSG_BUFFER_SIZE); return typename super::buffer_type(1, asio::buffer(raw_buff) + remain_len);}
 #elif ASIO_VERSION < 101100
-	virtual buffer_type prepare_next_recv() {assert(remain_len < ASCS_MSG_BUFFER_SIZE); return asio::buffer(asio::buffer(raw_buff) + remain_len);}
+	virtual typename super::buffer_type prepare_next_recv() {assert(remain_len < ASCS_MSG_BUFFER_SIZE); return asio::buffer(asio::buffer(raw_buff) + remain_len);}
 #else
-	virtual buffer_type prepare_next_recv() {assert(remain_len < ASCS_MSG_BUFFER_SIZE); return asio::buffer(raw_buff) + remain_len;}
+	virtual typename super::buffer_type prepare_next_recv() {assert(remain_len < ASCS_MSG_BUFFER_SIZE); return asio::buffer(raw_buff) + remain_len;}
 #endif
 
 	//msg must has been unpacked by this unpacker
-	virtual char* raw_data(msg_type& msg) const {return const_cast<char*>(stripped() ? msg.data() : std::next(msg.data(), ASCS_HEAD_LEN));}
-	virtual const char* raw_data(msg_ctype& msg) const {return stripped() ? msg.data() : std::next(msg.data(), ASCS_HEAD_LEN);}
-	virtual size_t raw_data_len(msg_ctype& msg) const {return stripped() ? msg.size() : msg.size() - ASCS_HEAD_LEN;}
+	virtual char* raw_data(typename super::msg_type& msg) const {return const_cast<char*>(this->stripped() ? msg.data() : std::next(msg.data(), ASCS_HEAD_LEN));}
+	virtual const char* raw_data(typename super::msg_ctype& msg) const {return this->stripped() ? msg.data() : std::next(msg.data(), ASCS_HEAD_LEN);}
+	virtual size_t raw_data_len(typename super::msg_ctype& msg) const {return this->stripped() ? msg.size() : msg.size() - ASCS_HEAD_LEN;}
 
 protected:
 	std::array<char, ASCS_MSG_BUFFER_SIZE> raw_buff;
@@ -384,8 +389,9 @@ protected:
 
 //protocol: length + body
 //Buffer can be unique_buffer or shared_buffer, the latter makes output messages seemingly copyable.
-//T can be std::string or basic_buffer, Unpacker can be the default unpacker or flexible_unpacker.
-template<template<typename> class Buffer = shared_buffer, typename T = std::string, typename Unpacker = unpacker>
+//T can be std::string or basic_buffer, and the output message type will be Buffer<T>.
+//Unpacker can be the default unpacker or flexible_unpacker, which means unpacker2 is just a wrapper.
+template<template<typename> class Buffer = shared_buffer, typename T = std::string, typename Unpacker = unpacker<>>
 class unpacker2 : public i_unpacker<Buffer<T>>
 {
 private:
@@ -548,9 +554,9 @@ private:
 };
 
 //protocol: fixed length
-//non-copy, let asio write msg directly (no temporary memory needed), actually, this unpacker has poor performance, because it needs one read for one message, other unpackers
-//are able to get many messages from just one read, so this unpacker just demonstrates a way to avoid memory replications and temporary memory utilization, it can provide better
-// performance for huge messages.
+//non-copy, let asio write msg directly (no temporary memory needed), actually, this unpacker has poor performance, because it needs one read for one message,
+// other unpackers are able to get many messages from just one read, so this unpacker just demonstrates a way to avoid memory replications and temporary memory
+// utilization, it can provide better performance for huge messages.
 //this unpacker doesn't support heartbeat, please note.
 class fixed_length_unpacker : public i_unpacker<basic_buffer>
 {
