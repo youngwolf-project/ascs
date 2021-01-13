@@ -56,15 +56,20 @@ public:
 };
 
 //protocol: length + body
-class packer : public i_packer<std::string>
+//T can be std::string or basic_buffer
+template<typename T = std::string>
+class packer : public i_packer<T>
 {
+private:
+	typedef i_packer<T> super;
+
 public:
 	static size_t get_max_msg_size() {return ASCS_MSG_BUFFER_SIZE - ASCS_HEAD_LEN;}
 
-	using i_packer<msg_type>::pack_msg;
-	virtual msg_type pack_msg(const char* const pstr[], const size_t len[], size_t num, bool native = false)
+	using i_packer<typename super::msg_type>::pack_msg;
+	virtual typename super::msg_type pack_msg(const char* const pstr[], const size_t len[], size_t num, bool native = false)
 	{
-		msg_type msg;
+		typename super::msg_type msg;
 		auto pre_len = native ? 0 : ASCS_HEAD_LEN;
 		auto total_len = packer_helper::msg_size_check(pre_len, pstr, len, num);
 		if ((size_t) -1 != total_len && total_len > pre_len)
@@ -92,7 +97,7 @@ public:
 
 		return msg;
 	}
-	virtual bool pack_msg(msg_type&& msg, container_type& msg_can)
+	virtual bool pack_msg(typename super::msg_type&& msg, typename super::container_type& msg_can)
 	{
 		auto len = msg.size();
 		if (len > get_max_msg_size())
@@ -104,7 +109,7 @@ public:
 
 		return true;
 	}
-	virtual bool pack_msg(msg_type&& msg1, msg_type&& msg2, container_type& msg_can)
+	virtual bool pack_msg(typename super::msg_type&& msg1, typename super::msg_type&& msg2, typename super::container_type& msg_can)
 	{
 		auto len = msg1.size() + msg2.size();
 		if (len > get_max_msg_size()) //not considered overflow
@@ -117,7 +122,7 @@ public:
 
 		return true;
 	}
-	virtual bool pack_msg(container_type& in, container_type& out)
+	virtual bool pack_msg(typename super::container_type& in, typename super::container_type& out)
 	{
 		auto len = ascs::get_size_in_byte(in);
 		if (len > get_max_msg_size()) //not considered overflow
@@ -129,30 +134,32 @@ public:
 
 		return true;
 	}
-	virtual msg_type pack_heartbeat() {auto head_len = packer_helper::pack_header(0); return msg_type((const char*) &head_len, ASCS_HEAD_LEN);}
+	virtual typename super::msg_type pack_heartbeat() {auto head_len = packer_helper::pack_header(0); return typename super::msg_type((const char*) &head_len, ASCS_HEAD_LEN);}
 
 	//msg must has been packed by this packer with native == false
-	virtual char* raw_data(msg_type& msg) const {return const_cast<char*>(std::next(msg.data(), ASCS_HEAD_LEN));}
-	virtual const char* raw_data(msg_ctype& msg) const {return std::next(msg.data(), ASCS_HEAD_LEN);}
-	virtual size_t raw_data_len(msg_ctype& msg) const {return msg.size() - ASCS_HEAD_LEN;}
+	virtual char* raw_data(typename super::msg_type& msg) const {return const_cast<char*>(std::next(msg.data(), ASCS_HEAD_LEN));}
+	virtual const char* raw_data(typename super::msg_ctype& msg) const {return std::next(msg.data(), ASCS_HEAD_LEN);}
+	virtual size_t raw_data_len(typename super::msg_ctype& msg) const {return msg.size() - ASCS_HEAD_LEN;}
 };
 
 //protocol: length + body
-//T can be unique_buffer or shared_buffer, the latter makes output messages seemingly copyable.
-template<typename T = unique_buffer<i_buffer>, typename C = string_buffer>
-class packer2 : public i_packer<T>
+//Buffer can be unique_buffer<XXXX> or shared_buffer<XXXX>, the latter makes output messages seemingly copyable.
+//T is XXXX or a class that inherit from XXXX (because XXXX can be a virtual interface).
+//Packer is the real packer who packs messages, which means packer2 is just a wrapper.
+template<typename Buffer = unique_buffer<i_buffer>, typename T = string_buffer, typename Packer = packer<>>
+class packer2 : public i_packer<Buffer>
 {
 private:
-	typedef i_packer<T> super;
+	typedef i_packer<Buffer> super;
 
 public:
-	static size_t get_max_msg_size() {return packer::get_max_msg_size();}
+	static size_t get_max_msg_size() {return Packer::get_max_msg_size();}
 
 	using super::pack_msg;
 	virtual typename super::msg_type pack_msg(const char* const pstr[], const size_t len[], size_t num, bool native = false)
 	{
-		auto raw_msg = new C();
-		auto str = packer().pack_msg(pstr, len, num, native);
+		auto raw_msg = new T();
+		auto str = Packer().pack_msg(pstr, len, num, native);
 		raw_msg->swap(str);
 		return typename super::msg_type(raw_msg);
 	}
@@ -163,7 +170,7 @@ public:
 			return false;
 
 		auto head_len = packer_helper::pack_header(len);
-		auto raw_msg = new C();
+		auto raw_msg = new T();
 		raw_msg->assign((const char*) &head_len, ASCS_HEAD_LEN);
 		msg_can.emplace_back(raw_msg);
 		msg_can.emplace_back(std::move(msg));
@@ -177,7 +184,7 @@ public:
 			return false;
 
 		auto head_len = packer_helper::pack_header(len);
-		auto raw_msg = new C();
+		auto raw_msg = new T();
 		raw_msg->assign((const char*) &head_len, ASCS_HEAD_LEN);
 		msg_can.emplace_back(raw_msg);
 		msg_can.emplace_back(std::move(msg1));
@@ -192,7 +199,7 @@ public:
 			return false;
 
 		auto head_len = packer_helper::pack_header(len);
-		auto raw_msg = new C();
+		auto raw_msg = new T();
 		raw_msg->assign((const char*) &head_len, ASCS_HEAD_LEN);
 		out.emplace_back(raw_msg);
 		out.splice(std::end(out), in);
@@ -201,8 +208,8 @@ public:
 	}
 	virtual typename super::msg_type pack_heartbeat()
 	{
-		auto raw_msg = new C();
-		auto str = packer().pack_heartbeat();
+		auto raw_msg = new T();
+		auto str = Packer().pack_heartbeat();
 		raw_msg->swap(str);
 		return typename super::msg_type(raw_msg);
 	}
@@ -214,7 +221,7 @@ public:
 };
 
 //protocol: fixed length
-class fixed_length_packer : public packer
+class fixed_length_packer : public packer<>
 {
 public:
 	using packer::pack_msg;
