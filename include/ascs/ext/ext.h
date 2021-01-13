@@ -52,6 +52,10 @@ public:
 	virtual const char* data() const {return std::string::data();}
 };
 
+//a substitute of std::string (just for unpacking scenario, many features are missing according to std::string), because std::string
+// has a small defect which is terrible for unpacking scenario, it cannot change its size without fill its buffer.
+//please note that basic_buffer won't append '\0' to the end of the string (std::string will do), you cannot treat it as a string and
+// print it with "%s" format even all characters in it are printable (because no '\0' appended to them).
 class basic_buffer
 #if defined(_MSC_VER) && _MSC_VER <= 1800
 	: public asio::noncopyable
@@ -60,34 +64,53 @@ class basic_buffer
 public:
 	basic_buffer() {do_detach();}
 	basic_buffer(size_t len) {do_assign(len);}
-	basic_buffer(char* buff, size_t len) {do_attach(buff, len);} //take the ownership of the buff
-	basic_buffer(const char* _buff, size_t len) {do_assign(len); memcpy(buff, _buff, len);} //allocate buffer and copy data from _buff to it
-	basic_buffer(basic_buffer&& other) {do_attach(other.buff, other.len); other.do_detach();}
+	basic_buffer(const char* _buff, size_t len) {do_assign(len); memcpy(buff, _buff, len);}
+	basic_buffer(basic_buffer&& other) {do_attach(other.buff, other.len, other.cap); other.do_detach();}
 	virtual ~basic_buffer() {clear();}
 
 	basic_buffer& operator=(basic_buffer&& other) {clear(); swap(other); return *this;}
-	void resize(size_t len) {assign(len);} //this function doesn't work as std::string::resize, it's just for flexible_unpacker, please note.
-	void assign(size_t len) {clear(); do_assign(len);}
-	void attach(char* buff, size_t len) {clear(); do_attach(buff, len);}
+
+	void resize(size_t _len) //won't fill the extended buffer
+	{
+		if (_len <= cap)
+			len = _len;
+		else
+		{
+			auto old_buff = buff;
+			auto old_len = len;
+
+			do_assign(_len);
+			if (nullptr != old_buff)
+			{
+				memcpy(buff, old_buff, old_len);
+				delete[] old_buff;
+			}
+		}
+	}
+	void reserve(size_t len) {if (len > cap) resize(len);}
+	void assign(size_t len) {resize(len);}
+
+	size_t max_size() const {return (unsigned) -1;}
+	size_t capacity() const {return cap;}
 
 	//the following five functions are needed by ascs
 	bool empty() const {return 0 == len || nullptr == buff;}
 	size_t size() const {return nullptr == buff ? 0 : len;}
 	const char* data() const {return buff;}
-	void swap(basic_buffer& other) {std::swap(buff, other.buff); std::swap(len, other.len);}
+	void swap(basic_buffer& other) {std::swap(buff, other.buff); std::swap(len, other.len); std::swap(cap, other.cap);}
 	void clear() {delete[] buff; do_detach();}
 
 	//functions needed by packer and unpacker
 	char* data() {return buff;}
 
 protected:
-	void do_assign(size_t len) {do_attach(new char[len], len);}
-	void do_attach(char* _buff, size_t _len) {buff = _buff; len = _len;}
-	void do_detach() {buff = nullptr; len = 0;}
+	void do_assign(size_t len) {do_attach(new char[len], len, len);}
+	void do_attach(char* _buff, size_t _len, size_t capacity) {buff = _buff; len = (unsigned) _len; cap = (unsigned) capacity;}
+	void do_detach() {buff = nullptr; len = cap = 0;}
 
 protected:
 	char* buff;
-	size_t len;
+	unsigned len, cap;
 };
 
 class cpu_timer //a substitute of boost::timer::cpu_timer
