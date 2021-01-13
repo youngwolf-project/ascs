@@ -813,13 +813,13 @@ static_assert(ASCS_SERVER_PORT > 0, "server port must be bigger than zero.");
 
 //send buffer's maximum size (bytes), it will be expanded dynamically (not fixed) within this range.
 #ifndef ASCS_MAX_SEND_BUF
-#define ASCS_MAX_SEND_BUF		1048576 //1M
+#define ASCS_MAX_SEND_BUF		(1024 * 1024) //1M, 1048576
 #endif
 static_assert(ASCS_MAX_SEND_BUF > 0, "send buffer capacity must be bigger than zero.");
 
 //recv buffer's maximum size (bytes), it will be expanded dynamically (not fixed) within this range.
 #ifndef ASCS_MAX_RECV_BUF
-#define ASCS_MAX_RECV_BUF		1048576 //1M
+#define ASCS_MAX_RECV_BUF		(1024 * 1024) //1M, 1048576
 #endif
 static_assert(ASCS_MAX_RECV_BUF > 0, "recv buffer capacity must be bigger than zero.");
 

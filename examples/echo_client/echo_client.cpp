@@ -25,9 +25,17 @@
 //2-fixed length packer and unpacker
 //3-prefix and/or suffix packer and unpacker
 
-#if 1 == PACKER_UNPACKER_TYPE
+#if 0 == PACKER_UNPACKER_TYPE
+#define ASCS_HUGE_MSG
+#define ASCS_MSG_BUFFER_SIZE 1000000
+#define ASCS_MAX_SEND_BUF (10 * ASCS_MSG_BUFFER_SIZE)
+#define ASCS_MAX_RECV_BUF (10 * ASCS_MSG_BUFFER_SIZE)
+#define ASCS_DEFAULT_UNPACKER flexible_unpacker<>
+//this unpacker only pre-allocated a buffer of 4000 bytes, but it can parse messages up to ST_ASIO_MSG_BUFFER_SIZE (here is 1000000) bytes,
+//it works as the default unpacker for messages <= 4000, otherwise, it works as non_copy_unpacker
+#elif 1 == PACKER_UNPACKER_TYPE
 #define ASCS_DEFAULT_PACKER packer2<unique_buffer<std::string>, std::string>
-#define ASCS_DEFAULT_UNPACKER unpacker2<unique_buffer<std::string>>
+#define ASCS_DEFAULT_UNPACKER unpacker2<unique_buffer, std::string, flexible_unpacker<>>
 #elif 2 == PACKER_UNPACKER_TYPE
 #undef ASCS_HEARTBEAT_INTERVAL
 #define ASCS_HEARTBEAT_INTERVAL	0 //not support heartbeat
@@ -357,7 +365,7 @@ void send_msg_concurrently(echo_client& client, size_t send_thread_num, size_t m
 			fflush(stdout);
 		}
 	} while (percent < 100);
-	do_something_to_all(threads, [](std::thread& t) {t.join();});
+	do_something_to_all(threads, [](std::thread& t) {if (t.joinable()) t.join();});
 	begin_time.stop();
 
 	printf(" finished in %f seconds, TPS: %f(*2), speed: %f(*2) MBps.\n",
