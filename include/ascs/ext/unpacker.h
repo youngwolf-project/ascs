@@ -383,7 +383,8 @@ protected:
 };
 
 //protocol: length + body
-//T can be unique_buffer<std::string> or shared_buffer<std::string>, the latter makes output messages seemingly copyable.
+//Buffer can be unique_buffer or shared_buffer, the latter makes output messages seemingly copyable.
+//T can be std::string or basic_buffer, Unpacker can be the default unpacker or flexible_unpacker.
 template<template<typename> class Buffer = shared_buffer, typename T = std::string, typename Unpacker = unpacker>
 class unpacker2 : public i_unpacker<Buffer<T>>
 {
