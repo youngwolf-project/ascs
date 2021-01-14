@@ -15,7 +15,7 @@
 
 //the following two macros demonstrate how to support huge msg(exceed 65535 - 2).
 #define ASCS_HUGE_MSG
-//#define ASCS_MSG_BUFFER_SIZE (1024 * 1024) //should not bigger than ASCS_MAX_SEND_BUF and ASCS_MAX_RECV_BUF, please note
+#define ASCS_MSG_BUFFER_SIZE	1000000
 #define ASCS_HEARTBEAT_INTERVAL	5 //if use stream_unpacker, heartbeat messages will be treated as normal messages,
 								  //because stream_unpacker doesn't support heartbeat
 //configuration

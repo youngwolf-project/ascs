@@ -254,7 +254,7 @@ public:
 
 		if (cur_msg_len <= ASCS_MSG_BUFFER_SIZE && cur_msg_len > raw_buff.size()) //big message
 		{
-			extern_buffer();
+			extend_buffer();
 			return true;
 		}
 
@@ -277,7 +277,7 @@ public:
 		}
 
 		if (unpack_ok && (size_t) -1 != cur_msg_len && cur_msg_len > raw_buff.size()) //big message
-			extern_buffer();
+			extend_buffer();
 
 		//if unpacking failed, successfully parsed msgs will still returned via msg_can(sticky package), please note.
 		return unpack_ok;
@@ -345,7 +345,7 @@ public:
 	virtual size_t raw_data_len(typename super::msg_ctype& msg) const {return this->stripped() ? msg.size() : msg.size() - ASCS_HEAD_LEN;}
 
 private:
-	void extern_buffer()
+	void extend_buffer()
 	{
 		auto step = 0;
 		if (this->stripped())
