@@ -30,12 +30,12 @@
 #define ASCS_MSG_BUFFER_SIZE 1000000
 #define ASCS_MAX_SEND_BUF (10 * ASCS_MSG_BUFFER_SIZE)
 #define ASCS_MAX_RECV_BUF (10 * ASCS_MSG_BUFFER_SIZE)
-#define ASCS_DEFAULT_UNPACKER flexible_unpacker<basic_buffer>
+#define ASCS_DEFAULT_UNPACKER flexible_unpacker<>
 //this unpacker only pre-allocated a buffer of 4000 bytes, but it can parse messages up to ST_ASIO_MSG_BUFFER_SIZE (here is 1000000) bytes,
 //it works as the default unpacker for messages <= 4000, otherwise, it works as non_copy_unpacker
 #elif 1 == PACKER_UNPACKER_TYPE
 #define ASCS_DEFAULT_PACKER packer2<unique_buffer<basic_buffer>, basic_buffer, packer<basic_buffer>>
-#define ASCS_DEFAULT_UNPACKER unpacker2<unique_buffer, basic_buffer, flexible_unpacker<basic_buffer>>
+#define ASCS_DEFAULT_UNPACKER unpacker2<unique_buffer<basic_buffer>, basic_buffer, flexible_unpacker<>>
 #elif 2 == PACKER_UNPACKER_TYPE
 #undef ASCS_HEARTBEAT_INTERVAL
 #define ASCS_HEARTBEAT_INTERVAL	0 //not support heartbeat
@@ -164,13 +164,14 @@ protected:
 };
 
 #if ASCS_HEARTBEAT_INTERVAL > 0
-typedef server_socket_base<ext::packer, ext::unpacker> normal_socket;
+typedef server_socket_base<packer<>, unpacker<>> normal_socket;
 #else
 //demonstrate how to open heartbeat function without defining macro ASCS_HEARTBEAT_INTERVAL
-class normal_socket : public server_socket_base<ext::packer<>, ext::unpacker<>>
+class normal_socket : public server_socket_base<packer<>, unpacker<>>
 {
 public:
 	normal_socket(i_server& server_) : server_socket_base<ext::packer<>, ext::unpacker<>>(server_) {}
+	//sometime, the default packer brings name conflict with the socket's packer member function, prefix namespace can resolve this conflict.
 
 protected:
 	//demo client needs heartbeat (macro ASCS_HEARTBEAT_INTERVAL been defined), please note that the interval (here is 5) must be equal to
@@ -190,7 +191,7 @@ protected:
 	virtual bool on_accept(object_ctype& socket_ptr) {stop_listen(); return true;}
 };
 
-class short_connection : public server_socket_base<ext::packer<>, ext::unpacker<>>
+class short_connection : public server_socket_base<packer<>, unpacker<>>
 {
 private:
 	typedef server_socket_base<ext::packer<>, ext::unpacker<>> super;

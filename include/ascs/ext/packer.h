@@ -143,14 +143,14 @@ public:
 };
 
 //protocol: length + body
-//T can be unique_buffer<XXXX> or shared_buffer<XXXX>, the latter makes output messages seemingly copyable.
-//C is XXXX or a class that inherit from XXXX (because XXXX can be a virtual interface).
+//Buffer can be unique_buffer<XXXX> or shared_buffer<XXXX>, the latter makes output messages seemingly copyable.
+//T is XXXX or a class that inherit from XXXX (because XXXX can be a virtual interface).
 //Packer is the real packer who packs messages, which means packer2 is just a wrapper.
-template<typename T = unique_buffer<i_buffer>, typename C = string_buffer, typename Packer = packer<>>
-class packer2 : public i_packer<T>
+template<typename Buffer = unique_buffer<i_buffer>, typename T = string_buffer, typename Packer = packer<>>
+class packer2 : public i_packer<Buffer>
 {
 private:
-	typedef i_packer<T> super;
+	typedef i_packer<Buffer> super;
 
 public:
 	static size_t get_max_msg_size() {return Packer::get_max_msg_size();}
@@ -158,7 +158,7 @@ public:
 	using super::pack_msg;
 	virtual typename super::msg_type pack_msg(const char* const pstr[], const size_t len[], size_t num, bool native = false)
 	{
-		auto raw_msg = new C();
+		auto raw_msg = new T();
 		auto str = Packer().pack_msg(pstr, len, num, native);
 		raw_msg->swap(str);
 		return typename super::msg_type(raw_msg);
@@ -170,7 +170,7 @@ public:
 			return false;
 
 		auto head_len = packer_helper::pack_header(len);
-		auto raw_msg = new C();
+		auto raw_msg = new T();
 		raw_msg->assign((const char*) &head_len, ASCS_HEAD_LEN);
 		msg_can.emplace_back(raw_msg);
 		msg_can.emplace_back(std::move(msg));
@@ -184,7 +184,7 @@ public:
 			return false;
 
 		auto head_len = packer_helper::pack_header(len);
-		auto raw_msg = new C();
+		auto raw_msg = new T();
 		raw_msg->assign((const char*) &head_len, ASCS_HEAD_LEN);
 		msg_can.emplace_back(raw_msg);
 		msg_can.emplace_back(std::move(msg1));
@@ -199,7 +199,7 @@ public:
 			return false;
 
 		auto head_len = packer_helper::pack_header(len);
-		auto raw_msg = new C();
+		auto raw_msg = new T();
 		raw_msg->assign((const char*) &head_len, ASCS_HEAD_LEN);
 		out.emplace_back(raw_msg);
 		out.splice(std::end(out), in);
@@ -208,7 +208,7 @@ public:
 	}
 	virtual typename super::msg_type pack_heartbeat()
 	{
-		auto raw_msg = new C();
+		auto raw_msg = new T();
 		auto str = Packer().pack_heartbeat();
 		raw_msg->swap(str);
 		return typename super::msg_type(raw_msg);
