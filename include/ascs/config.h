@@ -716,6 +716,8 @@
  * TCP client socket will remove itself (in on_recv_error) from tcp::multi_client_base if it is created by the latter and reconnecting is closed.
  * Make function void i_unpacker::stripped(bool) to be virtual.
  * To use the original default packer and unpacker, now you must write them as packer<> and unpacker<>.
+ * If both macro ASCS_PASSIVE_RECV and ASCS_SYNC_RECV been defined, the first invocation (right after the connection been established)
+ *  of recv_msg() will be omitted too, see the two macro for more details.
  *
  * HIGHLIGHT:
  * Introduce del_socket to i_matrix, so socket can remove itself from the container (object_pool and its subclasses) who created it.
@@ -1070,8 +1072,9 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 // means that before the sending really started, you can greedily call send_msg() and may exhaust all virtual memory, please note.
 
 //#define ASCS_PASSIVE_RECV
-//to gain the ability of changing the unpacker at runtime, with this macro, ascs will not do message receiving automatically (except the first one),
-// so you need to manually call recv_msg(), if you need to change the unpacker, do it before recv_msg() invocation, please note.
+//to gain the ability of changing the unpacker at runtime, with this macro, ascs will not do message receiving automatically (except
+// the first one, if macro ASCS_SYNC_RECV been defined, the first one will be omitted too), so you need to manually call recv_msg(),
+// if you need to change the unpacker, do it before recv_msg() invocation, please note.
 //during message receiving, calling recv_msg() will fail, this is by design to avoid asio::io_context using up all virtual memory, this also
 // means that before the receiving really started, you can greedily call recv_msg() and may exhaust all virtual memory, please note.
 //because user can greedily call recv_msg(), it's your responsibility to keep the recv buffer from overflowed, please pay special attention.
@@ -1109,7 +1112,8 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 // this feature will slightly impact efficiency even if you always use async message sending and receiving, so only open this feature when really needed.
 // we must avoid to do sync message sending and receiving in service threads.
 // if prior sync_recv_msg() not returned, the second sync_recv_msg() will return false immediately.
-// with macro ASCS_PASSIVE_RECV, in sync_recv_msg(), recv_msg() will be automatically called.
+// with macro ASCS_PASSIVE_RECV, in sync_recv_msg(), recv_msg() will be automatically called, but the first one (right after the connection been established)
+//  will be omitted too, see macro ASCS_PASSIVE_RECV for more details.
 // after returned from sync_recv_msg(), ascs will not maintain those messages any more.
 
 //Sync operations are not tracked by tracked_executor, please note.
