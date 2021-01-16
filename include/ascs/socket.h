@@ -296,7 +296,9 @@ protected:
 		start_heartbeat(ASCS_HEARTBEAT_INTERVAL);
 #endif
 		send_msg(); //send buffer may have msgs, send them
+#if !defined(ASCS_PASSIVE_RECV) || !defined(ASCS_SYNC_RECV)
 		recv_msg();
+#endif
 
 		return true;
 	}
