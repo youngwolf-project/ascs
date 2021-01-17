@@ -8,8 +8,6 @@
 //#define ASCS_FORCE_TO_USE_MSG_RECV_BUFFER
 //#define ASCS_WANT_MSG_SEND_NOTIFY
 #define ASCS_MSG_BUFFER_SIZE 65536
-#define ASCS_INPUT_QUEUE non_lock_queue //we will never operate sending buffer concurrently, so need no locks
-#define ASCS_INPUT_CONTAINER list
 #define ASCS_DEFAULT_UNPACKER stream_unpacker //non-protocol
 #define ASCS_DECREASE_THREAD_AT_RUNTIME
 //configuration

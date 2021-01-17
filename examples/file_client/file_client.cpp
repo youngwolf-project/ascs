@@ -4,8 +4,6 @@
 //configuration
 #define ASCS_SERVER_PORT	5050
 #define ASCS_DELAY_CLOSE	5 //define this to avoid hooks for async call (and slightly improve efficiency)
-//#define ASCS_INPUT_QUEUE non_lock_queue
-//we cannot use non_lock_queue, because we also send messages (talking messages) out of ascs::socket::on_msg_send().
 #define ASCS_DEFAULT_UNPACKER replaceable_unpacker<>
 #define ASCS_RECV_BUFFER_TYPE std::vector<asio::mutable_buffer> //scatter-gather buffer, it's very useful under certain situations (for example, ring buffer).
 #define ASCS_SCATTERED_RECV_BUFFER //used by unpackers, not belongs to ascs
