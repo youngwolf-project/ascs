@@ -10,8 +10,6 @@
 //#define ASCS_WANT_MSG_SEND_NOTIFY
 #define ASCS_FULL_STATISTIC //full statistic will slightly impact efficiency
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
-#define ASCS_INPUT_QUEUE non_lock_queue //we will never operate sending buffer concurrently, so need no locks
-#define ASCS_INPUT_CONTAINER list
 #endif
 //#define ASCS_MAX_MSG_NUM	16
 //if there's a huge number of links, please reduce messge buffer via ASCS_MAX_MSG_NUM macro.
