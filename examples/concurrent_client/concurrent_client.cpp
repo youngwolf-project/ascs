@@ -7,8 +7,6 @@
 #define ASCS_REUSE_OBJECT //use objects pool
 #define ASCS_DELAY_CLOSE		5 //define this to avoid hooks for async call (and slightly improve efficiency)
 #define ASCS_MSG_BUFFER_SIZE	1024
-#define ASCS_INPUT_QUEUE		non_lock_queue //we will never operate sending buffer concurrently, so need no locks
-#define ASCS_INPUT_CONTAINER	list
 #define ASCS_DECREASE_THREAD_AT_RUNTIME
 //configuration
 

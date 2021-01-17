@@ -133,7 +133,6 @@ protected:
 		out_container_type tmp_can;
 		//this manner requires the container used by the message queue can be spliced (such as std::list, but not std::vector,
 		// ascs doesn't require this characteristic).
-		//these code can be compiled because we used list as the container of the message queue, see macro ASCS_OUTPUT_CONTAINER for more details
 		//to consume all messages in msg_can, see echo_client
 		msg_can.lock();
 		auto begin_iter = std::begin(msg_can);
