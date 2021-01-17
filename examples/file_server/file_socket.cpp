@@ -4,11 +4,6 @@
 #define ASCS_RESTORE_OBJECT
 #define ASCS_ENHANCED_STABILITY
 #define ASCS_WANT_MSG_SEND_NOTIFY
-#define ASCS_INPUT_QUEUE non_lock_queue
-//file_server / file_client is a responsive system, before file_server send each message (except talking message,
-//but file_server only receive talking message, not send talking message proactively), the previous message has been
-//sent to file_client, so sending buffer will always be empty, which means we will never operate sending buffer concurrently,
-//so need no locks.
 #if defined(_MSC_VER) && _MSC_VER <= 1800
 #define ASCS_DEFAULT_PACKER packer2<shared_buffer<i_buffer>>
 #else

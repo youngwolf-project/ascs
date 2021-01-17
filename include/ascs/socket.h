@@ -138,6 +138,7 @@ public:
 #else
 private:
 	void recv_msg() {dispatch_strand(rw_strand, [this]() {this->do_recv_msg();});}
+public:
 #endif
 #ifndef ASCS_EXPOSE_SEND_INTERFACE
 private:
