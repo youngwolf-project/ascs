@@ -8,6 +8,11 @@
 #define ASCS_REUSE_OBJECT //use objects pool
 #define ASCS_DELAY_CLOSE		5 //define this to avoid hooks for async call (and slightly improve efficiency)
 #define ASCS_MSG_BUFFER_SIZE	1024
+#define ASCS_SYNC_DISPATCH
+#ifdef ASCS_SYNC_DISPATCH
+	#define ASCS_INPUT_QUEUE	non_lock_queue
+	#define ASCS_OUTPUT_QUEUE	non_lock_queue
+#endif
 #define ASCS_DECREASE_THREAD_AT_RUNTIME
 //configuration
 
@@ -30,8 +35,29 @@ public:
 	//other heavy things can be done in the constructor too, because we pre-created ASCS_ASYNC_ACCEPT_NUM echo_socket objects
 
 protected:
-	//msg handling: send the original msg back (echo server)
+	//msg handling
+#ifdef ASCS_SYNC_DISPATCH
+	virtual size_t on_msg(std::list<out_msg_type>& msg_can)
+	{
+		ascs::do_something_to_all(msg_can, [this](out_msg_type& msg) {this->direct_send_msg(std::move(msg));});
+		msg_can.clear();
+
+		return 1;
+	}
+#endif
+#ifdef ASCS_DISPATCH_BATCH_MSG
+	virtual size_t on_msg_handle(out_queue_type& msg_can)
+	{
+		assert(!msg_can.empty());
+		out_container_type tmp_can;
+		msg_can.swap(tmp_can);
+
+		ascs::do_something_to_all(tmp_can, [this](out_msg_type& msg) {this->direct_send_msg(std::move(msg));});
+		return 1;
+	}
+#else
 	virtual bool on_msg_handle(out_msg_type& msg) {direct_send_msg(std::move(msg), true); return true;}
+#endif
 	//msg handling end
 };
 
