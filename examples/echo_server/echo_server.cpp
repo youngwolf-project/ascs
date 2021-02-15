@@ -92,7 +92,7 @@ public:
 public:
 	//because we use objects pool(REUSE_OBJECT been defined), so, strictly speaking, this virtual
 	//function must be rewrote, but we don't have member variables to initialize but invoke father's
-	//reset() directly, so, it can be omitted, but we keep it for possibly future using
+	//reset() directly, so, it can be omitted, but we keep it for the possibility of using it in the future
 	virtual void reset() {super::reset();}
 
 protected:
@@ -106,7 +106,7 @@ protected:
 
 	//msg handling: send the original msg back(echo server)
 #ifdef ASCS_SYNC_DISPATCH //do not open this feature
-	//do not hold msg_can for further using, return from on_msg as quickly as possible
+	//do not hold msg_can for further usage, return from on_msg as quickly as possible
 	//access msg_can freely within this callback, it's always thread safe.
 	virtual size_t on_msg(std::list<out_msg_type>& msg_can)
 	{
@@ -129,7 +129,7 @@ protected:
 #endif
 
 #ifdef ASCS_DISPATCH_BATCH_MSG
-	//do not hold msg_can for further using, access msg_can and return from on_msg_handle as quickly as possible
+	//do not hold msg_can for further usage, access msg_can and return from on_msg_handle as quickly as possible
 	//can only access msg_can via functions that marked as 'thread safe', if you used non-lock queue, its your responsibility to guarantee
 	// that new messages will not come until we returned from this callback (for example, pingpong test).
 	virtual size_t on_msg_handle(out_queue_type& msg_can)
@@ -202,13 +202,13 @@ public:
 protected:
 	//msg handling
 #ifdef ASCS_SYNC_DISPATCH
-	//do not hold msg_can for further using, return from on_msg as quickly as possible
+	//do not hold msg_can for further usage, return from on_msg as quickly as possible
 	//access msg_can freely within this callback, it's always thread safe.
 	virtual size_t on_msg(std::list<out_msg_type>& msg_can) {auto re = super::on_msg(msg_can); force_shutdown(); return re;}
 #endif
 
 #ifdef ASCS_DISPATCH_BATCH_MSG
-	//do not hold msg_can for further using, access msg_can and return from on_msg_handle as quickly as possible
+	//do not hold msg_can for further usage, access msg_can and return from on_msg_handle as quickly as possible
 	//can only access msg_can via functions that marked as 'thread safe', if you used non-lock queue, its your responsibility to guarantee
 	// that new messages will not come until we returned from this callback (for example, pingpong test).
 	virtual size_t on_msg_handle(out_queue_type& msg_can) {auto re = super::on_msg_handle(msg_can); force_shutdown(); return re;}

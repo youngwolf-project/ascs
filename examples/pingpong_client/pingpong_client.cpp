@@ -50,7 +50,7 @@ protected:
 	virtual void on_connect() {asio::ip::tcp::no_delay option(true); lowest_layer().set_option(option); client_socket::on_connect();}
 
 	//msg handling, must define macro ASCS_SYNC_DISPATCH
-	//do not hold msg_can for further using, access msg_can and return from on_msg as quickly as possible
+	//do not hold msg_can for further usage, access msg_can and return from on_msg as quickly as possible
 	//access msg_can freely within this callback, it's always thread safe.
 	virtual size_t on_msg(std::list<out_msg_type>& msg_can)
 	{

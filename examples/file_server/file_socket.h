@@ -16,7 +16,7 @@ public:
 
 public:
 	//because we don't use objects pool(we don't defined ASCS_REUSE_OBJECT), so this virtual function will
-	//not be invoked, and can be omitted, but we keep it for possibly future using
+	//not be invoked, and can be omitted, but we keep it for the possibility of using it in the future
 	virtual void reset();
 	virtual void take_over(std::shared_ptr<file_socket> socket_ptr);
 
