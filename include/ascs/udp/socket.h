@@ -369,13 +369,13 @@ private:
 	Matrix* matrix;
 };
 
-template <typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = asio::ip::udp::socket,
+template <typename Packer, typename Unpacker, typename Matrix = i_matrix,
 	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
-class socket_base : public generic_socket<Packer, Unpacker, Matrix, Socket, asio::ip::udp, InQueue, InContainer, OutQueue, OutContainer>
+class socket_base : public generic_socket<Packer, Unpacker, Matrix, asio::ip::udp::socket, asio::ip::udp, InQueue, InContainer, OutQueue, OutContainer>
 {
 private:
-	typedef generic_socket<Packer, Unpacker, Matrix, Socket, asio::ip::udp, InQueue, InContainer, OutQueue, OutContainer> super;
+	typedef generic_socket<Packer, Unpacker, Matrix, asio::ip::udp::socket, asio::ip::udp, InQueue, InContainer, OutQueue, OutContainer> super;
 
 public:
 	socket_base(asio::io_context& io_context_) : super(io_context_) {}
