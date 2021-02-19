@@ -20,7 +20,7 @@
 namespace ascs
 {
 
-template<typename Socket, typename Family, typename Packer, typename Unpacker, typename InMsgType, typename OutMsgType,
+template<typename Socket, typename Packer, typename Unpacker, typename InMsgType, typename OutMsgType,
 	template<typename> class InQueue, template<typename> class InContainer, template<typename> class OutQueue, template<typename> class OutContainer>
 class socket : public timer<tracked_executor>
 {
@@ -408,7 +408,7 @@ protected:
 		if (lowest_layer().is_open())
 		{
 			asio::error_code ec;
-			use_close ? lowest_layer().close(ec) : lowest_layer().shutdown(Family::socket::shutdown_both, ec);
+			use_close ? lowest_layer().close(ec) : lowest_layer().shutdown(asio::socket_base::shutdown_both, ec);
 
 			stat.break_time = time(nullptr);
 		}
@@ -749,13 +749,13 @@ private:
 	unsigned msg_resuming_interval_, msg_handling_interval_;
 };
 
-template<typename Socket, typename Family, typename Packer, typename Unpacker,
+template<typename Socket, typename Packer, typename Unpacker,
 	template<typename> class InQueue, template<typename> class InContainer, template<typename> class OutQueue, template<typename> class OutContainer>
-using socket2 = socket<Socket, Family, Packer, Unpacker, typename Packer::msg_type, typename Unpacker::msg_type, InQueue, InContainer, OutQueue, OutContainer>;
+using socket2 = socket<Socket, Packer, Unpacker, typename Packer::msg_type, typename Unpacker::msg_type, InQueue, InContainer, OutQueue, OutContainer>;
 
 template<typename Socket, typename Family, typename Packer, typename Unpacker, template<typename, typename> class InMsgWrapper, template<typename, typename> class OutMsgWrapper,
 	template<typename> class InQueue, template<typename> class InContainer, template<typename> class OutQueue, template<typename> class OutContainer>
-using socket3 = socket<Socket, Family, Packer, Unpacker, InMsgWrapper<typename Packer::msg_type, Family>, OutMsgWrapper<typename Unpacker::msg_type, Family>, InQueue, InContainer, OutQueue, OutContainer>;
+using socket3 = socket<Socket, Packer, Unpacker, InMsgWrapper<typename Packer::msg_type, Family>, OutMsgWrapper<typename Unpacker::msg_type, Family>, InQueue, InContainer, OutQueue, OutContainer>;
 
 template<typename Socket, typename Family, typename Packer, typename Unpacker, template<typename, typename> class MsgWrapper,
 	template<typename> class InQueue, template<typename> class InContainer, template<typename> class OutQueue, template<typename> class OutContainer>
