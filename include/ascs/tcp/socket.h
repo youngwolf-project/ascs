@@ -183,7 +183,7 @@ protected:
 			if (ec) //graceful shutdown is impossible
 				shutdown();
 			else if (!sync)
-				this->set_timer(TIMER_ASYNC_SHUTDOWN, 10, [this](typename super::tid id)->bool {return this->async_shutdown_handler(ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION * 100);});
+				this->set_timer(TIMER_ASYNC_SHUTDOWN, 10, [this](typename super::tid id)->bool {return this->shutdown_handler(ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION * 100);});
 			else
 			{
 				auto loop_num = ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION * 100; //seconds to 10 milliseconds
@@ -412,14 +412,14 @@ private:
 		}
 	}
 
-	bool async_shutdown_handler(size_t loop_num)
+	bool shutdown_handler(size_t loop_num)
 	{
 		if (link_status::GRACEFUL_SHUTTING_DOWN == status)
 		{
 			--loop_num;
 			if (loop_num > 0)
 			{
-				this->change_timer_call_back(TIMER_ASYNC_SHUTDOWN, [loop_num, this](typename super::tid id)->bool {return this->async_shutdown_handler(loop_num);});
+				this->change_timer_call_back(TIMER_ASYNC_SHUTDOWN, [loop_num, this](typename super::tid id)->bool {return this->shutdown_handler(loop_num);});
 				return true;
 			}
 			else
