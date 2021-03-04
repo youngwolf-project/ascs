@@ -118,7 +118,7 @@ public:
 		temp_service_can.splice(std::end(temp_service_can), service_can);
 		lock.unlock();
 
-		ascs::do_something_to_all(temp_service_can, [this](object_type& item) {this->stop_and_free(item);});
+		ascs::do_something_to_all(temp_service_can, [this](object_type& item) {stop_and_free(item);});
 	}
 
 	void start_service(int thread_num = ASCS_SERVICE_THREAD_NUM) {if (!is_service_started()) do_service(thread_num);}
@@ -177,7 +177,7 @@ public:
 	bool is_running() const {return !stopped();}
 	bool is_service_started() const {return started;}
 
-	void add_service_thread(int thread_num) {for (auto i = 0; i < thread_num; ++i) service_threads.emplace_back([this]() {this->run();});}
+	void add_service_thread(int thread_num) {for (auto i = 0; i < thread_num; ++i) service_threads.emplace_back([this]() {run();});}
 #ifdef ASCS_DECREASE_THREAD_AT_RUNTIME
 	void del_service_thread(int thread_num) {if (thread_num > 0) {del_thread_num += thread_num;}}
 	int service_thread_num() const {return real_thread_num;}

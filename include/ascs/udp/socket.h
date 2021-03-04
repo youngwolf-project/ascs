@@ -257,10 +257,10 @@ private:
 #endif
 			if (is_connected)
 				this->next_layer().async_receive(recv_buff, make_strand_handler(rw_strand,
-					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);})));
+					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);})));
 			else
 				this->next_layer().async_receive_from(recv_buff, temp_addr, make_strand_handler(rw_strand,
-					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);})));
+					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);})));
 		}
 	}
 
@@ -277,7 +277,7 @@ private:
 			reading = false; //clear reading flag before call handle_msg() to make sure that recv_msg() can be called successfully in on_msg_handle()
 #endif
 			ascs::do_something_to_all(msg_can, [this](typename Unpacker::msg_type& msg) {
-				this->temp_msg_can.emplace_back(this->is_connected ? this->peer_addr : this->temp_addr, std::move(msg));
+				temp_msg_can.emplace_back(is_connected ? peer_addr : temp_addr, std::move(msg));
 			});
 			if (handle_msg()) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
 				do_recv_msg(); //receive msg in sequence
@@ -313,10 +313,10 @@ private:
 			sending_msg.restart();
 			if (is_connected)
 				this->next_layer().async_send(asio::buffer(sending_msg.data(), sending_msg.size()), make_strand_handler(rw_strand,
-					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);})));
+					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);})));
 			else
 				this->next_layer().async_send_to(asio::buffer(sending_msg.data(), sending_msg.size()), sending_msg.peer_addr, make_strand_handler(rw_strand,
-					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);})));
+					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);})));
 			return true;
 		}
 

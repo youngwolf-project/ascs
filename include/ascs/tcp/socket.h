@@ -183,7 +183,7 @@ protected:
 			if (ec) //graceful shutdown is impossible
 				shutdown();
 			else if (!sync)
-				this->set_timer(TIMER_ASYNC_SHUTDOWN, 10, [this](typename super::tid id)->bool {return this->shutdown_handler(ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION * 100);});
+				this->set_timer(TIMER_ASYNC_SHUTDOWN, 10, [this](typename super::tid id)->bool {return shutdown_handler(ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION * 100);});
 			else
 			{
 				auto loop_num = ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION * 100; //seconds to 10 milliseconds
@@ -287,8 +287,8 @@ private:
 			reading = true;
 #endif
 			asio::async_read(this->next_layer(), recv_buff,
-				[this](const asio::error_code& ec, size_t bytes_transferred)->size_t {return this->completion_checker(ec, bytes_transferred);}, make_strand_handler(rw_strand,
-					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);})));
+				[this](const asio::error_code& ec, size_t bytes_transferred)->size_t {return completion_checker(ec, bytes_transferred);}, make_strand_handler(rw_strand,
+					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);})));
 		}
 	}
 
@@ -347,7 +347,7 @@ private:
 		sending_buffer.clear(); //this buffer will not be refreshed according to sending_msgs timely
 		ascs::do_something_to_all(sending_msgs, [&](typename super::in_msg& item) {
 			this->stat.send_delay_sum += end_time - item.begin_time;
-			this->sending_buffer.emplace_back(item.data(), item.size());
+			sending_buffer.emplace_back(item.data(), item.size());
 		});
 
 		if (!sending_buffer.empty())
@@ -355,7 +355,7 @@ private:
 			sending = true;
 			sending_msgs.front().restart();
 			asio::async_write(this->next_layer(), sending_buffer, make_strand_handler(rw_strand,
-				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);})));
+				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);})));
 			return true;
 		}
 
@@ -421,7 +421,7 @@ private:
 			--loop_num;
 			if (loop_num > 0)
 			{
-				this->change_timer_call_back(TIMER_ASYNC_SHUTDOWN, ASCS_COPY_ALL_AND_THIS(typename super::tid id)->bool {return this->shutdown_handler(loop_num);});
+				this->change_timer_call_back(TIMER_ASYNC_SHUTDOWN, ASCS_COPY_ALL_AND_THIS(typename super::tid id)->bool {return shutdown_handler(loop_num);});
 				return true;
 			}
 			else

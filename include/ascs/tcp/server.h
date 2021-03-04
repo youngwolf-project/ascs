@@ -89,7 +89,7 @@ public:
 #endif
 		if (ec) {unified_out::error_out("listen failed."); return false;}
 
-		ascs::do_something_to_all(sockets, [this](typename Pool::object_ctype& item) {this->do_async_accept(item);});
+		ascs::do_something_to_all(sockets, [this](typename Pool::object_ctype& item) {do_async_accept(item);});
 		return true;
 	}
 	bool is_listening() const {return acceptor.is_open();}
@@ -224,7 +224,7 @@ private:
 	}
 
 	void do_async_accept(typename Pool::object_ctype& socket_ptr)
-		{if (socket_ptr) acceptor.async_accept(socket_ptr->lowest_layer(), ASCS_COPY_ALL_AND_THIS(const asio::error_code& ec) {this->accept_handler(ec, socket_ptr);});}
+		{if (socket_ptr) acceptor.async_accept(socket_ptr->lowest_layer(), ASCS_COPY_ALL_AND_THIS(const asio::error_code& ec) {accept_handler(ec, socket_ptr);});}
 
 private:
 	typename Family::endpoint server_addr;
