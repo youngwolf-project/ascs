@@ -109,7 +109,7 @@ public:
 
 		std::list<std::pair<const char*, size_t>> msg_pos_can;
 		auto unpack_ok = parse_msg(msg_pos_can);
-		do_something_to_all(msg_pos_can, [this, &msg_can](decltype(msg_pos_can.front()) item) {
+		do_something_to_all(msg_pos_can, [&](decltype(msg_pos_can.front()) item) {
 			if (item.second > ASCS_HEAD_LEN) //ignore heartbeat
 			{
 				if (this->stripped())
@@ -260,7 +260,7 @@ public:
 
 		std::list<std::pair<const char*, size_t>> msg_pos_can;
 		auto unpack_ok = parse_msg(msg_pos_can);
-		do_something_to_all(msg_pos_can, [this, &msg_can](decltype(msg_pos_can.front()) item) {
+		do_something_to_all(msg_pos_can, [&](decltype(msg_pos_can.front()) item) {
 			if (item.second > ASCS_HEAD_LEN) //ignore heartbeat
 			{
 				if (this->stripped())
@@ -406,7 +406,7 @@ public:
 	{
 		typename Unpacker::container_type tmp_can;
 		auto unpack_ok = unpacker_.parse_msg(bytes_transferred, tmp_can);
-		do_something_to_all(tmp_can, [&msg_can](typename Unpacker::msg_type& item) {msg_can.emplace_back(new T(std::move(item)));});
+		do_something_to_all(tmp_can, [&](typename Unpacker::msg_type& item) {msg_can.emplace_back(new T(std::move(item)));});
 
 		//if unpacking failed, successfully parsed msgs will still returned via msg_can(sticky package), please note.
 		return unpack_ok;

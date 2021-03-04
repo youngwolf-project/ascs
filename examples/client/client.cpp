@@ -86,7 +86,7 @@ private:
 
 std::thread create_sync_recv_thread(client_socket& client)
 {
-	return std::thread([&client]() {
+	return std::thread([&]() {
 		ASCS_DEFAULT_UNPACKER::container_type msg_can;
 		sync_call_result re = sync_call_result::SUCCESS;
 		do

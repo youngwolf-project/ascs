@@ -514,7 +514,7 @@ protected:
 	{
 		size_t size_in_byte = 0;
 		in_container_type temp_buffer;
-		ascs::do_something_to_all(msg_can, [&size_in_byte, &temp_buffer](InMsgType& msg) {size_in_byte += msg.size(); temp_buffer.emplace_back(std::move(msg));});
+		ascs::do_something_to_all(msg_can, [&](InMsgType& msg) {size_in_byte += msg.size(); temp_buffer.emplace_back(std::move(msg));});
 		prior ? send_buffer.move_items_in_front(temp_buffer, size_in_byte) : send_buffer.move_items_in(temp_buffer, size_in_byte);
 		send_msg();
 
@@ -551,7 +551,7 @@ protected:
 
 		size_t size_in_byte = 0;
 		in_container_type temp_buffer;
-		ascs::do_something_to_all(msg_can, [&size_in_byte, &temp_buffer](InMsgType& msg) {size_in_byte += msg.size(); temp_buffer.emplace_back(std::move(msg));});
+		ascs::do_something_to_all(msg_can, [&](InMsgType& msg) {size_in_byte += msg.size(); temp_buffer.emplace_back(std::move(msg));});
 
 		temp_buffer.back().check_and_create_promise(true);
 		auto p = temp_buffer.back().p;
@@ -631,7 +631,7 @@ private:
 			dispatching = true;
 			auto begin_time = statistic::now();
 #ifdef ASCS_FULL_STATISTIC
-			recv_buffer.do_something_to_all([&, this](out_msg& msg) {this->stat.dispatch_delay_sum += begin_time - msg.begin_time;});
+			recv_buffer.do_something_to_all([&](out_msg& msg) {this->stat.dispatch_delay_sum += begin_time - msg.begin_time;});
 #endif
 			auto re = on_msg_handle(recv_buffer);
 			auto end_time = statistic::now();
@@ -640,7 +640,7 @@ private:
 			if (0 == re) //dispatch failed, re-dispatch
 			{
 #ifdef ASCS_FULL_STATISTIC
-				recv_buffer.do_something_to_all([&end_time](out_msg& msg) {msg.restart(end_time);});
+				recv_buffer.do_something_to_all([&](out_msg& msg) {msg.restart(end_time);});
 #endif
 				set_timer(TIMER_DISPATCH_MSG, msg_handling_interval_, [this](tid id)->bool {return this->timer_handler(TIMER_DISPATCH_MSG);}); //hold dispatching
 			}

@@ -104,7 +104,7 @@ void file_socket::handle_msg(out_msg_ctype& msg)
 		{
 			uint_fast64_t id;
 			memcpy(&id, std::next(msg.data(), ORDER_LEN), sizeof(uint_fast64_t));
-			get_server().restore_socket(this->shared_from_this(), id, true);
+			get_server().restore_socket(shared_from_this(), id, true);
 		}
 	default:
 		break;

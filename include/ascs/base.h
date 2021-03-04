@@ -520,7 +520,7 @@ template<typename _Can>
 size_t get_size_in_byte(const _Can& __can)
 {
 	size_t size_in_byte = 0;
-	do_something_to_all(__can, [&size_in_byte](typename _Can::const_reference item) {size_in_byte += item.size();});
+	do_something_to_all(__can, [&](typename _Can::const_reference item) {size_in_byte += item.size();});
 	return size_in_byte;
 }
 
@@ -528,7 +528,7 @@ template<typename _Can>
 size_t get_size_in_byte(const _Can& __can, size_t& size)
 {
 	auto size_in_byte = size = 0;
-	do_something_to_all(__can, [&size_in_byte, &size](typename _Can::const_reference item) {size_in_byte += item.size(); ++size;});
+	do_something_to_all(__can, [&](typename _Can::const_reference item) {size_in_byte += item.size(); ++size;});
 	return size_in_byte;
 }
 

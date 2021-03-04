@@ -117,7 +117,7 @@ protected:
 	//access msg_can freely within this callback, it's always thread safe.
 	virtual size_t on_msg(std::list<out_msg_type>& msg_can)
 	{
-		ascs::do_something_to_all(msg_can, [this](out_msg_type& msg) {this->handle_msg(msg);});
+		ascs::do_something_to_all(msg_can, [this](out_msg_type& msg) {handle_msg(msg);});
 		msg_can.clear(); //if we left behind some messages in msg_can, they will be dispatched via on_msg_handle asynchronously, which means it's
 		//possible that on_msg_handle be invoked concurrently with the next on_msg (new messages arrived) and then disorder messages.
 		//here we always consumed all messages, so we can use sync message dispatching, otherwise, we should not use sync message dispatching
@@ -137,7 +137,7 @@ protected:
 		out_container_type tmp_can;
 		msg_can.swap(tmp_can); //to consume a part of the messages in msg_can, see echo_server
 
-		ascs::do_something_to_all(tmp_can, [this](out_msg_type& msg) {this->handle_msg(msg);});
+		ascs::do_something_to_all(tmp_can, [this](out_msg_type& msg) {handle_msg(msg);});
 		return 1;
 		//if we indeed handled some messages, do return 1, else, return 0
 		//if we handled nothing, but want to re-dispatch messages immediately, return 1
@@ -190,8 +190,8 @@ public:
 	uint64_t get_recv_bytes()
 	{
 		uint64_t total_recv_bytes = 0;
-		do_something_to_all([&total_recv_bytes](object_ctype& item) {total_recv_bytes += *item;});
-//		do_something_to_all([&total_recv_bytes](object_ctype& item) {total_recv_bytes += item->get_recv_bytes();});
+		do_something_to_all([&](object_ctype& item) {total_recv_bytes += *item;});
+//		do_something_to_all([&](object_ctype& item) {total_recv_bytes += item->get_recv_bytes();});
 
 		return total_recv_bytes;
 	}
@@ -211,9 +211,9 @@ public:
 			//notice: these methods need to define ASCS_CLEAR_OBJECT_INTERVAL macro, because it just shut down the socket,
 			//not really remove them from object pool, this will cause echo_client still send data via them, and wait responses from them.
 			//for this scenario, the smaller ASCS_CLEAR_OBJECT_INTERVAL macro is, the better experience you will get, so set it to 1 second.
-		case 0: do_something_to_one([&n](object_ctype& item) {return n-- > 0 ? item->graceful_shutdown(), false : true;});				break;
-		case 1: do_something_to_one([&n](object_ctype& item) {return n-- > 0 ? item->graceful_shutdown(false, false), false : true;});	break;
-		case 2: do_something_to_one([&n](object_ctype& item) {return n-- > 0 ? item->force_shutdown(), false : true;});					break;
+		case 0: do_something_to_one([&](object_ctype& item) {return n-- > 0 ? item->graceful_shutdown(), false : true;});				break;
+		case 1: do_something_to_one([&](object_ctype& item) {return n-- > 0 ? item->graceful_shutdown(false, false), false : true;});	break;
+		case 2: do_something_to_one([&](object_ctype& item) {return n-- > 0 ? item->force_shutdown(), false : true;});					break;
 #else
 			//method #2
 			//this is a equivalence of calling i_server::del_socket in server_socket_base::on_recv_error (see server_socket_base for more details).
@@ -222,9 +222,9 @@ public:
 		case 2: while (n-- > 0) force_shutdown(at(0));				break;
 #endif
 			//if you just want to reconnect to the server, you should do it like this:
-		case 3: do_something_to_one([&n](object_ctype& item) {return n-- > 0 ? item->graceful_shutdown(true), false : true;});			break;
-		case 4: do_something_to_one([&n](object_ctype& item) {return n-- > 0 ? item->graceful_shutdown(true, false), false : true;});	break;
-		case 5: do_something_to_one([&n](object_ctype& item) {return n-- > 0 ? item->force_shutdown(true), false : true;});				break;
+		case 3: do_something_to_one([&](object_ctype& item) {return n-- > 0 ? item->graceful_shutdown(true), false : true;});			break;
+		case 4: do_something_to_one([&](object_ctype& item) {return n-- > 0 ? item->graceful_shutdown(true, false), false : true;});	break;
+		case 5: do_something_to_one([&](object_ctype& item) {return n-- > 0 ? item->force_shutdown(true), false : true;});				break;
 		}
 	}
 
@@ -335,14 +335,14 @@ void send_msg_concurrently(echo_client& client, size_t send_thread_num, size_t m
 
 	cpu_timer begin_time;
 	std::list<std::thread> threads;
-	do_something_to_all(link_groups, [&threads, &msg_num, &msg_len, &msg_fill](const std::list<echo_client::object_type>& item) {
-		threads.emplace_back([&item, msg_num, msg_len, msg_fill]() {
+	do_something_to_all(link_groups, [&](const std::list<echo_client::object_type>& item) {
+		threads.emplace_back([=, &item]() {
 			auto buff = new char[msg_len];
 			memset(buff, msg_fill, msg_len);
 			for (size_t i = 0; i < msg_num; ++i)
 			{
 				memcpy(buff, &i, sizeof(size_t)); //seq
-				do_something_to_all(item, [&buff, &msg_len](echo_client::object_ctype& item2) {item2->safe_send_msg(buff, msg_len, false);}); //can_overflow is false, it's important
+				do_something_to_all(item, [&](echo_client::object_ctype& item2) {item2->safe_send_msg(buff, msg_len, false);}); //can_overflow is false, it's important
 			}
 			delete[] buff;
 		});
@@ -430,7 +430,7 @@ int main(int argc, const char* argv[])
 	//method #2, add clients first without any arguments, then set the server address.
 	for (size_t i = 1; i < link_num / 2; ++i)
 		client.add_socket();
-	client.do_something_to_all([&port, &ip](echo_client::object_ctype& item) {item->set_server_addr(port, ip);});
+	client.do_something_to_all([&](echo_client::object_ctype& item) {item->set_server_addr(port, ip);});
 
 	//method #3, add clients and set server address in one invocation.
 	for (auto i = std::max((size_t) 1, link_num / 2); i < link_num; ++i)

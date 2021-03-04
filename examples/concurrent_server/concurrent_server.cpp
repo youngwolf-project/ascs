@@ -39,7 +39,7 @@ protected:
 #ifdef ASCS_SYNC_DISPATCH
 	virtual size_t on_msg(std::list<out_msg_type>& msg_can)
 	{
-		ascs::do_something_to_all(msg_can, [this](out_msg_type& msg) {this->direct_send_msg(std::move(msg));});
+		ascs::do_something_to_all(msg_can, [this](out_msg_type& msg) {direct_send_msg(std::move(msg));});
 		msg_can.clear();
 
 		return 1;
@@ -52,7 +52,7 @@ protected:
 		out_container_type tmp_can;
 		msg_can.swap(tmp_can);
 
-		ascs::do_something_to_all(tmp_can, [this](out_msg_type& msg) {this->direct_send_msg(std::move(msg));});
+		ascs::do_something_to_all(tmp_can, [this](out_msg_type& msg) {direct_send_msg(std::move(msg));});
 		return 1;
 	}
 #else

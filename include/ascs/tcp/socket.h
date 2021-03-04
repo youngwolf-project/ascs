@@ -345,7 +345,7 @@ private:
 		send_buffer.move_items_out(asio::detail::default_max_transfer_size, sending_msgs);
 #endif
 		sending_buffer.clear(); //this buffer will not be refreshed according to sending_msgs timely
-		ascs::do_something_to_all(sending_msgs, [this, &end_time](typename super::in_msg& item) {
+		ascs::do_something_to_all(sending_msgs, [&](typename super::in_msg& item) {
 			this->stat.send_delay_sum += end_time - item.begin_time;
 			this->sending_buffer.emplace_back(item.data(), item.size());
 		});
@@ -419,7 +419,7 @@ private:
 			--loop_num;
 			if (loop_num > 0)
 			{
-				this->change_timer_call_back(TIMER_ASYNC_SHUTDOWN, [loop_num, this](typename super::tid id)->bool {return this->shutdown_handler(loop_num);});
+				this->change_timer_call_back(TIMER_ASYNC_SHUTDOWN, ASCS_COPY_ALL_AND_THIS(typename super::tid id)->bool {return this->shutdown_handler(loop_num);});
 				return true;
 			}
 			else
