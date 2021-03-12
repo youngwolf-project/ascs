@@ -20,7 +20,7 @@
 namespace ascs
 {
 
-template<typename Socket, typename Family, typename Packer, typename Unpacker, typename InMsgType, typename OutMsgType,
+template<typename Socket, typename Packer, typename Unpacker, typename InMsgType, typename OutMsgType,
 	template<typename> class InQueue, template<typename> class InContainer, template<typename> class OutQueue, template<typename> class OutContainer>
 class socket : public timer<tracked_executor>
 {
@@ -408,7 +408,7 @@ protected:
 		if (lowest_layer().is_open())
 		{
 			asio::error_code ec;
-			use_close ? lowest_layer().close(ec) : lowest_layer().shutdown(Family::socket::shutdown_both, ec);
+			use_close ? lowest_layer().close(ec) : lowest_layer().shutdown(asio::socket_base::shutdown_both, ec);
 
 			stat.break_time = time(nullptr);
 		}
@@ -514,7 +514,7 @@ protected:
 	{
 		size_t size_in_byte = 0;
 		in_container_type temp_buffer;
-		ascs::do_something_to_all(msg_can, [&size_in_byte, &temp_buffer](InMsgType& msg) {size_in_byte += msg.size(); temp_buffer.emplace_back(std::move(msg));});
+		ascs::do_something_to_all(msg_can, [&](InMsgType& msg) {size_in_byte += msg.size(); temp_buffer.emplace_back(std::move(msg));});
 		prior ? send_buffer.move_items_in_front(temp_buffer, size_in_byte) : send_buffer.move_items_in(temp_buffer, size_in_byte);
 		send_msg();
 
@@ -551,7 +551,7 @@ protected:
 
 		size_t size_in_byte = 0;
 		in_container_type temp_buffer;
-		ascs::do_something_to_all(msg_can, [&size_in_byte, &temp_buffer](InMsgType& msg) {size_in_byte += msg.size(); temp_buffer.emplace_back(std::move(msg));});
+		ascs::do_something_to_all(msg_can, [&](InMsgType& msg) {size_in_byte += msg.size(); temp_buffer.emplace_back(std::move(msg));});
 
 		temp_buffer.back().check_and_create_promise(true);
 		auto p = temp_buffer.back().p;
@@ -631,7 +631,7 @@ private:
 			dispatching = true;
 			auto begin_time = statistic::now();
 #ifdef ASCS_FULL_STATISTIC
-			recv_buffer.do_something_to_all([&, this](out_msg& msg) {this->stat.dispatch_delay_sum += begin_time - msg.begin_time;});
+			recv_buffer.do_something_to_all([&](out_msg& msg) {this->stat.dispatch_delay_sum += begin_time - msg.begin_time;});
 #endif
 			auto re = on_msg_handle(recv_buffer);
 			auto end_time = statistic::now();
@@ -640,7 +640,7 @@ private:
 			if (0 == re) //dispatch failed, re-dispatch
 			{
 #ifdef ASCS_FULL_STATISTIC
-				recv_buffer.do_something_to_all([&end_time](out_msg& msg) {msg.restart(end_time);});
+				recv_buffer.do_something_to_all([&](out_msg& msg) {msg.restart(end_time);});
 #endif
 				set_timer(TIMER_DISPATCH_MSG, msg_handling_interval_, [this](tid id)->bool {return this->timer_handler(TIMER_DISPATCH_MSG);}); //hold dispatching
 			}
@@ -749,13 +749,13 @@ private:
 	unsigned msg_resuming_interval_, msg_handling_interval_;
 };
 
-template<typename Socket, typename Family, typename Packer, typename Unpacker,
+template<typename Socket, typename Packer, typename Unpacker,
 	template<typename> class InQueue, template<typename> class InContainer, template<typename> class OutQueue, template<typename> class OutContainer>
-using socket2 = socket<Socket, Family, Packer, Unpacker, typename Packer::msg_type, typename Unpacker::msg_type, InQueue, InContainer, OutQueue, OutContainer>;
+using socket2 = socket<Socket, Packer, Unpacker, typename Packer::msg_type, typename Unpacker::msg_type, InQueue, InContainer, OutQueue, OutContainer>;
 
 template<typename Socket, typename Family, typename Packer, typename Unpacker, template<typename, typename> class InMsgWrapper, template<typename, typename> class OutMsgWrapper,
 	template<typename> class InQueue, template<typename> class InContainer, template<typename> class OutQueue, template<typename> class OutContainer>
-using socket3 = socket<Socket, Family, Packer, Unpacker, InMsgWrapper<typename Packer::msg_type, Family>, OutMsgWrapper<typename Unpacker::msg_type, Family>, InQueue, InContainer, OutQueue, OutContainer>;
+using socket3 = socket<Socket, Packer, Unpacker, InMsgWrapper<typename Packer::msg_type, Family>, OutMsgWrapper<typename Unpacker::msg_type, Family>, InQueue, InContainer, OutQueue, OutContainer>;
 
 template<typename Socket, typename Family, typename Packer, typename Unpacker, template<typename, typename> class MsgWrapper,
 	template<typename> class InQueue, template<typename> class InContainer, template<typename> class OutQueue, template<typename> class OutContainer>

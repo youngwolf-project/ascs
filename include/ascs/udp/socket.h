@@ -199,7 +199,7 @@ protected:
 
 	//msg was failed to send and udp::generic_socket will not hold it any more, if you want to re-send it in the future,
 	// you must take over it and re-send (at any time) it via direct_send_msg.
-	//DO NOT hold msg for future using, just swap its content with your own message in this virtual function.
+	//DO NOT hold msg for further usage, just swap its content with your own message in this virtual function.
 	virtual void on_send_error(const asio::error_code& ec, typename super::in_msg& msg)
 		{unified_out::error_out(ASCS_LLF " send msg error (%d %s)", this->id(), ec.value(), ec.message().data());}
 
@@ -265,7 +265,7 @@ private:
 #ifdef ASCS_PASSIVE_RECV
 			reading = false; //clear reading flag before call handle_msg() to make sure that recv_msg() can be called successfully in on_msg_handle()
 #endif
-			ascs::do_something_to_all(msg_can, [this](typename Unpacker::msg_type& msg) {temp_msg_can.emplace_back(this->temp_addr, std::move(msg));});
+			ascs::do_something_to_all(msg_can, [this](typename Unpacker::msg_type& msg) {this->temp_msg_can.emplace_back(this->temp_addr, std::move(msg));});
 			if (handle_msg()) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
 				do_recv_msg(); //receive msg in sequence
 		}
@@ -369,13 +369,13 @@ private:
 	Matrix* matrix;
 };
 
-template <typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = asio::ip::udp::socket,
+template <typename Packer, typename Unpacker, typename Matrix = i_matrix,
 	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
-class socket_base : public generic_socket<Packer, Unpacker, Matrix, Socket, asio::ip::udp, InQueue, InContainer, OutQueue, OutContainer>
+class socket_base : public generic_socket<Packer, Unpacker, Matrix, asio::ip::udp::socket, asio::ip::udp, InQueue, InContainer, OutQueue, OutContainer>
 {
 private:
-	typedef generic_socket<Packer, Unpacker, Matrix, Socket, asio::ip::udp, InQueue, InContainer, OutQueue, OutContainer> super;
+	typedef generic_socket<Packer, Unpacker, Matrix, asio::ip::udp::socket, asio::ip::udp, InQueue, InContainer, OutQueue, OutContainer> super;
 
 public:
 	socket_base(asio::io_context& io_context_) : super(io_context_) {}

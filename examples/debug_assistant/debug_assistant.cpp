@@ -33,7 +33,7 @@ protected:
 
 		this->set_timer(super::TIMER_END, 1000 * 60, [this](tid id)->bool {
 			auto now = time(nullptr);
-			this->do_something_to_all([&now](typename super::object_ctype& object_ptr) {
+			this->do_something_to_all([&](typename super::object_ctype& object_ptr) {
 				if (object_ptr->get_statistic().last_recv_time + 10 * 60 < now)
 					object_ptr->force_shutdown();
 			});
@@ -121,9 +121,9 @@ int main(int argc, const char* argv[])
 					return sp.end_service();
 			}
 
-			signal_receiver.async_wait([&signal_handler](const asio::error_code& ec, int signal_number) {signal_handler(ec, signal_number);});
+			signal_receiver.async_wait([&](const asio::error_code& ec, int signal_number) {signal_handler(ec, signal_number);});
 		};
-		signal_receiver.async_wait([&signal_handler](const asio::error_code& ec, int signal_number) {signal_handler(ec, signal_number);});
+		signal_receiver.async_wait([&](const asio::error_code& ec, int signal_number) {signal_handler(ec, signal_number);});
 
 		sp.run_service();
 		return 0;

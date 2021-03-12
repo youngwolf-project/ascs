@@ -57,7 +57,7 @@ protected:
 #ifdef ASCS_SYNC_DISPATCH
 	virtual size_t on_msg(std::list<out_msg_type>& msg_can)
 	{
-		ascs::do_something_to_all(msg_can, [this](out_msg_type& msg) {this->handle_msg(msg);});
+		ascs::do_something_to_all(msg_can, [this](out_msg_type& msg) {handle_msg(msg);});
 		msg_can.clear();
 
 		return 1;
@@ -70,7 +70,7 @@ protected:
 		out_container_type tmp_can;
 		msg_can.swap(tmp_can);
 
-		ascs::do_something_to_all(tmp_can, [this](out_msg_type& msg) {this->handle_msg(msg);});
+		ascs::do_something_to_all(tmp_can, [this](out_msg_type& msg) {handle_msg(msg);});
 		return 1;
 	}
 #else
@@ -97,8 +97,8 @@ public:
 
 	void begin(float max_delay, size_t msg_len)
 	{
-		do_something_to_all([&msg_len](object_ctype& item) {item->begin(msg_len);});
-		set_timer(TIMER_END, 5000, [max_delay, this](tid id)->bool {this->do_something_to_all([&max_delay](object_ctype& item) {item->check_delay(max_delay);}); return true;});
+		do_something_to_all([&](object_ctype& item) {item->begin(msg_len);});
+		set_timer(TIMER_END, 5000, ASCS_COPY_ALL_AND_THIS(tid id)->bool {do_something_to_all([&](object_ctype& item) {item->check_delay(max_delay);}); return true;});
 	}
 };
 

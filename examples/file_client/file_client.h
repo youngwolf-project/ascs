@@ -74,7 +74,7 @@ protected:
 			handle_msg(out_msg_type()); //we need empty message as a notification, it's just our business logic.
 		else
 		{
-			ascs::do_something_to_all(msg_can, [this](out_msg_type& msg) {this->handle_msg(msg);});
+			ascs::do_something_to_all(msg_can, [this](out_msg_type& msg) {handle_msg(msg);});
 			msg_can.clear();
 		}
 
@@ -93,7 +93,7 @@ protected:
 		out_container_type tmp_can;
 		msg_can.swap(tmp_can);
 
-		ascs::do_something_to_all(tmp_can, [this](out_msg_type& msg) {this->handle_msg(msg);});
+		ascs::do_something_to_all(tmp_can, [this](out_msg_type& msg) {handle_msg(msg);});
 
 		recv_msg(); //we always handled all messages, so calling recv_msg() at here is very reasonable.
 		return 1;
@@ -250,11 +250,11 @@ private:
 			printf("transfer %s begin.\n", file_name.data());
 			if (find(0)->get_file(file_name))
 			{
-				//do_something_to_all([&file_name](object_ctype& item) {if (0 != item->id()) item->get_file(file_name);});
+				//do_something_to_all([&](object_ctype& item) {if (0 != item->id()) item->get_file(file_name);});
 				//if you always return false, do_something_to_one will be equal to do_something_to_all.
-				do_something_to_one([&file_name](object_ctype& item)->bool {if (0 != item->id()) item->get_file(file_name); return false;});
+				do_something_to_one([&](object_ctype& item)->bool {if (0 != item->id()) item->get_file(file_name); return false;});
 				begin_time.restart();
-				set_timer(UPDATE_PROGRESS, 50, [this](tid id)->bool {return this->update_progress_handler(id, -1);});
+				set_timer(UPDATE_PROGRESS, 50, [this](tid id)->bool {return update_progress_handler(id, -1);});
 
 				break;
 			}
@@ -285,7 +285,7 @@ private:
 				printf("\r%u%%", new_percent);
 				fflush(stdout);
 
-				change_timer_call_back(id, [new_percent, this](tid id)->bool {return this->update_progress_handler(id, new_percent);});
+				change_timer_call_back(id, ASCS_COPY_ALL_AND_THIS(tid id)->bool {return update_progress_handler(id, new_percent);});
 			}
 		}
 

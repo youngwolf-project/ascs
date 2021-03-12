@@ -237,7 +237,7 @@ public:
 	object_type invalid_object_find(uint_fast64_t id)
 	{
 		std::lock_guard<std::mutex> lock(invalid_object_can_mutex);
-		auto iter = std::find_if(std::begin(invalid_object_can), std::end(invalid_object_can), [&id](object_ctype& item) {return item->is_equal_to(id);});
+		auto iter = std::find_if(std::begin(invalid_object_can), std::end(invalid_object_can), [&](object_ctype& item) {return item->is_equal_to(id);});
 		return iter == std::end(invalid_object_can) ? object_type() : *iter;
 	}
 
@@ -253,7 +253,7 @@ public:
 	object_type invalid_object_pop(uint_fast64_t id)
 	{
 		std::lock_guard<std::mutex> lock(invalid_object_can_mutex);
-		auto iter = std::find_if(std::begin(invalid_object_can), std::end(invalid_object_can), [&id](object_ctype& item) {return item->is_equal_to(id);});
+		auto iter = std::find_if(std::begin(invalid_object_can), std::end(invalid_object_can), [&](object_ctype& item) {return item->is_equal_to(id);});
 		if (iter != std::end(invalid_object_can) && (*iter).unique() && (*iter)->obsoleted())
 		{
 			auto object_ptr(std::move(*iter));
@@ -328,7 +328,7 @@ public:
 			//	//in this function without unique() checking.
 			//	socket_ptr->set_timer(...);
 			//}
-			//then in the future, when invoking the timer handler, the socket has been freed and it's this pointer already became wild.
+			//then in the future, when invoke the timer handler, the socket has been freed and its this pointer already became wild.
 			if ((*iter).unique() && (*iter)->obsoleted())
 			{
 				--num;

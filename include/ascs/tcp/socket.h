@@ -17,9 +17,9 @@
 
 namespace ascs { namespace tcp {
 
-template <typename Socket, typename Family, typename Packer, typename Unpacker,
+template <typename Socket, typename Packer, typename Unpacker,
 	template<typename> class InQueue, template<typename> class InContainer, template<typename> class OutQueue, template<typename> class OutContainer>
-class socket_base : public socket2<Socket, Family, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer>
+class socket_base : public socket2<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer>
 {
 public:
 	typedef typename Packer::msg_type in_msg_type;
@@ -28,7 +28,7 @@ public:
 	typedef typename Unpacker::msg_ctype out_msg_ctype;
 
 private:
-	typedef socket2<Socket, Family, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer> super;
+	typedef socket2<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer> super;
 
 protected:
 	enum link_status {CONNECTED, FORCE_SHUTTING_DOWN, GRACEFUL_SHUTTING_DOWN, BROKEN, HANDSHAKING};
@@ -179,11 +179,11 @@ protected:
 			status = link_status::GRACEFUL_SHUTTING_DOWN;
 
 			asio::error_code ec;
-			this->lowest_layer().shutdown(Family::socket::shutdown_send, ec);
+			this->lowest_layer().shutdown(asio::socket_base::shutdown_send, ec);
 			if (ec) //graceful shutdown is impossible
 				shutdown();
 			else if (!sync)
-				this->set_timer(TIMER_ASYNC_SHUTDOWN, 10, [this](typename super::tid id)->bool {return this->async_shutdown_handler(ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION * 100);});
+				this->set_timer(TIMER_ASYNC_SHUTDOWN, 10, [this](typename super::tid id)->bool {return this->shutdown_handler(ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION * 100);});
 			else
 			{
 				auto loop_num = ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION * 100; //seconds to 10 milliseconds
@@ -224,7 +224,7 @@ protected:
 	//generally, you don't have to rewrite this to maintain the status of connections
 	//msg_can contains messages that were failed to send and tcp::socket_base will not hold them any more, if you want to re-send them in the future,
 	// you must take over them and re-send (at any time) them via direct_send_msg.
-	//DO NOT hold msg_can for future using, just swap its content with your own container in this virtual function.
+	//DO NOT hold msg_can for further usage, just swap its content with your own container in this virtual function.
 	virtual void on_send_error(const asio::error_code& ec, typename super::in_container_type& msg_can)
 		{unified_out::error_out(ASCS_LLF " send msg error (%d %s)", this->id(), ec.value(), ec.message().data());}
 
@@ -345,7 +345,7 @@ private:
 		send_buffer.move_items_out(asio::detail::default_max_transfer_size, sending_msgs);
 #endif
 		sending_buffer.clear(); //this buffer will not be refreshed according to sending_msgs timely
-		ascs::do_something_to_all(sending_msgs, [this, &end_time](typename super::in_msg& item) {
+		ascs::do_something_to_all(sending_msgs, [&](typename super::in_msg& item) {
 			this->stat.send_delay_sum += end_time - item.begin_time;
 			this->sending_buffer.emplace_back(item.data(), item.size());
 		});
@@ -412,14 +412,14 @@ private:
 		}
 	}
 
-	bool async_shutdown_handler(size_t loop_num)
+	bool shutdown_handler(size_t loop_num)
 	{
 		if (link_status::GRACEFUL_SHUTTING_DOWN == status)
 		{
 			--loop_num;
 			if (loop_num > 0)
 			{
-				this->change_timer_call_back(TIMER_ASYNC_SHUTDOWN, [loop_num, this](typename super::tid id)->bool {return this->async_shutdown_handler(loop_num);});
+				this->change_timer_call_back(TIMER_ASYNC_SHUTDOWN, ASCS_COPY_ALL_AND_THIS(typename super::tid id)->bool {return this->shutdown_handler(loop_num);});
 				return true;
 			}
 			else

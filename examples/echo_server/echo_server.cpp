@@ -92,7 +92,7 @@ public:
 public:
 	//because we use objects pool(REUSE_OBJECT been defined), so, strictly speaking, this virtual
 	//function must be rewrote, but we don't have member variables to initialize but invoke father's
-	//reset() directly, so, it can be omitted, but we keep it for possibly future using
+	//reset() directly, so, it can be omitted, but we keep it for the possibility of using it in the future
 	virtual void reset() {super::reset();}
 
 protected:
@@ -106,7 +106,7 @@ protected:
 
 	//msg handling: send the original msg back(echo server)
 #ifdef ASCS_SYNC_DISPATCH //do not open this feature
-	//do not hold msg_can for further using, return from on_msg as quickly as possible
+	//do not hold msg_can for further usage, return from on_msg as quickly as possible
 	//access msg_can freely within this callback, it's always thread safe.
 	virtual size_t on_msg(std::list<out_msg_type>& msg_can)
 	{
@@ -119,7 +119,7 @@ protected:
 		//2. if we use true can_overflow to call send_msg, then buffer usage will be out of control, we should not take this risk.
 
 		//following statement can avoid one memory replication if the type of out_msg_type and in_msg_type are identical.
-		ascs::do_something_to_all(msg_can, [this](out_msg_type& msg) {this->send_msg(std::move(msg), true);});
+		ascs::do_something_to_all(msg_can, [this](out_msg_type& msg) {send_msg(std::move(msg), true);});
 		msg_can.clear();
 
 		return 1;
@@ -129,7 +129,7 @@ protected:
 #endif
 
 #ifdef ASCS_DISPATCH_BATCH_MSG
-	//do not hold msg_can for further using, access msg_can and return from on_msg_handle as quickly as possible
+	//do not hold msg_can for further usage, access msg_can and return from on_msg_handle as quickly as possible
 	//can only access msg_can via functions that marked as 'thread safe', if you used non-lock queue, its your responsibility to guarantee
 	// that new messages will not come until we returned from this callback (for example, pingpong test).
 	virtual size_t on_msg_handle(out_queue_type& msg_can)
@@ -141,7 +141,7 @@ protected:
 		msg_can.move_items_out(tmp_can, 10); //don't be too greedy, here is in a service thread, we should not block this thread for a long time
 
 		//following statement can avoid one memory replication if the type of out_msg_type and in_msg_type are identical.
-		ascs::do_something_to_all(tmp_can, [this](out_msg_type& msg) {this->send_msg(std::move(msg), true);});
+		ascs::do_something_to_all(tmp_can, [this](out_msg_type& msg) {send_msg(std::move(msg), true);});
 		return 1;
 		//if we indeed handled some messages, do return 1, else, return 0
 		//if we handled nothing, but want to re-dispatch messages immediately, return 1
@@ -202,13 +202,13 @@ public:
 protected:
 	//msg handling
 #ifdef ASCS_SYNC_DISPATCH
-	//do not hold msg_can for further using, return from on_msg as quickly as possible
+	//do not hold msg_can for further usage, return from on_msg as quickly as possible
 	//access msg_can freely within this callback, it's always thread safe.
 	virtual size_t on_msg(std::list<out_msg_type>& msg_can) {auto re = super::on_msg(msg_can); force_shutdown(); return re;}
 #endif
 
 #ifdef ASCS_DISPATCH_BATCH_MSG
-	//do not hold msg_can for further using, access msg_can and return from on_msg_handle as quickly as possible
+	//do not hold msg_can for further usage, access msg_can and return from on_msg_handle as quickly as possible
 	//can only access msg_can via functions that marked as 'thread safe', if you used non-lock queue, its your responsibility to guarantee
 	// that new messages will not come until we returned from this callback (for example, pingpong test).
 	virtual size_t on_msg_handle(out_queue_type& msg_can) {auto re = super::on_msg_handle(msg_can); force_shutdown(); return re;}
@@ -315,11 +315,11 @@ int main(int argc, const char* argv[])
 			//send \0 character too, because demo client used basic_buffer as its msg type, it will not append \0 character automatically as std::string does,
 			//so need \0 character when printing it.
 			if (!msg.empty())
-				((normal_server&) normal_server_).do_something_to_all([&msg](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(msg);});
+				((normal_server&) normal_server_).do_something_to_all([&](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(msg);});
 			*/
 			/*
 			//if demo client is using stream_unpacker
-			((normal_server&) normal_server_).do_something_to_all([&str](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(str);});
+			((normal_server&) normal_server_).do_something_to_all([&](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(str);});
 			//or
 			normal_server_.broadcast_native_msg(str);
 			*/

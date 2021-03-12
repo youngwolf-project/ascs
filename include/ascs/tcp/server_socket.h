@@ -17,14 +17,14 @@
 
 namespace ascs { namespace tcp {
 
-template<typename Packer, typename Unpacker, typename Server = i_server, typename Socket = asio::ip::tcp::socket, typename Family = asio::ip::tcp,
+template<typename Packer, typename Unpacker, typename Server = i_server, typename Socket = asio::ip::tcp::socket,
 	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
-class generic_server_socket : public socket_base<Socket, Family, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer>,
-	public std::enable_shared_from_this<generic_server_socket<Packer, Unpacker, Server, Socket, Family, InQueue, InContainer, OutQueue, OutContainer>>
+class generic_server_socket : public socket_base<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer>,
+	public std::enable_shared_from_this<generic_server_socket<Packer, Unpacker, Server, Socket, InQueue, InContainer, OutQueue, OutContainer>>
 {
 private:
-	typedef socket_base<Socket, Family, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer> super;
+	typedef socket_base<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer> super;
 
 public:
 	generic_server_socket(Server& server_) : super(server_.get_service_pump()), server(server_) {}
@@ -86,13 +86,13 @@ private:
 template<typename Packer, typename Unpacker, typename Server = i_server, typename Socket = asio::ip::tcp::socket,
 	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
-using server_socket_base = generic_server_socket<Packer, Unpacker, Server, Socket, asio::ip::tcp, InQueue, InContainer, OutQueue, OutContainer>;
+using server_socket_base = generic_server_socket<Packer, Unpacker, Server, Socket, InQueue, InContainer, OutQueue, OutContainer>;
 
 #ifdef ASIO_HAS_LOCAL_SOCKETS
 template <typename Packer, typename Unpacker, typename Server = i_server,
 	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
-using unix_server_socket_base = generic_server_socket<Packer, Unpacker, Server, asio::local::stream_protocol::socket, asio::local::stream_protocol, InQueue, InContainer, OutQueue, OutContainer>;
+using unix_server_socket_base = generic_server_socket<Packer, Unpacker, Server, asio::local::stream_protocol::socket, InQueue, InContainer, OutQueue, OutContainer>;
 #endif
 
 }} //namespace
