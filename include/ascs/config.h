@@ -752,6 +752,26 @@
  *
  * REPLACEMENTS:
  *
+ * ===============================================================
+ * 2021.x.x		version 1.5.3
+ *
+ * SPECIAL ATTENTION (incompatible with old editions):
+ *
+ * HIGHLIGHT:
+ * Support connected UDP socket, set macro ASCS_UDP_CONNECT_MODE to true to open it, you must also provide peer's ip address via set_peer_addr,
+ *  function set_connect_mode can open it too (before start_service). For connected UDP socket, the peer_addr parameter in send_msg (series)
+ *  will be ignored, please note.
+ *
+ * FIX:
+ *
+ * ENHANCEMENTS:
+ *
+ * DELETION:
+ *
+ * REFACTORING:
+ *
+ * REPLACEMENTS:
+ *
  */
 
 #ifndef _ASCS_CONFIG_H_
@@ -989,6 +1009,10 @@ static_assert(ASCS_ASYNC_ACCEPT_NUM > 0, "async accept number must be bigger tha
 #endif
 #ifndef ASCS_UDP_DEFAULT_IP_VERSION
 #define ASCS_UDP_DEFAULT_IP_VERSION asio::ip::udp::v4()
+#endif
+
+#ifndef ASCS_UDP_CONNECT_MODE
+#define ASCS_UDP_CONNECT_MODE false
 #endif
 
 //close port reuse
