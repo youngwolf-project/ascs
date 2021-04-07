@@ -247,7 +247,7 @@ private:
 			file_size = -1;
 			received_size = 0;
 
-			printf("transfer %s begin.\n", file_name.data());
+			printf("transmit %s begin.\n", file_name.data());
 			if (find(0)->get_file(file_name))
 			{
 				//do_something_to_all([&](object_ctype& item) {if (0 != item->id()) item->get_file(file_name);});
@@ -259,7 +259,7 @@ private:
 				break;
 			}
 			else
-				printf("transfer %s failed!\n", file_name.data());
+				printf("transmit %s failed!\n", file_name.data());
 		}
 	}
 

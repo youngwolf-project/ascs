@@ -24,7 +24,7 @@ std::atomic_int_fast64_t received_size;
 
 int main(int argc, const char* argv[])
 {
-	puts("this is a file transfer client.");
+	puts("this is a file transmission client.");
 	printf("usage: %s [<port=%d> [<ip=%s> [link num=1]]]\n", argv[0], ASCS_SERVER_PORT, ASCS_SERVER_IP);
 	if (argc >= 2 && (0 == strcmp(argv[1], "--help") || 0 == strcmp(argv[1], "-h")))
 		return 0;
