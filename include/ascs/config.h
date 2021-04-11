@@ -461,13 +461,13 @@
  * HIGHLIGHT:
  *
  * FIX:
- * If give up connecting (prepare_reconnect returns -1 or call close_reconnect), ascs::socket::started() still returns true (should be false).
+ * If give up connecting (prepare_reconnect returns -1 or call set_reconnect(false)), ascs::socket::started() still returns true (should be false).
  *
  * ENHANCEMENTS:
  * Expose server_base's acceptor via next_layer().
  * Prefix suffix packer and unpacker support heartbeat.
  * New demo socket_management demonstrates how to manage sockets if you use other keys rather than the original id.
- * Control reconnecting more flexibly, see function client_socket_base::open_reconnect and client_socket_base::close_reconnect for more details.
+ * Control reconnecting more flexibly, see function client_socket_base::set_reconnect and client_socket_base::is_reconnect for more details.
  * client_socket_base support binding to a specific local address.
  *
  * DELETION:
@@ -753,7 +753,7 @@
  * REPLACEMENTS:
  *
  * ===============================================================
- * 2021.x.x		version 1.5.3
+ * 2021.x.x		version 1.6.0
  *
  * SPECIAL ATTENTION (incompatible with old editions):
  *
@@ -765,8 +765,10 @@
  * FIX:
  *
  * ENHANCEMENTS:
+ * Enhance the reusability of ascs' ssl sockets, now they can be reused (include reconnecting) just as normal socket.
  *
  * DELETION:
+ * Delete macro ASCS_REUSE_SSL_STREAM, now ascs' ssl sockets can be reused just as normal socket.
  *
  * REFACTORING:
  *
@@ -1060,12 +1062,6 @@ static_assert(ASCS_HEARTBEAT_MAX_ABSENCE > 0, "heartbeat absence must be bigger 
 
 //#define ASCS_ALWAYS_SEND_HEARTBEAT
 //always send heartbeat in each ASCS_HEARTBEAT_INTERVAL seconds without checking if we're sending other messages or not.
-
-//#define ASCS_REUSE_SSL_STREAM
-//if you need ssl::client_socket_base to be able to reconnect the server, or to open object pool in ssl::object_pool, you must define this macro.
-//I tried many ways, only one way can make asio::ssl::stream reusable, which is:
-// don't call any shutdown functions of asio::ssl::stream, just call asio::ip::tcp::socket's shutdown function,
-// this seems not a normal procedure, but it works, I believe that asio's defect caused this problem.
 
 //#define ASCS_AVOID_AUTO_STOP_SERVICE
 //wrap service_pump with asio::io_service::work (asio::executor_work_guard), then it will never run out until you explicitly call stop_service().

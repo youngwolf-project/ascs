@@ -26,38 +26,13 @@ namespace ascs { namespace ssl {
 template <typename Socket>
 class socket : public Socket
 {
-#ifndef ASCS_REUSE_SSL_STREAM
-	#ifdef ASCS_REUSE_OBJECT
-		#error please define ASCS_REUSE_SSL_STREAM macro explicitly if you need asio::ssl::stream to be reusable!
-	#endif
-	#if ASCS_RECONNECT
-		#ifdef _MSC_VER
-			#pragma message("without macro ASCS_REUSE_SSL_STREAM, ssl::client_socket_base is not able to reconnect the server.")
-		#else
-			#warning without macro ASCS_REUSE_SSL_STREAM, ssl::client_socket_base is not able to reconnect the server.
-		#endif
-	#endif
-#endif
-
 public:
 	template<typename Arg> socket(Arg&& arg, asio::ssl::context& ctx) : Socket(std::forward<Arg>(arg), ctx) {}
 
 protected:
 	virtual void on_recv_error(const asio::error_code& ec)
 	{
-#ifndef ASCS_REUSE_SSL_STREAM
-		if (this->is_ready())
-		{
-			this->status = Socket::link_status::GRACEFUL_SHUTTING_DOWN;
-			this->show_info("ssl link:", "been shut down.");
-			asio::error_code ec;
-			this->next_layer().shutdown(ec);
-
-			if (ec && asio::error::eof != ec) //the endpoint who initiated a shutdown operation will get error eof.
-				unified_out::info_out(ASCS_LLF " shutdown ssl link failed (maybe intentionally because of reusing)", this->id());
-		}
-#endif
-
+		shutdown_ssl(true);
 		Socket::on_recv_error(ec);
 	}
 
@@ -72,13 +47,9 @@ protected:
 	void shutdown_ssl(bool sync = true)
 	{
 		if (!this->is_ready())
-		{
-			Socket::force_shutdown();
 			return;
-		}
 
 		this->status = Socket::link_status::GRACEFUL_SHUTTING_DOWN;
-
 		if (!sync)
 		{
 			this->show_info("ssl link:", "been shutting down.");
@@ -90,11 +61,11 @@ protected:
 		else
 		{
 			this->show_info("ssl link:", "been shut down.");
+
 			asio::error_code ec;
 			this->next_layer().shutdown(ec);
-
 			if (ec && asio::error::eof != ec) //the endpoint who initiated a shutdown operation will get error eof.
-				unified_out::info_out(ASCS_LLF " shutdown ssl link failed (maybe intentionally because of reusing)", this->id());
+				unified_out::info_out(ASCS_LLF " shutdown ssl link failed: %s", this->id(), ec.message().data());
 		}
 	}
 };
@@ -108,29 +79,34 @@ private:
 	typedef socket<tcp::client_socket_base<Packer, Unpacker, Matrix, asio::ssl::stream<asio::ip::tcp::socket>, InQueue, InContainer, OutQueue, OutContainer>> super;
 
 public:
-	client_socket_base(asio::io_context& io_context_, asio::ssl::context& ctx) : super(io_context_, ctx) {}
-	client_socket_base(Matrix& matrix_, asio::ssl::context& ctx) : super(matrix_, ctx) {}
+	client_socket_base(asio::io_context& io_context_, asio::ssl::context& ctx_) : super(io_context_, ctx_), io_context(io_context_), ctx(ctx_) {}
+	client_socket_base(Matrix& matrix_, asio::ssl::context& ctx_) : super(matrix_, ctx_), io_context(matrix_.get_service_pump()), ctx(ctx_) {}
 
 	virtual const char* type_name() const {return "SSL (client endpoint)";}
 	virtual int type_id() const {return 3;}
 
-#ifndef ASCS_REUSE_SSL_STREAM
 	void disconnect(bool reconnect = false) {force_shutdown(reconnect);}
 	void force_shutdown(bool reconnect = false) {graceful_shutdown(reconnect);}
 	void graceful_shutdown(bool reconnect = false, bool sync = true)
 	{
-		if (reconnect)
-			unified_out::error_out(ASCS_LLF " reconnecting mechanism is not available, please define macro ASCS_REUSE_SSL_STREAM", this->id());
-
-		shutdown_ssl(sync);
+		if (this->is_ready())
+		{
+			this->set_reconnect(reconnect);
+			shutdown_ssl(sync);
+		}
+		else
+			super::force_shutdown(reconnect);
 	}
 
 protected:
-	virtual int prepare_reconnect(const asio::error_code& ec) {return -1;}
-#else
-protected:
-#endif
-	virtual void on_unpack_error() {unified_out::info_out(ASCS_LLF " can not unpack msg.", this->id()); this->unpacker()->dump_left_data(); this->force_shutdown();}
+	virtual void on_unpack_error() {unified_out::info_out(ASCS_LLF " can not unpack msg.", this->id()); this->unpacker()->dump_left_data(); force_shutdown(this->is_reconnect());}
+	virtual void after_close()
+	{
+		if (this->is_reconnect())
+			this->reset_next_layer(io_context, ctx);
+
+		super::after_close();
+	}
 
 private:
 	virtual void connect_handler(const asio::error_code& ec) //intercept tcp::client_socket_base::connect_handler
@@ -148,10 +124,6 @@ private:
 	{
 		this->on_handshake(ec);
 
-#if ASCS_RECONNECT && !defined(ASCS_REUSE_SSL_STREAM)
-		this->close_reconnect();
-#endif
-
 		if (!ec)
 			super::connect_handler(ec); //return to tcp::client_socket_base::connect_handler
 		else
@@ -159,6 +131,10 @@ private:
 	}
 
 	using super::shutdown_ssl;
+
+private:
+	asio::io_context& io_context;
+	asio::ssl::context& ctx;
 };
 
 template<typename Object>
@@ -187,16 +163,20 @@ private:
 	typedef socket<tcp::server_socket_base<Packer, Unpacker, Server, asio::ssl::stream<asio::ip::tcp::socket>, InQueue, InContainer, OutQueue, OutContainer>> super;
 
 public:
-	server_socket_base(Server& server_, asio::ssl::context& ctx) : super(server_, ctx) {}
+	server_socket_base(Server& server_, asio::ssl::context& ctx_) : super(server_, ctx_), ctx(ctx_) {}
 
 	virtual const char* type_name() const {return "SSL (server endpoint)";}
 	virtual int type_id() const {return 4;}
 
-#ifndef ASCS_REUSE_SSL_STREAM
+	virtual void reset()
+	{
+		this->reset_next_layer(this->get_server().get_service_pump(), ctx);
+		super::reset();
+	}
+
 	void disconnect() {force_shutdown();}
 	void force_shutdown() {graceful_shutdown();} //must with async mode (the default value), because server_base::uninit will call this function
-	void graceful_shutdown(bool sync = false) {shutdown_ssl(sync);}
-#endif
+	void graceful_shutdown(bool sync = false) {if (this->is_ready()) shutdown_ssl(sync); else super::force_shutdown();}
 
 protected:
 	virtual bool do_start() //intercept tcp::server_socket_base::do_start (to add handshake)
@@ -220,6 +200,9 @@ private:
 	}
 
 	using super::shutdown_ssl;
+
+private:
+	asio::ssl::context& ctx;
 };
 
 template<typename Socket, typename Pool = object_pool<Socket>, typename Server = tcp::i_server> using server_base = tcp::server_base<Socket, Pool, Server>;

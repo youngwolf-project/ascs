@@ -4,7 +4,6 @@
 //configuration
 #define ASCS_SERVER_PORT	9527
 #define ASCS_REUSE_OBJECT	//use objects pool
-#define ASCS_REUSE_SSL_STREAM
 #define ASCS_MAX_OBJECT_NUM	1024
 //configuration
 
