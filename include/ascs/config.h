@@ -756,8 +756,10 @@
  * 2021.x.x		version 1.6.0
  *
  * SPECIAL ATTENTION (incompatible with old editions):
+ * client_socket's function open_reconnect and close_reconnect have been replaced by function set_reconnect(bool).
  *
  * HIGHLIGHT:
+ * Support reliable UDP socket.
  * Support connected UDP socket, set macro ASCS_UDP_CONNECT_MODE to true to open it, you must also provide peer's ip address via set_peer_addr,
  *  function set_connect_mode can open it too (before start_service). For connected UDP socket, the peer_addr parameter in send_msg (series)
  *  will be ignored, please note.
@@ -772,8 +774,10 @@
  * Delete macro ASCS_REUSE_SSL_STREAM, now ascs' ssl sockets can be reused just as normal socket.
  *
  * REFACTORING:
+ * Re-implement the reusability (object reuse and reconnecting) of ascs' ssl sockets.
  *
  * REPLACEMENTS:
+ * client_socket's function open_reconnect and close_reconnect have been replaced by function set_reconnect(bool).
  *
  */
 
@@ -1017,6 +1021,11 @@ static_assert(ASCS_ASYNC_ACCEPT_NUM > 0, "async accept number must be bigger tha
 #ifndef ASCS_UDP_CONNECT_MODE
 #define ASCS_UDP_CONNECT_MODE false
 #endif
+
+#ifndef ASCS_UDP_MAX_SYNC_BUF
+#define ASCS_UDP_MAX_SYNC_BUF 512
+#endif
+static_assert(ASCS_UDP_MAX_SYNC_BUF > 0 && ASCS_UDP_MAX_SYNC_BUF <= 1024, "reliable UDP sync buffer size must be bigger than zero and less then 1025.");
 
 //close port reuse
 //#define ASCS_NOT_REUSE_ADDRESS

@@ -16,6 +16,7 @@
 #include "packer.h"
 #include "unpacker.h"
 #include "../udp/socket.h"
+#include "../udp/reliable_socket.h"
 #include "../udp/socket_service.h"
 #include "../single_service_pump.h"
 
@@ -33,6 +34,11 @@ typedef ascs::udp::socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UDP_UNPACKER> s
 typedef ascs::udp::single_socket_service_base<socket> single_socket_service;
 typedef ascs::udp::multi_socket_service_base<socket> multi_socket_service;
 typedef multi_socket_service socket_service;
+
+typedef ascs::udp::reliable_socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UDP_UNPACKER> reliable_socket;
+typedef ascs::udp::single_socket_service_base<reliable_socket> reliable_single_socket_service;
+typedef ascs::udp::multi_socket_service_base<reliable_socket> reliable_multi_socket_service;
+typedef reliable_multi_socket_service reliable_socket_service;
 
 #ifdef ASIO_HAS_LOCAL_SOCKETS
 typedef ascs::udp::unix_socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UDP_UNPACKER> unix_socket;

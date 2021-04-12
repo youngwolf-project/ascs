@@ -22,17 +22,18 @@ using namespace ascs::ext::udp;
 #define QUIT_COMMAND	"quit"
 #define RESTART_COMMAND	"restart"
 
-std::thread create_sync_recv_thread(single_socket_service& service)
+template <typename Socket>
+std::thread create_sync_recv_thread(Socket& socket)
 {
 	return std::thread([&]() {
-		std::list<single_socket_service::out_msg_type> msg_can;
+		std::list<typename Socket::out_msg_type> msg_can;
 		auto re = ascs::sync_call_result::SUCCESS;
 		do
 		{
-			re = service.sync_recv_msg(msg_can, 50); //ascs will not maintain messages in msg_can anymore after sync_recv_msg return, please note.
+			re = socket.sync_recv_msg(msg_can, 50); //ascs will not maintain messages in msg_can anymore after sync_recv_msg return, please note.
 			if (ascs::sync_call_result::SUCCESS == re)
 			{
-				ascs::do_something_to_all(msg_can, [](single_socket_service::out_msg_type& msg) {printf("sync recv(" ASCS_SF ") : %s\n", msg.size(), msg.data());});
+				ascs::do_something_to_all(msg_can, [](typename Socket::out_msg_type& msg) {printf("sync recv(" ASCS_SF ") : %s\n", msg.size(), msg.data());});
 				msg_can.clear(); //sync_recv_msg just append new message(s) to msg_can, please note.
 			}
 		} while (ascs::sync_call_result::SUCCESS == re || ascs::sync_call_result::TIMEOUT == re);
@@ -51,7 +52,7 @@ int main(int argc, const char* argv[])
 		puts("type " QUIT_COMMAND " to end.");
 
 	ascs::service_pump sp;
-	single_socket_service service(sp);
+	reliable_single_socket_service service(sp);
 	service.set_local_addr((unsigned short) atoi(argv[1])); //for multicast, do not bind to a specific IP, just port is enough
 	service.set_peer_addr((unsigned short) atoi(argv[2]), argc >= 4 ? argv[3] : "127.0.0.1");
 
