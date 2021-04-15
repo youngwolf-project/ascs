@@ -28,8 +28,11 @@ public:
 public:
 #if ASIO_VERSION >= 101200
 	single_service_pump(int concurrency_hint = ASIO_CONCURRENCY_HINT_SAFE) : service_pump(concurrency_hint), Service((service_pump&) *this) {}
+	template<typename Arg> single_service_pump(Arg&& arg, int concurrency_hint = ASIO_CONCURRENCY_HINT_SAFE) :
+		service_pump(concurrency_hint), Service((service_pump&) *this, std::forward<Arg>(arg)) {}
 #else
 	single_service_pump() : Service((service_pump&) *this) {}
+	template<typename Arg> single_service_pump() : Service((service_pump&) *this, std::forward<Arg>(arg)) {}
 #endif
 };
 

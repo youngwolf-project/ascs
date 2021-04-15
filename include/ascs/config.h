@@ -763,6 +763,7 @@
  *  will be ignored, please note.
  *
  * FIX:
+ * single_service_pump support ssl single_client(_base).
  *
  * ENHANCEMENTS:
  * Enhance the reusability of ascs' ssl sockets, now they can be reused (include reconnecting) just as normal socket.
