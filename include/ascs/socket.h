@@ -154,7 +154,11 @@ public:
 #ifndef ASCS_EXPOSE_SEND_INTERFACE
 private:
 #endif
+#ifdef ASCS_ARBITRARY_SEND
+	void send_msg() {dispatch_strand(rw_strand, [this]() {this->do_send_msg();});}
+#else
 	void send_msg() {if (!sending && is_ready()) dispatch_strand(rw_strand, [this]() {this->do_send_msg();});}
+#endif
 
 public:
 	void start_heartbeat(int interval, int max_absence = ASCS_HEARTBEAT_MAX_ABSENCE)

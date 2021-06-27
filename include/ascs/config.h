@@ -1093,6 +1093,11 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 //during message sending, calling send_msg() will fail, this is by design to avoid asio::io_context using up all virtual memory, this also
 // means that before the sending really started, you can greedily call send_msg() and may exhaust all virtual memory, please note.
 
+//#define ASCS_ARBITRARY_SEND
+//dispatch an async do_send_msg invocation for each message, this feature brings 2 behaviors:
+// 1. it can also fix the situation i described for macro ASCS_EXPOSE_SEND_INTERFACE,
+// 2. it brings better effeciency for specific ENV, try to find them by you own.
+
 //#define ASCS_PASSIVE_RECV
 //to gain the ability of changing the unpacker at runtime, with this macro, ascs will not do message receiving automatically (except
 // the first one, if macro ASCS_SYNC_RECV been defined, the first one will be omitted too), so you need to manually call recv_msg(),

@@ -32,7 +32,7 @@ public:
 		service_pump(concurrency_hint), Service((service_pump&) *this, std::forward<Arg>(arg)) {}
 #else
 	single_service_pump() : Service((service_pump&) *this) {}
-	template<typename Arg> single_service_pump() : Service((service_pump&) *this, std::forward<Arg>(arg)) {}
+	template<typename Arg> single_service_pump(Arg&& arg) : Service((service_pump&) *this, std::forward<Arg>(arg)) {}
 #endif
 };
 
