@@ -382,7 +382,7 @@ private:
 #endif
 #ifdef ASCS_WANT_ALL_MSG_SEND_NOTIFY
 			if (send_buffer.empty())
-#if defined(ASCS_WANT_ALL_MSG_SEND_NOTIFY) || !defined(ASCS_WANT_BATCH_MSG_SEND_NOTIFY)
+#if defined(ASCS_WANT_MSG_SEND_NOTIFY) || !defined(ASCS_WANT_BATCH_MSG_SEND_NOTIFY)
 				this->on_all_msg_send(sending_msgs.back());
 #else
 			{
