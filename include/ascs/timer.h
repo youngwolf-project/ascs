@@ -118,8 +118,8 @@ public:
 	void stop_all_timer() {do_something_to_all([this](timer_info& item) {this->stop_timer(item);});}
 	void stop_all_timer(tid excepted_id) {do_something_to_all(ASCS_COPY_ALL_AND_THIS(timer_info& item) {if (excepted_id != item.id) this->stop_timer(item);});}
 
-	DO_SOMETHING_TO_ALL_MUTEX(timer_can, timer_can_mutex)
-	DO_SOMETHING_TO_ONE_MUTEX(timer_can, timer_can_mutex)
+	DO_SOMETHING_TO_ALL_MUTEX(timer_can, timer_can_mutex, std::lock_guard<std::mutex>)
+	DO_SOMETHING_TO_ONE_MUTEX(timer_can, timer_can_mutex, std::lock_guard<std::mutex>)
 
 protected:
 	bool start_timer(timer_info& ti, unsigned interval_ms)

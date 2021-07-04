@@ -500,16 +500,16 @@ template<typename T> struct obj_with_begin_time_promise : public obj_with_begin_
 #endif
 
 //free functions, used to do something to any container(except map and multimap) optionally with any mutex
-template<typename _Can, typename _Mutex, typename _Predicate>
-void do_something_to_all(_Can& __can, _Mutex& __mutex, const _Predicate& __pred) {std::lock_guard<std::mutex> lock(__mutex); for (auto& item : __can) __pred(item);}
+template<typename _Can, typename _Mutex, typename _Predicate, template<typename> class LockType = std::lock_guard>
+void do_something_to_all(_Can& __can, _Mutex& __mutex, const _Predicate& __pred) {LockType<_Mutex> lock(__mutex); for (auto& item : __can) __pred(item);}
 
 template<typename _Can, typename _Predicate>
 void do_something_to_all(_Can& __can, const _Predicate& __pred) {for (auto& item : __can) __pred(item);}
 
-template<typename _Can, typename _Mutex, typename _Predicate>
+template<typename _Can, typename _Mutex, typename _Predicate, template<typename> class LockType = std::lock_guard>
 void do_something_to_one(_Can& __can, _Mutex& __mutex, const _Predicate& __pred)
 {
-	std::lock_guard<std::mutex> lock(__mutex);
+	LockType<_Mutex> lock(__mutex);
 	for (auto iter = std::begin(__can); iter != std::end(__can); ++iter) if (__pred(*iter)) break;
 }
 
@@ -533,22 +533,22 @@ size_t get_size_in_byte(const _Can& __can, size_t& size)
 }
 
 //member functions, used to do something to any member container(except map and multimap) optionally with any member mutex
-#define DO_SOMETHING_TO_ALL_MUTEX(CAN, MUTEX) DO_SOMETHING_TO_ALL_MUTEX_NAME(do_something_to_all, CAN, MUTEX)
+#define DO_SOMETHING_TO_ALL_MUTEX(CAN, MUTEX, LOCKTYPE) DO_SOMETHING_TO_ALL_MUTEX_NAME(do_something_to_all, CAN, MUTEX, LOCKTYPE)
 #define DO_SOMETHING_TO_ALL(CAN) DO_SOMETHING_TO_ALL_NAME(do_something_to_all, CAN)
 
-#define DO_SOMETHING_TO_ALL_MUTEX_NAME(NAME, CAN, MUTEX) \
-template<typename _Predicate> void NAME(const _Predicate& __pred) {std::lock_guard<std::mutex> lock(MUTEX); for (auto& item : CAN) __pred(item);}
+#define DO_SOMETHING_TO_ALL_MUTEX_NAME(NAME, CAN, MUTEX, LOCKTYPE) \
+template<typename _Predicate> void NAME(const _Predicate& __pred) {LOCKTYPE lock(MUTEX); for (auto& item : CAN) __pred(item);}
 
 #define DO_SOMETHING_TO_ALL_NAME(NAME, CAN) \
 template<typename _Predicate> void NAME(const _Predicate& __pred) {for (auto& item : CAN) __pred(item);} \
 template<typename _Predicate> void NAME(const _Predicate& __pred) const {for (auto& item : CAN) __pred(item);}
 
-#define DO_SOMETHING_TO_ONE_MUTEX(CAN, MUTEX) DO_SOMETHING_TO_ONE_MUTEX_NAME(do_something_to_one, CAN, MUTEX)
+#define DO_SOMETHING_TO_ONE_MUTEX(CAN, MUTEX, LOCKTYPE) DO_SOMETHING_TO_ONE_MUTEX_NAME(do_something_to_one, CAN, MUTEX, LOCKTYPE)
 #define DO_SOMETHING_TO_ONE(CAN) DO_SOMETHING_TO_ONE_NAME(do_something_to_one, CAN)
 
-#define DO_SOMETHING_TO_ONE_MUTEX_NAME(NAME, CAN, MUTEX) \
+#define DO_SOMETHING_TO_ONE_MUTEX_NAME(NAME, CAN, MUTEX, LOCKTYPE) \
 template<typename _Predicate> void NAME(const _Predicate& __pred) \
-	{std::lock_guard<std::mutex> lock(MUTEX); for (auto iter = std::begin(CAN); iter != std::end(CAN); ++iter) if (__pred(*iter)) break;}
+	{LOCKTYPE lock(MUTEX); for (auto iter = std::begin(CAN); iter != std::end(CAN); ++iter) if (__pred(*iter)) break;}
 
 #define DO_SOMETHING_TO_ONE_NAME(NAME, CAN) \
 template<typename _Predicate> void NAME(const _Predicate& __pred) {for (auto iter = std::begin(CAN); iter != std::end(CAN); ++iter) if (__pred(*iter)) break;} \
