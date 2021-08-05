@@ -5,7 +5,6 @@
 #define ASCS_REUSE_OBJECT		//use objects pool
 //configuration
 
-//#include <shared_mutex>
 #include <ascs/ext/tcp.h>
 using namespace ascs;
 using namespace ascs::tcp;

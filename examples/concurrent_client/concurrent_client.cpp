@@ -31,24 +31,37 @@ using namespace ascs::ext::tcp;
 class echo_socket : public client_socket
 {
 public:
-	echo_socket(i_matrix& matrix_) : client_socket(matrix_), msg_len(ASCS_MSG_BUFFER_SIZE - ASCS_HEAD_LEN) {unpacker()->stripped(false);}
-
-	void begin(size_t msg_len_) {msg_len = msg_len_;}
-	void check_delay(float max_delay) {if (is_connected() && last_send_time.elapsed() > max_delay) force_shutdown();}
+	echo_socket(i_matrix& matrix_) : client_socket(matrix_), max_delay(1.f), msg_len(ASCS_MSG_BUFFER_SIZE - ASCS_HEAD_LEN) {unpacker()->stripped(false);}
+	void begin(float max_delay_, size_t msg_len_) {max_delay = max_delay_; msg_len = msg_len_;}
 
 protected:
+	bool check_delay(bool restart_timer)
+	{
+		std::lock_guard<std::mutex> lock(mutex);
+		if (is_connected() && last_send_time.elapsed() > max_delay)
+		{
+			force_shutdown();
+			return false;
+		}
+		else if (restart_timer)
+			last_send_time.restart();
+
+		return true;
+	}
+
 	virtual void on_connect()
 	{
 		asio::ip::tcp::no_delay option(true);
 		lowest_layer().set_option(option);
 
 		char* buff = new char[msg_len];
-		memset(buff, 'Y', msg_len); //what should we send?
+		memset(buff, '$', msg_len); //what should we send?
 
 		last_send_time.restart();
 		send_msg(buff, msg_len, true);
 
 		delete[] buff;
+		set_timer(TIMER_END, 5000, ASCS_COPY_ALL_AND_THIS(tid id)->bool {return this->check_delay(false);});
 
 		client_socket::on_connect();
 	}
@@ -81,25 +94,23 @@ protected:
 private:
 	void handle_msg(out_msg_type& msg)
 	{
-		last_send_time.restart();
-		direct_send_msg(std::move(msg), true);
+		if (check_delay(true))
+			direct_send_msg(std::move(msg), true);
 	}
 
 private:
+	float max_delay;
 	size_t msg_len;
+
 	cpu_timer last_send_time;
+	std::mutex mutex;
 };
 
 class echo_client : public multi_client_base<echo_socket>
 {
 public:
 	echo_client(service_pump& service_pump_) : multi_client_base<echo_socket>(service_pump_) {}
-
-	void begin(float max_delay, size_t msg_len)
-	{
-		do_something_to_all([&](object_ctype& item) {item->begin(msg_len);});
-		set_timer(TIMER_END, 5000, ASCS_COPY_ALL_AND_THIS(tid id)->bool {do_something_to_all([&](object_ctype& item) {item->check_delay(max_delay);}); return true;});
-	}
+	void begin(float max_delay, size_t msg_len) {do_something_to_all([&](object_ctype& item) {item->begin(max_delay, msg_len);});}
 };
 
 int main(int argc, const char* argv[])
