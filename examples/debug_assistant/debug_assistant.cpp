@@ -5,6 +5,7 @@
 #define ASCS_SERVER_PORT	9527
 #define ASCS_REUSE_OBJECT	//use objects pool
 #define ASCS_MAX_OBJECT_NUM	1024
+#define ASCS_AVOID_AUTO_STOP_SERVICE
 //configuration
 
 #include <ascs/ext/tcp.h>
@@ -111,6 +112,12 @@ int main(int argc, const char* argv[])
 		"type " QUIT_COMMAND " to end.");
 
 	service_pump sp;
+#ifndef ASCS_DECREASE_THREAD_AT_RUNTIME
+	//if you want to decrease service thread at runtime, then you cannot use multiple io_context, if somebody indeed needs it, please let me know.
+	//with multiple io_context, the number of service thread must be bigger than or equal to the number of io_context, please note.
+	//with multiple io_context, please also define macro ASCS_AVOID_AUTO_STOP_SERVICE.
+	sp.set_io_context_num(8);
+#endif
 	server_base<echo_socket, timed_object_pool<object_pool<echo_socket>>> echo_server(sp);
 	server_base<echo_stream_socket, timed_object_pool<object_pool<echo_stream_socket>>> echo_stream_server(sp);
 	single_udp_service udp_service(sp);

@@ -78,8 +78,14 @@ public:
 	virtual void reset()
 	{
 		is_connected = is_bound = false;
-
 		sending_msg.clear();
+
+		if (nullptr != matrix)
+#if ASIO_VERSION < 101100
+			matrix->get_service_pump().assign_io_context(this->lowest_layer().get_io_service());
+#else
+			matrix->get_service_pump().assign_io_context(this->lowest_layer().get_executor().context());
+#endif
 		super::reset();
 	}
 
@@ -229,6 +235,11 @@ protected:
 
 #ifdef ASCS_SYNC_SEND
 	virtual void on_close() {if (sending_msg.p) sending_msg.p->set_value(sync_call_result::NOT_APPLICABLE); super::on_close();}
+#endif
+#if ASIO_VERSION < 101100
+	virtual void after_close() {if (nullptr != matrix) matrix->get_service_pump().return_io_context(this->lowest_layer().get_io_service());}
+#else
+	virtual void after_close() {if (nullptr != matrix) matrix->get_service_pump().return_io_context(this->lowest_layer().get_executor().context());};
 #endif
 
 private:

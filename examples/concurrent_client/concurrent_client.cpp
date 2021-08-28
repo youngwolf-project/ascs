@@ -92,11 +92,7 @@ protected:
 	//msg handling end
 
 private:
-	void handle_msg(out_msg_type& msg)
-	{
-		if (check_delay(true))
-			direct_send_msg(std::move(msg), true);
-	}
+	void handle_msg(out_msg_type& msg) {if (check_delay(true)) direct_send_msg(std::move(msg), true);}
 
 private:
 	float max_delay;

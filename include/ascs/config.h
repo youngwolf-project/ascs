@@ -756,8 +756,11 @@
  * 2021.x.x		version 1.6.0
  *
  * SPECIAL ATTENTION (incompatible with old editions):
+ * client_socket's function open_reconnect and close_reconnect have been replaced by function set_reconnect(bool).
  *
  * HIGHLIGHT:
+ * service_pump support multiple io_context, just needs the number of service thread to be bigger than or equal to the number of io_context.
+ * Support reliable UDP (based on KCP -- https://github.com/skywind3000/kcp.git).
  * Support connected UDP socket, set macro ASCS_UDP_CONNECT_MODE to true to open it, you must also provide peer's ip address via set_peer_addr,
  *  function set_connect_mode can open it too (before start_service). For connected UDP socket, the peer_addr parameter in send_msg (series)
  *  will be ignored, please note.
@@ -772,8 +775,10 @@
  * Delete macro ASCS_REUSE_SSL_STREAM, now ascs' ssl sockets can be reused just as normal socket.
  *
  * REFACTORING:
+ * Re-implement the reusability (object reuse and reconnecting) of ascs' ssl sockets.
  *
  * REPLACEMENTS:
+ * client_socket's function open_reconnect and close_reconnect have been replaced by function set_reconnect(bool).
  *
  */
 
@@ -784,8 +789,8 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#define ASCS_VER		10502	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.5.2"
+#define ASCS_VER		10600	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.6.0"
 
 //asio and compiler check
 #ifdef _MSC_VER
@@ -820,13 +825,17 @@
 #define ASCS_LLF "%lld" //format used to print 'uint_fast64_t'
 #endif
 
-static_assert(ASIO_VERSION >= 101001, "ascs needs asio 1.10.1 or higher.");
-
 #if ASIO_VERSION < 101100
-namespace asio {typedef io_service io_context;}
-#define make_strand_handler(S, F) S.wrap(F)
+	namespace asio {typedef io_service io_context; typedef io_context execution_context;}
+	#define make_strand_handler(S, F) S.wrap(F)
+#elif ASIO_VERSION == 101100
+	namespace asio {typedef io_service io_context;}
+	#define make_strand_handler(S, F) asio::wrap(S, F)
+#elif ASIO_VERSION < 101700
+	namespace asio {typedef executor any_io_executor;}
+	#define make_strand_handler(S, F) asio::bind_executor(S, F)
 #else
-#define make_strand_handler(S, F) asio::bind_executor(S, F)
+	#define make_strand_handler(S, F) asio::bind_executor(S, F)
 #endif
 //asio and compiler check
 
@@ -1039,7 +1048,7 @@ static_assert(ASCS_ASYNC_ACCEPT_NUM > 0, "async accept number must be bigger tha
 
 //buffer type used when receiving messages (unpacker's prepare_next_recv() need to return this type)
 #ifndef ASCS_RECV_BUFFER_TYPE
-	#if ASIO_VERSION >= 101100
+	#if ASIO_VERSION > 101100
 	#define ASCS_RECV_BUFFER_TYPE asio::mutable_buffer
 	#else
 	#define ASCS_RECV_BUFFER_TYPE asio::mutable_buffers_1
