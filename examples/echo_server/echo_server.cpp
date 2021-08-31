@@ -11,7 +11,7 @@
 #define ASCS_USE_STEADY_TIMER
 #define ASCS_ALIGNED_TIMER
 #define ASCS_AVOID_AUTO_STOP_SERVICE
-#define ASCS_DECREASE_THREAD_AT_RUNTIME
+//#define ASCS_DECREASE_THREAD_AT_RUNTIME
 //#define ASCS_MAX_SEND_BUF	65536
 //#define ASCS_MAX_RECV_BUF	65536
 //if there's a huge number of links, please reduce messge buffer via ASCS_MAX_SEND_BUF and ASCS_MAX_RECV_BUF macro.
@@ -220,7 +220,7 @@ protected:
 
 int main(int argc, const char* argv[])
 {
-	printf("usage: %s [<service thread number=1> [<port=%d> [ip=0.0.0.0]]]\n", argv[0], ASCS_SERVER_PORT);
+	printf("usage: %s [<service thread number=4> [<port=%d> [ip=0.0.0.0]]]\n", argv[0], ASCS_SERVER_PORT);
 	puts("normal server's port will be 100 larger.");
 	if (argc >= 2 && (0 == strcmp(argv[1], "--help") || 0 == strcmp(argv[1], "-h")))
 		return 0;
@@ -261,7 +261,7 @@ int main(int argc, const char* argv[])
 	global_packer->prefix_suffix("begin", "end");
 #endif
 
-	sp.start_service(thread_num);
+	sp.start_service(std::max(thread_num, sp.get_io_context_num()));
 	normal_server_.start_service(1);
 	short_server.start_service(1);
 	while(sp.is_running())
