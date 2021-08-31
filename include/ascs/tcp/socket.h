@@ -48,7 +48,9 @@ public:
 		auto_duration dur(stat.pack_time_sum);
 		auto msg = this->packer()->pack_heartbeat();
 		dur.end();
-		do_direct_send_msg(std::move(msg));
+
+		if (!msg.empty())
+			do_direct_send_msg(std::move(msg));
 	}
 
 	//reset all, be ensure that there's no any operations performed on this socket when invoke it

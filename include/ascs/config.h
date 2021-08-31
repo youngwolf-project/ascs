@@ -770,6 +770,7 @@
  *
  * ENHANCEMENTS:
  * Enhance the reusability of ascs' ssl sockets, now they can be reused (include reconnecting) just as normal socket.
+ * Suppress error logs for empty heartbeat (suppose you want to stop heartbeat but keep heartbeat checking).
  *
  * DELETION:
  * Delete macro ASCS_REUSE_SSL_STREAM, now ascs' ssl sockets can be reused just as normal socket.
