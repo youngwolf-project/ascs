@@ -81,10 +81,11 @@ public:
 		sending_msg.clear();
 
 		if (nullptr != matrix)
+			if (!this->change_io_context())
 #if ASIO_VERSION < 101100
-			matrix->get_service_pump().assign_io_context(this->lowest_layer().get_io_service());
+				matrix->get_service_pump().assign_io_context(this->lowest_layer().get_io_service());
 #else
-			matrix->get_service_pump().assign_io_context(this->lowest_layer().get_executor().context());
+				matrix->get_service_pump().assign_io_context(this->lowest_layer().get_executor().context());
 #endif
 		super::reset();
 	}

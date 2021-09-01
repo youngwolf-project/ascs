@@ -760,6 +760,10 @@
  *
  * HIGHLIGHT:
  * service_pump support multiple io_context, just needs the number of service thread to be bigger than or equal to the number of io_context.
+ * Introduce virtual function change_io_context() to ascs::socket to balance the reference of io_context strictly,
+ *  this is because after a socket been reused, its next_layer still based on previous io_context, this may break the balance of io_context,
+ *  re-write this virtual function to re-create the next_layer base on the io_context which has the least references.
+ *  ssl's server_socket_base and client_socket_base already did this, please note.
  * Support reliable UDP (based on KCP -- https://github.com/skywind3000/kcp.git).
  * Support connected UDP socket, set macro ASCS_UDP_CONNECT_MODE to true to open it, you must also provide peer's ip address via set_peer_addr,
  *  function set_connect_mode can open it too (before start_service). For connected UDP socket, the peer_addr parameter in send_msg (series)
