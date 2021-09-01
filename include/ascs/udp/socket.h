@@ -233,14 +233,20 @@ protected:
 		return true;
 	}
 
+	virtual void on_close()
+	{
 #ifdef ASCS_SYNC_SEND
-	virtual void on_close() {if (sending_msg.p) sending_msg.p->set_value(sync_call_result::NOT_APPLICABLE); super::on_close();}
+		if (sending_msg.p)
+			sending_msg.p->set_value(sync_call_result::NOT_APPLICABLE);
 #endif
+		if (nullptr != matrix)
 #if ASIO_VERSION < 101100
-	virtual void after_close() {if (nullptr != matrix) matrix->get_service_pump().return_io_context(this->lowest_layer().get_io_service());}
+			matrix->get_service_pump().return_io_context(this->lowest_layer().get_io_service());
 #else
-	virtual void after_close() {if (nullptr != matrix) matrix->get_service_pump().return_io_context(this->lowest_layer().get_executor().context());};
+			matrix->get_service_pump().return_io_context(this->lowest_layer().get_executor().context());
 #endif
+		super::on_close();
+	}
 
 private:
 	using super::close;

@@ -131,7 +131,7 @@ public:
 #if ASIO_VERSION > 101100
 	asio::io_context::executor_type get_executor() {return assign_io_context().get_executor();}
 #endif
-	asio::io_context& assign_io_context() //pick the context which has the least references
+	asio::io_context& assign_io_context(bool increase_ref = true) //pick the context which has the least references
 	{
 		if (single_io_context)
 			return context_can.front().io_context;
@@ -152,7 +152,9 @@ public:
 
 		if (nullptr != ctx)
 		{
-			++ctx->refs;
+			if (increase_ref)
+				++ctx->refs;
+
 			return ctx->io_context;
 		}
 
