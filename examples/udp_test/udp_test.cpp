@@ -11,34 +11,38 @@
 						  //you will see them cross together on the receiver's screen.
 						  //with this macro, if heartbeat not applied, macro ASCS_AVOID_AUTO_STOP_SERVICE must be defined to avoid the service_pump run out.
 #define ASCS_AVOID_AUTO_STOP_SERVICE
-//#define ASCS_UDP_CONNECT_MODE true
+#define ASCS_UDP_CONNECT_MODE true
 //#define ASCS_HEARTBEAT_INTERVAL 5 //neither udp_unpacker nor udp_unpacker2 support heartbeat message, so heartbeat will be treated as normal message.
 //#define ASCS_DEFAULT_UDP_UNPACKER udp_unpacker2<>
 //configuration
 
-#include <ascs/ext/udp.h>
+#include <ascs/ext/reliable_udp.h>
 using namespace ascs::ext::udp;
 
 #define QUIT_COMMAND	"quit"
 #define RESTART_COMMAND	"restart"
 
-std::thread create_sync_recv_thread(single_socket_service& service)
+std::thread create_sync_recv_thread(single_reliable_socket_service& service)
 {
 	return std::thread([&]() {
-		std::list<single_socket_service::out_msg_type> msg_can;
+		std::list<single_reliable_socket_service::out_msg_type> msg_can;
 		auto re = ascs::sync_call_result::SUCCESS;
 		do
 		{
 			re = service.sync_recv_msg(msg_can, 50); //ascs will not maintain messages in msg_can anymore after sync_recv_msg return, please note.
 			if (ascs::sync_call_result::SUCCESS == re)
 			{
-				ascs::do_something_to_all(msg_can, [](single_socket_service::out_msg_type& msg) {printf("sync recv(" ASCS_SF ") : %s\n", msg.size(), msg.data());});
+				ascs::do_something_to_all(msg_can, [](single_reliable_socket_service::out_msg_type& msg) {printf("sync recv(" ASCS_SF ") : %s\n", msg.size(), msg.data());});
 				msg_can.clear(); //sync_recv_msg just append new message(s) to msg_can, please note.
 			}
 		} while (ascs::sync_call_result::SUCCESS == re || ascs::sync_call_result::TIMEOUT == re);
 		puts("sync recv end.");
 	});
 }
+
+//because st_asio_wrapper is header only, it cannot provide the implementation of below global function, but kcp needs it,
+//you're supposed to provide it and call reliable_socket_base::output directly in it, like:
+int output(const char* buf, int len, ikcpcb * kcp, void* user) {return ((single_reliable_socket_service*) user)->output(buf, len);}
 
 int main(int argc, const char* argv[])
 {
@@ -51,9 +55,14 @@ int main(int argc, const char* argv[])
 		puts("type " QUIT_COMMAND " to end.");
 
 	ascs::service_pump sp;
-	single_socket_service service(sp);
+	single_reliable_socket_service service(sp);
 	service.set_local_addr((unsigned short) atoi(argv[1])); //for multicast, do not bind to a specific IP, just port is enough
 	service.set_peer_addr((unsigned short) atoi(argv[2]), argc >= 4 ? argv[3] : "127.0.0.1");
+
+	//reliable_socket cannot become reliable without below statement, instead, it downgrade to normal UDP socket
+	service.create_kcpcb(0, (void*) &service);
+	//without below statement, your application will core dump
+	ikcp_setoutput(service.get_kcpcb(), &output);
 
 	sp.start_service();
 	//for broadcast

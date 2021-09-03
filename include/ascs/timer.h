@@ -94,7 +94,7 @@ public:
 		{return create_or_update_timer(id, interval, std::function<bool(tid)>(call_back), start);}
 
 	bool change_timer_status(tid id, typename timer_info::timer_status status) {auto ti = find_timer(id); return nullptr != ti ? ti->status = status, true : false;}
-	bool change_timer_interval(tid id, size_t interval) {auto ti = find_timer(id); return nullptr != ti ? ti->interval_ms = interval, true : false;}
+	bool change_timer_interval(tid id, unsigned interval) {auto ti = find_timer(id); return nullptr != ti ? ti->interval_ms = interval, true : false;}
 
 	bool change_timer_call_back(tid id, std::function<bool(tid)>&& call_back) {auto ti = find_timer(id); return nullptr != ti ? ti->call_back.swap(call_back), true : false;}
 	bool change_timer_call_back(tid id, const std::function<bool(tid)>& call_back) {return change_timer_call_back(id, std::function<bool(tid)>(call_back));}

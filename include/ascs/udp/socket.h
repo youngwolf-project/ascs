@@ -249,6 +249,13 @@ protected:
 		super::on_close();
 	}
 
+	//reliable UDP socket needs following virtual functions to specify different behaviors.
+	virtual bool check_send_cc() {return true;} //congestion control, return true means can continue to send messages
+	virtual bool do_send_msg(const typename super::in_msg& sending_msg) {return false;} //customize message sending, for connected socket only
+	virtual void pre_handle_msg(typename Unpacker::container_type& msg_can) {}
+
+	void resume_sending() {sending = false; super::send_msg();} //for reliable UDP socket only
+
 private:
 	using super::close;
 	using super::handle_error;
@@ -291,6 +298,9 @@ private:
 			typename Unpacker::container_type msg_can;
 			this->unpacker()->parse_msg(bytes_transferred, msg_can);
 
+			if (is_connected)
+				pre_handle_msg(msg_can);
+
 #ifdef ASCS_PASSIVE_RECV
 			reading = false; //clear reading flag before call handle_msg() to make sure that recv_msg() can be called successfully in on_msg_handle()
 #endif
@@ -324,16 +334,20 @@ private:
 		if (!in_strand && sending)
 			return true;
 
-		if (send_buffer.try_dequeue(sending_msg))
+		if (is_connected && !check_send_cc())
+			sending = true;
+		else if (send_buffer.try_dequeue(sending_msg))
 		{
 			sending = true;
 			stat.send_delay_sum += statistic::now() - sending_msg.begin_time;
 			sending_msg.restart();
-			if (is_connected)
-				this->next_layer().async_send(asio::buffer(sending_msg.data(), sending_msg.size()), make_strand_handler(rw_strand,
-					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);})));
-			else
+			if (!is_connected)
 				this->next_layer().async_send_to(asio::buffer(sending_msg.data(), sending_msg.size()), sending_msg.peer_addr, make_strand_handler(rw_strand,
+					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);})));
+			else if (do_send_msg(sending_msg))
+				this->post_strand(rw_strand, [this]() {this->send_handler(asio::error_code(), sending_msg.size());});
+			else
+				this->next_layer().async_send(asio::buffer(sending_msg.data(), sending_msg.size()), make_strand_handler(rw_strand,
 					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);})));
 			return true;
 		}

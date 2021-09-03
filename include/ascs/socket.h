@@ -169,7 +169,7 @@ private:
 public:
 #endif
 #ifndef ASCS_EXPOSE_SEND_INTERFACE
-private:
+protected:
 #endif
 #ifdef ASCS_ARBITRARY_SEND
 	void send_msg() {dispatch_strand(rw_strand, [this]() {this->do_send_msg();});}
