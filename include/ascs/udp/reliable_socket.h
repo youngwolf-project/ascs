@@ -146,7 +146,7 @@ protected:
 			if (re < 0)
 				unified_out::error_out("ikcp_input return error: %d", re);
 			else
-				this->need_kcp_check = true;
+				need_kcp_check = true;
 		});
 
 		msg_can.clear();

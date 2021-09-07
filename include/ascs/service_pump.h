@@ -59,7 +59,7 @@ protected:
 	struct context
 	{
 		asio::io_context io_context;
-		uint_fast64_t refs;
+		unsigned refs;
 #ifdef ASCS_AVOID_AUTO_STOP_SERVICE
 #if ASIO_VERSION > 101100
 		asio::executor_work_guard<typename asio::io_context::executor_type> work;
@@ -124,8 +124,11 @@ public:
 	}
 #endif
 #endif
-	int get_io_context_num() const {return (int) context_can.size();}
 	virtual ~service_pump() {stop_service();}
+
+	int get_io_context_num() const {return (int) context_can.size();}
+	void get_io_context_refs(std::list<unsigned>& refs)
+		{if (!single_io_context) ascs::do_something_to_all(context_can, context_can_mutex, [&](context& item) {refs.push_back(item.refs);});}
 
 	operator asio::io_context& () {return assign_io_context();}
 #if ASIO_VERSION > 101100
@@ -137,7 +140,7 @@ public:
 			return context_can.front().io_context;
 
 		context* ctx = nullptr;
-		uint_fast64_t refs = 0;
+		unsigned refs = 0;
 
 		std::lock_guard<std::mutex> lock(context_can_mutex);
 		ascs::do_something_to_one(context_can, [&](context& item) {
