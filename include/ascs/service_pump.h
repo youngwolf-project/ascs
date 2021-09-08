@@ -218,6 +218,9 @@ public:
 		ascs::do_something_to_all(temp_service_can, [this](object_type& item) {this->stop_and_free(item);});
 	}
 
+	//stop io_context directly, call this only if the stop_service invocation cannot stop the io_context
+	void stop() {ascs::do_something_to_all(context_can, [&](context& item) {item.io_context.stop();});}
+
 	void start_service(int thread_num = ASCS_SERVICE_THREAD_NUM) {if (!is_service_started()) do_service(thread_num);}
 	//stop the service, must be invoked explicitly when the service need to stop, for example, close the application
 	void stop_service()
