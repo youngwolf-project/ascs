@@ -62,7 +62,7 @@ protected:
 		unsigned refs;
 #ifdef ASCS_AVOID_AUTO_STOP_SERVICE
 #if ASIO_VERSION > 101100
-		asio::executor_work_guard<typename asio::io_context::executor_type> work;
+		asio::executor_work_guard<asio::io_context::executor_type> work;
 #else
 		std::shared_ptr<asio::io_service::work> work;
 #endif
