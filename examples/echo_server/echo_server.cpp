@@ -156,10 +156,10 @@ protected:
 	virtual bool change_io_context() {reset_next_layer(get_server().get_service_pump().assign_io_context()); return true;}
 };
 
-class echo_server : public server_base<echo_socket, object_pool<echo_socket>, i_echo_server>
+class echo_server : public server2<echo_socket, i_echo_server>
 {
 public:
-	echo_server(service_pump& service_pump_) : server_base(service_pump_) {}
+	echo_server(service_pump& service_pump_) : server2<echo_socket, i_echo_server>(service_pump_) {}
 
 protected:
 	//from i_echo_server, pure virtual function, we must implement it.

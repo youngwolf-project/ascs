@@ -211,7 +211,7 @@ private:
 
 template<typename Socket, typename Pool = object_pool<Socket>, typename Server = tcp::i_server> using server_base = tcp::server_base<Socket, Pool, Server>;
 template<typename Socket> using single_client_base = tcp::single_client_base<Socket>;
-template<typename Socket, typename Pool = object_pool<Socket>> using multi_client_base = tcp::multi_client_base<Socket, Pool>;
+template<typename Socket, typename Pool = object_pool<Socket>, typename Matrix = i_matrix> using multi_client_base = tcp::multi_client_base<Socket, Pool, Matrix>;
 
 }} //namespace
 
