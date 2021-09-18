@@ -94,7 +94,7 @@ public:
 		{return create_or_update_timer(id, interval, std::function<bool(tid)>(call_back), start);}
 
 	bool change_timer_status(tid id, typename timer_info::timer_status status) {auto ti = find_timer(id); return nullptr != ti ? ti->status = status, true : false;}
-	bool change_timer_interval(tid id, size_t interval) {auto ti = find_timer(id); return nullptr != ti ? ti->interval_ms = interval, true : false;}
+	bool change_timer_interval(tid id, unsigned interval) {auto ti = find_timer(id); return nullptr != ti ? ti->interval_ms = interval, true : false;}
 
 	bool change_timer_call_back(tid id, std::function<bool(tid)>&& call_back) {auto ti = find_timer(id); return nullptr != ti ? ti->call_back.swap(call_back), true : false;}
 	bool change_timer_call_back(tid id, const std::function<bool(tid)>& call_back) {return change_timer_call_back(id, std::function<bool(tid)>(call_back));}
@@ -118,8 +118,8 @@ public:
 	void stop_all_timer() {do_something_to_all([this](timer_info& item) {this->stop_timer(item);});}
 	void stop_all_timer(tid excepted_id) {do_something_to_all(ASCS_COPY_ALL_AND_THIS(timer_info& item) {if (excepted_id != item.id) this->stop_timer(item);});}
 
-	DO_SOMETHING_TO_ALL_MUTEX(timer_can, timer_can_mutex)
-	DO_SOMETHING_TO_ONE_MUTEX(timer_can, timer_can_mutex)
+	DO_SOMETHING_TO_ALL_MUTEX(timer_can, timer_can_mutex, std::lock_guard<std::mutex>)
+	DO_SOMETHING_TO_ONE_MUTEX(timer_can, timer_can_mutex, std::lock_guard<std::mutex>)
 
 protected:
 	bool start_timer(timer_info& ti, unsigned interval_ms)

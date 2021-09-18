@@ -29,14 +29,17 @@
 namespace ascs { namespace ext { namespace ssl {
 
 typedef ascs::ssl::client_socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UNPACKER> client_socket;
+template<typename Matrix = i_matrix> using client_socket2 = ascs::ssl::client_socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UNPACKER, Matrix>;
 typedef client_socket connector;
 typedef ascs::ssl::single_client_base<client_socket> single_client;
 typedef ascs::ssl::multi_client_base<client_socket> multi_client;
+template<typename Socket, typename Matrix = i_matrix> using multi_client2 = ascs::ssl::multi_client_base<Socket, ascs::ssl::object_pool<Socket>, Matrix>;
 typedef multi_client client;
 
 typedef ascs::ssl::server_socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UNPACKER> server_socket;
 template<typename Server = ascs::tcp::i_server> using server_socket2 = ascs::ssl::server_socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UNPACKER, Server>;
 typedef ascs::ssl::server_base<server_socket> server;
+template<typename Socket, typename Server = ascs::tcp::i_server> using server2 = ascs::ssl::server_base<Socket, ascs::ssl::object_pool<Socket>, Server>;
 
 }}} //namespace
 

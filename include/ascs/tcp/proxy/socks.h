@@ -43,7 +43,11 @@ public:
 		buff[0] = 4;
 		buff[1] = 1;
 		*((unsigned short*) std::next(buff, 2)) = htons(target_addr.port());
+#if ASIO_VERSION == 101100
+		memcpy(std::next(buff, 4), asio::ip::address_cast<asio::ip::address_v4>(target_addr.address()).to_bytes().data(), 4);
+#else
 		memcpy(std::next(buff, 4), target_addr.address().to_v4().to_bytes().data(), 4);
+#endif
 		memcpy(std::next(buff, 8), "ascs", sizeof("ascs"));
 		req_len = 8 + sizeof("ascs");
 
@@ -221,14 +225,22 @@ private:
 		else if (target_addr.address().is_v4())
 		{
 			buff[3] = 1;
+#if ASIO_VERSION == 101100
+			memcpy(std::next(buff, 4), asio::ip::address_cast<asio::ip::address_v4>(target_addr.address()).to_bytes().data(), 4);
+#else
 			memcpy(std::next(buff, 4), target_addr.address().to_v4().to_bytes().data(), 4);
+#endif
 			*((unsigned short*) std::next(buff, 8)) = htons(target_addr.port());
 			req_len = 10;
 		}
 		else //ipv6
 		{
 			buff[3] = 4;
+#if ASIO_VERSION == 101100
+			memcpy(std::next(buff, 4), asio::ip::address_cast<asio::ip::address_v6>(target_addr.address()).to_bytes().data(), 16);
+#else
 			memcpy(std::next(buff, 4), target_addr.address().to_v6().to_bytes().data(), 16);
+#endif
 			*((unsigned short*) std::next(buff, 20)) = htons(target_addr.port());
 			req_len = 22;
 		}
@@ -347,7 +359,7 @@ private:
 				this->force_shutdown(false);
 			}
 			else
-				this->next_layer().async_read_some(asio::buffer(buff, sizeof(buff)) + res_len,
+				this->next_layer().async_read_some(asio::buffer(std::next(buff, res_len), sizeof(buff) - res_len),
 					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);}));
 		}
 	}

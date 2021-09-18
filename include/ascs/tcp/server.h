@@ -82,7 +82,7 @@ public:
 		else
 			unified_out::info_out("finished pre-creating server sockets.");
 
-#if ASIO_VERSION >= 101100
+#if ASIO_VERSION > 101100
 		acceptor.listen(asio::socket_base::max_listen_connections, ec); assert(!ec);
 #else
 		acceptor.listen(asio::socket_base::max_connections, ec); assert(!ec);

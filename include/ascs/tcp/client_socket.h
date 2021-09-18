@@ -65,20 +65,31 @@ public:
 	virtual const char* type_name() const {return "TCP (client endpoint)";}
 	virtual int type_id() const {return 1;}
 
-	virtual void reset() {need_reconnect = ASCS_RECONNECT; super::reset();}
+	virtual void reset()
+	{
+		need_reconnect = ASCS_RECONNECT;
+		if (nullptr != matrix)
+			if (!this->change_io_context())
+#if ASIO_VERSION < 101100
+				matrix->get_service_pump().assign_io_context(this->next_layer().get_io_service());
+#else
+				matrix->get_service_pump().assign_io_context(this->next_layer().get_executor().context());
+#endif
+		super::reset();
+	}
 
 	bool set_server_addr(unsigned short port, const std::string& ip = ASCS_SERVER_IP) {return set_addr(server_addr, port, ip);}
 	bool set_server_addr(const std::string& file_name) {server_addr = typename Family::endpoint(file_name); return true;}
 	const typename Family::endpoint& get_server_addr() const {return server_addr;}
 
-	//if you don't want to reconnect to the server after link broken, define macro ASCS_RECONNECT as false, call close_reconnect() in on_connect()
+	//if you don't want to reconnect to the server after link broken, define macro ASCS_RECONNECT as false, call set_reconnect(false) in on_connect()
 	// or rewrite after_close() virtual function and do nothing in it.
 	//if you want to control the retry times and delay time after reconnecting failed, rewrite prepare_reconnect virtual function.
 	//disconnect(bool), force_shutdown(bool) and graceful_shutdown(bool, bool) can overwrite reconnecting behavior, please note.
 	//reset() virtual function will set reconnecting behavior according to macro ASCS_RECONNECT, please note.
 	//if prepare_reconnect returns negative value, reconnecting will be closed, please note.
-	void open_reconnect() {need_reconnect = true;}
-	void close_reconnect() {need_reconnect = false;}
+	void set_reconnect(bool reconnect) {need_reconnect = reconnect;}
+	bool is_reconnect() const {return need_reconnect;}
 
 	//if the connection is broken unexpectedly, generic_client_socket will try to reconnect to the server automatically (if need_reconnect is true).
 	void disconnect(bool reconnect = false) {force_shutdown(reconnect);}
@@ -157,6 +168,17 @@ protected:
 
 		force_shutdown(need_reconnect);
 		return false;
+	}
+
+	virtual void on_close()
+	{
+		if (!need_reconnect && nullptr != matrix)
+#if ASIO_VERSION < 101100
+			matrix->get_service_pump().return_io_context(this->next_layer().get_io_service());
+#else
+			matrix->get_service_pump().return_io_context(this->next_layer().get_executor().context());
+#endif
+		super::on_close();
 	}
 
 	//reconnect at here rather than in on_recv_error to make sure no async invocations performed on this socket before reconnecting.

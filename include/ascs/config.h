@@ -461,13 +461,13 @@
  * HIGHLIGHT:
  *
  * FIX:
- * If give up connecting (prepare_reconnect returns -1 or call close_reconnect), ascs::socket::started() still returns true (should be false).
+ * If give up connecting (prepare_reconnect returns -1 or call set_reconnect(false)), ascs::socket::started() still returns true (should be false).
  *
  * ENHANCEMENTS:
  * Expose server_base's acceptor via next_layer().
  * Prefix suffix packer and unpacker support heartbeat.
  * New demo socket_management demonstrates how to manage sockets if you use other keys rather than the original id.
- * Control reconnecting more flexibly, see function client_socket_base::open_reconnect and client_socket_base::close_reconnect for more details.
+ * Control reconnecting more flexibly, see function client_socket_base::set_reconnect and client_socket_base::is_reconnect for more details.
  * client_socket_base support binding to a specific local address.
  *
  * DELETION:
@@ -752,6 +752,40 @@
  *
  * REPLACEMENTS:
  *
+ * ===============================================================
+ * 2021.9.18	version 1.6.0
+ *
+ * SPECIAL ATTENTION (incompatible with old editions):
+ * client_socket's function open_reconnect and close_reconnect have been replaced by function set_reconnect(bool).
+ *
+ * HIGHLIGHT:
+ * service_pump support multiple io_context, just needs the number of service thread to be bigger than or equal to the number of io_context.
+ * Introduce virtual function change_io_context() to ascs::socket to balance the reference of multiple io_context strictly,
+ *  this is because after a socket been reused, its next_layer still based on previous io_context, this may break the reference balance of
+ *  multiple io_context, re-write this virtual function to re-create the next_layer base on the io_context which has the least references.
+ *  ssl's server_socket_base and client_socket_base already did this, please note.
+ * Support reliable UDP (based on KCP -- https://github.com/skywind3000/kcp.git), thus introduce new macro ASCS_RELIABLE_UDP_NSND_QUE to
+ *  specify the default value of the max size of ikcpcb::nsnd_que (congestion control).
+ * Support connected UDP socket, set macro ASCS_UDP_CONNECT_MODE to true to open it, you must also provide peer's ip address via set_peer_addr,
+ *  function set_connect_mode can open it too (before start_service). For connected UDP socket, the peer_addr parameter in send_msg (series)
+ *  will be ignored, please note.
+ *
+ * FIX:
+ * single_service_pump support ssl single_client(_base).
+ *
+ * ENHANCEMENTS:
+ * Enhance the reusability of ascs' ssl sockets, now they can be reused (include reconnecting) just as normal socket.
+ * Suppress error logs for empty heartbeat (suppose you want to stop heartbeat but keep heartbeat checking).
+ *
+ * DELETION:
+ * Delete macro ASCS_REUSE_SSL_STREAM, now ascs' ssl sockets can be reused just as normal socket.
+ *
+ * REFACTORING:
+ * Re-implement the reusability (object reuse and reconnecting) of ascs' ssl sockets.
+ *
+ * REPLACEMENTS:
+ * client_socket's function open_reconnect and close_reconnect have been replaced by function set_reconnect(bool).
+ *
  */
 
 #ifndef _ASCS_CONFIG_H_
@@ -761,8 +795,8 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#define ASCS_VER		10502	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.5.2"
+#define ASCS_VER		10600	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.6.0"
 
 //asio and compiler check
 #ifdef _MSC_VER
@@ -797,13 +831,17 @@
 #define ASCS_LLF "%lld" //format used to print 'uint_fast64_t'
 #endif
 
-static_assert(ASIO_VERSION >= 101001, "ascs needs asio 1.10.1 or higher.");
-
 #if ASIO_VERSION < 101100
-namespace asio {typedef io_service io_context;}
-#define make_strand_handler(S, F) S.wrap(F)
+	namespace asio {typedef io_service io_context; typedef io_context execution_context;}
+	#define make_strand_handler(S, F) S.wrap(F)
+#elif ASIO_VERSION == 101100
+	namespace asio {typedef io_service io_context;}
+	#define make_strand_handler(S, F) asio::wrap(S, F)
+#elif ASIO_VERSION < 101700
+	namespace asio {typedef executor any_io_executor;}
+	#define make_strand_handler(S, F) asio::bind_executor(S, F)
 #else
-#define make_strand_handler(S, F) asio::bind_executor(S, F)
+	#define make_strand_handler(S, F) asio::bind_executor(S, F)
 #endif
 //asio and compiler check
 
@@ -991,6 +1029,16 @@ static_assert(ASCS_ASYNC_ACCEPT_NUM > 0, "async accept number must be bigger tha
 #define ASCS_UDP_DEFAULT_IP_VERSION asio::ip::udp::v4()
 #endif
 
+#ifndef ASCS_UDP_CONNECT_MODE
+#define ASCS_UDP_CONNECT_MODE false
+#endif
+
+//max value that ikcpcb::nsnd_que can get to, then ascs will suspend message sending (congestion control).
+#ifndef ASCS_RELIABLE_UDP_NSND_QUE
+#define ASCS_RELIABLE_UDP_NSND_QUE 1024
+#endif
+static_assert(ASCS_RELIABLE_UDP_NSND_QUE >= 0, "kcp send queue must be bigger than or equal to zero.");
+
 //close port reuse
 //#define ASCS_NOT_REUSE_ADDRESS
 
@@ -1012,7 +1060,7 @@ static_assert(ASCS_ASYNC_ACCEPT_NUM > 0, "async accept number must be bigger tha
 
 //buffer type used when receiving messages (unpacker's prepare_next_recv() need to return this type)
 #ifndef ASCS_RECV_BUFFER_TYPE
-	#if ASIO_VERSION >= 101100
+	#if ASIO_VERSION > 101100
 	#define ASCS_RECV_BUFFER_TYPE asio::mutable_buffer
 	#else
 	#define ASCS_RECV_BUFFER_TYPE asio::mutable_buffers_1
@@ -1036,12 +1084,6 @@ static_assert(ASCS_HEARTBEAT_MAX_ABSENCE > 0, "heartbeat absence must be bigger 
 
 //#define ASCS_ALWAYS_SEND_HEARTBEAT
 //always send heartbeat in each ASCS_HEARTBEAT_INTERVAL seconds without checking if we're sending other messages or not.
-
-//#define ASCS_REUSE_SSL_STREAM
-//if you need ssl::client_socket_base to be able to reconnect the server, or to open object pool in ssl::object_pool, you must define this macro.
-//I tried many ways, only one way can make asio::ssl::stream reusable, which is:
-// don't call any shutdown functions of asio::ssl::stream, just call asio::ip::tcp::socket's shutdown function,
-// this seems not a normal procedure, but it works, I believe that asio's defect caused this problem.
 
 //#define ASCS_AVOID_AUTO_STOP_SERVICE
 //wrap service_pump with asio::io_service::work (asio::executor_work_guard), then it will never run out until you explicitly call stop_service().
@@ -1071,6 +1113,11 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 // sent until new messages come in, define this macro to expose send_msg() interface, then you can call it manually to fix this situation.
 //during message sending, calling send_msg() will fail, this is by design to avoid asio::io_context using up all virtual memory, this also
 // means that before the sending really started, you can greedily call send_msg() and may exhaust all virtual memory, please note.
+
+//#define ASCS_ARBITRARY_SEND
+//dispatch an async do_send_msg invocation for each message, this feature brings 2 behaviors:
+// 1. it can also fix the situation i described for macro ASCS_EXPOSE_SEND_INTERFACE,
+// 2. it brings better effeciency for specific ENV, try to find them by you own.
 
 //#define ASCS_PASSIVE_RECV
 //to gain the ability of changing the unpacker at runtime, with this macro, ascs will not do message receiving automatically (except
