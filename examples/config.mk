@@ -33,12 +33,10 @@ ifneq (, ${findstring mingw, ${target_machine}})
 	SHELL = cmd
 	cflag += -D__USE_MINGW_ANSI_STDIO=1
 	lflag += -lws2_32 -lwsock32
-	sources = ${shell dir /B *.cpp}
 	ignore = 1>nul
 	make_dir = md ${dir} 2>nul
 	del_dirs = -rd /S /Q debug release 2>nul
 else
-	sources = ${shell ls *.cpp}
 	ignore = 1>/dev/null
 	make_dir = mkdir -p ${dir}
 	del_dirs = -rm -rf debug release
@@ -48,7 +46,7 @@ cflag += ${ext_cflag} ${asio_dir} -I../../include/
 lflag += ${ext_libs}
 
 target = ${dir}/${module}
-objects = ${patsubst %.cpp,${dir}/%.o,${sources}}
+objects = ${patsubst %.cpp,${dir}/%.o,${wildcard *.cpp}}
 deps = ${patsubst %.o,%.d,${objects}}
 ${shell ${make_dir}}
 
@@ -57,7 +55,7 @@ release debug : ${target}
 ${target} : ${objects}
 	${CXX} -o $@ $^ ${lflag}
 ${objects} : ${dir}/%.o : %.cpp
-	${CXX} ${cflag} -E -MMD -w -MT '$@' -MF ${subst .cpp,.d,${dir}/$<} $< ${ignore}
+	${CXX} ${cflag} -E -MMD -w -MT '$@' -MF ${patsubst %.cpp,%.d,${dir}/$<} $< ${ignore}
 	${CXX} ${cflag} -c $< -o $@
 
 .PHONY : clean
