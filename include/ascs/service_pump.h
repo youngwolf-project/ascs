@@ -164,15 +164,15 @@ public:
 		throw "no available io_context!";
 	}
 
-	void return_io_context(const asio::execution_context& io_context)
+	void return_io_context(const asio::execution_context& io_context, unsigned refs = 1)
 	{
 		if (!single_io_context)
-			ascs::do_something_to_one(context_can, context_can_mutex, [&](context& item) {return &io_context != &item.io_context ? false : (--item.refs, true);});
+			ascs::do_something_to_one(context_can, context_can_mutex, [&](context& item) {return &io_context != &item.io_context ? false : (item.refs -= refs, true);});
 	}
-	void assign_io_context(const asio::execution_context& io_context)
+	void assign_io_context(const asio::execution_context& io_context, unsigned refs = 1)
 	{
 		if (!single_io_context)
-			ascs::do_something_to_one(context_can, context_can_mutex, [&](context& item) {return &io_context != &item.io_context ? false : (++item.refs, true);});
+			ascs::do_something_to_one(context_can, context_can_mutex, [&](context& item) {return &io_context != &item.io_context ? false : (item.refs += refs, true);});
 	}
 
 	object_type find(int id)

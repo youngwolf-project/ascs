@@ -217,7 +217,7 @@ private:
 				return true;
 		}
 
-		unified_out::info_out(ASCS_LLF " reconnectiong abandon.", this->id());
+		unified_out::info_out(ASCS_LLF " reconnecting abandoned.", this->id());
 		super::force_shutdown();
 		return false;
 	}

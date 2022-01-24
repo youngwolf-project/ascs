@@ -40,7 +40,7 @@ template <typename Socket> std::thread create_sync_recv_thread(Socket& socket)
 	});
 }
 
-//because st_asio_wrapper is header only, it cannot provide the implementation of below global function, but kcp needs it,
+//because ascs is header only, it cannot provide the implementation of below global function, but kcp needs it,
 //you're supposed to provide it and call reliable_socket_base::output directly in it, like:
 int output(const char* buf, int len, ikcpcb * kcp, void* user) {return ((single_reliable_socket_service*) user)->output(buf, len);}
 
