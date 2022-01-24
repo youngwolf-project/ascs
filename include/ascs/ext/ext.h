@@ -63,7 +63,7 @@ class basic_buffer
 {
 public:
 	basic_buffer() {do_detach();}
-	basic_buffer(size_t len) {do_assign(len);}
+	basic_buffer(size_t len) {do_detach(); do_assign(len);}
 	basic_buffer(const char* buff, size_t len) {do_detach(); append(buff, len);}
 	basic_buffer(basic_buffer&& other) {do_attach(other.buff, other.len, other.cap); other.do_detach();}
 	virtual ~basic_buffer() {clear();}
@@ -73,9 +73,7 @@ public:
 	{
 		if (nullptr != _buff && _len > 0)
 		{
-			if (len + _len > cap) //no optimization for memory re-allocation, please reserve enough memory before appending data
-				reserve(len + _len);
-
+			reserve(len + _len); //no optimization for memory re-allocation, please reserve enough memory before appending data
 			memcpy(std::next(buff, len), _buff, _len);
 			len += (unsigned) _len;
 		}
@@ -88,17 +86,7 @@ public:
 		if (_len <= cap)
 			len = (unsigned) _len;
 		else
-		{
-			auto old_buff = buff;
-			auto old_len = len;
-
 			do_assign(_len);
-			if (nullptr != old_buff)
-			{
-				memcpy(buff, old_buff, old_len);
-				delete[] old_buff;
-			}
-		}
 	}
 
 	void assign(size_t len) {resize(len);}
@@ -122,13 +110,13 @@ public:
 	size_t size() const {return nullptr == buff ? 0 : len;}
 	const char* data() const {return buff;}
 	void swap(basic_buffer& other) {std::swap(buff, other.buff); std::swap(len, other.len); std::swap(cap, other.cap);}
-	void clear() {delete[] buff; do_detach();}
+	void clear() {free(buff); do_detach();}
 
 	//functions needed by packer and unpacker
 	char* data() {return buff;}
 
 protected:
-	void do_assign(size_t len) {do_attach(new char[len], len, len);}
+	void do_assign(size_t len) {do_attach((char*) realloc(buff, len), len, len);}
 	void do_attach(char* _buff, size_t _len, size_t capacity) {buff = _buff; len = (unsigned) _len; cap = (unsigned) capacity;}
 	void do_detach() {buff = nullptr; len = cap = 0;}
 
