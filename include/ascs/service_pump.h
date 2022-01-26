@@ -374,7 +374,6 @@ protected:
 	}
 #endif
 
-#ifdef ASCS_DECREASE_THREAD_AT_RUNTIME
 	size_t run(context* ctx)
 	{
 		size_t n = 0;
@@ -382,6 +381,8 @@ protected:
 		std::stringstream os;
 		os << "service thread[" << std::this_thread::get_id() << "] begin.";
 		unified_out::info_out(os.str().data());
+
+#ifdef ASCS_DECREASE_THREAD_AT_RUNTIME
 		++real_thread_num;
 		while (true)
 		{
@@ -413,17 +414,17 @@ protected:
 				break;
 			}
 		}
+#elif defined(ASCS_NO_TRY_CATCH)
+		n += ctx->io_context.run();
+#else
+		while (true) try {n += ctx->io_context.run(); break;} catch (const std::exception& e) {if (!on_exception(e)) break;}
+#endif
 		os.str("");
 		os << "service thread[" << std::this_thread::get_id() << "] end.";
 		unified_out::info_out(os.str().data());
 
 		return n;
 	}
-#elif !defined(ASCS_NO_TRY_CATCH)
-	size_t run(context* ctx) {while (true) {try {return ctx->io_context.run();} catch (const std::exception& e) {if (!on_exception(e)) return 0;}}}
-#else
-	size_t run(context* ctx) {return ctx->io_context.run();}
-#endif
 
 	DO_SOMETHING_TO_ALL_MUTEX(service_can, service_can_mutex, std::lock_guard<std::mutex>)
 	DO_SOMETHING_TO_ONE_MUTEX(service_can, service_can_mutex, std::lock_guard<std::mutex>)
