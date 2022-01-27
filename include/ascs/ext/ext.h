@@ -13,6 +13,7 @@
 #ifndef _ASCS_EXT_H_
 #define _ASCS_EXT_H_
 
+#include <initializer_list>
 #include "../base.h"
 
 //the size of the buffer used when receiving msg, must equal to or larger than the biggest msg size,
@@ -52,23 +53,47 @@ public:
 	virtual const char* data() const {return std::string::data();}
 };
 
-//a substitute of std::string (just for unpacking scenario, many features are missing against std::string), because std::string
-// has a small defect which is terrible for unpacking scenario, it cannot change its size without fill its buffer.
+//a substitute of std::string, because std::string has a small defect which is terrible for unpacking scenario (and protobuf encoding),
+// it cannot change its size without fill the extended buffers.
 //please note that basic_buffer won't append '\0' to the end of the string (std::string will do), you must appen '\0' characters
 // by your own if you want to print it via "%s" formatter, e.g. basic_buffer("123", 4), bb.append("abc", 4).
 class basic_buffer
-#if defined(_MSC_VER) && _MSC_VER <= 1800
-	: public asio::noncopyable
-#endif
 {
 public:
 	basic_buffer() {do_detach();}
 	basic_buffer(size_t len) {do_detach(); do_assign(len);}
+	basic_buffer(size_t count, char c) {do_detach(); append(count, c);}
+	basic_buffer(const char* buff) {do_detach(); operator+=(buff);}
 	basic_buffer(const char* buff, size_t len) {do_detach(); append(buff, len);}
+	basic_buffer(std::initializer_list<char> ilist) {do_detach(); operator+=(ilist);}
+	basic_buffer(const basic_buffer& other) {do_detach(); append(other.buff, other.len);}
 	basic_buffer(basic_buffer&& other) {do_attach(other.buff, other.len, other.cap); other.do_detach();}
-	virtual ~basic_buffer() {clear();}
+	virtual ~basic_buffer() {clean();}
 
-	basic_buffer& operator=(basic_buffer&& other) {clear(); swap(other); return *this;}
+	inline basic_buffer& operator=(basic_buffer&& other) {clean(); swap(other); return *this;}
+	inline basic_buffer& operator=(const basic_buffer& other) {resize(0); return operator+=(other);}
+	inline basic_buffer& operator=(char c) {resize(0); return operator+=(c);}
+	inline basic_buffer& operator=(const char* buff) {resize(0); return operator+=(buff);}
+	inline basic_buffer& operator=(std::initializer_list<char> ilist) {resize(0); return operator+=(ilist);}
+
+	inline basic_buffer& operator+=(const basic_buffer& other) {return append(other);}
+	inline basic_buffer& operator+=(char c) {return append(1, c);}
+	inline basic_buffer& operator+=(const char* buff) {return append(buff);}
+	inline basic_buffer& operator+=(std::initializer_list<char> ilist) {return append(ilist);}
+
+	basic_buffer& append(const basic_buffer& other) {return append(other.data(), other.size());}
+	basic_buffer& append(size_t count, char c)
+	{
+		if (count > 0)
+		{
+			reserve(len + count); //no optimization for memory re-allocation, please reserve enough memory before appending data
+			memset(std::next(buff, len), c, count);
+			len += (unsigned) count;
+		}
+
+		return *this;
+	}
+	basic_buffer& append(const char* buff) {return append(buff, strlen(buff));}
 	basic_buffer& append(const char* _buff, size_t _len)
 	{
 		if (nullptr != _buff && _len > 0)
@@ -80,8 +105,9 @@ public:
 
 		return *this;
 	}
+	basic_buffer& append(std::initializer_list<char> ilist) {return append(std::begin(ilist), ilist.size());}
 
-	void resize(size_t _len) //won't fill the extended buffer
+	void resize(size_t _len) //won't fill the extended buffers
 	{
 		if (_len <= cap)
 			len = (unsigned) _len;
@@ -110,7 +136,8 @@ public:
 	size_t size() const {return nullptr == buff ? 0 : len;}
 	const char* data() const {return buff;}
 	void swap(basic_buffer& other) {std::swap(buff, other.buff); std::swap(len, other.len); std::swap(cap, other.cap);}
-	void clear() {free(buff); do_detach();}
+	void clear() {resize(0);}
+	void clean() {free(buff); do_detach();}
 
 	//functions needed by packer and unpacker
 	char* data() {return buff;}
