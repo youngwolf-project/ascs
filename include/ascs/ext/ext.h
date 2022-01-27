@@ -61,7 +61,7 @@ class basic_buffer
 {
 public:
 	basic_buffer() {do_detach();}
-	basic_buffer(size_t len) {do_detach(); do_assign(len);}
+	explicit basic_buffer(size_t len) {do_detach(); resize(len);}
 	basic_buffer(size_t count, char c) {do_detach(); append(count, c);}
 	basic_buffer(const char* buff) {do_detach(); operator+=(buff);}
 	basic_buffer(const char* buff, size_t len) {do_detach(); append(buff, len);}
@@ -77,54 +77,60 @@ public:
 	inline basic_buffer& operator=(std::initializer_list<char> ilist) {resize(0); return operator+=(ilist);}
 
 	inline basic_buffer& operator+=(const basic_buffer& other) {return append(other);}
-	inline basic_buffer& operator+=(char c) {return append(1, c);}
+	inline basic_buffer& operator+=(char c) {return append(c);}
 	inline basic_buffer& operator+=(const char* buff) {return append(buff);}
 	inline basic_buffer& operator+=(std::initializer_list<char> ilist) {return append(ilist);}
 
-	basic_buffer& append(const basic_buffer& other) {return append(other.data(), other.size());}
+	basic_buffer& append(char c) {return append(1, c);}
 	basic_buffer& append(size_t count, char c)
 	{
 		if (count > 0)
 		{
-			reserve(len + count); //no optimization for memory re-allocation, please reserve enough memory before appending data
+			reserve(len + count);
 			memset(std::next(buff, len), c, count);
 			len += (unsigned) count;
 		}
 
 		return *this;
 	}
+
+	basic_buffer& append(std::initializer_list<char> ilist) {return append(std::begin(ilist), ilist.size());}
+	basic_buffer& append(const basic_buffer& other) {return append(other.data(), other.size());}
 	basic_buffer& append(const char* buff) {return append(buff, strlen(buff));}
 	basic_buffer& append(const char* _buff, size_t _len)
 	{
 		if (nullptr != _buff && _len > 0)
 		{
-			reserve(len + _len); //no optimization for memory re-allocation, please reserve enough memory before appending data
+			reserve(len + _len);
 			memcpy(std::next(buff, len), _buff, _len);
 			len += (unsigned) _len;
 		}
 
 		return *this;
 	}
-	basic_buffer& append(std::initializer_list<char> ilist) {return append(std::begin(ilist), ilist.size());}
 
 	void resize(size_t _len) //won't fill the extended buffers
 	{
-		if (_len <= cap)
-			len = (unsigned) _len;
-		else
-			do_assign(_len);
+		reserve(_len);
+		len = (unsigned) _len;
 	}
 
 	void assign(size_t len) {resize(len);}
 	void assign(const char* buff, size_t len) {resize(0); append(buff, len);}
 
-	void reserve(size_t _len)
+	void reserve(size_t capacity)
 	{
-		if (_len > cap)
+		if (capacity > cap)
 		{
-			auto old_len = len;
-			resize(_len);
-			len = old_len;
+			cap = (unsigned) capacity & 0xFFFFFFF0;
+			if ((unsigned) capacity > cap)
+				cap <<= 1;
+			//memory expansion strategy -- double memory reservation each time as std::string does.
+			//not considered integer overflow, please note.
+
+			if (cap < 16)
+				cap = 16;
+			buff = (char*) realloc(buff, cap);
 		}
 	}
 
@@ -143,7 +149,6 @@ public:
 	char* data() {return buff;}
 
 protected:
-	void do_assign(size_t len) {do_attach((char*) realloc(buff, len), len, len);}
 	void do_attach(char* _buff, size_t _len, size_t capacity) {buff = _buff; len = (unsigned) _len; cap = (unsigned) capacity;}
 	void do_detach() {buff = nullptr; len = cap = 0;}
 
