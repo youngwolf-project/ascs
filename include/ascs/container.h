@@ -44,7 +44,7 @@ private:
 };
 
 //Container must at least has the following functions (like std::list):
-// Container() and Container(size_t) constructor
+// Container() constructor
 // empty, must be thread safe, but doesn't have to be consistent
 // clear
 // swap
@@ -70,7 +70,6 @@ public:
 	using Container::empty;
 
 	queue() : total_size(0) {}
-	queue(size_t capacity) : Container(capacity), total_size(0) {}
 
 	//thread safe
 	bool is_thread_safe() const {return Lockable::is_lockable();}
