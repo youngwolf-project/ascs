@@ -59,6 +59,7 @@ public:
 protected:
 	generic_socket(asio::io_context& io_context_) : super(io_context_), is_bound(false), is_connected(false), connect_mode(ASCS_UDP_CONNECT_MODE), matrix(nullptr) {}
 	generic_socket(Matrix& matrix_) : super(matrix_.get_service_pump()), is_bound(false), is_connected(false), connect_mode(ASCS_UDP_CONNECT_MODE), matrix(&matrix_) {}
+	~generic_socket() {this->clear_io_context_refs();}
 
 public:
 	virtual bool is_ready() {return is_bound;}
@@ -80,13 +81,6 @@ public:
 		is_connected = is_bound = false;
 		sending_msg.clear();
 
-		if (nullptr != matrix)
-			if (!this->change_io_context())
-#if ASIO_VERSION < 101100
-				matrix->get_service_pump().assign_io_context(this->lowest_layer().get_io_service());
-#else
-				matrix->get_service_pump().assign_io_context(this->lowest_layer().get_executor().context());
-#endif
 		super::reset();
 	}
 
@@ -240,12 +234,7 @@ protected:
 		if (sending_msg.p)
 			sending_msg.p->set_value(sync_call_result::NOT_APPLICABLE);
 #endif
-		if (nullptr != matrix)
-#if ASIO_VERSION < 101100
-			matrix->get_service_pump().return_io_context(this->lowest_layer().get_io_service());
-#else
-			matrix->get_service_pump().return_io_context(this->lowest_layer().get_executor().context());
-#endif
+		this->clear_io_context_refs();
 		super::on_close();
 	}
 
@@ -264,6 +253,14 @@ private:
 #ifdef ASCS_SYNC_SEND
 	using super::do_direct_sync_send_msg;
 #endif
+
+	//call following two functions (via timer object's add_io_context_refs, sub_io_context_refs or clear_io_context_refs) in:
+	// 1. on_xxxx callbacks on this object;
+	// 2. use this->post or this->set_timer to emit an async event, then in the callback.
+	//otherwise, you must protect them to not be called with reset and on_close simultaneously
+	//actually, you're recommended to not use them, use add_socket instead.
+	virtual void attach_io_context(asio::io_context& io_context_, unsigned refs) {if (nullptr != matrix) matrix->get_service_pump().assign_io_context(io_context_, refs);}
+	virtual void detach_io_context(asio::io_context& io_context_, unsigned refs) {if (nullptr != matrix) matrix->get_service_pump().return_io_context(io_context_, refs);}
 
 	virtual void do_recv_msg()
 	{

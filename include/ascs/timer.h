@@ -63,8 +63,27 @@ public:
 	};
 	typedef const timer_info timer_cinfo;
 
-	timer(asio::io_context& io_context_) : Executor(io_context_) {}
+	timer(asio::io_context& io_context_) : Executor(io_context_), io_context_refs(1) {}
 	~timer() {stop_all_timer();}
+
+	unsigned get_io_context_refs() const {return io_context_refs;}
+	void add_io_context_refs(unsigned count)
+	{
+		if (count > 0)
+		{
+			io_context_refs += count;
+			attach_io_context(io_context_, count);
+		}
+	}
+	void sub_io_context_refs(unsigned count)
+	{
+		if (count > 0 && io_context_refs >= count)
+		{
+			io_context_refs -= count;
+			detach_io_context(io_context_, count);
+		}
+	}
+	void clear_io_context_refs() {sub_io_context_refs(io_context_refs);}
 
 	bool create_or_update_timer(tid id, unsigned interval, std::function<bool(tid)>&& call_back, bool start = false)
 	{
@@ -173,12 +192,17 @@ protected:
 		}
 	}
 
+	void reset_io_context_refs() {attach_io_context(io_context_, io_context_refs = 1);}
+	virtual void attach_io_context(asio::io_context& io_context_, unsigned refs) = 0;
+	virtual void detach_io_context(asio::io_context& io_context_, unsigned refs) = 0;
+
 private:
 	typedef std::list<timer_info> container_type;
 	container_type timer_can;
 	std::mutex timer_can_mutex;
 
 	using Executor::io_context_;
+	unsigned io_context_refs;
 };
 
 } //namespace

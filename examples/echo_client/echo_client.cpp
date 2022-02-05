@@ -64,6 +64,7 @@ using namespace ascs::ext::tcp;
 #define LIST_ALL_CLIENT	"list all client"
 #define INCREASE_THREAD	"increase thread"
 #define DECREASE_THREAD	"decrease thread"
+#define REFS			"refs"
 
 static bool check_msg;
 
@@ -164,16 +165,6 @@ protected:
 		send_msg(pstr, msg_len, true);
 	}
 #endif
-
-	//demonstrate strict reference balance between multiple io_context.
-	virtual bool change_io_context()
-	{
-		if (nullptr == get_matrix())
-			return false;
-
-		reset_next_layer(get_matrix()->get_service_pump().assign_io_context());
-		return true;
-	}
 
 private:
 	void handle_msg(out_msg_ctype& msg)
@@ -345,8 +336,9 @@ void send_msg_concurrently(echo_client& client, size_t send_thread_num, size_t m
 
 	cpu_timer begin_time;
 	std::list<std::thread> threads;
+	std::atomic_uint finished_sending;
 	do_something_to_all(link_groups, [&](const std::list<echo_client::object_type>& item) {
-		threads.emplace_back([=, &item]() {
+		threads.emplace_back([=, &finished_sending, &item]() {
 			auto buff = new char[msg_len];
 			memset(buff, msg_fill, msg_len);
 			for (size_t i = 0; i < msg_num; ++i)
@@ -354,6 +346,7 @@ void send_msg_concurrently(echo_client& client, size_t send_thread_num, size_t m
 				memcpy(buff, &i, sizeof(size_t)); //seq
 				do_something_to_all(item, [&](echo_client::object_ctype& item2) {item2->safe_send_msg(buff, msg_len, false);}); //can_overflow is false, it's important
 			}
+			++finished_sending;
 			delete[] buff;
 		});
 	});
@@ -362,6 +355,12 @@ void send_msg_concurrently(echo_client& client, size_t send_thread_num, size_t m
 	do
 	{
 		std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+		if (group_num == finished_sending)
+		{
+			puts("all of the message sending thread finished.");
+			finished_sending = 0;
+		}
 
 		auto new_percent = (unsigned) (100 * client.get_recv_bytes() / total_msg_bytes);
 		if (percent != new_percent)
@@ -404,6 +403,16 @@ void start_test(int repeat_times, char mode, echo_client& client, size_t send_th
 	is_testing = false;
 }
 
+void dump_io_context_refs(service_pump& sp)
+{
+	std::list<unsigned> refs;
+	sp.get_io_context_refs(refs);
+	char buff[16];
+	std::string str = "io_context references:\n";
+	do_something_to_all(refs, [&](const unsigned& item) {str.append(buff, sprintf(buff, " %u", item));});
+	puts(str.data());
+}
+
 int main(int argc, const char* argv[])
 {
 	printf("usage: %s [<service thread number=4> [<send thread number=8> [<port=%d> [<ip=%s> [link num=16]]]]]\n", argv[0], ASCS_SERVER_PORT, ASCS_SERVER_IP);
@@ -430,6 +439,8 @@ int main(int argc, const char* argv[])
 	echo_client client(sp);
 	//echo client means to cooperate with echo server while doing performance test, it will not send msgs back as echo server does,
 	//otherwise, dead loop will occur, network resource will be exhausted.
+	client.add_io_context_refs(1); //the timer object in multi_client_base takes 2 references on the io_context that assigned to it.
+	dump_io_context_refs(sp);
 
 //	argv[4] = "::1" //ipv6
 //	argv[4] = "127.0.0.1" //ipv4
@@ -470,6 +481,8 @@ int main(int argc, const char* argv[])
 		std::getline(std::cin, str);
 		if (str.empty())
 			;
+		else if (REFS == str)
+			dump_io_context_refs(sp);
 		else if (STATISTIC == str)
 		{
 			printf("link #: " ASCS_SF ", valid links: " ASCS_SF ", invalid links: " ASCS_SF "\n\n", client.size(), client.valid_size(), client.invalid_object_size());
@@ -495,7 +508,12 @@ int main(int argc, const char* argv[])
 		else if (RESTART_COMMAND == str)
 		{
 			sp.stop_service();
-			sp.start_service(thread_num);
+			dump_io_context_refs(sp);
+
+			//add all clients back
+			for (size_t i = 0; i < link_num; ++i)
+				client.add_socket(port, ip);
+			sp.start_service(std::max(thread_num, sp.get_io_context_num()));
 		}
 		else
 		{

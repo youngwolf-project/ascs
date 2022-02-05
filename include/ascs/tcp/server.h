@@ -21,8 +21,10 @@ template<typename Socket, typename Family = asio::ip::tcp, typename Pool = objec
 class generic_server : public Server, public Pool
 {
 protected:
-	generic_server(service_pump& service_pump_) : Pool(service_pump_), acceptor(service_pump_) {}
-	template<typename Arg> generic_server(service_pump& service_pump_, Arg&& arg) : Pool(service_pump_, std::forward<Arg>(arg)), acceptor(service_pump_) {}
+	generic_server(service_pump& service_pump_) : Pool(service_pump_), acceptor(service_pump_.assign_io_context()), io_context_refs(1), listening(false) {}
+	template<typename Arg> generic_server(service_pump& service_pump_, Arg&& arg) :
+		Pool(service_pump_, std::forward<Arg>(arg)), acceptor(service_pump_.assign_io_context()), io_context_refs(1), listening(false) {}
+	~generic_server() {clear_io_context_refs(); Pool::clear_io_context_refs();}
 
 public:
 	bool set_server_addr(unsigned short port, const std::string& ip = std::string())
@@ -48,6 +50,34 @@ public:
 	bool set_server_addr(const std::string& file_name) {server_addr = typename Family::endpoint(file_name); return true;}
 	const typename Family::endpoint& get_server_addr() const {return server_addr;}
 
+	void add_io_context_refs(unsigned count)
+	{
+		std::lock_guard<std::mutex> lock(mutex);
+		if (count > 0)
+		{
+			io_context_refs += count;
+#if ASIO_VERSION < 101100
+			get_service_pump().assign_io_context(acceptor.get_io_service(), count);
+#else
+			get_service_pump().assign_io_context(acceptor.get_executor().context(), count);
+#endif
+		}
+	}
+	void sub_io_context_refs(unsigned count)
+	{
+		std::lock_guard<std::mutex> lock(mutex);
+		if (count > 0 && io_context_refs >= count)
+		{
+			io_context_refs -= count;
+#if ASIO_VERSION < 101100
+			get_service_pump().return_io_context(acceptor.get_io_service(), count);
+#else
+			get_service_pump().return_io_context(acceptor.get_executor().context(), count);
+#endif
+		}
+	}
+	void clear_io_context_refs() {sub_io_context_refs(io_context_refs);}
+
 	bool start_listen()
 	{
 		std::lock_guard<std::mutex> lock(mutex);
@@ -61,6 +91,7 @@ public:
 #endif
 		acceptor.bind(server_addr, ec); assert(!ec);
 		if (ec) {unified_out::error_out("bind failed."); return false;}
+		listening = true;
 
 		auto num = async_accept_num();
 		assert(num > 0);
@@ -92,8 +123,8 @@ public:
 		ascs::do_something_to_all(sockets, [this](typename Pool::object_ctype& item) {this->do_async_accept(item);});
 		return true;
 	}
-	bool is_listening() const {return acceptor.is_open();}
-	void stop_listen() {std::lock_guard<std::mutex> lock(mutex); asio::error_code ec; acceptor.cancel(ec); acceptor.close(ec);}
+	bool is_listening() const {return listening;}
+	void stop_listen() {std::lock_guard<std::mutex> lock(mutex); listening = false; asio::error_code ec; acceptor.cancel(ec); acceptor.close(ec);}
 
 	typename Family::acceptor& next_layer() {return acceptor;}
 	const typename Family::acceptor& next_layer() const {return acceptor;}
@@ -209,6 +240,13 @@ protected:
 	}
 
 private:
+	//call following two functions (via timer object's add_io_context_refs, sub_io_context_refs or clear_io_context_refs) in:
+	// 1. on_xxxx callbacks on this object;
+	// 2. use this->post or this->set_timer to emit an async event, then in the callback.
+	//otherwise, you must protect them to not be called with reset and on_close simultaneously
+	virtual void attach_io_context(asio::io_context& io_context_, unsigned refs) {get_service_pump().assign_io_context(io_context_, refs);}
+	virtual void detach_io_context(asio::io_context& io_context_, unsigned refs) {get_service_pump().return_io_context(io_context_, refs);}
+
 	void accept_handler(const asio::error_code& ec, typename Pool::object_ctype& socket_ptr)
 	{
 		if (!ec)
@@ -229,7 +267,9 @@ private:
 private:
 	typename Family::endpoint server_addr;
 	typename Family::acceptor acceptor;
+	unsigned io_context_refs;
 	std::mutex mutex;
+	bool listening;
 };
 
 template<typename Socket, typename Pool = object_pool<Socket>, typename Server = i_server>

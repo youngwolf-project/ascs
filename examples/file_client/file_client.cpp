@@ -25,6 +25,21 @@ int link_num = 1;
 fl_type file_size;
 std::atomic_int_fast64_t received_size;
 
+void add_socket(file_client& client, int argc, const char* argv[])
+{
+	for (auto i = 0; i < link_num; ++i)
+	{
+//		argv[2] = "::1" //ipv6
+//		argv[2] = "127.0.0.1" //ipv4
+		if (argc > 2)
+			client.add_socket(atoi(argv[1]), argv[2])->set_index(i);
+		else if (argc > 1)
+			client.add_socket(atoi(argv[1]))->set_index(i);
+		else
+			client.add_socket()->set_index(i);
+	}
+}
+
 int main(int argc, const char* argv[])
 {
 	puts("this is a file transmission client.");
@@ -46,17 +61,7 @@ int main(int argc, const char* argv[])
 	if (argc > 3)
 		link_num = std::min(256, std::max(atoi(argv[3]), 1)); //link number cannot exceed 500, because file_server's macro ASCS_START_OBJECT_ID is defined as 500
 
-	for (auto i = 0; i < link_num; ++i)
-	{
-//		argv[2] = "::1" //ipv6
-//		argv[2] = "127.0.0.1" //ipv4
-		if (argc > 2)
-			client.add_socket(atoi(argv[1]), argv[2])->set_index(i);
-		else if (argc > 1)
-			client.add_socket(atoi(argv[1]))->set_index(i);
-		else
-			client.add_socket()->set_index(i);
-	}
+	add_socket(client, argc, argv);
 
 	sp.start_service();
 	while(sp.is_running())
@@ -70,6 +75,9 @@ int main(int argc, const char* argv[])
 		else if (RESTART_COMMAND == str)
 		{
 			sp.stop_service();
+
+			//add all clients back
+			add_socket(client, argc, argv);
 			sp.start_service();
 		}
 		else if (STATISTIC == str)
