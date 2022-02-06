@@ -764,9 +764,10 @@
  *  if a socket broken, it will be unbound from the io_context to reduce the reference number of the io_context, but if it's reused later,
  *  it will be bound to previous io_context again, this can break the balance, if you want strict balance, you must not use object reuse,
  *  which means you should not define macro ASCS_REUSE_OBJECT.
- * Support io_context reference customization, all of the services support this feature, because it's implemented by the timer object,
- *  the acceptor in the server_base also support this feature, see echo_server and echo_client for more details. socket also support this
- *  feature, but the reference number will be reset to 1 after link broken and reconnecting is no open (client_socket).
+ * Support io_context reference customization, all of the services support this feature, because it's implemented by the timer object, but
+ *  single_xxxx services don't even they inherit from class timer too, please note.
+ *  the acceptor in the server_base also support this feature, see echo_server and echo_client for more details.
+ *  socket also support this feature, but the reference number will be reset to 1 after link broken and reconnecting is closed (client_socket).
  * Support reliable UDP (based on KCP -- https://github.com/skywind3000/kcp.git), thus introduce new macro ASCS_RELIABLE_UDP_NSND_QUE to
  *  specify the default value of the max size of ikcpcb::nsnd_que (congestion control).
  * Support connected UDP socket, set macro ASCS_UDP_CONNECT_MODE to true to open it, you must also provide peer's ip address via set_peer_addr,

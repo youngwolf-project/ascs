@@ -110,15 +110,7 @@ protected:
 	}
 
 	//from i_service
-	virtual void finalize()
-	{
-		do_something_to_all([this](object_type& item) {
-			try {this->invalid_object_can.emplace_back(std::move(item));}
-			catch (const std::exception& e) {unified_out::error_out("cannot hold more objects (%s)", e.what());}
-		});
-
-		object_can.clear();
-	}
+	virtual void finalize() {object_can.clear();}
 
 	//you can do some statistic about object creations at here
 	virtual void on_create(object_ctype& object_ptr) {}
