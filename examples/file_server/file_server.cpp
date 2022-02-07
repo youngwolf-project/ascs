@@ -60,7 +60,7 @@ int main(int argc, const char* argv[])
 #if !defined(_MSC_VER) && !defined(__MINGW64__) && !defined(__MINGW32__)
 	if (1 == index)
 	{
-		asio::signal_set signal_receiver(sp, SIGINT, SIGTERM);
+		asio::signal_set signal_receiver(sp.assign_io_context(), SIGINT, SIGTERM);
 		std::function<void(const asio::error_code&, int)> signal_handler = [&](const asio::error_code& ec, int signal_number) {
 			if (!ec)
 				return sp.end_service();

@@ -64,29 +64,22 @@ protected:
 	}
 
 	//guarantee no operations (include asynchronous operations) be performed on this socket during call following reset_next_layer functions.
-#if ASIO_VERSION <= 101100
+#if ASIO_VERSION < 101100
 	void reset_next_layer() {reset_next_layer(next_layer_.get_io_service());}
 	template<typename Arg> void reset_next_layer(Arg&& arg) {reset_next_layer(next_layer_.get_io_service(), std::forward<Arg>(arg));}
 #elif ASIO_VERSION < 101300
-	void reset_next_layer() {reset_next_layer(static_cast<asio::io_context&>(next_layer_.get_executor().context()));}
+	void reset_next_layer() {reset_next_layer(next_layer_.get_executor().context());}
 	template<typename Arg>
-	void reset_next_layer(Arg&& arg) {reset_next_layer(static_cast<asio::io_context&>(next_layer_.get_executor().context()), std::forward<Arg>(arg));}
+	void reset_next_layer(Arg&& arg) {reset_next_layer(next_layer_.get_executor().context(), std::forward<Arg>(arg));}
 #else
 	void reset_next_layer() {reset_next_layer((const asio::any_io_executor&) next_layer_.get_executor());}
 	template<typename Arg> void reset_next_layer(Arg&& arg) {reset_next_layer(next_layer_.get_executor(), std::forward<Arg>(arg));}
 #endif
 
-	void reset_next_layer(asio::io_context& io_context) {(&next_layer_)->~Socket(); new (&next_layer_) Socket(io_context);}
-	template<typename Arg>
-	void reset_next_layer(asio::io_context& io_context, Arg&& arg) {(&next_layer_)->~Socket(); new (&next_layer_) Socket(io_context, std::forward<Arg>(arg));}
-#if ASIO_VERSION >= 101300
-	void reset_next_layer(const asio::any_io_executor& executor) {(&next_layer_)->~Socket(); new (&next_layer_) Socket(executor);}
-	template<typename Arg>
-	void reset_next_layer(const asio::any_io_executor& executor, Arg&& arg) {(&next_layer_)->~Socket(); new (&next_layer_) Socket(executor, std::forward<Arg>(arg));}
-#endif
-
 	void reset()
 	{
+		reset_io_context_refs();
+
 		auto need_clean_up = is_timer(TIMER_DELAY_CLOSE);
 		stop_all_timer(); //just in case, theoretically, timer TIMER_DELAY_CLOSE and TIMER_ASYNC_SHUTDOWN (used by tcp::socket_base) can left behind.
 		if (need_clean_up)
@@ -338,19 +331,6 @@ protected:
 	//if you overwrote this callback, do not forget to call parent class' on_close at the end.
 	virtual void on_close() {unified_out::info_out(ASCS_LLF " on_close()", id());}
 	virtual void after_close() {} //a good case for using this is to reconnect the server, please refer to client_socket_base.
-
-	//reused socket still based on previous io_context, and may break the reference balance of multiple io_context, if you want to balance it strictly,
-	// re-write this virtual function to re-create the next_layer base on the io_context which has the least references and return true, like:
-	//virtual bool change_io_context() {this->reset_next_layer(this->get_server().get_service_pump().assign_io_context()); return true;} or
-	//virtual bool change_io_context()
-	//{
-	//	if (nullptr == this->get_matrix())
-	//		return false;
-	//
-	//	this->reset_next_layer(this->get_matrix()->get_service_pump().assign_io_context());
-	//	return true;
-	//}
-	virtual bool change_io_context() {return false;}
 
 #ifdef ASCS_SYNC_DISPATCH
 	//return positive value if handled some messages (include all messages), if some msg left behind, socket will re-dispatch them asynchronously
@@ -612,6 +592,15 @@ private:
 	template<typename> friend class object_pool;
 	template<typename> friend class single_socket_service;
 	void id(uint_fast64_t id) {_id = id;}
+
+	void reset_next_layer(asio::io_context& io_context) {(&next_layer_)->~Socket(); new (&next_layer_) Socket(io_context);}
+	template<typename Arg>
+	void reset_next_layer(asio::io_context& io_context, Arg&& arg) {(&next_layer_)->~Socket(); new (&next_layer_) Socket(io_context, std::forward<Arg>(arg));}
+#if ASIO_VERSION >= 101300
+	void reset_next_layer(const asio::any_io_executor& executor) {(&next_layer_)->~Socket(); new (&next_layer_) Socket(executor);}
+	template<typename Arg>
+	void reset_next_layer(const asio::any_io_executor& executor, Arg&& arg) {(&next_layer_)->~Socket(); new (&next_layer_) Socket(executor, std::forward<Arg>(arg));}
+#endif
 
 #ifdef ASCS_SYNC_RECV
 	sync_call_result sync_recv_waiting(std::unique_lock<std::mutex>& lock, unsigned duration)

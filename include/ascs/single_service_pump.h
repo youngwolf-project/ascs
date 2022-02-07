@@ -27,12 +27,25 @@ public:
 
 public:
 #if ASIO_VERSION >= 101200
+#ifdef ASCS_DECREASE_THREAD_AT_RUNTIME
 	single_service_pump(int concurrency_hint = ASIO_CONCURRENCY_HINT_SAFE) : service_pump(concurrency_hint), Service((service_pump&) *this) {}
 	template<typename Arg> single_service_pump(Arg&& arg, int concurrency_hint = ASIO_CONCURRENCY_HINT_SAFE) :
 		service_pump(concurrency_hint), Service((service_pump&) *this, std::forward<Arg>(arg)) {}
 #else
+	//single_service_pump always think it's using multiple io_context
+	single_service_pump(int concurrency_hint = ASIO_CONCURRENCY_HINT_SAFE) : service_pump(concurrency_hint, true), Service((service_pump&) *this) {}
+	template<typename Arg> single_service_pump(Arg&& arg, int concurrency_hint = ASIO_CONCURRENCY_HINT_SAFE) :
+		service_pump(concurrency_hint, true), Service((service_pump&) *this, std::forward<Arg>(arg)) {}
+#endif
+#else
+#ifdef ASCS_DECREASE_THREAD_AT_RUNTIME
 	single_service_pump() : Service((service_pump&) *this) {}
 	template<typename Arg> single_service_pump(Arg&& arg) : Service((service_pump&) *this, std::forward<Arg>(arg)) {}
+#else
+	//single_service_pump always think it's using multiple io_context
+	single_service_pump() : service_pump(true), Service((service_pump&) *this) {}
+	template<typename Arg> single_service_pump(Arg&& arg) : service_pump(true), Service((service_pump&) *this, std::forward<Arg>(arg)) {}
+#endif
 #endif
 };
 

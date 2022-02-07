@@ -61,6 +61,7 @@ class basic_buffer
 {
 public:
 	basic_buffer() {do_detach();}
+	virtual ~basic_buffer() {clean();}
 	explicit basic_buffer(size_t len) {do_detach(); resize(len);}
 	basic_buffer(size_t count, char c) {do_detach(); append(count, c);}
 	basic_buffer(const char* buff) {do_detach(); operator+=(buff);}
@@ -68,17 +69,16 @@ public:
 	basic_buffer(std::initializer_list<char> ilist) {do_detach(); operator+=(ilist);}
 	basic_buffer(const basic_buffer& other) {do_detach(); append(other.buff, other.len);}
 	basic_buffer(basic_buffer&& other) {do_attach(other.buff, other.len, other.cap); other.do_detach();}
-	virtual ~basic_buffer() {clean();}
 
-	inline basic_buffer& operator=(basic_buffer&& other) {clean(); swap(other); return *this;}
-	inline basic_buffer& operator=(const basic_buffer& other) {resize(0); return operator+=(other);}
 	inline basic_buffer& operator=(char c) {resize(0); return operator+=(c);}
 	inline basic_buffer& operator=(const char* buff) {resize(0); return operator+=(buff);}
+	inline basic_buffer& operator=(basic_buffer&& other) {clean(); swap(other); return *this;}
+	inline basic_buffer& operator=(const basic_buffer& other) {resize(0); return operator+=(other);}
 	inline basic_buffer& operator=(std::initializer_list<char> ilist) {resize(0); return operator+=(ilist);}
 
-	inline basic_buffer& operator+=(const basic_buffer& other) {return append(other);}
 	inline basic_buffer& operator+=(char c) {return append(c);}
 	inline basic_buffer& operator+=(const char* buff) {return append(buff);}
+	inline basic_buffer& operator+=(const basic_buffer& other) {return append(other);}
 	inline basic_buffer& operator+=(std::initializer_list<char> ilist) {return append(ilist);}
 
 	basic_buffer& append(char c) {return append(1, c);}
@@ -138,12 +138,12 @@ public:
 	size_t capacity() const {return cap;}
 
 	//the following five functions are needed by ascs
-	bool empty() const {return 0 == len || nullptr == buff;}
-	size_t size() const {return nullptr == buff ? 0 : len;}
-	const char* data() const {return buff;}
-	void swap(basic_buffer& other) {std::swap(buff, other.buff); std::swap(len, other.len); std::swap(cap, other.cap);}
 	void clear() {resize(0);}
 	void clean() {free(buff); do_detach();}
+	const char* data() const {return buff;}
+	size_t size() const {return nullptr == buff ? 0 : len;}
+	bool empty() const {return 0 == len || nullptr == buff;}
+	void swap(basic_buffer& other) {std::swap(buff, other.buff); std::swap(len, other.len); std::swap(cap, other.cap);}
 
 	//functions needed by packer and unpacker
 	char* data() {return buff;}

@@ -45,8 +45,10 @@ public:
 	protected:
 		virtual bool init() = 0;
 		virtual void uninit() = 0;
+		virtual void finalize() {} //clean up after stop_service
 
 	protected:
+		friend service_pump;
 		service_pump& sp;
 
 	private:
@@ -64,7 +66,7 @@ protected:
 #if ASIO_VERSION > 101100
 		asio::executor_work_guard<asio::io_context::executor_type> work;
 #else
-		std::shared_ptr<asio::io_service::work> work;
+		std::shared_ptr<asio::io_context::work> work;
 #endif
 #endif
 		std::list<std::thread> threads;
@@ -78,7 +80,7 @@ protected:
 #if ASIO_VERSION > 101100
 			, work(io_context.get_executor())
 #else
-			, work(std::make_shared<asio::io_service::work>(io_context))
+			, work(std::make_shared<asio::io_context::work>(io_context))
 #endif
 #endif
 		{}
@@ -91,34 +93,41 @@ public:
 
 #if ASIO_VERSION >= 101200
 #ifdef ASCS_DECREASE_THREAD_AT_RUNTIME
-	service_pump(int concurrency_hint = ASIO_CONCURRENCY_HINT_SAFE) : started(false), real_thread_num(0), del_thread_num(0), single_io_context(true)
+	service_pump(int concurrency_hint = ASIO_CONCURRENCY_HINT_SAFE) : started(false), first(false), real_thread_num(0), del_thread_num(0), single_ctx(true)
 		{context_can.emplace_back(concurrency_hint);}
 #else
-	service_pump(int concurrency_hint = ASIO_CONCURRENCY_HINT_SAFE) : started(false), single_io_context(true) {context_can.emplace_back(concurrency_hint);}
-	bool set_io_context_num(int io_context_num, int concurrency_hint = ASIO_CONCURRENCY_HINT_SAFE) //call this before adding any services to this service_pump
+	//basically, the parameter multi_ctx is designed to be used by single_service_pump, which means single_service_pump always think it's using multiple io_context
+	//for service_pump, you should use set_io_context_num function instead if you really need multiple io_context.
+	service_pump(int concurrency_hint = ASIO_CONCURRENCY_HINT_SAFE, bool multi_ctx = false) : started(false), first(false), single_ctx(!multi_ctx)
+		{context_can.emplace_back(concurrency_hint);}
+	bool set_io_context_num(int io_context_num, int concurrency_hint = ASIO_CONCURRENCY_HINT_SAFE) //call this before construct any services on this service_pump
 	{
 		if (io_context_num < 1 || is_service_started() || context_can.size() > 1) //can only be called once
 			return false;
 
 		for (auto i = 1; i < io_context_num; ++i)
 			context_can.emplace_back(concurrency_hint);
-		single_io_context = context_can.size() < 2;
+		if (context_can.size() > 1)
+			single_ctx = false;
 
 		return true;
 	}
 #endif
 #else
 #ifdef ASCS_DECREASE_THREAD_AT_RUNTIME
-	service_pump() : started(false), real_thread_num(0), del_thread_num(0), single_io_context(true), context_can(1) {}
+	service_pump() : started(false), first(false), real_thread_num(0), del_thread_num(0), single_ctx(true), context_can(1) {}
 #else
-	service_pump() : started(false), single_io_context(true), context_can(1) {}
-	bool set_io_context_num(int io_context_num) //call this before adding any services to this service_pump
+	//basically, the parameter multi_ctx is designed to be used by single_service_pump, which means single_service_pump always think it's using multiple io_context
+	//for service_pump, you should use set_io_context_num function instead if you really need multiple io_context.
+	service_pump(bool multi_ctx = false) : started(false), first(false), single_ctx(!multi_ctx), context_can(1) {}
+	bool set_io_context_num(int io_context_num) //call this before construct any services on this service_pump
 	{
 		if (io_context_num < 1 || is_service_started() || context_can.size() > 1) //can only be called once
 			return false;
 
 		context_can.resize(io_context_num);
-		single_io_context = context_can.size() < 2;
+		if (context_can.size() > 1)
+			single_ctx = false;
 
 		return true;
 	}
@@ -128,15 +137,17 @@ public:
 
 	int get_io_context_num() const {return (int) context_can.size();}
 	void get_io_context_refs(std::list<unsigned>& refs)
-		{if (!single_io_context) ascs::do_something_to_all(context_can, context_can_mutex, [&](context& item) {refs.push_back(item.refs);});}
+		{if (!single_ctx) ascs::do_something_to_all(context_can, context_can_mutex, [&](context& item) {refs.push_back(item.refs);});}
 
+	//do not call below function implicitly or explicitly, before 1.6, a service_pump is also an io_context, so we already have it implicitly,
+	// but in 1.6 and later, a service_pump is not an io_context anymore, then it is just provided to accommodate legacy usage in class
+	// (unix_)server_base, (unix_)server_socket_base, (unix_)client_socket_base, udp::(unix_)socket_base and their subclasses.
+	//according to the implementation, it picks the io_context who has the least references, so the return values are not consistent.
 	operator asio::io_context& () {return assign_io_context();}
-#if ASIO_VERSION > 101100
-	asio::io_context::executor_type get_executor() {return assign_io_context().get_executor();}
-#endif
+
 	asio::io_context& assign_io_context(bool increase_ref = true) //pick the context which has the least references
 	{
-		if (single_io_context)
+		if (single_ctx)
 			return context_can.front().io_context;
 
 		context* ctx = nullptr;
@@ -166,12 +177,12 @@ public:
 
 	void return_io_context(const asio::execution_context& io_context, unsigned refs = 1)
 	{
-		if (!single_io_context)
+		if (!single_ctx)
 			ascs::do_something_to_one(context_can, context_can_mutex, [&](context& item) {return &io_context != &item.io_context ? false : (item.refs -= refs, true);});
 	}
 	void assign_io_context(const asio::execution_context& io_context, unsigned refs = 1)
 	{
-		if (!single_io_context)
+		if (!single_ctx)
 			ascs::do_something_to_one(context_can, context_can_mutex, [&](context& item) {return &io_context != &item.io_context ? false : (item.refs += refs, true);});
 	}
 
@@ -279,7 +290,9 @@ public:
 		ascs::do_something_to_one(context_can, [&](const context& item) {return (running = !item.io_context.stopped());});
 		return running;
 	}
+
 	bool is_service_started() const {return started;}
+	bool is_first_running() const {return first;}
 
 	//not thread safe
 #if ASIO_VERSION >= 101200
@@ -297,7 +310,7 @@ public:
 			}
 			else
 			{
-				single_io_context = false;
+				single_ctx = false;
 				std::lock_guard<std::mutex> lock(context_can_mutex);
 #if ASIO_VERSION >= 101200
 				for (int i = 0; i < io_context_num; ++i)
@@ -334,6 +347,18 @@ protected:
 			return;
 		}
 
+#ifdef ASCS_AVOID_AUTO_STOP_SERVICE
+		if (!is_first_running())
+			ascs::do_something_to_all(context_can, [](context& item) {
+#if ASIO_VERSION > 101100
+				(&item.work)->~executor_work_guard();
+				new(&item.work) asio::executor_work_guard<asio::io_context::executor_type>(item.io_context.get_executor());
+#else
+				item.work = std::make_shared<asio::io_context::work>(item.io_context);
+#endif
+			});
+#endif
+
 		started = true;
 		unified_out::info_out("service pump started.");
 
@@ -348,9 +373,10 @@ protected:
 
 	void wait_service()
 	{
-		ascs::do_something_to_all(context_can, [](context& item) {ascs::do_something_to_all(item.threads, [](std::thread& t) {t.join();});});
+		ascs::do_something_to_all(context_can, [](context& item) {ascs::do_something_to_all(item.threads, [](std::thread& t) {t.join();}); item.threads.clear();});
+		do_something_to_all([](object_type& item) {item->finalize();});
 
-		started = false;
+		started = first = false;
 #ifdef ASCS_DECREASE_THREAD_AT_RUNTIME
 		del_thread_num = 0;
 #endif
@@ -462,7 +488,7 @@ private:
 	}
 
 private:
-	bool started;
+	bool started, first;
 	container_type service_can;
 	std::mutex service_can_mutex;
 
@@ -471,7 +497,7 @@ private:
 	std::atomic_int_fast32_t del_thread_num;
 #endif
 
-	bool single_io_context;
+	bool single_ctx;
 	std::list<context> context_can;
 	std::mutex context_can_mutex;
 };
