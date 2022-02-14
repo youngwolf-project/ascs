@@ -68,6 +68,13 @@ public:
 	basic_buffer(const char* buff, size_t len) {do_detach(); append(buff, len);}
 	basic_buffer(std::initializer_list<char> ilist) {do_detach(); operator+=(ilist);}
 	basic_buffer(const basic_buffer& other) {do_detach(); append(other.buff, other.len);}
+	basic_buffer(const basic_buffer& other, size_t pos) {do_detach(); if (pos < other.len) append(std::next(other.buff, pos), other.len - pos);}
+	basic_buffer(const basic_buffer& other, size_t pos, size_t len)
+	{
+		do_detach();
+		if (pos < other.len)
+			append(std::next(other.buff, pos), pos + len > other.len ? other.len - pos : len);
+	}
 	basic_buffer(basic_buffer&& other) {do_attach(other.buff, other.len, other.cap); other.do_detach();}
 
 	inline basic_buffer& operator=(char c) {resize(0); return operator+=(c);}
@@ -86,7 +93,12 @@ public:
 	{
 		if (count > 0)
 		{
-			reserve(len + count);
+			check_length(count);
+
+			auto capacity = len + count;
+			if (capacity > cap)
+				reserve(capacity);
+
 			memset(std::next(buff, len), c, count);
 			len += (unsigned) count;
 		}
@@ -101,7 +113,12 @@ public:
 	{
 		if (nullptr != _buff && _len > 0)
 		{
-			reserve(len + _len);
+			check_length(_len);
+
+			auto capacity = len + _len;
+			if (capacity > cap)
+				reserve(capacity);
+
 			memcpy(std::next(buff, len), _buff, _len);
 			len += (unsigned) _len;
 		}
@@ -109,32 +126,85 @@ public:
 		return *this;
 	}
 
+	basic_buffer& erase(size_t pos = 0, size_t len = UINT_MAX)
+	{
+		if (pos > size())
+			throw "out of range.";
+
+		if (len >= size())
+			resize(pos);
+		else
+		{
+			auto start = size() - len;
+			if (pos >= start)
+				resize(pos);
+			else
+			{
+				memmove(std::next(buff, pos), std::next(buff, pos + len), size() - pos - len);
+				resize(size() - len);
+			}
+		}
+
+		return *this;
+	}
+
 	void resize(size_t _len) //won't fill the extended buffers
 	{
-		reserve(_len);
+		if (_len > cap)
+			reserve(_len);
+
 		len = (unsigned) _len;
 	}
 
 	void assign(size_t len) {resize(len);}
 	void assign(const char* buff, size_t len) {resize(0); append(buff, len);}
 
+	void shrink_to_fit() {reserve(0);}
 	void reserve(size_t capacity)
 	{
-		if (capacity > cap)
-		{
-			cap = (unsigned) capacity & 0xFFFFFFF0;
-			if ((unsigned) capacity > cap)
-				cap <<= 1;
-			//memory expansion strategy -- double memory reservation each time as std::string does.
-			//not considered integer overflow, please note.
+		if (capacity > max_size())
+			throw "too big memory request!";
+		else if (capacity < len)
+			capacity = len;
+		else if (0 == capacity)
+			capacity = 16;
 
-			if (cap < 16)
-				cap = 16;
-			buff = (char*) realloc(buff, cap);
+		if (capacity != cap)
+		{
+#ifdef _MSC_VER
+			if (cap < capacity && capacity < cap + cap / 2) //memory expansion strategy -- quoted from std::string.
+			{
+				capacity = cap + cap / 2;
+#else
+			if (cap < capacity && capacity < 2 * cap) //memory expansion strategy -- quoted from std::string.
+			{
+				capacity = 2 * cap;
+#endif
+				if (capacity > max_size())
+					capacity = max_size();
+			}
+
+			auto new_cap = capacity & (unsigned) (max_size() << 4);
+			if (capacity > new_cap)
+			{
+				new_cap += 0x10;
+				if (capacity > new_cap || new_cap > max_size()) //overflow
+					new_cap = max_size();
+			}
+
+			if (new_cap != cap)
+			{
+				auto new_buff = (char*) realloc(buff, new_cap);
+				if (nullptr == new_buff)
+					throw "no sufficient memory!";
+
+				cap = (unsigned) new_cap;
+				buff = new_buff;
+			}
 		}
 	}
 
-	size_t max_size() const {return (unsigned) -1;}
+	size_t max_size() const {return UINT_MAX;}
 	size_t capacity() const {return cap;}
 
 	//the following five functions are needed by ascs
@@ -151,6 +221,8 @@ public:
 protected:
 	void do_attach(char* _buff, size_t _len, size_t capacity) {buff = _buff; len = (unsigned) _len; cap = (unsigned) capacity;}
 	void do_detach() {buff = nullptr; len = cap = 0;}
+
+	void check_length(size_t add_len) {if (add_len > max_size() || max_size() - add_len < len) throw "too big memory request!";}
 
 protected:
 	char* buff;
