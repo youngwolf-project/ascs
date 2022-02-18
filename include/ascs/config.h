@@ -757,6 +757,7 @@
  *
  * SPECIAL ATTENTION (incompatible with old editions):
  * client_socket's function open_reconnect and close_reconnect have been replaced by function set_reconnect(bool).
+ * Drop the second parameter of function multi_client_base::graceful_shutdown(bool, bool), now it will always be false.
  *
  * HIGHLIGHT:
  * service_pump support multiple io_context, just needs the number of service thread to be bigger than or equal to the number of io_context.
@@ -789,9 +790,13 @@
  * Enhance the reusability of ascs' ssl sockets, now they can be reused (include reconnecting) just as normal socket.
  * Suppress error logs for empty heartbeat (suppose you want to stop heartbeat but keep heartbeat checking).
  * service_pump's single io_context optimization can be closed.
+ * Throw more specific exceptions instead of just std::execption.
+ * Enhance ext::basic_buffer's memory expansion strategy according to std::string.
+ * Make ext::basic_buffer to be able to work as std::string during handling the end '\0' character although with different way.
  *
  * DELETION:
  * Delete macro ASCS_REUSE_SSL_STREAM, now ascs' ssl sockets can be reused just as normal socket.
+ * Drop the second parameter of function multi_client_base::graceful_shutdown(bool, bool).
  *
  * REFACTORING:
  * Re-implement the reusability (object reuse and reconnecting) of ascs' ssl sockets.
