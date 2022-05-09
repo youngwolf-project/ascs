@@ -10,6 +10,8 @@
 #endif
 #define ASCS_RECV_BUFFER_TYPE std::vector<asio::mutable_buffer> //scatter-gather buffer, it's very useful under certain situations (for example, ring buffer).
 #define ASCS_SCATTERED_RECV_BUFFER //used by unpackers, not belongs to ascs
+#define ASCS_WANT_MSG_SEND_NOTIFY
+#define ASCS_DEFAULT_PACKER packer2<>
 //configuration
 
 #include "file_client.h"
@@ -19,11 +21,12 @@
 #define STATUS			"status"
 #define STATISTIC		"statistic"
 #define LIST_ALL_CLIENT	"list all client"
-#define REQUEST_FILE	"get"
+#define GET_FILE		"get"
+#define PUT_FILE		"put"
 
 int link_num = 1;
 fl_type file_size;
-std::atomic_int_fast64_t received_size;
+std::atomic_int_fast64_t transmit_size;
 
 void add_socket(file_client& client, int argc, const char* argv[])
 {
@@ -89,10 +92,15 @@ int main(int argc, const char* argv[])
 			client.list_all_status();
 		else if (LIST_ALL_CLIENT == str)
 			client.list_all_object();
-		else if (str.size() > sizeof(REQUEST_FILE) && !strncmp(REQUEST_FILE, str.data(), sizeof(REQUEST_FILE) - 1) && isspace(str[sizeof(REQUEST_FILE) - 1]))
+		else if (str.size() > sizeof(GET_FILE) && !strncmp(GET_FILE, str.data(), sizeof(GET_FILE) - 1) && isspace(str[sizeof(GET_FILE) - 1]))
 		{
-			str.erase(0, sizeof(REQUEST_FILE));
+			str.erase(0, sizeof(GET_FILE));
 			client.get_file(split_string(str));
+		}
+		else if (str.size() > sizeof(PUT_FILE) && !strncmp(PUT_FILE, str.data(), sizeof(PUT_FILE) - 1) && isspace(str[sizeof(PUT_FILE) - 1]))
+		{
+			str.erase(0, sizeof(PUT_FILE));
+			client.put_file(split_string(str));
 		}
 		else
 			client.at(0)->talk(str);

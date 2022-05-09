@@ -6,7 +6,7 @@
 using namespace ascs::tcp;
 using namespace ascs::ext::tcp;
 
-#include "file_buffer.h"
+#include "../file_common/common.h"
 
 class file_socket : public base_socket, public server_socket
 {
@@ -30,8 +30,13 @@ protected:
 #endif
 
 private:
-	void trans_end();
-	void handle_msg(out_msg_ctype& msg);
+	void clear();
+	void trans_end(bool reset_unpacker = true);
+	void response_put_file(fl_type offset, fl_type length, bool success);
+	bool handle_msg(out_msg_ctype& msg);
+
+private:
+	int retry_num;
 };
 
 #endif //#ifndef FILE_SOCKET_H_
