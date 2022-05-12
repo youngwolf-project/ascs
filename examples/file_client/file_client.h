@@ -73,7 +73,7 @@ public:
 
 		fseeko(file, 0, SEEK_END);
 		auto length = ftello(file);
-		if (link_num - 1 == index)
+		if (0 == index)
 			file_size = length;
 
 		auto my_length = length / link_num;
@@ -280,13 +280,13 @@ private:
 				}
 				else
 				{
-					fl_type length;
-					memcpy(&length, std::next(msg.data(), ORDER_LEN), DATA_LEN);
+					fl_type my_length;
+					memcpy(&my_length, std::next(msg.data(), ORDER_LEN), DATA_LEN);
 
-					printf("start to send the file with length " ASCS_LLF "\n", length);
+					printf("start to send the file with length " ASCS_LLF "\n", my_length);
 
 					state = TRANS_BUSY;
-					direct_send_msg(in_msg_type(new file_buffer(file, length, &transmit_size)), true);
+					direct_send_msg(in_msg_type(new file_buffer(file, my_length, &transmit_size)), true);
 				}
 			}
 			break;
@@ -357,8 +357,8 @@ private:
 					//if you always return false, do_something_to_one will be equal to do_something_to_all.
 					do_something_to_one([&](object_ctype& item) {if (0 != item->id()) item->get_file(file_name); return false;});
 			}
-			else if ((re = find(link_num - 1)->put_file(file_name)))
-				do_something_to_all([&](object_ctype& item) {if ((unsigned) (link_num - 1) != item->id()) item->put_file(file_name);});
+			else if ((re = find(0)->put_file(file_name)))
+				do_something_to_all([&](object_ctype& item) {if (0 != item->id()) item->put_file(file_name);});
 
 			if (re)
 			{
