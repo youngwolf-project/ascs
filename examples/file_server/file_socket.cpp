@@ -14,14 +14,14 @@
 
 #include "file_socket.h"
 
-file_socket::file_socket(i_server& server_) : server_socket(server_), retry_num(0) {}
+file_socket::file_socket(i_server& server_) : server_socket(server_) {}
 file_socket::~file_socket() {clear();}
 
 void file_socket::reset() {trans_end(); server_socket::reset();}
 void file_socket::take_over(std::shared_ptr<file_socket> socket_ptr) {if (socket_ptr) printf("restore user data from invalid object (" ASCS_LLF ").\n", socket_ptr->id());}
 
 //msg handling
-bool file_socket::on_msg_handle(out_msg_type& msg) {auto re = handle_msg(msg); if (re && 0 == get_pending_recv_msg_size()) recv_msg(); return re;}
+bool file_socket::on_msg_handle(out_msg_type& msg) {handle_msg(msg); if (0 == get_pending_recv_msg_size()) recv_msg(); return true;}
 //msg handling end
 
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
@@ -59,31 +59,9 @@ void file_socket::trans_end(bool reset_unpacker)
 	if (reset_unpacker)
 		unpacker(std::make_shared<ASCS_DEFAULT_UNPACKER>());
 	state = TRANS_IDLE;
-	retry_num = 0;
 }
 
-void file_socket::response_put_file(fl_type offset, fl_type length, bool success)
-{
-	char buffer[ORDER_LEN + DATA_LEN + 1];
-	*buffer = 10; //head
-	memcpy(std::next(buffer, ORDER_LEN), &length, DATA_LEN);
-	*std::next(buffer, ORDER_LEN + DATA_LEN) = success ? '\0' : '\1';
-	
-	if (success)
-	{
-		printf("start to accept the file from " ASCS_LLF " with length " ASCS_LLF "\n", offset, length);
-
-		state = TRANS_BUSY;
-		fseeko(file, offset, SEEK_SET);
-		unpacker(std::make_shared<file_unpacker>(file, length)); //replace the unpacker first, then response put file request
-	}
-	else
-		puts("failed to create the file!");
-
-	send_msg(buffer, sizeof(buffer), true);
-}
-
-bool file_socket::handle_msg(out_msg_ctype& msg)
+void file_socket::handle_msg(out_msg_ctype& msg)
 {
 	if (TRANS_BUSY == state)
 	{
@@ -98,12 +76,12 @@ bool file_socket::handle_msg(out_msg_ctype& msg)
 			trans_end();
 		}
 
-		return true;
+		return;
 	}
 	else if (msg.size() <= ORDER_LEN)
 	{
 		printf("wrong order length: " ASCS_SF ".\n", msg.size());
-		return true;
+		return;
 	}
 
 	switch (*msg.data())
@@ -131,7 +109,7 @@ bool file_socket::handle_msg(out_msg_ctype& msg)
 			else
 			{
 				memset(std::next(buffer, ORDER_LEN), -1, DATA_LEN);
-				printf("can not open file %s!\n", std::next(msg.data(), ORDER_LEN));
+				printf("can not open file %s!\n", file_name);
 			}
 
 			send_msg(buffer, sizeof(buffer), true);
@@ -159,7 +137,34 @@ bool file_socket::handle_msg(out_msg_ctype& msg)
 	case 10:
 		//let the client to control the life cycle of file transmission, so we don't care the state
 		//avoid accessing the send queue concurrently, because we use non_lock_queue
-		if (/*TRANS_IDLE == state && */msg.size() > ORDER_LEN + OFFSET_LEN + DATA_LEN + 1 && !is_sending())
+		if (/*TRANS_IDLE == state && */!is_sending())
+		{
+			trans_end();
+
+			std::string order(ORDER_LEN, (char) 10);
+			auto file_name = std::next(msg.data(), ORDER_LEN);
+			file = fopen(file_name, "w+b");
+			if (nullptr != file)
+			{
+				clear();
+
+				order += '\0';
+				printf("file %s been created or truncated\n", file_name);
+			}
+			else
+			{
+				order += '\1';
+				printf("can not create or truncate file %s!\n", file_name);
+			}
+			order += file_name;
+
+			send_msg(std::move(order), true);
+		}
+		break;
+	case 11:
+		//let the client to control the life cycle of file transmission, so we don't care the state
+		//avoid accessing the send queue concurrently, because we use non_lock_queue
+		if (/*TRANS_IDLE == state && */msg.size() > ORDER_LEN + OFFSET_LEN + DATA_LEN && !is_sending())
 		{
 			trans_end();
 
@@ -168,21 +173,28 @@ bool file_socket::handle_msg(out_msg_ctype& msg)
 			fl_type length;
 			memcpy(&length, std::next(msg.data(), ORDER_LEN + OFFSET_LEN), DATA_LEN);
 
-			auto file_name = std::next(msg.data(), ORDER_LEN + OFFSET_LEN + DATA_LEN + 1);
-			if (0 == *std::next(msg.data(), ORDER_LEN + OFFSET_LEN + DATA_LEN))
+			char buffer[ORDER_LEN + DATA_LEN + 1];
+			*buffer = 11; //head
+			memcpy(std::next(buffer, ORDER_LEN), &length, DATA_LEN);
+
+			auto file_name = std::next(msg.data(), ORDER_LEN + OFFSET_LEN + DATA_LEN);
+			file = fopen(file_name, "r+b");
+			if (nullptr == file)
 			{
-				printf("prepare to accept file %s from " ASCS_LLF " with length " ASCS_LLF "\n", file_name, offset, length);
-				file = fopen(file_name, "w+b");
-				response_put_file(offset, length, nullptr != file);
+				printf("can not open file %s\n", file_name);
+				*std::next(buffer, ORDER_LEN + DATA_LEN) = '\1';
 			}
 			else
 			{
-				auto re = nullptr != (file = fopen(std::next(msg.data(), ORDER_LEN + OFFSET_LEN + DATA_LEN + 1), "r+b"));
-				if (!re && ++retry_num < 100) //wait (up to 100 times of ASCS_MSG_HANDLING_INTERVAL) the leader to create the file
-					return false;
+				printf("start to accept file %s from " ASCS_LLF " with length " ASCS_LLF "\n", file_name, offset, length);
+				*std::next(buffer, ORDER_LEN + DATA_LEN) = '\0';
 
-				response_put_file(offset, length, re);
+				state = TRANS_BUSY;
+				fseeko(file, offset, SEEK_SET);
+				unpacker(std::make_shared<file_unpacker>(file, length)); //replace the unpacker first, then response put file request
 			}
+
+			send_msg(buffer, sizeof(buffer), true);
 		}
 		break;
 	case 2:
@@ -200,6 +212,4 @@ bool file_socket::handle_msg(out_msg_ctype& msg)
 	default:
 		break;
 	}
-
-	return true;
 }
