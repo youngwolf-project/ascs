@@ -1,18 +1,12 @@
 #ifndef UNPACKER_H_
 #define UNPACKER_H_
 
-#include <ascs/base.h>
-using namespace ascs;
-using namespace ascs::tcp;
-
-#include "../file_server/common.h"
-
-extern std::atomic_int_fast64_t received_size;
+#include "common.h"
 
 class file_unpacker : public i_unpacker<std::string>, public asio::noncopyable
 {
 public:
-	file_unpacker(FILE* file, fl_type total_len_)  : _file(file), total_len(total_len_)
+	file_unpacker(FILE* file, fl_type total_len_, std::atomic_int_fast64_t* transmit_size_ = nullptr)  : _file(file), total_len(total_len_), transmit_size(transmit_size_)
 	{
 		assert(nullptr != _file);
 
@@ -27,8 +21,10 @@ public:
 	virtual bool parse_msg(size_t bytes_transferred, container_type& msg_can)
 	{
 		assert(total_len >= (fl_type) bytes_transferred && bytes_transferred > 0);
+
 		total_len -= bytes_transferred;
-		received_size += bytes_transferred;
+		if (nullptr != transmit_size)
+			*transmit_size += bytes_transferred;
 
 		if (bytes_transferred == fwrite(buffer, 1, bytes_transferred, _file))
 			return true;
@@ -53,6 +49,7 @@ protected:
 	char* buffer;
 
 	fl_type total_len;
+	std::atomic_int_fast64_t* transmit_size;
 };
 
 #endif //UNPACKER_H_

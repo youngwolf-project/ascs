@@ -1,15 +1,12 @@
 #ifndef FILE_BUFFER_H_
 #define FILE_BUFFER_H_
 
-#include <ascs/base.h>
-using namespace ascs;
-
 #include "common.h"
 
 class file_buffer : public i_buffer, public asio::noncopyable
 {
 public:
-	file_buffer(FILE* file, fl_type total_len_) : _file(file), total_len(total_len_)
+	file_buffer(FILE* file, fl_type total_len_, std::atomic_int_fast64_t* transmit_size_ = nullptr) : _file(file), total_len(total_len_), transmit_size(transmit_size_)
 	{
 		assert(nullptr != _file);
 
@@ -38,6 +35,8 @@ public:
 				printf("fread(" ASCS_SF ") error!\n", data_len);
 				data_len = 0;
 			}
+			else if (nullptr != transmit_size)
+				*transmit_size += data_len;
 		}
 	}
 
@@ -47,6 +46,7 @@ protected:
 	size_t data_len;
 
 	fl_type total_len;
+	std::atomic_int_fast64_t* transmit_size;
 };
 
 #endif //FILE_BUFFER_H_

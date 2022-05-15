@@ -3,6 +3,10 @@
 
 #include <stdio.h>
 
+#include <ascs/base.h>
+using namespace ascs;
+using namespace ascs::tcp;
+
 #ifdef _MSC_VER
 #define fseeko _fseeki64
 #define ftello _ftelli64
@@ -29,10 +33,17 @@ if head equal to:
 2: body is talk content
 	talk, client->server. please note that server cannot talk to client, this is because server never knows whether
 	it is going to transmit a file or not.
-	return: n/a
+	return: na
 3: body is object id(8 bytes)
 	change file server's object ids, demonstrate how to use macro ASCS_RESTORE_OBJECT.
-	return: n/a
+	return: na
+
+10:body is a filename
+	request to create or truncate the file on the server, client->server->client
+	return: same head + status(1 byte, 0 - success, !0 - failed) + filename
+11:body is offset(8 bytes) + data length(8 bytes) + filename
+	request to upload the file, client->server->client
+	return: same head + data length(8 bytes) + status(1 byte, 0 - success, !0 - failed), then file content(no-protocol), repeat until all data been sent
 */
 
 class base_socket
