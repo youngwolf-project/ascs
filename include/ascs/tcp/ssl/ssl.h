@@ -7,7 +7,7 @@
  *		QQ: 676218192
  *		Community on QQ: 198941541
  *
- * make ascs support asio::ssl
+ * make ascs support ssl (based on asio::ssl)
  */
 
 #ifndef _ASCS_SSL_H_
@@ -23,8 +23,7 @@
 
 namespace ascs { namespace ssl {
 
-template <typename Socket>
-class socket : public Socket
+template<typename Socket> class socket : public Socket
 {
 public:
 	template<typename Arg> socket(Arg&& arg, asio::ssl::context& ctx_) : Socket(std::forward<Arg>(arg), ctx_), ctx(ctx_) {}
@@ -78,7 +77,7 @@ private:
 	asio::ssl::context& ctx;
 };
 
-template <typename Packer, typename Unpacker, typename Matrix = i_matrix,
+template<typename Packer, typename Unpacker, typename Matrix = i_matrix,
 	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
 class client_socket_base : public socket<tcp::client_socket_base<Packer, Unpacker, Matrix, asio::ssl::stream<asio::ip::tcp::socket>, InQueue, InContainer, OutQueue, OutContainer>>

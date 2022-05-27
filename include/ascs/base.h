@@ -225,6 +225,21 @@ private:
 	bool _stripped;
 };
 
+//just provide msg_type definition, you should not call any functions of it nor store msg in it
+template<typename MsgType>
+class dummy_unpacker : public i_unpacker<MsgType>
+{
+public:
+	using typename i_unpacker<MsgType>::msg_type;
+	using typename i_unpacker<MsgType>::msg_ctype;
+	using typename i_unpacker<MsgType>::container_type;
+	using typename i_unpacker<MsgType>::buffer_type;
+
+	virtual void reset() {assert(false);}
+	virtual bool parse_msg(size_t bytes_transferred, container_type& msg_can) {assert(false); return false;}
+	virtual buffer_type prepare_next_recv() {assert(false); return buffer_type();}
+};
+
 namespace udp
 {
 	template<typename MsgType, typename Family = asio::ip::udp>

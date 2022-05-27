@@ -17,7 +17,7 @@
 
 namespace ascs { namespace ssl {
 
-template <typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = asio::ssl::stream<asio::ip::tcp::socket>,
+template<typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = asio::ssl::stream<asio::ip::tcp::socket>,
 	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
 using connector_base = client_socket_base<Packer, Unpacker, Matrix, Socket, InQueue, InContainer, OutQueue, OutContainer>;

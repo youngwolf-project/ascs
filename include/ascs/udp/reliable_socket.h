@@ -22,7 +22,7 @@
 
 namespace ascs { namespace udp {
 
-template <typename Packer, typename Unpacker, typename Matrix = i_matrix,
+template<typename Packer, typename Unpacker, typename Matrix = i_matrix,
 	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
 class reliable_socket_base : public socket_base<Packer, Unpacker, Matrix, InQueue, InContainer, OutQueue, OutContainer>

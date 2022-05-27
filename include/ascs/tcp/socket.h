@@ -17,9 +17,54 @@
 
 namespace ascs { namespace tcp {
 
-template <typename Socket, typename Packer, typename Unpacker,
-	template<typename> class InQueue, template<typename> class InContainer, template<typename> class OutQueue, template<typename> class OutContainer>
-class socket_base : public socket2<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer>
+template<typename Socket, typename OutMsgType> class reader_writer : public Socket
+{
+public:
+	reader_writer(asio::io_context& io_context_) : Socket(io_context_) {}
+	template<typename Arg> reader_writer(asio::io_context& io_context_, Arg&& arg) : Socket(io_context_, std::forward<Arg>(arg)) {}
+
+	typedef std::function<void(const asio::error_code& ec, size_t bytes_transferred)> ReadWriteCallBack;
+
+protected:
+	bool async_read(ReadWriteCallBack&& call_back)
+	{
+		auto recv_buff = this->unpacker()->prepare_next_recv();
+		assert(asio::buffer_size(recv_buff) > 0);
+		if (0 == asio::buffer_size(recv_buff))
+		{
+			unified_out::error_out(ASCS_LLF " the unpacker returned an empty buffer, quit receiving!", this->id());
+			return false;
+		}
+
+		asio::async_read(this->next_layer(), recv_buff, [this](const asio::error_code& ec, size_t bytes_transferred)->size_t {
+			return this->completion_checker(ec, bytes_transferred);}, std::forward<ReadWriteCallBack>(call_back));
+		return true;
+	}
+	bool parse_msg(size_t bytes_transferred, std::list<OutMsgType>& msg_can) {return this->unpacker()->parse_msg(bytes_transferred, msg_can);}
+
+	size_t batch_msg_send_size() const
+	{
+#ifdef ASCS_WANT_MSG_SEND_NOTIFY
+		return 0;
+#else
+		return asio::detail::default_max_transfer_size;
+#endif
+	}
+	template<typename Buffer> void async_write(const Buffer& msg_can, ReadWriteCallBack&& call_back)
+		{asio::async_write(this->next_layer(), msg_can, std::forward<ReadWriteCallBack>(call_back));}
+
+private:
+	size_t completion_checker(const asio::error_code& ec, size_t bytes_transferred)
+	{
+		auto_duration dur(this->stat.unpack_time_sum);
+		return this->unpacker()->completion_condition(ec, bytes_transferred);
+	}
+};
+
+template<typename Socket, typename Packer, typename Unpacker,
+	template<typename> class InQueue, template<typename> class InContainer, template<typename> class OutQueue, template<typename> class OutContainer,
+	template<typename, typename> class ReaderWriter = reader_writer>
+class socket_base : public ReaderWriter<socket2<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer>, typename Unpacker::msg_type>
 {
 public:
 	typedef typename Packer::msg_type in_msg_type;
@@ -28,7 +73,7 @@ public:
 	typedef typename Unpacker::msg_ctype out_msg_ctype;
 
 private:
-	typedef socket2<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer> super;
+	typedef ReaderWriter<socket2<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer>, out_msg_type> super;
 
 protected:
 	enum link_status {CONNECTED, FORCE_SHUTTING_DOWN, GRACEFUL_SHUTTING_DOWN, BROKEN, HANDSHAKING};
@@ -267,31 +312,20 @@ private:
 		}
 	}
 
-	size_t completion_checker(const asio::error_code& ec, size_t bytes_transferred)
-	{
-		auto_duration dur(stat.unpack_time_sum);
-		return this->unpacker()->completion_condition(ec, bytes_transferred);
-	}
-
 	virtual void do_recv_msg()
 	{
 #ifdef ASCS_PASSIVE_RECV
 		if (reading || !is_ready())
 			return;
 #endif
-		auto recv_buff = this->unpacker()->prepare_next_recv();
-		assert(asio::buffer_size(recv_buff) > 0);
-		if (0 == asio::buffer_size(recv_buff))
-			unified_out::error_out(ASCS_LLF " the unpacker returned an empty buffer, quit receiving!", this->id());
-		else
-		{
 #ifdef ASCS_PASSIVE_RECV
+		if (this->async_read(make_strand_handler(rw_strand,
+			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);}))))
 			reading = true;
+#else
+		this->async_read(make_strand_handler(rw_strand,
+			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);})));
 #endif
-			asio::async_read(this->next_layer(), recv_buff,
-				[this](const asio::error_code& ec, size_t bytes_transferred)->size_t {return this->completion_checker(ec, bytes_transferred);}, make_strand_handler(rw_strand,
-					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);})));
-		}
 	}
 
 	void recv_handler(const asio::error_code& ec, size_t bytes_transferred)
@@ -305,7 +339,7 @@ private:
 			stat.last_recv_time = time(nullptr);
 
 			auto_duration dur(stat.unpack_time_sum);
-			auto unpack_ok = this->unpacker()->parse_msg(bytes_transferred, temp_msg_can);
+			auto unpack_ok = this->parse_msg(bytes_transferred, temp_msg_can);
 			dur.end();
 
 			if (!unpack_ok)
@@ -341,11 +375,7 @@ private:
 			return true;
 
 		auto end_time = statistic::now();
-#ifdef ASCS_WANT_MSG_SEND_NOTIFY
-		send_buffer.move_items_out(0, sending_msgs);
-#else
-		send_buffer.move_items_out(asio::detail::default_max_transfer_size, sending_msgs);
-#endif
+		send_buffer.move_items_out(this->batch_msg_send_size(), sending_msgs);
 		sending_buffer.clear(); //this buffer will not be refreshed according to sending_msgs timely
 		ascs::do_something_to_all(sending_msgs, [&](typename super::in_msg& item) {
 			this->stat.send_delay_sum += end_time - item.begin_time;
@@ -356,7 +386,7 @@ private:
 		{
 			sending = true;
 			sending_msgs.front().restart();
-			asio::async_write(this->next_layer(), sending_buffer, make_strand_handler(rw_strand,
+			this->async_write(sending_buffer, make_strand_handler(rw_strand,
 				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);})));
 			return true;
 		}

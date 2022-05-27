@@ -17,13 +17,10 @@
 
 namespace ascs { namespace tcp {
 
-template <typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = asio::ip::tcp::socket, typename Family = asio::ip::tcp,
-	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
-	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
-class generic_client_socket : public socket_base<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer>
+template<typename Socket, typename Matrix = i_matrix, typename Family = asio::ip::tcp> class generic_client_socket : public Socket
 {
 private:
-	typedef socket_base<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer> super;
+	typedef Socket super;
 
 public:
 	static const typename super::tid TIMER_BEGIN = super::TIMER_END;
@@ -225,13 +222,14 @@ private:
 	Matrix* matrix;
 };
 
-template <typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = asio::ip::tcp::socket,
+template<typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = asio::ip::tcp::socket,
 	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
-	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
-class client_socket_base : public generic_client_socket<Packer, Unpacker, Matrix, Socket, asio::ip::tcp, InQueue, InContainer, OutQueue, OutContainer>
+	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER,
+	template<typename, typename> class ReaderWriter = reader_writer>
+class client_socket_base : public generic_client_socket<socket_base<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>, Matrix>
 {
 private:
-	typedef generic_client_socket<Packer, Unpacker, Matrix, Socket, asio::ip::tcp, InQueue, InContainer, OutQueue, OutContainer> super;
+	typedef generic_client_socket<socket_base<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>, Matrix> super;
 
 public:
 	client_socket_base(asio::io_context& io_context_) : super(io_context_) {this->set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
@@ -278,13 +276,14 @@ private:
 };
 
 #ifdef ASIO_HAS_LOCAL_SOCKETS
-template <typename Packer, typename Unpacker, typename Matrix = i_matrix,
+template<typename Packer, typename Unpacker, typename Matrix = i_matrix,
 	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
-	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
-class unix_client_socket_base : public generic_client_socket<Packer, Unpacker, Matrix, asio::local::stream_protocol::socket, asio::local::stream_protocol, InQueue, InContainer, OutQueue, OutContainer>
+	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER,
+	template<typename, typename> class ReaderWriter = reader_writer>
+class unix_client_socket_base : public generic_client_socket<socket_base<asio::local::stream_protocol::socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>, Matrix, asio::local::stream_protocol>
 {
 private:
-	typedef generic_client_socket<Packer, Unpacker, Matrix, asio::local::stream_protocol::socket, asio::local::stream_protocol, InQueue, InContainer, OutQueue, OutContainer> super;
+	typedef generic_client_socket<socket_base<asio::local::stream_protocol::socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>, Matrix, asio::local::stream_protocol> super;
 
 public:
 	unix_client_socket_base(asio::io_context& io_context_) : super(io_context_) {this->set_server_addr("./ascs-unix-socket");}
