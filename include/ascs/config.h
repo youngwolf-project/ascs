@@ -894,7 +894,7 @@ static_assert(ASCS_MAX_SEND_BUF > 0, "send buffer capacity must be bigger than z
 static_assert(ASCS_MAX_RECV_BUF > 0, "recv buffer capacity must be bigger than zero.");
 
 //by defining this, virtual function socket::calc_shrink_size will be introduced and be called when send buffer is insufficient before sending message,
-//the return value will be used to determine how many messages (in bytes) will be discarded (from the oldest one), 0 means don't shrink send buffer,
+//the return value will be used to determine how many messages (in bytes) will be discarded (from the oldest ones), 0 means don't shrink send buffer,
 //you can rewrite it or accept the default implementation---1/3 of the current size.
 //please note:
 // 1. shrink size will be round up to the last discarded message.

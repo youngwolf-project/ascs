@@ -130,11 +130,7 @@ private:
 	void handle_handshake(const asio::error_code& ec)
 	{
 		this->on_handshake(ec);
-
-		if (!ec)
-			super::connect_handler(ec); //return to tcp::client_socket_base::connect_handler
-		else
-			this->force_shutdown();
+		ec ? this->force_shutdown() : super::connect_handler(ec); //return to tcp::client_socket_base::connect_handler
 	}
 
 	using super::shutdown_ssl;
@@ -189,11 +185,7 @@ private:
 	void handle_handshake(const asio::error_code& ec)
 	{
 		this->on_handshake(ec);
-
-		if (!ec)
-			super::do_start(); //return to tcp::server_socket_base::do_start
-		else
-			this->get_server().del_socket(this->shared_from_this());
+		ec ? this->get_server().del_socket(this->shared_from_this()) : super::do_start(); //return to tcp::server_socket_base::do_start
 	}
 
 	using super::shutdown_ssl;
