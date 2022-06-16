@@ -109,9 +109,7 @@ protected:
 	virtual void on_unpack_error() {unified_out::info_out(ASCS_LLF " can not unpack msg.", this->id()); this->unpacker()->dump_left_data(); force_shutdown(this->is_reconnect());}
 	virtual void after_close()
 	{
-		if (this->is_reconnect())
-			this->reset_next_layer(this->get_context());
-
+		this->reset_next_layer(this->get_context());
 		super::after_close();
 	}
 
