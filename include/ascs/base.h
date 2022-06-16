@@ -71,9 +71,10 @@ public:
 	virtual service_pump& get_service_pump() = 0;
 	virtual const service_pump& get_service_pump() const = 0;
 
-	virtual bool socket_exist(uint_fast64_t id) = 0;
-	virtual std::shared_ptr<tracked_executor> find_socket(uint_fast64_t id) = 0;
-	virtual bool del_socket(uint_fast64_t id) = 0;
+	//following implementation is useful for a dummy matrix, for example, in a proxy server, each server_socket (dummy matrix) contains a client_socket
+	virtual bool socket_exist(uint_fast64_t id) {return false;}
+	virtual std::shared_ptr<tracked_executor> find_socket(uint_fast64_t id) {return std::shared_ptr<tracked_executor>();}
+	virtual bool del_socket(uint_fast64_t id) {return false;}
 };
 
 namespace tcp
@@ -81,7 +82,7 @@ namespace tcp
 	class i_server : public i_matrix
 	{
 	private:
-		virtual	bool del_socket(uint_fast64_t id) {return false;} //implement and hide i_matrix::del_socket
+		using i_matrix::del_socket; //hide i_matrix::del_socket
 
 	public:
 		virtual bool del_socket(const std::shared_ptr<tracked_executor>& socket_ptr) = 0;
@@ -223,6 +224,21 @@ public:
 
 private:
 	bool _stripped;
+};
+
+//just provide msg_type definition, you should not call any functions of it nor store msg in it
+template<typename MsgType>
+class dummy_unpacker : public i_unpacker<MsgType>
+{
+public:
+	using typename i_unpacker<MsgType>::msg_type;
+	using typename i_unpacker<MsgType>::msg_ctype;
+	using typename i_unpacker<MsgType>::container_type;
+	using typename i_unpacker<MsgType>::buffer_type;
+
+	virtual void reset() {assert(false);}
+	virtual bool parse_msg(size_t bytes_transferred, container_type& msg_can) {assert(false); return false;}
+	virtual buffer_type prepare_next_recv() {assert(false); return buffer_type();}
 };
 
 namespace udp

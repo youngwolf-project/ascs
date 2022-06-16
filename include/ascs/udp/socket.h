@@ -17,7 +17,7 @@
 
 namespace ascs { namespace udp {
 
-template <typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = asio::ip::udp::socket, typename Family = asio::ip::udp,
+template<typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = asio::ip::udp::socket, typename Family = asio::ip::udp,
 	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
 class generic_socket : public socket4<Socket, Family, Packer, Unpacker, udp_msg, InQueue, InContainer, OutQueue, OutContainer>
@@ -415,7 +415,7 @@ private:
 	Matrix* matrix;
 };
 
-template <typename Packer, typename Unpacker, typename Matrix = i_matrix,
+template<typename Packer, typename Unpacker, typename Matrix = i_matrix,
 	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
 class socket_base : public generic_socket<Packer, Unpacker, Matrix, asio::ip::udp::socket, asio::ip::udp, InQueue, InContainer, OutQueue, OutContainer>
@@ -463,7 +463,7 @@ protected:
 };
 
 #ifdef ASIO_HAS_LOCAL_SOCKETS
-template <typename Packer, typename Unpacker, typename Matrix = i_matrix,
+template<typename Packer, typename Unpacker, typename Matrix = i_matrix,
 	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
 class unix_socket_base : public generic_socket<Packer, Unpacker, Matrix, asio::local::datagram_protocol::socket, asio::local::datagram_protocol, InQueue, InContainer, OutQueue, OutContainer>

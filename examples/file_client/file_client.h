@@ -113,6 +113,8 @@ public:
 				return true;
 			}
 		}
+		else
+			printf("can not open file %s.\n", file_name.data());
 
 		trans_end(false);
 		return re;
@@ -178,8 +180,9 @@ protected:
 		auto buffer = dynamic_cast<file_buffer*>(&*msg.raw_buffer());
 		if (nullptr != buffer)
 		{
-			buffer->read();
-			if (buffer->empty())
+			if (!buffer->read())
+				trans_end(false);
+			else if (buffer->empty())
 			{
 				puts("file sending end successfully");
 				trans_end(false);
@@ -295,7 +298,7 @@ private:
 				{
 					if (link_num - 1 == index)
 						printf("cannot create or truncated file %s on the server\n", file_name);
-					trans_end(false);
+					trans_end();
 				}
 				else
 				{
@@ -321,7 +324,14 @@ private:
 					printf("start to send the file with length " ASCS_LLF "\n", my_length);
 
 					state = TRANS_BUSY;
-					direct_send_msg(in_msg_type(new file_buffer(file, my_length, &transmit_size)), true);
+					auto buffer = new file_buffer(file, my_length, &transmit_size);
+					if (buffer->is_good())
+						direct_send_msg(in_msg_type(buffer), true);
+					else
+					{
+						delete buffer;
+						trans_end();
+					}
 				}
 			}
 			break;

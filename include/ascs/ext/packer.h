@@ -66,6 +66,8 @@ private:
 public:
 	static size_t get_max_msg_size() {return ASCS_MSG_BUFFER_SIZE - ASCS_HEAD_LEN;}
 
+	packer() {auto head_len = packer_helper::pack_header(0); heartbeat.assign((const char*) &head_len, ASCS_HEAD_LEN);}
+
 	using i_packer<typename super::msg_type>::pack_msg;
 	virtual typename super::msg_type pack_msg(const char* const pstr[], const size_t len[], size_t num, bool native = false)
 	{
@@ -134,12 +136,15 @@ public:
 
 		return true;
 	}
-	virtual typename super::msg_type pack_heartbeat() {auto head_len = packer_helper::pack_header(0); return typename super::msg_type((const char*) &head_len, ASCS_HEAD_LEN);}
+	virtual typename super::msg_type pack_heartbeat() {return typename super::msg_type(heartbeat);}
 
 	//msg must has been packed by this packer with native == false
 	virtual char* raw_data(typename super::msg_type& msg) const {return const_cast<char*>(std::next(msg.data(), ASCS_HEAD_LEN));}
 	virtual const char* raw_data(typename super::msg_ctype& msg) const {return std::next(msg.data(), ASCS_HEAD_LEN);}
 	virtual size_t raw_data_len(typename super::msg_ctype& msg) const {return msg.size() - ASCS_HEAD_LEN;}
+
+private:
+	typename super::msg_type heartbeat;
 };
 
 //protocol: length + body
@@ -237,7 +242,7 @@ class prefix_suffix_packer : public i_packer<std::string>
 {
 public:
 	void prefix_suffix(const std::string& prefix, const std::string& suffix)
-		{assert(!suffix.empty() && prefix.size() + suffix.size() < ASCS_MSG_BUFFER_SIZE); _prefix = prefix;  _suffix = suffix;}
+		{assert(!suffix.empty() && prefix.size() + suffix.size() < ASCS_MSG_BUFFER_SIZE); _prefix = prefix; _suffix = suffix; heartbeat = prefix + suffix;}
 	const std::string& prefix() const {return _prefix;}
 	const std::string& suffix() const {return _suffix;}
 
@@ -305,7 +310,7 @@ public:
 
 		return true;
 	}
-	virtual msg_type pack_heartbeat() {return _prefix + _suffix;}
+	virtual msg_type pack_heartbeat() {return msg_type(heartbeat);}
 
 	//msg must has been packed by this packer with native == false
 	virtual char* raw_data(msg_type& msg) const {return const_cast<char*>(std::next(msg.data(), _prefix.size()));}
@@ -314,6 +319,7 @@ public:
 
 private:
 	std::string _prefix, _suffix;
+	msg_type heartbeat;
 };
 
 }} //namespace

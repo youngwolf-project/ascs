@@ -30,8 +30,9 @@ void file_socket::on_msg_send(in_msg_type& msg)
 	auto buffer = dynamic_cast<file_buffer*>(&*msg.raw_buffer());
 	if (nullptr != buffer)
 	{
-		buffer->read();
-		if (buffer->empty())
+		if (!buffer->read())
+			trans_end(false);
+		else if (buffer->empty())
 		{
 			puts("file sending end successfully");
 			trans_end(false);
@@ -128,7 +129,14 @@ void file_socket::handle_msg(out_msg_ctype& msg)
 
 				state = TRANS_BUSY;
 				fseeko(file, offset, SEEK_SET);
-				direct_send_msg(in_msg_type(new file_buffer(file, length)), true);
+				auto buffer = new file_buffer(file, length);
+				if (buffer->is_good())
+					direct_send_msg(in_msg_type(buffer), true);
+				else
+				{
+					delete buffer;
+					trans_end();
+				}
 			}
 			else
 				trans_end();
