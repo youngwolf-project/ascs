@@ -137,7 +137,7 @@ public:
 		{
 			auto remote_ep = this->lowest_layer().remote_endpoint(ec2);
 			if (!ec2)
-				unified_out::info_out(ASCS_LLF " %s (%s %s) %s (%d %s)", this->id(), nullptr == head ? "" : head,
+				unified_out::error_out(ASCS_LLF " %s (%s %s) %s (%d %s)", this->id(), nullptr == head ? "" : head,
 					endpoint_to_string(local_ep).data(), endpoint_to_string(remote_ep).data(), nullptr == tail ? "" : tail, ec.value(), ec.message().data());
 		}
 	}
@@ -216,8 +216,15 @@ public:
 	///////////////////////////////////////////////////
 
 protected:
+	//do something in the read/write strand -- rw_strand
+	void do_something_in_strand(const std::function<void()>& handler) {this->dispatch_strand(rw_strand, handler);}
+
+	void force_shutdown_in_strand() {do_something_in_strand([this]() {this->force_shutdown();});}
+	void graceful_shutdown_in_strand() {do_something_in_strand([this]() {this->graceful_shutdown();});}
+
+	//following two functions must be called in the read/write strand
 	void force_shutdown() {if (link_status::FORCE_SHUTTING_DOWN != status) shutdown();}
-	void graceful_shutdown(bool sync) //will block until shutdown success or time out if sync equal to true
+	void graceful_shutdown()
 	{
 		if (is_broken())
 			shutdown();
@@ -229,21 +236,15 @@ protected:
 			this->lowest_layer().shutdown(asio::socket_base::shutdown_send, ec);
 			if (ec) //graceful shutdown is impossible
 				shutdown();
-			else if (!sync)
-				this->set_timer(TIMER_ASYNC_SHUTDOWN, 10, [this](typename super::tid id)->bool {return this->shutdown_handler(ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION * 100);});
 			else
-			{
-				auto loop_num = ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION * 100; //seconds to 10 milliseconds
-				while (--loop_num >= 0 && link_status::GRACEFUL_SHUTTING_DOWN == status)
-					std::this_thread::sleep_for(std::chrono::milliseconds(10));
-				if (loop_num < 0) //graceful shutdown is impossible
-				{
-					unified_out::info_out(ASCS_LLF " failed to graceful shutdown within %d seconds", this->id(), ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION);
-					shutdown();
-				}
-			}
+				this->set_timer(TIMER_ASYNC_SHUTDOWN, 10, [this](typename super::tid id)->bool {return this->shutdown_handler(ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION * 100);});
 		}
 	}
+
+	//used by ssl and websocket
+	void start_graceful_shutdown_monitoring()
+		{this->set_timer(TIMER_ASYNC_SHUTDOWN, ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION * 1000, [this](typename super::tid id)->bool {return this->shutdown_handler(1);});}
+	void stop_graceful_shutdown_monitoring() {this->stop_timer(TIMER_ASYNC_SHUTDOWN);}
 
 	virtual bool do_start()
 	{
@@ -304,10 +305,10 @@ private:
 	void shutdown()
 	{
 		if (is_broken())
-			this->dispatch_strand(rw_strand, [this]() {this->close(true);});
+			close(true);
 		else
 		{
-			status = link_status::FORCE_SHUTTING_DOWN; //not thread safe because of this assignment
+			status = link_status::FORCE_SHUTTING_DOWN;
 			close();
 		}
 	}
@@ -458,7 +459,7 @@ private:
 			}
 			else
 			{
-				unified_out::info_out(ASCS_LLF " failed to graceful shutdown within %d seconds", this->id(), ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION);
+				unified_out::error_out(ASCS_LLF " failed to graceful shutdown within %d seconds", this->id(), ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION);
 				on_async_shutdown_error();
 			}
 		}
