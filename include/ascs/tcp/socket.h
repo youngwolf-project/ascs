@@ -119,27 +119,38 @@ public:
 	void show_info(const char* head = nullptr, const char* tail = nullptr) const
 	{
 		asio::error_code ec;
-		auto local_ep = this->lowest_layer().local_endpoint(ec);
+		std::string local_addr, remote_addr;
+		auto ep = this->lowest_layer().local_endpoint(ec);
 		if (!ec)
-		{
-			auto remote_ep = this->lowest_layer().remote_endpoint(ec);
-			if (!ec)
-				unified_out::info_out(ASCS_LLF " %s (%s %s) %s", this->id(), nullptr == head ? "" : head,
-					endpoint_to_string(local_ep).data(), endpoint_to_string(remote_ep).data(), nullptr == tail ? "" : tail);
-		}
+			local_addr = endpoint_to_string(ep);
+
+		ec.clear();
+		ep = this->lowest_layer().remote_endpoint(ec);
+		if (!ec)
+			remote_addr = endpoint_to_string(ep);
+
+		unified_out::info_out(ASCS_LLF " %s [%s %s] %s", this->id(), nullptr == head ? "" : head,
+			local_addr.data(), remote_addr.data(), nullptr == tail ? "" : tail);
 	}
 
 	void show_info(const asio::error_code& ec, const char* head = nullptr, const char* tail = nullptr) const
 	{
+		if (!ec)
+			return show_info(head, tail);
+
 		asio::error_code ec2;
-		auto local_ep = this->lowest_layer().local_endpoint(ec2);
+		std::string local_addr, remote_addr;
+		auto ep = this->lowest_layer().local_endpoint(ec2);
 		if (!ec2)
-		{
-			auto remote_ep = this->lowest_layer().remote_endpoint(ec2);
-			if (!ec2)
-				unified_out::error_out(ASCS_LLF " %s (%s %s) %s (%d %s)", this->id(), nullptr == head ? "" : head,
-					endpoint_to_string(local_ep).data(), endpoint_to_string(remote_ep).data(), nullptr == tail ? "" : tail, ec.value(), ec.message().data());
-		}
+			local_addr = endpoint_to_string(ep);
+
+		ec2.clear();
+		ep = this->lowest_layer().remote_endpoint(ec2);
+		if (!ec2)
+			remote_addr = endpoint_to_string(ep);
+
+		unified_out::error_out(ASCS_LLF " %s [%s %s] %s (%d %s)", this->id(), nullptr == head ? "" : head,
+			local_addr.data(), remote_addr.data(), nullptr == tail ? "" : tail, ec.value(), ec.message().data());
 	}
 
 	void show_status() const

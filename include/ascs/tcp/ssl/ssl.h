@@ -151,7 +151,7 @@ public:
 
 	//these functions are not thread safe, please note.
 	void disconnect() {force_shutdown();}
-	void force_shutdown() {graceful_shutdown();} //must with async mode (the default value), because server_base::uninit will call this function
+	void force_shutdown() {graceful_shutdown();}
 	void graceful_shutdown() {if (this->is_ready()) shutdown_ssl(); else super::force_shutdown();}
 
 protected:
