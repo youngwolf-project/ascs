@@ -81,9 +81,8 @@ public:
 	void disconnect(bool reconnect = false) {this->do_something_to_all([&](typename Pool::object_ctype& item) {item->disconnect(reconnect);});}
 	void force_shutdown(typename Pool::object_ctype& socket_ptr) {this->del_object(socket_ptr); socket_ptr->force_shutdown();}
 	void force_shutdown(bool reconnect = false) {this->do_something_to_all([&](typename Pool::object_ctype& item) {item->force_shutdown(reconnect);});}
-	void graceful_shutdown(typename Pool::object_ctype& socket_ptr, bool sync = true) {this->del_object(socket_ptr); socket_ptr->graceful_shutdown(false, sync);}
-	void graceful_shutdown(bool reconnect = false) {this->do_something_to_all([&](typename Pool::object_ctype& item) {item->graceful_shutdown(reconnect, false);});}
-	//for the last function, parameter sync will always be false, or dead lock will occur (until timeout).
+	void graceful_shutdown(typename Pool::object_ctype& socket_ptr) {this->del_object(socket_ptr); socket_ptr->graceful_shutdown(false);}
+	void graceful_shutdown(bool reconnect = false) {this->do_something_to_all([&](typename Pool::object_ctype& item) {item->graceful_shutdown(reconnect);});}
 
 protected:
 	virtual void uninit() {this->stop(); force_shutdown();} //if you wanna graceful shutdown, call graceful_shutdown before service_pump::stop_service invocation.

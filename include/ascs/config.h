@@ -804,6 +804,32 @@
  * REPLACEMENTS:
  * client_socket's function open_reconnect and close_reconnect have been replaced by function set_reconnect(bool).
  *
+ * ===============================================================
+ * 2022.6.19	version 1.7.0
+ *
+ * SPECIAL ATTENTION (incompatible with old editions):
+ * Graceful shutdown does not support sync mode anymore.
+ *
+ * HIGHLIGHT:
+ * Make shutdown thread safe.
+ *
+ * FIX:
+ * Fix alias for tcp and ssl.
+ * Fix -- in Windows, a TCP client must explicitly specify a full IP address (not only the port) to connect to.
+ *
+ * ENHANCEMENTS:
+ * heartbeat(ext) optimization.
+ * Add error check during file reading in file_server/file_client.
+ * Enhance basic_buffer to support more comprehensive buffers.
+ * Add ability to change the socket id if it's not managed by object_pool nor single_socket_service.
+ *
+ * DELETION:
+ *
+ * REFACTORING:
+ * Add some default implementations for i_matrix interface, which is useful for a dummy matrix.
+ *
+ * REPLACEMENTS:
+ *
  */
 
 #ifndef _ASCS_CONFIG_H_

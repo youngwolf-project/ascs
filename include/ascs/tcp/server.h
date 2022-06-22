@@ -136,13 +136,15 @@ public:
 
 	virtual bool socket_exist(uint_fast64_t id) {return this->exist(id);}
 	virtual std::shared_ptr<tracked_executor> find_socket(uint_fast64_t id) {return this->find(id);}
-	virtual bool del_socket(const std::shared_ptr<tracked_executor>& socket_ptr)
+	virtual bool del_socket(const std::shared_ptr<tracked_executor>& socket_ptr, bool need_shutdown = true)
 	{
 		auto raw_socket_ptr(std::dynamic_pointer_cast<Socket>(socket_ptr));
 		if (!raw_socket_ptr)
 			return false;
 
-		raw_socket_ptr->force_shutdown();
+		if (need_shutdown)
+			raw_socket_ptr->force_shutdown();
+
 		return this->del_object(raw_socket_ptr);
 	}
 	//restore the invalid socket whose id is equal to 'id', if successful, socket_ptr's take_over function will be invoked,
@@ -193,9 +195,8 @@ public:
 	void disconnect() {this->do_something_to_all([&](typename Pool::object_ctype& item) {item->disconnect();});}
 	void force_shutdown(typename Pool::object_ctype& socket_ptr) {this->del_object(socket_ptr); socket_ptr->force_shutdown();}
 	void force_shutdown() {this->do_something_to_all([&](typename Pool::object_ctype& item) {item->force_shutdown();});}
-	void graceful_shutdown(typename Pool::object_ctype& socket_ptr, bool sync = false) {this->del_object(socket_ptr); socket_ptr->graceful_shutdown(sync);}
+	void graceful_shutdown(typename Pool::object_ctype& socket_ptr) {this->del_object(socket_ptr); socket_ptr->graceful_shutdown();}
 	void graceful_shutdown() {this->do_something_to_all([](typename Pool::object_ctype& item) {item->graceful_shutdown();});}
-	//for the last function, parameter sync must be false (the default value), or dead lock will occur.
 
 protected:
 	virtual int async_accept_num() {return ASCS_ASYNC_ACCEPT_NUM;}

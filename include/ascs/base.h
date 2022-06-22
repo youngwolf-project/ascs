@@ -85,7 +85,7 @@ namespace tcp
 		using i_matrix::del_socket; //hide i_matrix::del_socket
 
 	public:
-		virtual bool del_socket(const std::shared_ptr<tracked_executor>& socket_ptr) = 0;
+		virtual bool del_socket(const std::shared_ptr<tracked_executor>& socket_ptr, bool need_shutdown = true) = 0;
 		virtual bool restore_socket(const std::shared_ptr<tracked_executor>& socket_ptr, uint_fast64_t id, bool init) = 0;
 	};
 } //namespace

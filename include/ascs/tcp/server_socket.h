@@ -38,21 +38,18 @@ public:
 		if (super::link_status::FORCE_SHUTTING_DOWN != this->status)
 			this->show_info("server link:", "been shut down.");
 
-		super::force_shutdown();
+		this->force_shutdown_in_strand();
 	}
 
-	//sync must be false if you call graceful_shutdown in on_msg
-	//furthermore, you're recommended to call this function with sync equal to false in all service threads,
-	//all callbacks will be called in service threads.
 	//this function is not thread safe, please note.
-	void graceful_shutdown(bool sync = false)
+	void graceful_shutdown()
 	{
 		if (this->is_broken())
 			return force_shutdown();
 		else if (!this->is_shutting_down())
 			this->show_info("server link:", "being shut down gracefully.");
 
-		super::graceful_shutdown(sync);
+		this->graceful_shutdown_in_strand();
 	}
 
 protected:
@@ -65,11 +62,9 @@ protected:
 	{
 		this->show_info(ec, "server link:", "broken/been shut down");
 
-#ifdef ASCS_CLEAR_OBJECT_INTERVAL
 		force_shutdown();
-#else
+#ifndef ASCS_CLEAR_OBJECT_INTERVAL
 		server.del_socket(this->shared_from_this());
-		this->status = super::link_status::BROKEN;
 #endif
 	}
 
