@@ -64,6 +64,7 @@ public:
 	virtual const char* type_name() const {return "TCP (client endpoint)";}
 	virtual int type_id() const {return 1;}
 
+	virtual bool obsoleted() {return !need_reconnect && super::obsoleted();}
 	virtual void reset() {need_reconnect = ASCS_RECONNECT; super::reset();}
 
 #ifdef _MSC_VER
@@ -77,7 +78,7 @@ public:
 	//if you don't want to reconnect to the server after link broken, define macro ASCS_RECONNECT as false, call set_reconnect(false) in on_connect()
 	// or rewrite after_close() virtual function and do nothing in it.
 	//if you want to control the retry times and delay time after reconnecting failed, rewrite prepare_reconnect virtual function.
-	//disconnect(bool), force_shutdown(bool) and graceful_shutdown(bool, bool) can overwrite reconnecting behavior, please note.
+	//disconnect(bool), force_shutdown(bool) and graceful_shutdown(bool) can overwrite reconnecting behavior, please note.
 	//reset() virtual function will set reconnecting behavior according to macro ASCS_RECONNECT, please note.
 	//if prepare_reconnect returns negative value, reconnecting will be closed, please note.
 	void set_reconnect(bool reconnect) {need_reconnect = reconnect;}
@@ -95,7 +96,7 @@ public:
 		else if (super::link_status::FORCE_SHUTTING_DOWN != this->status)
 			this->show_info("client link:", "been shut down.");
 
-		this->force_shutdown_in_strand();
+		super::force_shutdown();
 	}
 
 	//this function is not thread safe, please note.
@@ -110,7 +111,7 @@ public:
 		else if (!this->is_shutting_down())
 			this->show_info("client link:", "being shut down gracefully.");
 
-		this->graceful_shutdown_in_strand();
+		super::graceful_shutdown();
 	}
 
 protected:
@@ -138,38 +139,25 @@ protected:
 	virtual int prepare_reconnect(const asio::error_code& ec) {return ASCS_RECONNECT_INTERVAL;}
 	virtual void on_connect() {unified_out::info_out(ASCS_LLF " connecting success.", this->id());}
 	virtual void on_unpack_error() {unified_out::info_out(ASCS_LLF " can not unpack msg.", this->id()); this->unpacker()->dump_left_data(); force_shutdown(need_reconnect);}
-	virtual void on_recv_error(const asio::error_code& ec)
-	{
-		this->show_info(ec, "client link:", "broken/been shut down");
-
-		force_shutdown(need_reconnect);
-		this->status = super::link_status::BROKEN;
-
-#ifndef ASCS_CLEAR_OBJECT_INTERVAL
-		if (!need_reconnect && nullptr != matrix)
-			matrix->del_socket(this->id());
-#endif
-	}
-
+	virtual void on_recv_error(const asio::error_code& ec) {this->show_info(ec, "client link:", "broken/been shut down"); force_shutdown(need_reconnect);}
 	virtual void on_async_shutdown_error() {force_shutdown(need_reconnect);}
-	virtual bool on_heartbeat_error()
-	{
-		this->show_info("client link:", "broke unexpectedly.");
-
-		force_shutdown(need_reconnect);
-		return false;
-	}
+	virtual bool on_heartbeat_error() {this->show_info("client link:", "broke unexpectedly."); force_shutdown(need_reconnect); return false;}
 
 	virtual void on_close()
 	{
 		if (!need_reconnect)
+		{
 			this->clear_io_context_refs();
+#ifndef ASCS_CLEAR_OBJECT_INTERVAL
+			if (nullptr != matrix)
+				matrix->del_socket(this->id());
+#endif
+		}
 
 		super::on_close();
 	}
-
 	//reconnect at here rather than in on_recv_error to make sure no async invocations performed on this socket before reconnecting.
-	//if you don't want to reconnect the server after link broken, rewrite this virtual function and do nothing in it or call close_reconnt().
+	//if you don't want to reconnect the server after link broken, rewrite this virtual function and do nothing in it or call set_reconnect(false).
 	//if you want to control the retry times and delay time after reconnecting failed, rewrite prepare_reconnect virtual function.
 	virtual void after_close() {if (need_reconnect) this->start();}
 

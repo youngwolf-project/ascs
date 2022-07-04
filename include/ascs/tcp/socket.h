@@ -86,7 +86,6 @@ public:
 	static const typename super::tid TIMER_ASYNC_SHUTDOWN = TIMER_BEGIN;
 	static const typename super::tid TIMER_END = TIMER_BEGIN + 5;
 
-	virtual bool obsoleted() {return !is_shutting_down() && super::obsoleted();}
 	virtual bool is_ready() {return is_connected();}
 	virtual void send_heartbeat()
 	{
@@ -227,30 +226,8 @@ public:
 	///////////////////////////////////////////////////
 
 protected:
-	//do something in the read/write strand -- rw_strand
-	void do_something_in_strand(const std::function<void()>& handler) {this->dispatch_strand(rw_strand, handler);}
-
-	void force_shutdown_in_strand() {do_something_in_strand([this]() {this->force_shutdown();});}
-	void graceful_shutdown_in_strand() {do_something_in_strand([this]() {this->graceful_shutdown();});}
-
-	//following two functions must be called in the read/write strand
-	void force_shutdown() {if (link_status::FORCE_SHUTTING_DOWN != status) shutdown();}
-	void graceful_shutdown()
-	{
-		if (is_broken())
-			shutdown();
-		else if (!is_shutting_down())
-		{
-			status = link_status::GRACEFUL_SHUTTING_DOWN;
-
-			asio::error_code ec;
-			this->lowest_layer().shutdown(asio::socket_base::shutdown_send, ec);
-			if (ec) //graceful shutdown is impossible
-				shutdown();
-			else
-				this->set_timer(TIMER_ASYNC_SHUTDOWN, 10, [this](typename super::tid id)->bool {return this->shutdown_handler(ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION * 100);});
-		}
-	}
+	void force_shutdown() {this->dispatch_in_io_strand([this]() {this->_force_shutdown();});}
+	void graceful_shutdown() {this->dispatch_in_io_strand([this]() {this->_graceful_shutdown();});}
 
 	//used by ssl and websocket
 	void start_graceful_shutdown_monitoring()
@@ -312,6 +289,24 @@ private:
 #ifdef ASCS_SYNC_SEND
 	using super::do_direct_sync_send_msg;
 #endif
+
+	void _force_shutdown() {if (link_status::FORCE_SHUTTING_DOWN != status) shutdown();}
+	void _graceful_shutdown()
+	{
+		if (is_broken())
+			shutdown();
+		else if (!is_shutting_down())
+		{
+			status = link_status::GRACEFUL_SHUTTING_DOWN;
+
+			asio::error_code ec;
+			this->lowest_layer().shutdown(asio::socket_base::shutdown_send, ec);
+			if (ec) //graceful shutdown is impossible
+				shutdown();
+			else
+				this->set_timer(TIMER_ASYNC_SHUTDOWN, 10, [this](typename super::tid id)->bool {return this->shutdown_handler(ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION * 100);});
+		}
+	}
 
 	void shutdown()
 	{

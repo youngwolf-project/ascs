@@ -38,7 +38,7 @@ public:
 		if (super::link_status::FORCE_SHUTTING_DOWN != this->status)
 			this->show_info("server link:", "been shut down.");
 
-		this->force_shutdown_in_strand();
+		super::force_shutdown();
 	}
 
 	//this function is not thread safe, please note.
@@ -49,7 +49,7 @@ public:
 		else if (!this->is_shutting_down())
 			this->show_info("server link:", "being shut down gracefully.");
 
-		this->graceful_shutdown_in_strand();
+		super::graceful_shutdown();
 	}
 
 protected:
@@ -57,22 +57,16 @@ protected:
 	const Server& get_server() const {return server;}
 
 	virtual void on_unpack_error() {unified_out::error_out(ASCS_LLF " can not unpack msg.", this->id()); this->unpacker()->dump_left_data(); force_shutdown();}
-	//do not forget to force_shutdown this socket(in del_socket(), there's a force_shutdown() invocation)
-	virtual void on_recv_error(const asio::error_code& ec)
-	{
-		this->show_info(ec, "server link:", "broken/been shut down");
-
-		force_shutdown();
-#ifndef ASCS_CLEAR_OBJECT_INTERVAL
-		server.del_socket(this->shared_from_this());
-#endif
-	}
-
+	virtual void on_recv_error(const asio::error_code& ec) {this->show_info(ec, "server link:", "broken/been shut down"); force_shutdown();}
 	virtual void on_async_shutdown_error() {force_shutdown();}
 	virtual bool on_heartbeat_error() {this->show_info("server link:", "broke unexpectedly."); force_shutdown(); return false;}
+
 	virtual void on_close()
 	{
 		this->clear_io_context_refs();
+#ifndef ASCS_CLEAR_OBJECT_INTERVAL
+		server.del_socket(this->shared_from_this(), false);
+#endif
 		super::on_close();
 	}
 

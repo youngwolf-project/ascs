@@ -45,7 +45,7 @@ protected:
 	void shutdown_ssl()
 	{
 		this->status = Socket::link_status::GRACEFUL_SHUTTING_DOWN;
-		this->do_something_in_strand([this]() {
+		this->dispatch_in_io_strand([this]() {
 			this->show_info("ssl link:", "been shutting down.");
 			this->start_graceful_shutdown_monitoring();
 			this->next_layer().async_shutdown(this->make_handler_error([this](const asio::error_code& ec) {
@@ -91,10 +91,10 @@ public:
 
 protected:
 	virtual void on_unpack_error() {unified_out::info_out(ASCS_LLF " can not unpack msg.", this->id()); this->unpacker()->dump_left_data(); force_shutdown(this->is_reconnect());}
-	virtual void after_close()
+	virtual void on_close()
 	{
 		this->reset_next_layer(this->get_context());
-		super::after_close();
+		super::on_close();
 	}
 
 private:
