@@ -134,16 +134,16 @@ public:
 
 #ifdef ASCS_PASSIVE_RECV
 	bool is_reading() const {return reading;}
-	void recv_msg() {if (!reading && is_ready()) dispatch_strand(rw_strand, [this]() {this->do_recv_msg();});}
+	void recv_msg() {if (!reading && is_ready()) post_strand(rw_strand, [this]() {this->do_recv_msg();});}
 #else
 private:
-	void recv_msg() {dispatch_strand(rw_strand, [this]() {this->do_recv_msg();});}
+	void recv_msg() {post_strand(rw_strand, [this]() {this->do_recv_msg();});}
 public:
 #endif
 #ifndef ASCS_EXPOSE_SEND_INTERFACE
 private:
 #endif
-	void send_msg() {if (!sending && is_ready()) dispatch_strand(rw_strand, [this]() {this->do_send_msg();});}
+	void send_msg() {if (!sending && is_ready()) post_strand(rw_strand, [this]() {this->do_send_msg();});}
 
 public:
 	void start_heartbeat(int interval, int max_absence = ASCS_HEARTBEAT_MAX_ABSENCE)
