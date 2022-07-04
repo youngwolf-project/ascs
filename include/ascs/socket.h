@@ -54,6 +54,7 @@ protected:
 		sr_status = sync_recv_status::NOT_REQUESTED;
 #endif
 		started_ = false;
+		obsoleted_ = false;
 		dispatching = false;
 		recv_idle_began = false;
 		send_buf_size_ = ASCS_MAX_SEND_BUF;
@@ -78,15 +79,12 @@ protected:
 
 	void reset()
 	{
-		reset_io_context_refs();
+		assert(!is_timer(TIMER_DELAY_CLOSE));
+		if (is_timer(TIMER_DELAY_CLOSE))
+			throw std::runtime_error("invalid resetting or object reusing");
 
-		auto need_clean_up = is_timer(TIMER_DELAY_CLOSE);
+		reset_io_context_refs();
 		stop_all_timer(); //just in case, theoretically, timer TIMER_DELAY_CLOSE and TIMER_ASYNC_SHUTDOWN (used by tcp::socket_base) can left behind.
-		if (need_clean_up)
-		{
-			on_close();
-			set_async_calling(false);
-		}
 
 		stat.reset();
 		packer_->reset();
@@ -98,6 +96,7 @@ protected:
 #ifdef ASCS_SYNC_RECV
 		sr_status = sync_recv_status::NOT_REQUESTED;
 #endif
+		obsoleted_ = false;
 		dispatching = false;
 		recv_idle_began = false;
 		clear_buffer();
@@ -111,6 +110,16 @@ protected:
 		send_buffer.clear();
 		recv_buffer.clear();
 	}
+
+	//execute in the IO strand -- rw_strand
+	void post_in_io_strand(const std::function<void()>& handler) {post_strand(rw_strand, handler);}
+	//execute in the IO strand -- rw_strand, or current thead, use it carefully
+	void dispatch_in_io_strand(const std::function<void()>& handler) {dispatch_strand(rw_strand, handler);}
+
+	//execute in the dispatch strand -- dis_strand
+	void post_in_dis_strand(const std::function<void()>& handler) {post_strand(dis_strand, handler);}
+	//execute in the dispatch strand -- dis_strand, or current thead, use it carefully
+	void dispatch_in_dis_strand(const std::function<void()>& handler) {dispatch_strand(dis_strand, handler);}
 
 public:
 #ifdef ASCS_SYNC_SEND
@@ -136,7 +145,7 @@ public:
 	typename Socket::lowest_layer_type& lowest_layer() {return next_layer().lowest_layer();}
 	const typename Socket::lowest_layer_type& lowest_layer() const {return next_layer().lowest_layer();}
 
-	virtual bool obsoleted() {return !started_ && !is_async_calling();}
+	virtual bool obsoleted() {return obsoleted_ && !is_async_calling();}
 	virtual bool is_ready() = 0; //is ready for sending and receiving messages
 	virtual void send_heartbeat() = 0;
 	virtual const char* type_name() const = 0;
@@ -159,19 +168,19 @@ public:
 
 #ifdef ASCS_PASSIVE_RECV
 	bool is_reading() const {return reading;}
-	void recv_msg() {if (!reading && is_ready()) dispatch_strand(rw_strand, [this]() {this->do_recv_msg();});}
+	void recv_msg() {if (!reading && is_ready()) post_in_io_strand([this]() {this->do_recv_msg();});}
 #else
 private:
-	void recv_msg() {dispatch_strand(rw_strand, [this]() {this->do_recv_msg();});}
+	void recv_msg() {post_in_io_strand([this]() {this->do_recv_msg();});}
 public:
 #endif
 #ifndef ASCS_EXPOSE_SEND_INTERFACE
 protected:
 #endif
 #ifdef ASCS_ARBITRARY_SEND
-	void send_msg() {dispatch_strand(rw_strand, [this]() {this->do_send_msg();});}
+	void send_msg() {post_in_io_strand([this]() {this->do_send_msg();});}
 #else
-	void send_msg() {if (!sending && is_ready()) dispatch_strand(rw_strand, [this]() {this->do_send_msg();});}
+	void send_msg() {if (!sending && is_ready()) post_in_io_strand([this]() {this->do_send_msg();});}
 #endif
 
 public:
@@ -442,11 +451,12 @@ protected:
 			unpacker_->reset(); //very important, otherwise, the unpacker will never be able to parse any more messages if its buffer has legacy data
 			on_close();
 			after_close();
+			obsoleted_ = true;
 		}
 		else
 		{
 			set_async_calling(true);
-			set_timer(TIMER_DELAY_CLOSE, ASCS_DELAY_CLOSE * 1000 + 50, [this](tid id)->bool {return this->timer_handler(TIMER_DELAY_CLOSE);});
+			set_timer(TIMER_DELAY_CLOSE, ASCS_DELAY_CLOSE * 1000 + 50, [this](tid id)->bool {return this->timer_handler(id);});
 		}
 
 		return true;
@@ -655,7 +665,7 @@ private:
 	}
 
 	//do not use dispatch_strand at here, because the handler (do_dispatch_msg) may call this function, which can lead stack overflow.
-	void dispatch_msg() {if (!dispatching) post_strand(dis_strand, [this]() {this->do_dispatch_msg();});}
+	void dispatch_msg() {if (!dispatching) post_in_dis_strand([this]() {this->do_dispatch_msg();});}
 	void do_dispatch_msg()
 	{
 #ifdef ASCS_DISPATCH_BATCH_MSG
@@ -675,7 +685,7 @@ private:
 #ifdef ASCS_FULL_STATISTIC
 				recv_buffer.do_something_to_all([&](out_msg& msg) {msg.restart(end_time);});
 #endif
-				set_timer(TIMER_DISPATCH_MSG, msg_handling_interval_, [this](tid id)->bool {return this->timer_handler(TIMER_DISPATCH_MSG);}); //hold dispatching
+				set_timer(TIMER_DISPATCH_MSG, msg_handling_interval_, [this](tid id)->bool {return this->timer_handler(id);}); //hold dispatching
 			}
 			else
 			{
@@ -692,7 +702,7 @@ private:
 			if (!re) //dispatch failed, re-dispatch
 			{
 				dispatching_msg.restart(end_time);
-				set_timer(TIMER_DISPATCH_MSG, msg_handling_interval_, [this](tid id)->bool {return this->timer_handler(TIMER_DISPATCH_MSG);}); //hold dispatching
+				set_timer(TIMER_DISPATCH_MSG, msg_handling_interval_, [this](tid id)->bool {return this->timer_handler(id);}); //hold dispatching
 			}
 			else
 			{
@@ -711,12 +721,12 @@ private:
 		switch (id)
 		{
 		case TIMER_DISPATCH_MSG:
-			post_strand(dis_strand, [this]() {this->do_dispatch_msg();});
+			post_in_dis_strand([this]() {this->do_dispatch_msg();});
 			break;
 		case TIMER_DELAY_CLOSE:
 			if (!is_last_async_call())
 			{
-				stop_all_timer(TIMER_DELAY_CLOSE);
+				stop_all_timer(id);
 				return true;
 			}
 			else if (lowest_layer().is_open())
@@ -726,9 +736,10 @@ private:
 			}
 			unpacker_->reset(); //very important, otherwise, the unpacker will never be able to parse any more messages if its buffer has legacy data
 			on_close();
-			change_timer_status(TIMER_DELAY_CLOSE, timer_info::TIMER_CANCELED);
+			change_timer_status(id, timer_info::TIMER_CANCELED);
 			after_close();
 			set_async_calling(false);
+			obsoleted_ = true;
 			break;
 		default:
 			assert(false);
@@ -756,6 +767,8 @@ private:
 
 	bool recv_idle_began;
 	volatile bool started_; //has started or not
+	volatile bool obsoleted_;
+
 	volatile bool dispatching;
 #ifndef ASCS_DISPATCH_BATCH_MSG
 	out_msg dispatching_msg;

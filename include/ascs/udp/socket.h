@@ -97,7 +97,7 @@ public:
 	const typename Family::endpoint& get_peer_addr() const {return peer_addr;}
 
 	void disconnect() {force_shutdown();}
-	void force_shutdown() {show_info("link:", "been shutting down."); this->dispatch_strand(rw_strand, [this]() {this->close(true);});}
+	void force_shutdown() {show_info("link:", "been shutting down."); this->dispatch_in_io_strand([this]() {this->close(true);});}
 	void graceful_shutdown() {force_shutdown();}
 
 	std::string endpoint_to_string(const asio::ip::udp::endpoint& ep) const {return ep.address().to_string() + ':' + std::to_string(ep.port());}
@@ -215,10 +215,6 @@ protected:
 	{
 		if (asio::error::operation_aborted != ec)
 			unified_out::error_out(ASCS_LLF " recv msg error (%d %s)", this->id(), ec.value(), ec.message().data());
-#ifndef ASCS_CLEAR_OBJECT_INTERVAL
-		else if (nullptr != matrix)
-			matrix->del_socket(this->id());
-#endif
 	}
 
 	virtual bool on_heartbeat_error()
@@ -235,6 +231,10 @@ protected:
 			sending_msg.p->set_value(sync_call_result::NOT_APPLICABLE);
 #endif
 		this->clear_io_context_refs();
+#ifndef ASCS_CLEAR_OBJECT_INTERVAL
+		if (nullptr != matrix)
+			matrix->del_socket(this->id());
+#endif
 		super::on_close();
 	}
 
@@ -342,7 +342,7 @@ private:
 				this->next_layer().async_send_to(asio::buffer(sending_msg.data(), sending_msg.size()), sending_msg.peer_addr, make_strand_handler(rw_strand,
 					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);})));
 			else if (do_send_msg(sending_msg))
-				this->post_strand(rw_strand, [this]() {this->send_handler(asio::error_code(), sending_msg.size());});
+				this->post_in_io_strand([this]() {this->send_handler(asio::error_code(), sending_msg.size());});
 			else
 				this->next_layer().async_send(asio::buffer(sending_msg.data(), sending_msg.size()), make_strand_handler(rw_strand,
 					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);})));
