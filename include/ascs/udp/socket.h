@@ -91,7 +91,7 @@ public:
 #ifdef ASCS_PASSIVE_RECV
 	//changing unpacker must before calling ascs::socket::recv_msg, and define ASCS_PASSIVE_RECV macro.
 	void unpacker(const std::shared_ptr<i_unpacker<typename Unpacker::msg_type>>& _unpacker_) {unpacker_ = _unpacker_;}
-	virtual void recv_msg() {if (!reading && is_ready()) this->dispatch_strand(strand, [this]() {this->do_recv_msg();});}
+	virtual void recv_msg() {if (!reading && is_ready()) this->post_strand(strand, [this]() {this->do_recv_msg();});}
 #endif
 
 	///////////////////////////////////////////////////
@@ -171,9 +171,9 @@ protected:
 
 private:
 #ifndef ASCS_PASSIVE_RECV
-	virtual void recv_msg() {this->dispatch_strand(strand, [this]() {this->do_recv_msg();});}
+	virtual void recv_msg() {this->post_strand(strand, [this]() {this->do_recv_msg();});}
 #endif
-	virtual void send_msg() {this->dispatch_strand(strand, [this]() {this->do_send_msg(false);});}
+	virtual void send_msg() {this->post_strand(strand, [this]() {this->do_send_msg(false);});}
 
 	using super::close;
 	using super::handle_error;
