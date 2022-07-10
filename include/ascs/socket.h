@@ -168,19 +168,31 @@ public:
 
 #ifdef ASCS_PASSIVE_RECV
 	bool is_reading() const {return reading;}
+#ifdef ASCS_USE_DISPATCH_IN_IO
+	void recv_msg() {if (!reading && is_ready()) dispatch_in_io_strand([this]() {this->do_recv_msg();});}
+#else
 	void recv_msg() {if (!reading && is_ready()) post_in_io_strand([this]() {this->do_recv_msg();});}
+#endif
 #else
 private:
-	void recv_msg() {post_in_io_strand([this]() {this->do_recv_msg();});}
+	void recv_msg() {dispatch_in_io_strand([this]() {this->do_recv_msg();});}
 public:
 #endif
 #ifndef ASCS_EXPOSE_SEND_INTERFACE
 protected:
 #endif
+#ifdef ASCS_USE_DISPATCH_IN_IO
+#ifdef ASCS_ARBITRARY_SEND
+	void send_msg() {dispatch_in_io_strand([this]() {this->do_send_msg();});}
+#else
+	void send_msg() {if (!sending && is_ready()) dispatch_in_io_strand([this]() {this->do_send_msg();});}
+#endif
+#else
 #ifdef ASCS_ARBITRARY_SEND
 	void send_msg() {post_in_io_strand([this]() {this->do_send_msg();});}
 #else
 	void send_msg() {if (!sending && is_ready()) post_in_io_strand([this]() {this->do_send_msg();});}
+#endif
 #endif
 
 public:
@@ -664,7 +676,7 @@ private:
 		return false;
 	}
 
-	//do not use dispatch_strand at here, because the handler (do_dispatch_msg) may call this function, which can lead stack overflow.
+	//do not use dispatch_strand/dispatch_in_dis_strand at here, because the handler (do_dispatch_msg) may call this function, which can lead stack overflow.
 	void dispatch_msg() {if (!dispatching) post_in_dis_strand([this]() {this->do_dispatch_msg();});}
 	void do_dispatch_msg()
 	{
