@@ -322,13 +322,15 @@ private:
 	virtual void do_recv_msg()
 	{
 #ifdef ASCS_PASSIVE_RECV
-		if (reading || !is_ready())
+		if (!is_ready())
+			return;
+		else if (this->test_and_set_reading())
 			return;
 #endif
 #ifdef ASCS_PASSIVE_RECV
-		if (this->async_read(make_strand_handler(rw_strand,
+		if (!this->async_read(make_strand_handler(rw_strand,
 			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);}))))
-			reading = true;
+			this->clear_reading();
 #else
 		this->async_read(make_strand_handler(rw_strand,
 			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);})));
@@ -338,7 +340,7 @@ private:
 	void recv_handler(const asio::error_code& ec, size_t bytes_transferred)
 	{
 #ifdef ASCS_PASSIVE_RECV
-		reading = false; //clear reading flag before calling handle_msg() to make sure that recv_msg() is available in on_msg() and on_msg_handle()
+		this->clear_reading(); //clear reading flag before calling handle_msg() to make sure that recv_msg() is available in on_msg() and on_msg_handle()
 #endif
 		auto need_next_recv = false;
 		if (bytes_transferred > 0)
@@ -378,7 +380,7 @@ private:
 
 	virtual bool do_send_msg(bool in_strand = false)
 	{
-		if (!in_strand && sending)
+		if (!in_strand && this->test_and_set_sending())
 			return true;
 
 		auto end_time = statistic::now();
@@ -391,14 +393,14 @@ private:
 
 		if (!sending_buffer.empty())
 		{
-			sending = true;
 			sending_msgs.front().restart();
 			this->async_write(sending_buffer, make_strand_handler(rw_strand,
 				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);})));
 			return true;
 		}
+		else
+			this->clear_sending();
 
-		sending = false;
 		return false;
 	}
 
@@ -410,7 +412,7 @@ private:
 
 			stat.send_byte_sum += bytes_transferred;
 			stat.send_time_sum += statistic::now() - sending_msgs.front().begin_time;
-			stat.send_msg_sum += sending_buffer.size();
+			stat.send_msg_sum += sending_buffer.size(); //before gcc 5.0, std::list::size() has linear complexity, very embarrassing!
 #ifdef ASCS_SYNC_SEND
 			ascs::do_something_to_all(sending_msgs, [](typename super::in_msg& item) {if (item.p) {item.p->set_value(sync_call_result::SUCCESS);}});
 #endif
@@ -436,10 +438,12 @@ private:
 #endif
 #endif
 			sending_msgs.clear();
-#ifndef ASCS_ARBITRARY_SEND
+#ifdef ASCS_ARBITRARY_SEND
+			do_send_msg(true);
+#else
 			if (!do_send_msg(true) && !send_buffer.empty()) //send msg in sequence
+				super::send_msg(); //just make sure no pending msgs
 #endif
-				do_send_msg(true); //just make sure no pending msgs
 		}
 		else
 		{
@@ -449,7 +453,7 @@ private:
 			on_send_error(ec, sending_msgs);
 			sending_msgs.clear(); //clear sending messages after on_send_error, then user can decide how to deal with them in on_send_error
 
-			sending = false;
+			this->clear_sending();
 		}
 	}
 
@@ -481,15 +485,12 @@ private:
 	using super::temp_msg_can;
 
 	using super::send_buffer;
-	using super::sending;
-
-#ifdef ASCS_PASSIVE_RECV
-	using super::reading;
-#endif
 	using super::rw_strand;
 
+	//before gcc 5.0, std::list::size() has linear complexity, very embarrassing!
+	//so use std::vector (member variable) to reduce memory allocation and keep the number of sending msgs (its size() has constant complexity, it's very important).
 	typename super::in_container_type sending_msgs;
-	std::vector<asio::const_buffer> sending_buffer; //just to reduce memory allocation and keep the size of sending items (linear complexity, it's very important).
+	std::vector<asio::const_buffer> sending_buffer;
 };
 
 }} //namespace

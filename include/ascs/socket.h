@@ -46,9 +46,9 @@ protected:
 		_id = -1;
 		packer_ = std::make_shared<Packer>();
 		unpacker_ = std::make_shared<Unpacker>();
-		sending = false;
+		clear_sending();
 #ifdef ASCS_PASSIVE_RECV
-		reading = false;
+		clear_reading();
 #endif
 #ifdef ASCS_SYNC_RECV
 		sr_status = sync_recv_status::NOT_REQUESTED;
@@ -89,9 +89,9 @@ protected:
 		stat.reset();
 		packer_->reset();
 		unpacker_->reset();
-		sending = false;
+		clear_sending();
 #ifdef ASCS_PASSIVE_RECV
-		reading = false;
+		clear_reading();
 #endif
 #ifdef ASCS_SYNC_RECV
 		sr_status = sync_recv_status::NOT_REQUESTED;
@@ -167,12 +167,8 @@ public:
 	}
 
 #ifdef ASCS_PASSIVE_RECV
-	bool is_reading() const {return reading;}
-#ifdef ASCS_USE_DISPATCH_IN_IO
-	void recv_msg() {if (!reading && is_ready()) dispatch_in_io_strand([this]() {this->do_recv_msg();});}
-#else
-	void recv_msg() {if (!reading && is_ready()) post_in_io_strand([this]() {this->do_recv_msg();});}
-#endif
+	bool is_reading() const {return 1 == reading.load(std::memory_order_relaxed);}
+	void recv_msg() {if (is_ready() && !is_reading()) dispatch_in_io_strand([this]() {this->do_recv_msg();});}
 #else
 private:
 	void recv_msg() {dispatch_in_io_strand([this]() {this->do_recv_msg();});}
@@ -181,18 +177,10 @@ public:
 #ifndef ASCS_EXPOSE_SEND_INTERFACE
 protected:
 #endif
-#ifdef ASCS_USE_DISPATCH_IN_IO
 #ifdef ASCS_ARBITRARY_SEND
 	void send_msg() {dispatch_in_io_strand([this]() {this->do_send_msg();});}
 #else
-	void send_msg() {if (!sending && is_ready()) dispatch_in_io_strand([this]() {this->do_send_msg();});}
-#endif
-#else
-#ifdef ASCS_ARBITRARY_SEND
-	void send_msg() {post_in_io_strand([this]() {this->do_send_msg();});}
-#else
-	void send_msg() {if (!sending && is_ready()) post_in_io_strand([this]() {this->do_send_msg();});}
-#endif
+	void send_msg() {if (is_ready() && !is_sending()) dispatch_in_io_strand([this]() {this->do_send_msg();});}
 #endif
 
 public:
@@ -220,7 +208,7 @@ public:
 					return false;
 
 #ifndef ASCS_ALWAYS_SEND_HEARTBEAT
-			if (!sending && now - stat.last_send_time >= interval) //don't need to send heartbeat if we're sending messages
+			if (!is_sending() && now - stat.last_send_time >= interval) //don't need to send heartbeat if we're sending messages
 #endif
 				send_heartbeat();
 		}
@@ -228,7 +216,7 @@ public:
 		return true;
 	}
 
-	bool is_sending() const {return sending;}
+	bool is_sending() const {return 1 == sending.load(std::memory_order_relaxed);}
 	bool is_dispatching() const {return dispatching;}
 	bool is_recv_idle() const {return recv_idle_began;}
 
@@ -431,6 +419,14 @@ protected:
 #else
 	bool shrink_send_buffer() const {return is_send_buffer_available();}
 #endif
+
+#ifdef ASCS_PASSIVE_RECV
+	void clear_reading() {reading.store(0, std::memory_order_release);}
+	bool test_and_set_reading() {return 1 == reading.exchange(1, std::memory_order_acq_rel);}
+#endif
+
+	void clear_sending() {sending.store(0, std::memory_order_release);}
+	bool test_and_set_sending() {return 1 == sending.exchange(1, std::memory_order_acq_rel);}
 
 	//subclass notify shutdown event
 	bool close(bool use_close = false) //if not use_close, shutdown (both direction) will be used
@@ -721,7 +717,7 @@ private:
 				dispatching_msg.clear();
 #endif
 				dispatching = false;
-				dispatch_msg(); //dispatch msg in sequence
+				post_in_dis_strand([this]() {this->do_dispatch_msg();}); //dispatch msg in sequence
 			}
 		}
 		else
@@ -766,11 +762,6 @@ protected:
 	std::list<OutMsgType> temp_msg_can;
 
 	in_queue_type send_buffer;
-	volatile bool sending;
-
-#ifdef ASCS_PASSIVE_RECV
-	volatile bool reading;
-#endif
 	asio::io_context::strand rw_strand;
 
 private:
@@ -792,6 +783,10 @@ private:
 	uint_fast64_t _id;
 	Socket next_layer_;
 
+#ifdef ASCS_PASSIVE_RECV
+	std::atomic_size_t reading;
+#endif
+	std::atomic_size_t sending;
 	std::atomic_flag start_atomic;
 	asio::io_context::strand dis_strand;
 
