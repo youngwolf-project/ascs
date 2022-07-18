@@ -243,7 +243,7 @@ protected:
 	virtual bool do_send_msg(const typename super::in_msg& sending_msg) {return false;} //customize message sending, for connected socket only
 	virtual void pre_handle_msg(typename Unpacker::container_type& msg_can) {}
 
-	void resume_sending() {sending = false; super::send_msg();} //for reliable UDP socket only
+	void resume_sending() {this->clear_sending(); super::send_msg();} //for reliable UDP socket only
 
 private:
 	using super::close;
@@ -265,7 +265,7 @@ private:
 	virtual void do_recv_msg()
 	{
 #ifdef ASCS_PASSIVE_RECV
-		if (reading)
+		if (this->test_and_set_reading())
 			return;
 #endif
 		auto recv_buff = this->unpacker()->prepare_next_recv();
@@ -274,20 +274,25 @@ private:
 			unified_out::error_out(ASCS_LLF " the unpacker returned an empty buffer, quit receiving!", this->id());
 		else
 		{
-#ifdef ASCS_PASSIVE_RECV
-			reading = true;
-#endif
 			if (is_connected)
 				this->next_layer().async_receive(recv_buff, make_strand_handler(rw_strand,
 					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);})));
 			else
 				this->next_layer().async_receive_from(recv_buff, temp_addr, make_strand_handler(rw_strand,
 					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);})));
+			return;
 		}
+
+#ifdef ASCS_PASSIVE_RECV
+		this->clear_reading();
+#endif
 	}
 
 	void recv_handler(const asio::error_code& ec, size_t bytes_transferred)
 	{
+#ifdef ASCS_PASSIVE_RECV
+		this->clear_reading(); //clear reading flag before calling handle_msg() to make sure that recv_msg() is available in on_msg() and on_msg_handle()
+#endif
 		if (!ec && bytes_transferred > 0)
 		{
 			stat.last_recv_time = time(nullptr);
@@ -298,9 +303,6 @@ private:
 			if (is_connected)
 				pre_handle_msg(msg_can);
 
-#ifdef ASCS_PASSIVE_RECV
-			reading = false; //clear reading flag before call handle_msg() to make sure that recv_msg() can be called successfully in on_msg_handle()
-#endif
 			ascs::do_something_to_all(msg_can, [this](typename Unpacker::msg_type& msg) {
 				this->temp_msg_can.emplace_back(this->is_connected ? this->peer_addr : this->temp_addr, std::move(msg));
 			});
@@ -309,9 +311,6 @@ private:
 		}
 		else
 		{
-#ifdef ASCS_PASSIVE_RECV
-			reading = false; //clear reading flag before call handle_msg() to make sure that recv_msg() can be called successfully in on_msg_handle()
-#endif
 #if defined(_MSC_VER) || defined(__CYGWIN__) || defined(__MINGW32__) || defined(__MINGW64__)
 			if (ec && asio::error::connection_refused != ec && asio::error::connection_reset != ec)
 #else
@@ -328,14 +327,12 @@ private:
 
 	virtual bool do_send_msg(bool in_strand = false)
 	{
-		if (!in_strand && sending)
+		if (!in_strand && this->test_and_set_sending())
 			return true;
-
-		if (is_connected && !check_send_cc())
-			sending = true;
+		else if (is_connected && !check_send_cc())
+			;
 		else if (send_buffer.try_dequeue(sending_msg))
 		{
-			sending = true;
 			stat.send_delay_sum += statistic::now() - sending_msg.begin_time;
 			sending_msg.restart();
 			if (!is_connected)
@@ -348,8 +345,9 @@ private:
 					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);})));
 			return true;
 		}
+		else
+			this->clear_sending();
 
-		sending = false;
 		return false;
 	}
 
@@ -385,13 +383,12 @@ private:
 		sending_msg.clear(); //clear sending message after on_send_error, then user can decide how to deal with it in on_send_error
 
 		if (ec && (asio::error::not_socket == ec || asio::error::bad_descriptor == ec))
-			return;
-
+			this->clear_sending();
 		//send msg in sequence
 		//on windows, sending a msg to addr_any may cause errors, please note
 		//for UDP, sending error will not stop subsequent sending.
-		if (!do_send_msg(true) && !send_buffer.empty())
-			do_send_msg(true); //just make sure no pending msgs
+		else if (!do_send_msg(true) && !send_buffer.empty())
+			super::send_msg(); //just make sure no pending msgs
 	}
 
 private:
@@ -399,11 +396,6 @@ private:
 	using super::temp_msg_can;
 
 	using super::send_buffer;
-	using super::sending;
-
-#ifdef ASCS_PASSIVE_RECV
-	using super::reading;
-#endif
 	using super::rw_strand;
 
 	bool is_bound, is_connected, connect_mode;
