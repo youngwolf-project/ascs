@@ -45,7 +45,7 @@ private:
 
 //Container must at least has the following functions (like std::list):
 // Container() constructor
-// empty, must be thread safe, but doesn't have to be consistent
+// empty
 // clear
 // swap
 // template<typename T> emplace_back(const T& item), if you call direct_(sync_)send_msg which accepts other than rvalue reference
@@ -67,13 +67,17 @@ public:
 	using typename Container::size_type;
 	using typename Container::reference;
 	using typename Container::const_reference;
-	using Container::empty;
+	//since some implementations (such as gcc before 5.0) of std::list::size() have linear complexity, we don't expose this size() function
+	//using Container::size;
 
 	queue() : total_size(0) {}
 
 	//thread safe
 	bool is_thread_safe() const {return Lockable::is_lockable();}
 	size_t size_in_byte() const {return total_size;}
+	//almost all implementations of list::empty() in the world are thread safe (not means correctness, but just no memory access violation),
+	// but we need a memory fence to synchronize memory with the IO thread, so we use a lock here.
+	bool empty() {typename Lockable::lock_guard lock(*this); return Container::empty();}
 	void clear() {typename Lockable::lock_guard lock(*this); Container::clear(); total_size = 0;}
 	void swap(Container& can)
 	{
@@ -152,7 +156,7 @@ public:
 		total_size += size_in_byte;
 	}
 
-	bool try_dequeue_(reference item) {if (this->empty()) return false; item.swap(this->front()); this->pop_front(); total_size -= item.size(); return true;}
+	bool try_dequeue_(reference item) {if (Container::empty()) return false; item.swap(this->front()); this->pop_front(); total_size -= item.size(); return true;}
 
 	void move_items_out_(Container& dest, size_t max_item_num = -1)
 	{
