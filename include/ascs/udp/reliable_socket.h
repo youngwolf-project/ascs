@@ -37,8 +37,8 @@ public:
 	static const typename super::tid TIMER_END = TIMER_BEGIN + 5;
 
 public:
-	reliable_socket_base(asio::io_context& io_context_) : super(io_context_), kcp(nullptr), need_kcp_check(false), max_nsnd_que(ASCS_RELIABLE_UDP_NSND_QUE) {}
-	reliable_socket_base(Matrix& matrix_) : super(matrix_), kcp(nullptr), need_kcp_check(false), max_nsnd_que(ASCS_RELIABLE_UDP_NSND_QUE) {}
+	reliable_socket_base(asio::io_context& io_context_) : super(io_context_), kcp(nullptr), max_nsnd_que(ASCS_RELIABLE_UDP_NSND_QUE) {}
+	reliable_socket_base(Matrix& matrix_) : super(matrix_), kcp(nullptr), max_nsnd_que(ASCS_RELIABLE_UDP_NSND_QUE) {}
 	~reliable_socket_base() {release_kcp();}
 
 	ikcpcb* get_kcpcb() {return kcp;}
@@ -103,7 +103,10 @@ protected:
 	virtual bool do_start()
 	{
 		if (nullptr != kcp)
-			this->set_timer(TIMER_KCP_UPDATE, kcp_check(), [this](typename super::tid id)->bool {return this->timer_handler(id);});
+		{
+			IUINT32 now = iclock();
+			this->set_timer(TIMER_KCP_UPDATE, ikcp_check(kcp, now) - now, [this](typename super::tid id)->bool {return this->timer_handler(id);});
+		}
 
 		return super::do_start();
 	}
@@ -120,17 +123,17 @@ protected:
 		return false;
 	}
 
-	virtual bool do_send_msg(const typename super::in_msg& sending_msg)
+	virtual bool do_send_msg(const typename super::in_msg& msg)
 	{
 		std::lock_guard<std::mutex> lock(mutex);
 		if (nullptr == kcp)
 			return false;
 
-		auto re = ikcp_send(kcp, sending_msg.data(), (long) sending_msg.size());
+		auto re = ikcp_send(kcp, msg.data(), (long) msg.size());
 		if (re < 0)
 			unified_out::error_out("ikcp_send return error: %d", re);
 		else
-			need_kcp_check = true;
+			ikcp_update(kcp, iclock());
 
 		return true;
 	}
@@ -146,7 +149,7 @@ protected:
 			if (re < 0)
 				unified_out::error_out("ikcp_input return error: %d", re);
 			else
-				need_kcp_check = true;
+				ikcp_update(kcp, iclock());
 		});
 
 		msg_can.clear();
@@ -162,12 +165,6 @@ protected:
 	}
 
 private:
-	IUINT32 kcp_check()
-	{
-		IUINT32 now = iclock();
-		return ikcp_check(kcp, now) - now;
-	}
-
 	bool timer_handler(typename super::tid id)
 	{
 		switch (id)
@@ -187,13 +184,10 @@ private:
 			if (nullptr != kcp)
 			{
 				std::lock_guard<std::mutex> lock(mutex);
-				ikcp_update(kcp, iclock());
-				if (need_kcp_check)
-				{
-					need_kcp_check = false;
-					this->change_timer_interval(TIMER_KCP_UPDATE, kcp_check());
-				}
+				IUINT32 now = iclock();
+				ikcp_update(kcp, now);
 
+				this->change_timer_interval(id, ikcp_check(kcp, now) - now);
 				return true;
 			}
 			break;
@@ -211,7 +205,6 @@ private:
 	ikcpcb* kcp;
 	std::mutex mutex;
 
-	bool need_kcp_check;
 	IUINT32 max_nsnd_que;
 };
 
