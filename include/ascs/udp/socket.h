@@ -243,7 +243,7 @@ protected:
 	virtual bool do_send_msg(const typename super::in_msg& msg) {return false;} //customize message sending, for connected socket only
 	virtual void pre_handle_msg(typename Unpacker::container_type& msg_can) {}
 
-	void resume_sending() {this->clear_sending(); super::send_msg();} //for reliable UDP socket only
+	void resume_sending() {this->clear_sending(); if (!send_buffer.empty()) super::send_msg();} //for reliable UDP socket only
 
 private:
 	using super::close;
