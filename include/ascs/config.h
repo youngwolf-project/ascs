@@ -810,7 +810,7 @@
  * SPECIAL ATTENTION (incompatible with old editions):
  * Graceful shutdown does not support sync mode anymore.
  * Introduce memory fence to synchronize socket's status -- sending and reading, dispatch_strand is not enough, except post_strand,
- *  but dispatch_strand is more efficient than post_strand.
+ *  but dispatch_strand is more efficient than post_strand in specific circumstances.
  *
  * HIGHLIGHT:
  * Make shutdown thread safe.
@@ -819,12 +819,20 @@
  * Fix alias for tcp and ssl.
  * Fix -- in Windows, a TCP client must explicitly specify a full IP address (not only the port) to connect to.
  * Fix -- reliable UDP sometimes cannot send messages successfully.
+ * Fix -- in extreme circumstances, following functions may cause messages leave behind in the send buffer until the next message sending:
+ *  resume_sending, reliable UDP socket needs it, while general UDP socket doesn't.
+ *  pop_first/all_pending_send_msg and pop_first/all_pending_recv_msg.
+ *  socket::send_msg().
+ * Fix -- basic_buffer doesn't support fixed arrays (just in the constructor) in GCC and Clang.
  *
  * ENHANCEMENTS:
  * heartbeat(ext) optimization.
  * Add error check during file reading in file_server/file_client.
  * Enhance basic_buffer to support more comprehensive buffers.
  * Add ability to change the socket id if it's not managed by object_pool nor single_socket_service.
+ * ascs needs the container's empty() function (used by the queue for message sending and receiving) to be thread safe (here, thread safe does not means
+ *  correctness, but just no memory access violation), almost all implementations of list::empty() in the world are thread safe, but not for list::size().
+ *  if your container's empty() function is not thread safe, please define macro ASCS_CAN_EMPTY_NOT_SAFE, then ascs will make it thread safe for you.
  *
  * DELETION:
  *
@@ -1104,6 +1112,10 @@ static_assert(ASCS_RELIABLE_UDP_NSND_QUE >= 0, "kcp send queue must be bigger th
 //we also can control the queues (and their containers) via template parameters on class 'client_socket_base'
 //'server_socket_base', 'ssl::client_socket_base' and 'ssl::server_socket_base'.
 //we even can let a socket to use different queue (and / or different container) for input and output via template parameters.
+
+//if your container's empty() function (used by the queue for message sending and receiving) is not thread safe, please define this macro,
+// then ascs will make it thread safe for you.
+//#define ASCS_CAN_EMPTY_NOT_SAFE
 
 //buffer type used when receiving messages (unpacker's prepare_next_recv() need to return this type)
 #ifndef ASCS_RECV_BUFFER_TYPE

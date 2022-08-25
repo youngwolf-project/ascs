@@ -380,7 +380,14 @@ private:
 
 	virtual bool do_send_msg(bool in_strand = false)
 	{
-		if (!in_strand && this->test_and_set_sending())
+		if (send_buffer.empty()) //without this, in extreme circumstances, messages can leave behind in the send buffer until the next message sending
+		{
+			if (in_strand)
+				this->clear_sending();
+
+			return false;
+		}
+		else if (!in_strand && this->test_and_set_sending())
 			return true;
 
 		auto end_time = statistic::now();
