@@ -33,14 +33,15 @@ public:
 	bool is_idle() const {return TRANS_IDLE == state;}
 	void set_index(int index_) {index = index_;}
 
-	bool get_file(const std::string& file_name)
+	bool get_file(const std::string& file_name, bool master_only)
 	{
 		assert(!file_name.empty());
 
-		if (TRANS_IDLE != state)
+		if ((master_only && 0 != index) || (!master_only && 0 == index))
+			return true;
+		else if (TRANS_IDLE != state)
 			return false;
-
-		if (0 == index)
+		else if (master_only)
 			file = fopen(file_name.data(), "w+b");
 		else
 			file = fopen(file_name.data(), "r+b");
@@ -60,13 +61,15 @@ public:
 		return true;
 	}
 
-	bool truncate_file(const std::string& file_name)
+	bool truncate_file(const std::string& file_name, bool master_only)
 	{
 		assert(!file_name.empty());
 
-		if (TRANS_IDLE != state)
+		if ((master_only && 0 != index) || (!master_only && 0 == index))
+			return true;
+		else if (TRANS_IDLE != state)
 			return false;
-		else if (0 == index)
+		else if (master_only)
 		{
 			std::string order(ORDER_LEN, (char) 10);
 			order += file_name;
@@ -296,13 +299,13 @@ private:
 				auto file_name = std::next(msg.data(), ORDER_LEN + 1);
 				if ('\0' != *std::next(msg.data(), ORDER_LEN))
 				{
-					if (link_num - 1 == index)
+					if (0 == index)
 						printf("cannot create or truncated file %s on the server\n", file_name);
 					trans_end();
 				}
 				else
 				{
-					if (link_num - 1 == index)
+					if (0 == index)
 						printf("prepare to send file %s\n", file_name);
 					get_matrix()->put_file(std::next(msg.data(), ORDER_LEN + 1));
 				}
@@ -397,16 +400,14 @@ private:
 			transmit_size = 0;
 
 			printf("transmit %s begin.\n", file_name.data());
-			auto re = false;
+			auto re = true;
 			if (0 == type)
 			{
-				if ((re = find(0)->get_file(file_name)))
-					//do_something_to_all([&](object_ctype& item) {if (0 != item->id()) item->get_file(file_name);});
-					//if you always return false, do_something_to_one will be equal to do_something_to_all.
-					do_something_to_one([&](object_ctype& item) {if (0 != item->id()) item->get_file(file_name); return false;});
+				do_something_to_all([&](object_ctype& item) {if (!item->get_file(file_name, true)) re = false;});
+				do_something_to_all([&](object_ctype& item) {if (!item->get_file(file_name, false)) re = false;});
 			}
 			else
-				re = find(0)->truncate_file(file_name);
+				do_something_to_all([&](object_ctype& item) {if (!item->truncate_file(file_name, true)) re = false;});
 
 			if (re)
 			{
