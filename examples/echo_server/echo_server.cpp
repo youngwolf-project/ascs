@@ -7,7 +7,7 @@
 //#define ASCS_FREE_OBJECT_INTERVAL	60 //it's useless if ASCS_REUSE_OBJECT macro been defined
 //#define ASCS_SYNC_DISPATCH //do not open this feature, see below for more details
 #define ASCS_DISPATCH_BATCH_MSG
-//#define ASCS_FULL_STATISTIC //full statistic will slightly impact efficiency
+//#define ASCS_FULL_STATISTIC //full statistic will slightly impact performance
 #define ASCS_USE_STEADY_TIMER
 #define ASCS_ALIGNED_TIMER
 #define ASCS_AVOID_AUTO_STOP_SERVICE

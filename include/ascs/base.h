@@ -445,7 +445,7 @@ struct statistic
 	uint_fast64_t recv_byte_sum; //msgs (in bytes) returned by i_unpacker::parse_msg
 	stat_duration dispatch_delay_sum; //from parse_msg(exclude msg unpacking) to on_msg_handle
 	stat_duration recv_idle_sum; //during this duration, socket suspended msg reception (receiving buffer overflow)
-	stat_duration handle_time_sum; //on_msg_handle (and on_msg) consumed time, this indicate the efficiency of msg handling
+	stat_duration handle_time_sum; //on_msg_handle (and on_msg) consumed time, this indicate the performance of msg handling
 	stat_duration unpack_time_sum; //udp::socket_base will not gather this item
 
 	time_t establish_time; //time of link establishment

@@ -4,7 +4,7 @@
 //configuration
 #define ASCS_SERVER_PORT		9527
 #define ASCS_REUSE_OBJECT //use objects pool
-#define ASCS_DELAY_CLOSE		5 //define this to avoid hooks for async call (and slightly improve efficiency)
+#define ASCS_DELAY_CLOSE		5 //define this to avoid hooks for async call (and slightly improve performance)
 #define ASCS_SYNC_DISPATCH
 #define ASCS_MSG_BUFFER_SIZE	65536
 #define ASCS_DEFAULT_UNPACKER stream_unpacker //non-protocol

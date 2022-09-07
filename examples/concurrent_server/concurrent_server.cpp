@@ -6,7 +6,7 @@
 #define ASCS_MAX_OBJECT_NUM		102400
 #define ASCS_ASYNC_ACCEPT_NUM	1024 //pre-create 1024 server socket, this is very useful if creating server socket is very expensive
 #define ASCS_REUSE_OBJECT //use objects pool
-#define ASCS_DELAY_CLOSE		5 //define this to avoid hooks for async call (and slightly improve efficiency)
+#define ASCS_DELAY_CLOSE		5 //define this to avoid hooks for async call (and slightly improve performance)
 #define ASCS_MSG_BUFFER_SIZE	1024
 #define ASCS_SYNC_DISPATCH
 #ifdef ASCS_SYNC_DISPATCH

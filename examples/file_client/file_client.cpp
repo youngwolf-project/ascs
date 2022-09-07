@@ -3,7 +3,7 @@
 
 //configuration
 #define ASCS_SERVER_PORT	5050
-#define ASCS_DELAY_CLOSE	5 //define this to avoid hooks for async call (and slightly improve efficiency)
+#define ASCS_DELAY_CLOSE	5 //define this to avoid hooks for async call (and slightly improve performance)
 #define ASCS_PASSIVE_RECV
 #ifndef ASCS_DECREASE_THREAD_AT_RUNTIME
 #define ASCS_AVOID_AUTO_STOP_SERVICE
