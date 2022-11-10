@@ -100,9 +100,9 @@ public:
 	void force_shutdown() {show_info("link:", "been shutting down."); this->dispatch_in_io_strand([this]() {this->close(true);});}
 	void graceful_shutdown() {force_shutdown();}
 
-	std::string endpoint_to_string(const asio::ip::udp::endpoint& ep) const {return ep.address().to_string() + ':' + std::to_string(ep.port());}
+	static std::string endpoint_to_string(const asio::ip::udp::endpoint& ep) {return ep.address().to_string() + ':' + std::to_string(ep.port());}
 #ifdef ASIO_HAS_LOCAL_SOCKETS
-	std::string endpoint_to_string(const asio::local::datagram_protocol::endpoint& ep) const {return ep.path();}
+	static std::string endpoint_to_string(const asio::local::datagram_protocol::endpoint& ep) {return ep.path();}
 #endif
 
 	void show_info(const char* head = nullptr, const char* tail = nullptr) const
