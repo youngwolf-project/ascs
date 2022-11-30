@@ -68,6 +68,8 @@ public:
 	basic_buffer(char* buff) {do_detach(); operator+=(buff);}
 	basic_buffer(const char* buff) {do_detach(); operator+=(buff);}
 	basic_buffer(const char* buff, size_t len) {do_detach(); append(buff, len);}
+	template<size_t size> basic_buffer(char(&buff)[size], size_t len) {do_detach(); append(buff, len);}
+	template<size_t size> basic_buffer(const char(&buff)[size], size_t len) {do_detach(); append(buff, len);}
 	basic_buffer(std::initializer_list<char> ilist) {do_detach(); operator+=(ilist);}
 	basic_buffer(const basic_buffer& other) {do_detach(); append(other);}
 	template<typename Buff> basic_buffer(const Buff& other) {do_detach(); append(other);}
@@ -114,7 +116,7 @@ public:
 
 	basic_buffer& append(std::initializer_list<char> ilist) {return append(std::begin(ilist), ilist.size());}
 	template<typename Buff> basic_buffer& append(const Buff& other) {return append(other.data(), other.size());}
-	basic_buffer& append(char* buff) {return append(buff, strlen(buff));}
+	basic_buffer& append(char* buff) {return append((const char*) buff);}
 	basic_buffer& append(const char* buff) {return append(buff, strlen(buff));}
 	basic_buffer& append(const char* _buff, size_t _len)
 	{
@@ -132,6 +134,8 @@ public:
 
 		return *this;
 	}
+	template<size_t size> basic_buffer& append(char(&buff)[size], size_t len) {return append((const char*) buff, std::min(size, len));}
+	template<size_t size> basic_buffer& append(const char(&buff)[size], size_t len) {return append((const char*) buff, std::min(size, len));}
 
 	//nonstandard function append2 -- delete the last character if it's '\0' before appending another string.
 	//this feature makes basic_buffer to be able to works as std::string, which will append '\0' automatically.

@@ -68,7 +68,6 @@ public:
 	using typename Container::reference;
 	using typename Container::const_reference;
 	//since some implementations (such as gcc before 5.0) of std::list::size() have linear complexity, we don't expose this size() function
-	//even this function is thread safe, if you rely it, you may still need a memory fence as we do for the empty() function.
 	//using Container::size;
 
 	queue() : total_size(0) {}
@@ -76,9 +75,11 @@ public:
 	//thread safe
 	bool is_thread_safe() const {return Lockable::is_lockable();}
 	size_t size_in_byte() const {return total_size;}
-	//almost all implementations of list::empty() in the world are thread safe (not means correctness, but just no memory access violation),
-	// but we need a memory fence to synchronize memory with IO threads, so we use a lock here.
+#ifdef ASCS_CAN_EMPTY_NOT_SAFE //container's empty() function is not thread safe
 	bool empty() {typename Lockable::lock_guard lock(*this); return Container::empty();}
+#else
+	using Container::empty; //almost all implementations of list::empty() in the world are thread safe (not means correctness, but just no memory access violation)
+#endif
 	void clear() {typename Lockable::lock_guard lock(*this); Container::clear(); total_size = 0;}
 	void swap(Container& can)
 	{

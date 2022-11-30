@@ -110,9 +110,9 @@ public:
 	bool is_connected() const {return link_status::CONNECTED == status;}
 	bool is_shutting_down() const {return link_status::FORCE_SHUTTING_DOWN == status || link_status::GRACEFUL_SHUTTING_DOWN == status;}
 
-	std::string endpoint_to_string(const asio::ip::tcp::endpoint& ep) const {return ep.address().to_string() + ':' + std::to_string(ep.port());}
+	static std::string endpoint_to_string(const asio::ip::tcp::endpoint& ep) {return ep.address().to_string() + ':' + std::to_string(ep.port());}
 #ifdef ASIO_HAS_LOCAL_SOCKETS
-	std::string endpoint_to_string(const asio::local::stream_protocol::endpoint& ep) const {return ep.path();}
+	static std::string endpoint_to_string(const asio::local::stream_protocol::endpoint& ep) {return ep.path();}
 #endif
 
 	void show_info(const char* head = nullptr, const char* tail = nullptr) const
@@ -380,7 +380,14 @@ private:
 
 	virtual bool do_send_msg(bool in_strand = false)
 	{
-		if (!in_strand && this->test_and_set_sending())
+		if (send_buffer.empty()) //without this, in extreme circumstances, messages can leave behind in the send buffer until the next message sending
+		{
+			if (in_strand)
+				this->clear_sending();
+
+			return false;
+		}
+		else if (!in_strand && this->test_and_set_sending())
 			return true;
 
 		auto end_time = statistic::now();

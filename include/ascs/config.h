@@ -63,7 +63,7 @@
  * Drop macro ASCS_USE_CONCURRENT_QUEUE, rename macro ASCS_USE_CONCURRE to ASCS_HAS_CONCURRENT_QUEUE.
  * In contrast to non_lock_queue, split message_queue into lock_queue and lock_free_queue.
  * Move container related classes and functions from base.h to container.h.
- * Improve efficiency in scenarios of low throughput like pingpong test.
+ * Improve performance in scenarios of low throughput like pingpong test.
  * Move class statistic and obj_with_begin_time out of ascs::socket to reduce template tiers.
  *
  * 2016.11.1	version 1.1.2
@@ -398,7 +398,7 @@
  *
  * HIGHLIGHT:
  * Fully support sync message sending and receiving (even be able to mix with async message sending and receiving without any limitations), but please note
- *  that this feature will slightly impact efficiency even if you always use async message sending and receiving, so only open this feature when really needed.
+ *  that this feature will slightly impact performance even if you always use async message sending and receiving, so only open this feature when really needed.
  *
  * FIX:
  * Fix race condition when aligning timers, see macro ASCS_ALIGNED_TIMER for more details.
@@ -810,7 +810,7 @@
  * SPECIAL ATTENTION (incompatible with old editions):
  * Graceful shutdown does not support sync mode anymore.
  * Introduce memory fence to synchronize socket's status -- sending and reading, dispatch_strand is not enough, except post_strand,
- *  but dispatch_strand is more efficient than post_strand.
+ *  but dispatch_strand is more efficient than post_strand in specific circumstances.
  *
  * HIGHLIGHT:
  * Make shutdown thread safe.
@@ -819,12 +819,20 @@
  * Fix alias for tcp and ssl.
  * Fix -- in Windows, a TCP client must explicitly specify a full IP address (not only the port) to connect to.
  * Fix -- reliable UDP sometimes cannot send messages successfully.
+ * Fix -- in extreme circumstances, following functions may cause messages leave behind in the send buffer until the next message sending:
+ *  resume_sending, reliable UDP socket needs it, while general UDP socket doesn't.
+ *  pop_first/all_pending_send_msg and pop_first/all_pending_recv_msg.
+ *  socket::send_msg().
+ * Fix -- basic_buffer doesn't support fixed arrays (just in the constructor) in GCC and Clang.
  *
  * ENHANCEMENTS:
  * heartbeat(ext) optimization.
  * Add error check during file reading in file_server/file_client.
  * Enhance basic_buffer to support more comprehensive buffers.
  * Add ability to change the socket id if it's not managed by object_pool nor single_socket_service.
+ * ascs needs the container's empty() function (used by the queue for message sending and receiving) to be thread safe (here, thread safe does not means
+ *  correctness, but just no memory access violation), almost all implementations of list::empty() in the world are thread safe, but not for list::size().
+ *  if your container's empty() function is not thread safe, please define macro ASCS_CAN_EMPTY_NOT_SAFE, then ascs will make it thread safe for you.
  *
  * DELETION:
  *
@@ -952,7 +960,7 @@ static_assert(ASCS_MAX_RECV_BUF > 0, "recv buffer capacity must be bigger than z
 //you must define this macro as a value, not just define it, the value means the duration, unit is second.
 //a value equal to zero will cause ascs to use a mechanism to guarantee 100% safety when reusing or freeing this socket,
 //ascs will hook all async calls to avoid this socket to be reused or freed before all async calls finish
-//or been interrupted (of course, this mechanism will slightly impact efficiency).
+//or been interrupted (of course, this mechanism will slightly impact performance).
 #ifndef ASCS_DELAY_CLOSE
 #define ASCS_DELAY_CLOSE	0 //seconds, guarantee 100% safety when reusing or freeing socket objects
 #endif
@@ -1105,6 +1113,10 @@ static_assert(ASCS_RELIABLE_UDP_NSND_QUE >= 0, "kcp send queue must be bigger th
 //'server_socket_base', 'ssl::client_socket_base' and 'ssl::server_socket_base'.
 //we even can let a socket to use different queue (and / or different container) for input and output via template parameters.
 
+//if your container's empty() function (used by the queue for message sending and receiving) is not thread safe, please define this macro,
+// then ascs will make it thread safe for you.
+//#define ASCS_CAN_EMPTY_NOT_SAFE
+
 //buffer type used when receiving messages (unpacker's prepare_next_recv() need to return this type)
 #ifndef ASCS_RECV_BUFFER_TYPE
 	#if ASIO_VERSION > 101100
@@ -1204,7 +1216,7 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 // sync_safe_send_native_msg
 // sync_recv_msg
 //please note that:
-// this feature will slightly impact efficiency even if you always use async message sending and receiving, so only open this feature when really needed.
+// this feature will slightly impact performance even if you always use async message sending and receiving, so only open this feature when really needed.
 // we must avoid to do sync message sending and receiving in service threads.
 // if prior sync_recv_msg() not returned, the second sync_recv_msg() will return false immediately.
 // with macro ASCS_PASSIVE_RECV, in sync_recv_msg(), recv_msg() will be automatically called, but the first one (right after the connection been established)
@@ -1218,7 +1230,7 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 //#define ASCS_SYNC_DISPATCH
 //with this macro, virtual bool on_msg(std::list<OutMsgType>& msg_can) will be provided, you can rewrite it and handle all or a part of the
 // messages like virtual function on_msg_handle (with macro ASCS_DISPATCH_BATCH_MSG), if your logic is simple enough (like echo or pingpong test),
-// this feature is recommended because it can slightly improve efficiency.
+// this feature is recommended because it can slightly improve performance.
 //now we have three ways to handle messages (sync_recv_msg, on_msg and on_msg_handle), the invocation order is the same as listed, if messages been successfully
 // dispatched to sync_recv_msg, then the second two will not be called, otherwise messages will be dispatched to on_msg, if on_msg only handled a part of (include
 // zero) the messages, then on_msg_handle will continue to dispatch the rest of them asynchronously, this will disorder messages because on_msg_handle and the next

@@ -178,9 +178,9 @@ public:
 protected:
 #endif
 #ifdef ASCS_ARBITRARY_SEND
-	void send_msg() {dispatch_in_io_strand([this]() {this->do_send_msg();});}
+	void send_msg() {_send_msg();}
 #else
-	void send_msg() {if (is_ready() && !is_sending()) dispatch_in_io_strand([this]() {this->do_send_msg();});}
+	void send_msg() {if (is_ready() && 1 != sending.load(std::memory_order_acquire)) _send_msg();} //here we cannot use is_sending(), because we need memory fence
 #endif
 
 public:
@@ -208,7 +208,7 @@ public:
 					return false;
 
 #ifndef ASCS_ALWAYS_SEND_HEARTBEAT
-			if (!is_sending() && now - stat.last_send_time >= interval) //don't need to send heartbeat if we're sending messages
+			if (now - stat.last_send_time >= interval && !is_sending()) //don't need to send heartbeat if we're sending messages
 #endif
 				send_heartbeat();
 		}
@@ -623,6 +623,8 @@ private:
 	template<typename Arg>
 	void reset_next_layer(const asio::any_io_executor& executor, Arg&& arg) {(&next_layer_)->~Socket(); new (&next_layer_) Socket(executor, std::forward<Arg>(arg));}
 #endif
+
+	void _send_msg() {dispatch_in_io_strand([this]() {this->do_send_msg();});}
 
 #ifdef ASCS_SYNC_RECV
 	sync_call_result sync_recv_waiting(std::unique_lock<std::mutex>& lock, unsigned duration)

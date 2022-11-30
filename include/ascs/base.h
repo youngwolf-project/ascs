@@ -445,7 +445,7 @@ struct statistic
 	uint_fast64_t recv_byte_sum; //msgs (in bytes) returned by i_unpacker::parse_msg
 	stat_duration dispatch_delay_sum; //from parse_msg(exclude msg unpacking) to on_msg_handle
 	stat_duration recv_idle_sum; //during this duration, socket suspended msg reception (receiving buffer overflow)
-	stat_duration handle_time_sum; //on_msg_handle (and on_msg) consumed time, this indicate the efficiency of msg handling
+	stat_duration handle_time_sum; //on_msg_handle (and on_msg) consumed time, this indicate the performance of msg handling
 	stat_duration unpack_time_sum; //udp::socket_base will not gather this item
 
 	time_t establish_time; //time of link establishment
@@ -579,12 +579,12 @@ template<typename _Predicate> void NAME(const _Predicate& __pred) const {for (au
 }
 
 #define GET_PENDING_MSG_SIZE(FUNNAME, CAN) size_t FUNNAME() const {return CAN.size_in_byte();}
-#define POP_FIRST_PENDING_MSG(FUNNAME, CAN, MSGTYPE) void FUNNAME(MSGTYPE& msg) {msg.clear(); CAN.try_dequeue(msg);}
+#define POP_FIRST_PENDING_MSG(FUNNAME, CAN, MSGTYPE) void FUNNAME(MSGTYPE& msg) {msg.clear(); if (CAN.try_dequeue(msg)) _send_msg();}
 #define POP_FIRST_PENDING_MSG_NOTIFY(FUNNAME, CAN, MSGTYPE) void FUNNAME(MSGTYPE& msg) \
-	{msg.clear(); if (CAN.try_dequeue(msg) && msg.p) msg.p->set_value(sync_call_result::NOT_APPLICABLE);}
-#define POP_ALL_PENDING_MSG(FUNNAME, CAN, CANTYPE) void FUNNAME(CANTYPE& can) {can.clear(); CAN.swap(can);}
+	{msg.clear(); if (CAN.try_dequeue(msg)) {_send_msg(); if (msg.p) msg.p->set_value(sync_call_result::NOT_APPLICABLE);}}
+#define POP_ALL_PENDING_MSG(FUNNAME, CAN, CANTYPE) void FUNNAME(CANTYPE& can) {can.clear(); CAN.swap(can); _send_msg();}
 #define POP_ALL_PENDING_MSG_NOTIFY(FUNNAME, CAN, CANTYPE) void FUNNAME(CANTYPE& can) \
-	{can.clear(); CAN.swap(can); ascs::do_something_to_all(can, [](typename CANTYPE::reference msg) {if (msg.p) msg.p->set_value(sync_call_result::NOT_APPLICABLE);});}
+	{can.clear(); CAN.swap(can); _send_msg(); ascs::do_something_to_all(can, [](typename CANTYPE::reference msg) {if (msg.p) msg.p->set_value(sync_call_result::NOT_APPLICABLE);});}
 
 ///////////////////////////////////////////////////
 //TCP msg sending interface
