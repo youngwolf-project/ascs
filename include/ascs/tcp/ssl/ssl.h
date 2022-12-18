@@ -41,6 +41,7 @@ protected:
 		else
 			this->show_info(ec, nullptr, "handshake failed");
 	}
+	virtual void on_recv_error(const asio::error_code& ec) {this->stop_graceful_shutdown_monitoring(); Socket::on_recv_error(ec);}
 
 	void shutdown_ssl()
 	{
@@ -49,7 +50,9 @@ protected:
 			this->show_info("ssl link:", "been shutting down.");
 			this->start_graceful_shutdown_monitoring();
 			this->next_layer().async_shutdown(this->make_handler_error([this](const asio::error_code& ec) {
-				this->stop_graceful_shutdown_monitoring();
+				//do not stop the shutdown monitoring at here, sometimes, this async_shutdown cannot trigger on_recv_error,
+				//very strange, maybe, there's a bug in Asio. so we stop it in on_recv_error.
+				//this->stop_graceful_shutdown_monitoring();
 				if (ec)
 					this->show_info(ec, "ssl link", "async shutdown failed");
 			}));
@@ -125,11 +128,11 @@ private:
 	typedef ascs::object_pool<Object> super;
 
 public:
-	object_pool(service_pump& service_pump_, asio::ssl::context::method&& m) : super(service_pump_), ctx(std::forward<asio::ssl::context::method>(m)) {}
+	object_pool(service_pump& service_pump_, const asio::ssl::context::method& m) : super(service_pump_), ctx(m) {}
 	asio::ssl::context& context() {return ctx;}
 
 protected:
-	template<typename Arg> typename object_pool::object_type create_object(Arg&& arg) {return super::create_object(std::forward<Arg>(arg), ctx);}
+	template<typename Arg> typename super::object_type create_object(Arg&& arg) {return super::create_object(std::forward<Arg>(arg), ctx);}
 
 private:
 	asio::ssl::context ctx;
@@ -162,7 +165,7 @@ protected:
 		return true;
 	}
 
-	virtual void on_unpack_error() {unified_out::info_out(ASCS_LLF " can not unpack msg.", this->id()); this->unpacker()->dump_left_data(); this->force_shutdown();}
+	virtual void on_unpack_error() {unified_out::info_out(ASCS_LLF " can not unpack msg.", this->id()); this->unpacker()->dump_left_data(); force_shutdown();}
 
 private:
 	void handle_handshake(const asio::error_code& ec)
@@ -181,10 +184,13 @@ private:
 	typedef tcp::single_client_base<Socket> super;
 
 public:
-	single_client_base(service_pump& service_pump_, asio::ssl::context& ctx_) : super(service_pump_, ctx_) {}
+	template<typename Arg> single_client_base(service_pump& service_pump_, Arg&& arg) : super(service_pump_, *arg), ctx_holder(std::forward<Arg>(arg)) {}
 
 protected:
 	virtual bool init() {if (0 == this->get_io_context_refs()) this->reset_next_layer(this->get_context()); return super::init();}
+
+private:
+	std::shared_ptr<asio::ssl::context> ctx_holder;
 };
 template<typename Socket, typename Pool = object_pool<Socket>, typename Matrix = i_matrix> using multi_client_base = tcp::multi_client_base<Socket, Pool, Matrix>;
 
