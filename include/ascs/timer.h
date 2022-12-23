@@ -160,9 +160,11 @@ protected:
 		auto prev_seq = ++ti.seq;
 		ti.timer.async_wait(this->make_handler_error([this, &ti, prev_seq](const asio::error_code& ec) {
 #endif
+			//the first 'timer_info::TIMER_STARTED == ti.status' judgement means stop_timer can also invalidate cumulative timer callbacks
+			//the second 'timer_info::TIMER_STARTED == ti.status' judgement is used to exclude a particular situation--stop the same timer in call_back and return true
 #ifdef ASCS_ALIGNED_TIMER
 			auto begin_time = std::chrono::system_clock::now();
-			if (!ec && ti.call_back(ti.id) && timer_info::TIMER_STARTED == ti.status)
+			if (timer_info::TIMER_STARTED == ti.status && !ec && ti.call_back(ti.id) && timer_info::TIMER_STARTED == ti.status)
 			{
 				auto elapsed_ms = (unsigned) std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - begin_time).count();
 				if (elapsed_ms > ti.interval_ms)
@@ -171,7 +173,7 @@ protected:
 				this->start_timer(ti, ti.interval_ms - elapsed_ms);
 			}
 #else
-			if (!ec && ti.call_back(ti.id) && timer_info::TIMER_STARTED == ti.status)
+			if (timer_info::TIMER_STARTED == ti.status && !ec && ti.call_back(ti.id) && timer_info::TIMER_STARTED == ti.status)
 				this->start_timer(ti);
 #endif
 			else if (prev_seq == ti.seq) //exclude a particular situation--start the same timer in call_back and return false
@@ -186,9 +188,9 @@ protected:
 	{
 		if (timer_info::TIMER_STARTED == ti.status) //enable stopping timers that has been stopped
 		{
+			ti.status = timer_info::TIMER_CANCELED; //invalidate cumulative timer callbacks first
 			try {ti.timer.cancel();}
 			catch (const asio::system_error& e) {unified_out::error_out("cannot stop timer %d (%d %s)", ti.id, e.code().value(), e.what());}
-			ti.status = timer_info::TIMER_CANCELED;
 		}
 	}
 
