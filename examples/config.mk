@@ -1,6 +1,7 @@
 
 # If your compiler cannot find boost, please specify it explicitly like this:
 #boost_include_dir = -I/usr/local/include/
+#boost_lib_dir = -I/usr/local/lib/
 
 # If possible, a higher edition of c++ would be always better.
 cflag = -Wall -fexceptions -std=c++11
@@ -42,7 +43,7 @@ else
 endif
 
 cflag += ${ext_cflag} ${boost_include_dir} -I../../include/
-lflag += ${ext_libs}
+lflag += ${ext_libs} ${boost_lib_dir}
 
 target = ${dir}/${module}
 objects = ${patsubst %.cpp,${dir}/%.o,${wildcard *.cpp}}
