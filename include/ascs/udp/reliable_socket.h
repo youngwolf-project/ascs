@@ -37,7 +37,7 @@ public:
 	static const typename super::tid TIMER_END = TIMER_BEGIN + 5;
 
 public:
-	reliable_socket_base(asio::io_context& io_context_) : super(io_context_), kcp(nullptr), max_nsnd_que(ASCS_RELIABLE_UDP_NSND_QUE) {}
+	reliable_socket_base(service_pump& service_pump_) : super(service_pump_), kcp(nullptr), max_nsnd_que(ASCS_RELIABLE_UDP_NSND_QUE) {}
 	reliable_socket_base(Matrix& matrix_) : super(matrix_), kcp(nullptr), max_nsnd_que(ASCS_RELIABLE_UDP_NSND_QUE) {}
 	~reliable_socket_base() {release_kcp();}
 
