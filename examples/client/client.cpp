@@ -38,6 +38,7 @@ public:
 };
 
 #include <ascs/ext/tcp.h>
+#include <ascs/ext/socket.h>
 using namespace ascs;
 using namespace ascs::tcp;
 using namespace ascs::ext;
@@ -49,17 +50,8 @@ using namespace ascs::ext::tcp::proxy;
 #define RECONNECT		"reconnect"
 #define STATISTIC		"statistic"
 
-//we only want close reconnecting mechanism on this socket, so we don't define macro ASCS_RECONNECT
-class short_connection : public socks4::client_socket
-{
-public:
-	short_connection(i_matrix& matrix_) : socks4::client_socket(matrix_) {}
-
-protected:
-	virtual void on_connect() {set_reconnect(false); client_socket::on_connect();} //close reconnecting mechanism
-};
-
-class short_client : public multi_client_base<short_connection>
+//we only want close reconnecting mechanism on these sockets, so it cannot be done by defining macro ASCS_RECONNECT to false
+class short_client : public multi_client_base<c_socket<socks4::client_socket>>
 {
 public:
 	short_client(service_pump& service_pump_) : multi_client_base(service_pump_) {set_server_addr(ASCS_SERVER_PORT);}
@@ -73,6 +65,9 @@ public:
 		auto socket_ptr = add_socket(port, ip);
 		if (!socket_ptr)
 			return false;
+
+		//register event callback from outside of the socket, it also can be done from inside of the socket, see echo_server for more details
+		socket_ptr->register_on_connect([](socks4::client_socket* socket) {socket->set_reconnect(false);}, true); //close reconnection mechanism
 
 		//without following setting, socks4::client_socket will be downgraded to normal client_socket
 		//socket_ptr->set_target_addr(9527, "172.27.0.14"); //target server address, original server address becomes SOCK4 server address

@@ -30,8 +30,11 @@
 namespace ascs { namespace ext { namespace udp {
 
 typedef ascs::udp::reliable_socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UDP_UNPACKER> reliable_socket;
+template<typename Matrix = i_matrix> using reliable_socket2 = ascs::udp::reliable_socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UDP_UNPACKER, Matrix>;
 typedef ascs::udp::single_socket_service_base<reliable_socket> single_reliable_socket_service;
 typedef ascs::udp::multi_socket_service_base<reliable_socket> multi_reliable_socket_service;
+template<typename Socket, typename Matrix = i_matrix> using multi_reliable_socket_service2 = ascs::udp::multi_socket_service_base<Socket, object_pool<Socket>, Matrix>;
+typedef multi_reliable_socket_service reliable_socket_service;
 
 }}} //namespace
 

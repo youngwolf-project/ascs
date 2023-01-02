@@ -48,6 +48,7 @@
 //configuration
 
 #include <ascs/ext/tcp.h>
+#include <ascs/ext/socket.h>
 using namespace ascs;
 using namespace ascs::tcp;
 using namespace ascs::ext;
@@ -192,31 +193,34 @@ protected:
 	virtual bool on_accept(object_ctype& socket_ptr) {stop_listen(); return true;}
 };
 
-class short_connection : public server_socket_base<packer<>, unpacker<>>
+class short_connection : public s_socket<server_socket_base<packer<>, unpacker<>>>
 {
 private:
-	typedef server_socket_base<ext::packer<>, ext::unpacker<>> super;
+	typedef s_socket<server_socket_base<ext::packer<>, ext::unpacker<>>> super;
 
 public:
-	short_connection(i_server& server_) : super(server_) {}
-
-protected:
-	//msg handling
+	short_connection(i_server& server_) : super(server_)
+	{
+		//register msg handling from inside of the socket, it also can be done from outside of the socket, see client for more details
+		//since we're in the socket, so the 'raw_socket* socket' actually is 'this'
+		//in xxxx callback, do not call super::xxxx, call raw_socket::xxxx instead, otherwise, dead loop will occur.
+		//in this demo, the raw_socket is 'server_socket_base<ext::packer<>, ext::unpacker<>>', it is defined by the s_socket.
 #ifdef ASCS_SYNC_DISPATCH
-	//do not hold msg_can for further usage, return from on_msg as quickly as possible
-	//access msg_can freely within this callback, it's always thread safe.
-	virtual size_t on_msg(std::list<out_msg_type>& msg_can) {auto re = super::on_msg(msg_can); force_shutdown(); return re;}
+		//do not hold msg_can for further usage, return from on_msg as quickly as possible
+		//access msg_can freely within this callback, it's always thread safe.
+		register_on_msg([this](raw_socket* socket, std::list<out_msg_type>& msg_can) {auto re = raw_socket::on_msg(msg_can); socket->force_shutdown(); return re;});
 #endif
 
 #ifdef ASCS_DISPATCH_BATCH_MSG
-	//do not hold msg_can for further usage, access msg_can and return from on_msg_handle as quickly as possible
-	//can only access msg_can via functions that marked as 'thread safe', if you used non-lock queue, its your responsibility to guarantee
-	// that new messages will not come until we returned from this callback (for example, pingpong test).
-	virtual size_t on_msg_handle(out_queue_type& msg_can) {auto re = super::on_msg_handle(msg_can); force_shutdown(); return re;}
+		//do not hold msg_can for further usage, access msg_can and return from on_msg_handle as quickly as possible
+		//can only access msg_can via functions that marked as 'thread safe', if you used non-lock queue, its your responsibility to guarantee
+		// that new messages will not come until we returned from this callback (for example, pingpong test).
+		register_on_msg_handle([this](raw_socket* socket, out_queue_type& msg_can) {auto re = raw_socket::on_msg_handle(msg_can); socket->force_shutdown(); return re;});
 #else
-	virtual bool on_msg_handle(out_msg_type& msg) {auto re = super::on_msg_handle(msg); force_shutdown(); return re;}
+		register_on_msg_handle([this](raw_socket* socket, out_msg_type& msg) {auto re = raw_socket::on_msg_handle(msg); socket->force_shutdown(); return re;});
 #endif
-	//msg handling end
+		//register msg handling end
+	}
 };
 
 void dump_io_context_refs(service_pump& sp)
