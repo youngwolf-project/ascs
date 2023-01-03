@@ -18,7 +18,8 @@ public:
 	//because we don't use objects pool(we don't defined ASCS_REUSE_OBJECT), so this virtual function will
 	//not be invoked, and can be omitted, but we keep it for the possibility of using it in the future
 	virtual void reset();
-	virtual void take_over(std::shared_ptr<file_socket> socket_ptr);
+	virtual void take_over(std::shared_ptr<server_socket::type_of_object_restore> socket_ptr);
+//	virtual void take_over(std::shared_ptr<file_socket> socket_ptr); //this works too, but brings warnings with -Woverloaded-virtual option.
 
 protected:
 	//msg handling

@@ -19,6 +19,9 @@ namespace ascs { namespace tcp {
 
 template<typename Socket, typename Server = i_server> class generic_server_socket : public Socket, public std::enable_shared_from_this<generic_server_socket<Socket, Server>>
 {
+public:
+	typedef generic_server_socket<Socket, Server> type_of_object_restore;
+
 private:
 	typedef Socket super;
 
