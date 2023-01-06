@@ -38,7 +38,7 @@ public:
 };
 
 #include <ascs/ext/tcp.h>
-#include <ascs/ext/socket.h>
+#include <ascs/ext/callbacks.h>
 using namespace ascs;
 using namespace ascs::tcp;
 using namespace ascs::ext;
@@ -51,7 +51,8 @@ using namespace ascs::ext::tcp::proxy;
 #define STATISTIC		"statistic"
 
 //we only want close reconnecting mechanism on these sockets, so it cannot be done by defining macro ASCS_RECONNECT to false
-class short_client : public multi_client_base<c_socket<socks4::client_socket>>
+//method 1
+class short_client : public multi_client_base<callbacks::c_socket<socks4::client_socket>>
 {
 public:
 	short_client(service_pump& service_pump_) : multi_client_base(service_pump_) {set_server_addr(ASCS_SERVER_PORT);}
@@ -78,6 +79,20 @@ private:
 	unsigned short port;
 	std::string ip;
 };
+
+//method 2
+//class short_client : public multi_client_base<socks4::client_socket, callbacks::object_pool<object_pool<socks4::client_socket>>>
+//{
+//public:
+//	we now can not call register_on_connect on socket_ptr, since it's not wrapped by callbacks::c_socket
+//	socket_ptr->register_on_connect([](socks4::client_socket* socket) {socket->set_reconnect(false);}, true); //close reconnection mechanism
+//};
+//
+//but now, we're able to call register_on_create on client2, since its object pool is wrapped by callbacks::object_pool
+//short_client client2(...);
+//client2.register_on_create([](object_pool<socks4::client_socket>*, object_pool<socks4::client_socket>::object_ctype& object_ptr) {
+//	object_ptr->set_reconnect(false); //close reconnection mechanism
+//});
 
 std::thread create_sync_recv_thread(client_socket& client)
 {

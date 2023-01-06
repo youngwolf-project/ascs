@@ -48,7 +48,7 @@
 //configuration
 
 #include <ascs/ext/tcp.h>
-#include <ascs/ext/socket.h>
+#include <ascs/ext/callbacks.h>
 using namespace ascs;
 using namespace ascs::tcp;
 using namespace ascs::ext;
@@ -182,21 +182,11 @@ protected:
 };
 #endif
 
-//demonstrate how to accept just one client at server endpoint
-class normal_server : public server_base<normal_socket>
-{
-public:
-	normal_server(service_pump& service_pump_) : server_base(service_pump_) {}
-
-protected:
-	virtual int async_accept_num() {return 1;}
-	virtual bool on_accept(object_ctype& socket_ptr) {stop_listen(); return true;}
-};
-
-class short_connection : public s_socket<server_socket_base<packer<>, unpacker<>>>
+class short_connection : public callbacks::s_socket<server_socket_base<packer<>, unpacker<>>>
 {
 private:
-	typedef s_socket<server_socket_base<ext::packer<>, ext::unpacker<>>> super;
+	typedef callbacks::s_socket<server_socket_base<ext::packer<>, ext::unpacker<>>> super;
+	typedef server_socket_base<ext::packer<>, ext::unpacker<>> raw_socket;
 
 public:
 	short_connection(i_server& server_) : super(server_)
@@ -257,7 +247,12 @@ int main(int argc, const char* argv[])
 	//demonstrate how to use singel_service
 	//because of normal_socket, this server cannot support fixed_length_packer/fixed_length_unpacker and prefix_suffix_packer/prefix_suffix_unpacker,
 	//the reason is these packer and unpacker need additional initializations that normal_socket not implemented, see echo_socket's constructor for more details.
-	single_service_pump<normal_server> normal_server_;
+	single_service_pump<callbacks::server<server_base<normal_socket>>> normal_server_;
+	//following statements demonstrate how to accept just one client at server endpoint
+	normal_server_.register_async_accept_num([](server_base<normal_socket>*) {return 1;});
+	normal_server_.register_on_accept([](server_base<normal_socket>* server, server_base<normal_socket>::object_ctype&) {server->stop_listen(); return true;}, false);
+
+	//demonstrate how to use singel_service
 	single_service_pump<server_base<short_connection>> short_server;
 
 	unsigned short port = ASCS_SERVER_PORT;
@@ -340,16 +335,16 @@ int main(int argc, const char* argv[])
 //			*/
 			/*
 			//if all clients used the same protocol, we can pack msg one time, and send it repeatedly like this:
-			packer p;
+			packer<> p;
 			auto msg = p.pack_msg(str.data(), str.size() + 1);
 			//send \0 character too, because demo client used basic_buffer as its msg type, it will not append \0 character automatically as std::string does,
 			//so need \0 character when printing it.
 			if (!msg.empty())
-				((normal_server&) normal_server_).do_something_to_all([&](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(msg);});
+				((server_base<normal_socket>&) normal_server_).do_something_to_all([&](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(msg);});
 			*/
 			/*
 			//if demo client is using stream_unpacker
-			((normal_server&) normal_server_).do_something_to_all([&](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(str);});
+			((server_base<normal_socket>&) normal_server_).do_something_to_all([&](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(str);});
 			//or
 			normal_server_.broadcast_native_msg(str);
 			*/
