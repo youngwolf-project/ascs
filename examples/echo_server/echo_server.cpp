@@ -182,35 +182,42 @@ protected:
 };
 #endif
 
-class short_connection : public callbacks::s_socket<server_socket_base<packer<>, unpacker<>>>
+typedef server_socket_base<packer<>, unpacker<>> short_socket;
+class short_connection : public callbacks::s_socket<short_socket>
 {
-private:
-	typedef callbacks::s_socket<server_socket_base<ext::packer<>, ext::unpacker<>>> super;
-	typedef server_socket_base<ext::packer<>, ext::unpacker<>> raw_socket;
-
 public:
-	short_connection(i_server& server_) : super(server_)
+	short_connection(i_server& server_) : callbacks::s_socket<short_socket>(server_)
 	{
 		//register msg handling from inside of the socket, it also can be done from outside of the socket, see client for more details
-		//since we're in the socket, so the 'raw_socket* socket' actually is 'this'
-		//in xxxx callback, do not call super::xxxx, call raw_socket::xxxx instead, otherwise, dead loop will occur.
-		//in this demo, the raw_socket is 'server_socket_base<ext::packer<>, ext::unpacker<>>', it is defined by the s_socket.
+		//since we're in the socket, so the 'short_socket* socket' actually is 'this'
+		//in xxxx callback, do not call callbacks::s_socket<short_socket>::xxxx, call short_socket::xxxx instead, otherwise, dead loop will occur.
 #ifdef ASCS_SYNC_DISPATCH
 		//do not hold msg_can for further usage, return from on_msg as quickly as possible
 		//access msg_can freely within this callback, it's always thread safe.
-		register_on_msg([this](raw_socket* socket, std::list<out_msg_type>& msg_can) {auto re = raw_socket::on_msg(msg_can); socket->force_shutdown(); return re;});
+		register_on_msg([this](short_socket* socket, std::list<out_msg_type>& msg_can) {return handle_msg_and_shutdown(socket, msg_can);});
 #endif
 
 #ifdef ASCS_DISPATCH_BATCH_MSG
 		//do not hold msg_can for further usage, access msg_can and return from on_msg_handle as quickly as possible
 		//can only access msg_can via functions that marked as 'thread safe', if you used non-lock queue, its your responsibility to guarantee
 		// that new messages will not come until we returned from this callback (for example, pingpong test).
-		register_on_msg_handle([this](raw_socket* socket, out_queue_type& msg_can) {auto re = raw_socket::on_msg_handle(msg_can); socket->force_shutdown(); return re;});
+		register_on_msg_handle([this](short_socket* socket, out_queue_type& msg_can) {return handle_msg_and_shutdown(socket, msg_can);});
 #else
-		register_on_msg_handle([this](raw_socket* socket, out_msg_type& msg) {auto re = raw_socket::on_msg_handle(msg); socket->force_shutdown(); return re;});
+		register_on_msg_handle([this](short_socket* socket, out_msg_type& msg) {return handle_msg_and_shutdown(socket, msg);});
 #endif
 		//register msg handling end
 	}
+
+private:
+#ifdef ASCS_SYNC_DISPATCH
+	size_t handle_msg_and_shutdown(short_socket* socket, std::list<out_msg_type>& msg_can) {auto re = short_socket::on_msg(msg_can); socket->force_shutdown(); return re;}
+#endif
+
+#ifdef ASCS_DISPATCH_BATCH_MSG
+	size_t handle_msg_and_shutdown(short_socket* socket, out_queue_type& msg_can) {auto re = short_socket::on_msg_handle(msg_can); socket->force_shutdown(); return re;}
+#else
+	bool handle_msg_and_shutdown(short_socket* socket, out_msg_type& msg) {auto re = short_socket::on_msg_handle(msg); socket->force_shutdown(); return re;}
+#endif
 };
 
 void dump_io_context_refs(service_pump& sp)
