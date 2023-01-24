@@ -51,6 +51,7 @@ using namespace ascs::ext::tcp::proxy;
 #define STATISTIC		"statistic"
 
 //we only want close reconnecting mechanism on these sockets, so it cannot be done by defining macro ASCS_RECONNECT to false
+///*
 //method 1
 class short_client : public multi_client_base<callbacks::c_socket<socks4::client_socket>>
 {
@@ -79,20 +80,39 @@ private:
 	unsigned short port;
 	std::string ip;
 };
-
+//*/
 //method 2
-//class short_client : public multi_client_base<socks4::client_socket, callbacks::object_pool<object_pool<socks4::client_socket>>>
-//{
-//public:
-//	we now can not call register_on_connect on socket_ptr, since it's not wrapped by callbacks::c_socket
-//	socket_ptr->register_on_connect([](socks4::client_socket* socket) {socket->set_reconnect(false);}, true); //close reconnection mechanism
-//};
-//
-//but now, we're able to call register_on_create on client2, since its object pool is wrapped by callbacks::object_pool
-//short_client client2(...);
-//client2.register_on_create([](object_pool<socks4::client_socket>*, object_pool<socks4::client_socket>::object_ctype& object_ptr) {
-//	object_ptr->set_reconnect(false); //close reconnection mechanism
-//});
+/*
+class short_client : public multi_client_base<socks4::client_socket, callbacks::object_pool<object_pool<socks4::client_socket>>>
+{
+public:
+	short_client(service_pump& service_pump_) : multi_client_base(service_pump_) {set_server_addr(ASCS_SERVER_PORT);}
+
+	void set_server_addr(unsigned short _port, const std::string& _ip = ASCS_SERVER_IP) {port = _port; ip = _ip;}
+	bool send_msg(const std::string& msg) {return send_msg(std::string(msg), port, ip);}
+	bool send_msg(std::string&& msg) {return send_msg(std::move(msg), port, ip);}
+	bool send_msg(const std::string& msg, unsigned short port, const std::string& ip) {return send_msg(std::string(msg), port, ip);}
+	bool send_msg(std::string&& msg, unsigned short port, const std::string& ip)
+	{
+		auto socket_ptr = add_socket(port, ip);
+		if (!socket_ptr)
+			return false;
+
+		//we now can not call register_on_connect on socket_ptr, since socket_ptr is not wrapped by callbacks::c_socket
+		//register event callback from outside of the socket, it also can be done from inside of the socket, see echo_server for more details
+		//socket_ptr->register_on_connect([](socks4::client_socket* socket) {socket->set_reconnect(false);}, true); //close reconnection mechanism
+
+		//without following setting, socks4::client_socket will be downgraded to normal client_socket
+		//socket_ptr->set_target_addr(9527, "172.27.0.14"); //target server address, original server address becomes SOCK4 server address
+		return socket_ptr->send_msg(std::move(msg));
+	}
+
+private:
+	unsigned short port;
+	std::string ip;
+};
+void on_create(object_pool<socks4::client_socket>* op, object_pool<socks4::client_socket>::object_ctype& socket_ptr) {socket_ptr->set_reconnect(false);}
+*/
 
 std::thread create_sync_recv_thread(client_socket& client)
 {
@@ -124,6 +144,16 @@ int main(int argc, const char* argv[])
 	single_service_pump<socks5::single_client> client;
 	//singel_service_pump also is a service_pump, this let us to control client2 via client
 	short_client client2(client); //without single_client, we need to define ASCS_AVOID_AUTO_STOP_SERVICE macro to forbid service_pump stopping services automatically
+	//method 2
+	/*
+	//close reconnection mechanism, 3 approaches
+	client2.register_on_create([](object_pool<socks4::client_socket>*, object_pool<socks4::client_socket>::object_ctype& socket_ptr) {
+		socket_ptr->set_reconnect(false);
+	});
+	client2.register_on_create(std::bind(on_create, std::placeholders::_1, std::placeholders::_2));
+	client2.register_on_create(on_create);
+	*/
+	//method 2
 
 //	argv[2] = "::1" //ipv6
 //	argv[2] = "127.0.0.1" //ipv4
