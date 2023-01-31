@@ -18,7 +18,12 @@ file_socket::file_socket(i_server& server_) : server_socket(server_) {}
 file_socket::~file_socket() {clear();}
 
 void file_socket::reset() {trans_end(); server_socket::reset();}
-void file_socket::take_over(std::shared_ptr<file_socket> socket_ptr) {if (socket_ptr) printf("restore user data from invalid object (" ASCS_LLF ").\n", socket_ptr->id());}
+
+//socket_ptr actually is a pointer of file_socket, use std::dynamic_pointer_cast to convert it.
+void file_socket::take_over(std::shared_ptr<server_socket::type_of_object_restore> socket_ptr)
+	{printf("restore user data from invalid object (" ASCS_LLF ").\n", socket_ptr->id());}
+//this works too, but brings warnings with -Woverloaded-virtual option.
+//void file_socket::take_over(std::shared_ptr<file_socket> socket_ptr) {printf("restore user data from invalid object (" ASCS_LLF ").\n", socket_ptr->id());}
 
 //msg handling
 bool file_socket::on_msg_handle(out_msg_type& msg) {handle_msg(msg); if (0 == get_pending_recv_msg_size()) recv_msg(); return true;}

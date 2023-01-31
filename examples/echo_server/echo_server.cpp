@@ -48,6 +48,7 @@
 //configuration
 
 #include <ascs/ext/tcp.h>
+#include <ascs/ext/callbacks.h>
 using namespace ascs;
 using namespace ascs::tcp;
 using namespace ascs::ext;
@@ -181,42 +182,42 @@ protected:
 };
 #endif
 
-//demonstrate how to accept just one client at server endpoint
-class normal_server : public server_base<normal_socket>
+typedef server_socket_base<packer<>, unpacker<>> short_socket;
+class short_connection : public callbacks::s_socket<short_socket>
 {
 public:
-	normal_server(service_pump& service_pump_) : server_base(service_pump_) {}
-
-protected:
-	virtual int async_accept_num() {return 1;}
-	virtual bool on_accept(object_ctype& socket_ptr) {stop_listen(); return true;}
-};
-
-class short_connection : public server_socket_base<packer<>, unpacker<>>
-{
-private:
-	typedef server_socket_base<ext::packer<>, ext::unpacker<>> super;
-
-public:
-	short_connection(i_server& server_) : super(server_) {}
-
-protected:
-	//msg handling
+	short_connection(i_server& server_) : callbacks::s_socket<short_socket>(server_)
+	{
+		//register msg handling from inside of the socket, it also can be done from outside of the socket, see client for more details
+		//since we're in the socket, so the 'short_socket* socket' actually is 'this'
+		//in xxxx callback, do not call callbacks::s_socket<short_socket>::xxxx, call short_socket::xxxx instead, otherwise, dead loop will occur.
 #ifdef ASCS_SYNC_DISPATCH
-	//do not hold msg_can for further usage, return from on_msg as quickly as possible
-	//access msg_can freely within this callback, it's always thread safe.
-	virtual size_t on_msg(std::list<out_msg_type>& msg_can) {auto re = super::on_msg(msg_can); force_shutdown(); return re;}
+		//do not hold msg_can for further usage, return from on_msg as quickly as possible
+		//access msg_can freely within this callback, it's always thread safe.
+		register_on_msg([this](short_socket* socket, std::list<out_msg_type>& msg_can) {return handle_msg_and_shutdown(socket, msg_can);});
 #endif
 
 #ifdef ASCS_DISPATCH_BATCH_MSG
-	//do not hold msg_can for further usage, access msg_can and return from on_msg_handle as quickly as possible
-	//can only access msg_can via functions that marked as 'thread safe', if you used non-lock queue, its your responsibility to guarantee
-	// that new messages will not come until we returned from this callback (for example, pingpong test).
-	virtual size_t on_msg_handle(out_queue_type& msg_can) {auto re = super::on_msg_handle(msg_can); force_shutdown(); return re;}
+		//do not hold msg_can for further usage, access msg_can and return from on_msg_handle as quickly as possible
+		//can only access msg_can via functions that marked as 'thread safe', if you used non-lock queue, its your responsibility to guarantee
+		// that new messages will not come until we returned from this callback (for example, pingpong test).
+		register_on_msg_handle([this](short_socket* socket, out_queue_type& msg_can) {return handle_msg_and_shutdown(socket, msg_can);});
 #else
-	virtual bool on_msg_handle(out_msg_type& msg) {auto re = super::on_msg_handle(msg); force_shutdown(); return re;}
+		register_on_msg_handle([this](short_socket* socket, out_msg_type& msg) {return handle_msg_and_shutdown(socket, msg);});
 #endif
-	//msg handling end
+		//register msg handling end
+	}
+
+private:
+#ifdef ASCS_SYNC_DISPATCH
+	size_t handle_msg_and_shutdown(short_socket* socket, std::list<out_msg_type>& msg_can) {auto re = short_socket::on_msg(msg_can); socket->force_shutdown(); return re;}
+#endif
+
+#ifdef ASCS_DISPATCH_BATCH_MSG
+	size_t handle_msg_and_shutdown(short_socket* socket, out_queue_type& msg_can) {auto re = short_socket::on_msg_handle(msg_can); socket->force_shutdown(); return re;}
+#else
+	bool handle_msg_and_shutdown(short_socket* socket, out_msg_type& msg) {auto re = short_socket::on_msg_handle(msg); socket->force_shutdown(); return re;}
+#endif
 };
 
 void dump_io_context_refs(service_pump& sp)
@@ -253,7 +254,12 @@ int main(int argc, const char* argv[])
 	//demonstrate how to use singel_service
 	//because of normal_socket, this server cannot support fixed_length_packer/fixed_length_unpacker and prefix_suffix_packer/prefix_suffix_unpacker,
 	//the reason is these packer and unpacker need additional initializations that normal_socket not implemented, see echo_socket's constructor for more details.
-	single_service_pump<normal_server> normal_server_;
+	single_service_pump<callbacks::server<server_base<normal_socket>>> normal_server_;
+	//following statements demonstrate how to accept just one client at server endpoint
+	normal_server_.register_async_accept_num([](server_base<normal_socket>*) {return 1;});
+	normal_server_.register_on_accept([](server_base<normal_socket>* server, server_base<normal_socket>::object_ctype&) {server->stop_listen(); return true;}, false);
+
+	//demonstrate how to use singel_service
 	single_service_pump<server_base<short_connection>> short_server;
 
 	unsigned short port = ASCS_SERVER_PORT;
@@ -336,16 +342,16 @@ int main(int argc, const char* argv[])
 //			*/
 			/*
 			//if all clients used the same protocol, we can pack msg one time, and send it repeatedly like this:
-			packer p;
+			packer<> p;
 			auto msg = p.pack_msg(str.data(), str.size() + 1);
 			//send \0 character too, because demo client used basic_buffer as its msg type, it will not append \0 character automatically as std::string does,
 			//so need \0 character when printing it.
 			if (!msg.empty())
-				((normal_server&) normal_server_).do_something_to_all([&](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(msg);});
+				((server_base<normal_socket>&) normal_server_).do_something_to_all([&](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(msg);});
 			*/
 			/*
 			//if demo client is using stream_unpacker
-			((normal_server&) normal_server_).do_something_to_all([&](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(str);});
+			((server_base<normal_socket>&) normal_server_).do_something_to_all([&](server_base<normal_socket>::object_ctype& item) {item->direct_send_msg(str);});
 			//or
 			normal_server_.broadcast_native_msg(str);
 			*/

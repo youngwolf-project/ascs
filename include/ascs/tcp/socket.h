@@ -364,7 +364,7 @@ private:
 		else if (!ec)
 		{
 			assert(false);
-			unified_out::error_out(ASCS_LLF " read 0 byte without any errors which is unexpected, please check your unpacker!", this->id());
+			unified_out::error_out(ASCS_LLF " read 0 byte without any errors is unexpected, please check your unpacker!", this->id());
 		}
 
 		if (ec)

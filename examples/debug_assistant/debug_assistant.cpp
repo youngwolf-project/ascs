@@ -27,7 +27,7 @@ private:
 
 protected:
 	timed_object_pool(service_pump& service_pump_) : ObjectPool(service_pump_) {}
-	timed_object_pool(service_pump& service_pump_, asio::ssl::context::method&& m) : ObjectPool(service_pump_, std::forward<asio::ssl::context::method>(m)) {}
+	timed_object_pool(service_pump& service_pump_, const asio::ssl::context::method& m) : ObjectPool(service_pump_, m) {}
 
 	void start()
 	{

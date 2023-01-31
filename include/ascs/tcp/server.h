@@ -199,12 +199,12 @@ public:
 	void graceful_shutdown() {this->do_something_to_all([](typename Pool::object_ctype& item) {item->graceful_shutdown();});}
 
 protected:
-	virtual int async_accept_num() {return ASCS_ASYNC_ACCEPT_NUM;}
 	virtual bool init() {return start_listen() ? (this->start(), true) : false;}
 	virtual void uninit() {this->stop(); stop_listen(); force_shutdown();} //if you wanna graceful shutdown, call graceful_shutdown before stop_service.
 
-	virtual bool on_accept(typename Pool::object_ctype& socket_ptr) {return true;}
+	virtual int async_accept_num() {return ASCS_ASYNC_ACCEPT_NUM;}
 	virtual void start_next_accept() {std::lock_guard<std::mutex> lock(mutex); do_async_accept(create_object());}
+	virtual bool on_accept(typename Pool::object_ctype& socket_ptr) {return true;}
 
 	//if you want to ignore this error and continue to accept new connections immediately, return true in this virtual function;
 	//if you want to ignore this error and continue to accept new connections after a specific delay, start a timer immediately and return false
