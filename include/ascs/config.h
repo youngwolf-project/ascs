@@ -855,8 +855,8 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#define ASCS_VER		10600	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.6.0"
+#define ASCS_VER		10700	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.7.0"
 
 //asio and compiler check
 #ifdef _MSC_VER
