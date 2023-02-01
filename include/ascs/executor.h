@@ -15,7 +15,7 @@
 
 #include <functional>
 
-#include <asio.hpp>
+#include <boost/asio.hpp>
 
 #include "config.h"
 
@@ -31,7 +31,7 @@ protected:
 public:
 	bool stopped() const {return io_context_.stopped();}
 
-#if ASIO_VERSION >= 101100
+#if BOOST_ASIO_VERSION >= 101100
 	template<typename F> void post(F&& handler) {asio::post(io_context_, std::forward<F>(handler));}
 	template<typename F> void defer(F&& handler) {asio::defer(io_context_, std::forward<F>(handler));}
 	template<typename F> void dispatch(F&& handler) {asio::dispatch(io_context_, std::forward<F>(handler));}

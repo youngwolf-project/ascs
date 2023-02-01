@@ -846,6 +846,28 @@
  *
  * REPLACEMENTS:
  *
+ * ===============================================================
+ * 2022.3.21	version 1.8.0
+ *
+ * SPECIAL ATTENTION (incompatible with old editions):
+ * Use Boost.Asio from Boost_1.81 on since standalone Asio will retire soon, to reduce the changes, ascs will using namespace boost, please be aware.
+ * Give up the support of gcc 4.7 (it's too old to supports c++ standards well).
+ *
+ * HIGHLIGHT:
+ * Support websocket, use macro ASCS_WEBSOCKET_BINARY to control the mode (binary or text) of websocket message,
+ *  !0 - binary mode (default), 0 - text mode.
+ * Add demo websocket_test and ssl_websocket_test which have been introduced in st_asio_wrapper 2.5.
+ *
+ * FIX:
+ *
+ * ENHANCEMENTS:
+ *
+ * DELETION:
+ *
+ * REFACTORING:
+ *
+ * REPLACEMENTS:
+ *
  */
 
 #ifndef _ASCS_CONFIG_H_
@@ -855,14 +877,43 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#define ASCS_VER		10700	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.7.0"
+#define ASCS_VER		10800	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.8.0"
 
-//asio and compiler check
+//boost and compiler check
 #ifdef _MSC_VER
 	#define ASCS_SF "%Iu" //format used to print 'size_t'
+
+	#ifndef ASCS_MIN_ACI_REF
+		#if BOOST_VERSION < 105500
+			#define ASCS_MIN_ACI_REF 3
+		#elif BOOST_VERSION < 107000
+			#define ASCS_MIN_ACI_REF 2
+		#elif BOOST_VERSION < 107400
+			#define ASCS_MIN_ACI_REF 3
+		#else
+			#define ASCS_MIN_ACI_REF 2
+		#endif
+	#endif
+
 	static_assert(_MSC_VER >= 1800, "ascs needs Visual C++ 12.0 (2013) or higher.");
 #elif defined(__GNUC__)
+	#ifndef ASCS_MIN_ACI_REF
+		#if BOOST_VERSION < 105500
+			#define ASCS_MIN_ACI_REF 3
+		#elif BOOST_VERSION < 107000
+			#define ASCS_MIN_ACI_REF 2
+		#elif BOOST_VERSION < 107400
+			#if defined(__GXX_EXPERIMENTAL_CXX0X__) || __cplusplus >= 201103L
+				#define ASCS_MIN_ACI_REF 2
+			#else
+				#define ASCS_MIN_ACI_REF 3
+			#endif
+		#else
+			#define ASCS_MIN_ACI_REF 2
+		#endif
+	#endif
+
 	#ifdef __clang__
 		static_assert(__clang_major__ > 3 || (__clang_major__ == 3 && __clang_minor__ >= 1), "ascs needs Clang 3.1 or higher.");
 	#else
@@ -891,19 +942,22 @@
 #define ASCS_LLF "%lld" //format used to print 'uint_fast64_t'
 #endif
 
-#if ASIO_VERSION < 101100
-	namespace asio {typedef io_service io_context; typedef io_context execution_context;}
+#if BOOST_ASIO_VERSION < 101100
+	namespace boost {namespace asio {typedef io_service io_context; typedef io_context execution_context;}}
 	#define make_strand_handler(S, F) S.wrap(F)
-#elif ASIO_VERSION == 101100
-	namespace asio {typedef io_service io_context;}
-	#define make_strand_handler(S, F) asio::wrap(S, F)
-#elif ASIO_VERSION < 101700
-	namespace asio {typedef executor any_io_executor;}
-	#define make_strand_handler(S, F) asio::bind_executor(S, F)
+#elif BOOST_ASIO_VERSION == 101100
+	namespace boost {namespace asio {typedef io_service io_context;}}
+	#define make_strand_handler(S, F) boost::asio::wrap(S, F)
+#elif BOOST_ASIO_VERSION < 101700
+	namespace boost {namespace asio {typedef executor any_io_executor;}}
+	#define make_strand_handler(S, F) boost::asio::bind_executor(S, F)
 #else
-	#define make_strand_handler(S, F) asio::bind_executor(S, F)
+	#define make_strand_handler(S, F) boost::asio::bind_executor(S, F)
 #endif
-//asio and compiler check
+
+namespace boost {namespace asio {typedef boost::system::error_code error_code;}}
+//boost and compiler check
+using namespace boost;
 
 //configurations
 
@@ -935,6 +989,11 @@ static_assert(ASCS_MAX_SEND_BUF > 0, "send buffer capacity must be bigger than z
 #endif
 static_assert(ASCS_MAX_RECV_BUF > 0, "recv buffer capacity must be bigger than zero.");
 
+//the message mode for websocket, !0 - binary mode (default), 0 - text mode
+#ifndef ASCS_WEBSOCKET_BINARY
+#define ASCS_WEBSOCKET_BINARY		1
+#endif
+
 //by defining this, virtual function socket::calc_shrink_size will be introduced and be called when send buffer is insufficient before sending message,
 //the return value will be used to determine how many messages (in bytes) will be discarded (from the oldest ones), 0 means don't shrink send buffer,
 //you can rewrite it or accept the default implementation---1/3 of the current size.
@@ -958,8 +1017,11 @@ static_assert(ASCS_MAX_RECV_BUF > 0, "recv buffer capacity must be bigger than z
 //if defined, service_pump will not catch exceptions for asio::io_context::run().
 //#define ASCS_NO_TRY_CATCH
 
-//if defined, asio::steady_timer will be used in ascs::timer, otherwise, asio::system_timer will be used.
+//if defined, asio::steady_timer will be used in ascs::timer.
 //#define ASCS_USE_STEADY_TIMER
+//if defined, asio::system_timer will be used in ascs::timer.
+//#define ASCS_USE_SYSTEM_TIMER
+//otherwise, asio::deadline_timer will be used
 
 //after this duration, this socket can be freed from the heap or reused,
 //you must define this macro as a value, not just define it, the value means the duration, unit is second.
@@ -1124,7 +1186,7 @@ static_assert(ASCS_RELIABLE_UDP_NSND_QUE >= 0, "kcp send queue must be bigger th
 
 //buffer type used when receiving messages (unpacker's prepare_next_recv() need to return this type)
 #ifndef ASCS_RECV_BUFFER_TYPE
-	#if ASIO_VERSION > 101100
+	#if BOOST_ASIO_VERSION > 101100
 	#define ASCS_RECV_BUFFER_TYPE asio::mutable_buffer
 	#else
 	#define ASCS_RECV_BUFFER_TYPE asio::mutable_buffers_1
@@ -1205,12 +1267,12 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 
 //#define ASCS_SYNC_SEND
 //before 1.12.2, asio has a problem or no ability with the detection of std::future availability with libstdc++.
-#if ASIO_VERSION >= 101202
+#if BOOST_ASIO_VERSION >= 101202
 	#ifdef ASCS_SYNC_SEND
-		#ifndef ASIO_HAS_STD_FUTURE
-		#define ASIO_HAS_STD_FUTURE	0
+		#ifndef BOOST_ASIO_HAS_STD_FUTURE
+		#define BOOST_ASIO_HAS_STD_FUTURE	0
 		#endif
-		static_assert(ASIO_HAS_STD_FUTURE == 1, "sync message sending needs std::future.");
+		static_assert(BOOST_ASIO_HAS_STD_FUTURE == 1, "sync message sending needs std::future.");
 	#endif
 #endif
 //#define ASCS_SYNC_RECV

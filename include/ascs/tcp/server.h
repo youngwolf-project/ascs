@@ -34,7 +34,7 @@ public:
 		else
 		{
 			asio::error_code ec;
-#if ASIO_VERSION >= 101100
+#if BOOST_ASIO_VERSION >= 101100
 			auto addr = asio::ip::make_address(ip, ec);
 #else
 			auto addr = asio::ip::address::from_string(ip, ec);
@@ -56,7 +56,7 @@ public:
 		if (count > 0)
 		{
 			io_context_refs += count;
-#if ASIO_VERSION < 101100
+#if BOOST_ASIO_VERSION < 101100
 			get_service_pump().assign_io_context(acceptor.get_io_service(), count);
 #else
 			get_service_pump().assign_io_context(acceptor.get_executor().context(), count);
@@ -69,7 +69,7 @@ public:
 		if (count > 0 && io_context_refs >= count)
 		{
 			io_context_refs -= count;
-#if ASIO_VERSION < 101100
+#if BOOST_ASIO_VERSION < 101100
 			get_service_pump().return_io_context(acceptor.get_io_service(), count);
 #else
 			get_service_pump().return_io_context(acceptor.get_executor().context(), count);
@@ -113,14 +113,14 @@ public:
 		else
 			unified_out::info_out("finished pre-creating server sockets.");
 
-#if ASIO_VERSION > 101100
+#if BOOST_ASIO_VERSION > 101100
 		acceptor.listen(asio::socket_base::max_listen_connections, ec); assert(!ec);
 #else
 		acceptor.listen(asio::socket_base::max_connections, ec); assert(!ec);
 #endif
 		if (ec) {unified_out::error_out("listen failed."); return false;}
 
-		ascs::do_something_to_all(sockets, [this](typename Pool::object_ctype& item) {this->do_async_accept(item);});
+		ascs::do_something_to_all(sockets, [this](typename Pool::object_ctype& item) {do_async_accept(item);});
 		return true;
 	}
 	bool is_listening() const {return listening;}
@@ -263,7 +263,7 @@ private:
 	}
 
 	void do_async_accept(typename Pool::object_ctype& socket_ptr)
-		{if (socket_ptr) acceptor.async_accept(socket_ptr->lowest_layer(), ASCS_COPY_ALL_AND_THIS(const asio::error_code& ec) {this->accept_handler(ec, socket_ptr);});}
+		{if (socket_ptr) acceptor.async_accept(socket_ptr->lowest_layer(), ASCS_COPY_ALL_AND_THIS(const asio::error_code& ec) {accept_handler(ec, socket_ptr);});}
 
 private:
 	typename Family::endpoint server_addr;
@@ -284,7 +284,7 @@ public:
 	template<typename Arg> server_base(service_pump& service_pump_, Arg&& arg) : super(service_pump_, std::forward<Arg>(arg)) {this->set_server_addr(ASCS_SERVER_PORT);}
 };
 
-#ifdef ASIO_HAS_LOCAL_SOCKETS
+#ifdef BOOST_ASIO_HAS_LOCAL_SOCKETS
 template<typename Socket, typename Pool = object_pool<Socket>, typename Server = i_server>
 class unix_server_base : public generic_server<Socket, asio::local::stream_protocol, Pool, Server>
 {

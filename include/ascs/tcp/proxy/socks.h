@@ -43,7 +43,7 @@ public:
 		buff[0] = 4;
 		buff[1] = 1;
 		*((unsigned short*) std::next(buff, 2)) = htons(target_addr.port());
-#if ASIO_VERSION == 101100
+#if BOOST_ASIO_VERSION == 101100
 		memcpy(std::next(buff, 4), asio::ip::address_cast<asio::ip::address_v4>(target_addr.address()).to_bytes().data(), 4);
 #else
 		memcpy(std::next(buff, 4), target_addr.address().to_v4().to_bytes().data(), 4);
@@ -64,7 +64,7 @@ private:
 		unified_out::info_out("connected to the proxy server, begin to negotiate with it.");
 		this->status = super::link_status::HANDSHAKING;
 		asio::async_write(this->next_layer(), asio::buffer(buff, req_len),
-			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);}));
+			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);}));
 	}
 
 	void send_handler(const asio::error_code& ec, size_t bytes_transferred)
@@ -76,7 +76,7 @@ private:
 		}
 		else
 			asio::async_read(this->next_layer(), asio::buffer(buff, 8),
-				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);}));
+				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}));
 	}
 
 	void recv_handler(const asio::error_code& ec, size_t bytes_transferred)
@@ -189,7 +189,7 @@ private:
 		buff[2] = 0;
 
 		asio::async_write(this->next_layer(), asio::buffer(buff, req_len),
-			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);}));
+			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);}));
 	}
 
 	void send_auth()
@@ -204,7 +204,7 @@ private:
 		req_len = 1 + 1 + username.size() + 1 + password.size();
 
 		asio::async_write(this->next_layer(), asio::buffer(buff, req_len),
-			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);}));
+			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);}));
 	}
 
 	void send_request()
@@ -225,7 +225,7 @@ private:
 		else if (target_addr.address().is_v4())
 		{
 			buff[3] = 1;
-#if ASIO_VERSION == 101100
+#if BOOST_ASIO_VERSION == 101100
 			memcpy(std::next(buff, 4), asio::ip::address_cast<asio::ip::address_v4>(target_addr.address()).to_bytes().data(), 4);
 #else
 			memcpy(std::next(buff, 4), target_addr.address().to_v4().to_bytes().data(), 4);
@@ -236,7 +236,7 @@ private:
 		else //ipv6
 		{
 			buff[3] = 4;
-#if ASIO_VERSION == 101100
+#if BOOST_ASIO_VERSION == 101100
 			memcpy(std::next(buff, 4), asio::ip::address_cast<asio::ip::address_v6>(target_addr.address()).to_bytes().data(), 16);
 #else
 			memcpy(std::next(buff, 4), target_addr.address().to_v6().to_bytes().data(), 16);
@@ -246,7 +246,7 @@ private:
 		}
 
 		asio::async_write(this->next_layer(), asio::buffer(buff, req_len),
-			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);}));
+			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);}));
 	}
 
 	void send_handler(const asio::error_code& ec, size_t bytes_transferred)
@@ -260,7 +260,7 @@ private:
 		{
 			++step;
 			this->next_layer().async_read_some(asio::buffer(buff, sizeof(buff)),
-				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);}));
+				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}));
 		}
 	}
 
@@ -360,7 +360,7 @@ private:
 			}
 			else
 				this->next_layer().async_read_some(asio::buffer(std::next(buff, res_len), sizeof(buff) - res_len),
-					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);}));
+					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}));
 		}
 	}
 

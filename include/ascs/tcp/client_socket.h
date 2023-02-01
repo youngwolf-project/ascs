@@ -34,7 +34,7 @@ public:
 		else
 		{
 			asio::error_code ec;
-#if ASIO_VERSION >= 101100
+#if BOOST_ASIO_VERSION >= 101100
 			auto addr = asio::ip::make_address(ip, ec); assert(!ec);
 #else
 			auto addr = asio::ip::address::from_string(ip, ec); assert(!ec);
@@ -124,7 +124,7 @@ protected:
 	virtual bool do_start() //connect
 	{
 		assert(!this->is_connected());
-		return bind() && this->set_timer(TIMER_CONNECT, 50, [this](typename super::tid id)->bool {this->connect(true); return false;});
+		return bind() && this->set_timer(TIMER_CONNECT, 50, [this](typename super::tid id)->bool {connect(true); return false;});
 	}
 
 	virtual void connect_handler(const asio::error_code& ec)
@@ -177,7 +177,7 @@ private:
 		if (!first && !bind())
 			return false;
 
-		this->lowest_layer().async_connect(server_addr, this->make_handler_error([this](const asio::error_code& ec) {this->connect_handler(ec);}));
+		this->lowest_layer().async_connect(server_addr, this->make_handler_error([this](const asio::error_code& ec) {connect_handler(ec);}));
 		return true;
 	}
 
@@ -196,7 +196,7 @@ private:
 			auto delay = prepare_reconnect(ec);
 			if (delay < 0)
 				need_reconnect = false;
-			else if (this->set_timer(TIMER_CONNECT, delay, [this](typename super::tid id)->bool {this->connect(false); return false;}))
+			else if (this->set_timer(TIMER_CONNECT, delay, [this](typename super::tid id)->bool {connect(false); return false;}))
 				return true;
 		}
 
@@ -265,7 +265,7 @@ private:
 	asio::ip::tcp::endpoint local_addr;
 };
 
-#ifdef ASIO_HAS_LOCAL_SOCKETS
+#ifdef BOOST_ASIO_HAS_LOCAL_SOCKETS
 template<typename Packer, typename Unpacker, typename Matrix = i_matrix,
 	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER,

@@ -63,7 +63,7 @@ protected:
 		asio::io_context io_context;
 		unsigned refs;
 #ifdef ASCS_AVOID_AUTO_STOP_SERVICE
-#if ASIO_VERSION > 101100
+#if BOOST_ASIO_VERSION > 101100
 		asio::executor_work_guard<asio::io_context::executor_type> work;
 #else
 		std::shared_ptr<asio::io_context::work> work;
@@ -71,13 +71,13 @@ protected:
 #endif
 		std::list<std::thread> threads;
 
-#if ASIO_VERSION >= 101200
-		context(int concurrency_hint = ASIO_CONCURRENCY_HINT_SAFE) : io_context(concurrency_hint), refs(0)
+#if BOOST_ASIO_VERSION >= 101200
+		context(int concurrency_hint = BOOST_ASIO_CONCURRENCY_HINT_SAFE) : io_context(concurrency_hint), refs(0)
 #else
 		context() : refs(0)
 #endif
 #ifdef ASCS_AVOID_AUTO_STOP_SERVICE
-#if ASIO_VERSION > 101100
+#if BOOST_ASIO_VERSION > 101100
 			, work(io_context.get_executor())
 #else
 			, work(std::make_shared<asio::io_context::work>(io_context))
@@ -91,16 +91,16 @@ public:
 	typedef const object_type object_ctype;
 	typedef std::list<object_type> container_type;
 
-#if ASIO_VERSION >= 101200
+#if BOOST_ASIO_VERSION >= 101200
 #ifdef ASCS_DECREASE_THREAD_AT_RUNTIME
-	service_pump(int concurrency_hint = ASIO_CONCURRENCY_HINT_SAFE) : started(false), first(false), real_thread_num(0), del_thread_num(0), single_ctx(true)
+	service_pump(int concurrency_hint = BOOST_ASIO_CONCURRENCY_HINT_SAFE) : started(false), first(false), real_thread_num(0), del_thread_num(0), single_ctx(true)
 		{context_can.emplace_back(concurrency_hint);}
 #else
 	//basically, the parameter multi_ctx is designed to be used by single_service_pump, which means single_service_pump always think it's using multiple io_context
 	//for service_pump, you should use set_io_context_num function instead if you really need multiple io_context.
-	service_pump(int concurrency_hint = ASIO_CONCURRENCY_HINT_SAFE, bool multi_ctx = false) : started(false), first(false), single_ctx(!multi_ctx)
+	service_pump(int concurrency_hint = BOOST_ASIO_CONCURRENCY_HINT_SAFE, bool multi_ctx = false) : started(false), first(false), single_ctx(!multi_ctx)
 		{context_can.emplace_back(concurrency_hint);}
-	bool set_io_context_num(int io_context_num, int concurrency_hint = ASIO_CONCURRENCY_HINT_SAFE) //call this before construct any services on this service_pump
+	bool set_io_context_num(int io_context_num, int concurrency_hint = BOOST_ASIO_CONCURRENCY_HINT_SAFE) //call this before construct any services on this service_pump
 	{
 		if (io_context_num < 1 || is_service_started() || context_can.size() > 1) //can only be called once
 			return false;
@@ -226,7 +226,7 @@ public:
 		temp_service_can.splice(std::end(temp_service_can), service_can);
 		lock.unlock();
 
-		ascs::do_something_to_all(temp_service_can, [this](object_type& item) {this->stop_and_free(item);});
+		ascs::do_something_to_all(temp_service_can, [this](object_type& item) {stop_and_free(item);});
 	}
 
 	//stop io_context directly, call this only if the stop_service invocation cannot stop the io_context
@@ -295,8 +295,8 @@ public:
 	bool is_first_running() const {return first;}
 
 	//not thread safe
-#if ASIO_VERSION >= 101200
-	void add_service_thread(int thread_num, bool block = false, int io_context_num = 0, int concurrency_hint = ASIO_CONCURRENCY_HINT_SAFE)
+#if BOOST_ASIO_VERSION >= 101200
+	void add_service_thread(int thread_num, bool block = false, int io_context_num = 0, int concurrency_hint = BOOST_ASIO_CONCURRENCY_HINT_SAFE)
 #else
 	void add_service_thread(int thread_num, bool block = false, int io_context_num = 0)
 #endif
@@ -312,7 +312,7 @@ public:
 			{
 				single_ctx = false;
 				std::lock_guard<std::mutex> lock(context_can_mutex);
-#if ASIO_VERSION >= 101200
+#if BOOST_ASIO_VERSION >= 101200
 				for (int i = 0; i < io_context_num; ++i)
 					context_can.emplace_back(concurrency_hint);
 #else
@@ -329,7 +329,7 @@ public:
 			else if (block && i + 1 == thread_num)
 				run(ctx); //block at here
 			else
-				ctx->threads.emplace_back([this, ctx]() {this->run(ctx);});
+				ctx->threads.emplace_back([this, ctx]() {run(ctx);});
 		}
 	}
 
@@ -350,7 +350,7 @@ protected:
 #ifdef ASCS_AVOID_AUTO_STOP_SERVICE
 		if (!is_first_running())
 			ascs::do_something_to_all(context_can, [](context& item) {
-#if ASIO_VERSION > 101100
+#if BOOST_ASIO_VERSION > 101100
 				(&item.work)->~executor_work_guard();
 				new(&item.work) asio::executor_work_guard<asio::io_context::executor_type>(item.io_context.get_executor());
 #else
@@ -362,7 +362,7 @@ protected:
 		started = true;
 		unified_out::info_out("service pump started.");
 
-#if ASIO_VERSION >= 101100
+#if BOOST_ASIO_VERSION >= 101100
 		ascs::do_something_to_all(context_can, [](context& item) {item.io_context.restart();}); //this is needed when restart service
 #else
 		ascs::do_something_to_all(context_can, [](context& item) {item.io_context.reset();}); //this is needed when restart service

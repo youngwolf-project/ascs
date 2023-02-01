@@ -32,22 +32,16 @@
 #include <condition_variable>
 #endif
 
-#include <asio.hpp>
+#include <boost/asio.hpp>
+#include <boost/version.hpp>
+#include <boost/noncopyable.hpp>
 
 #include "config.h"
 
 namespace ascs
 {
 
-#if defined(_MSC_VER) && _MSC_VER <= 1800 //terrible VC++
-inline bool operator==(asio::error::basic_errors _Left, const asio::error_code& _Right) {return _Left == _Right.value();}
-inline bool operator!=(asio::error::basic_errors _Left, const asio::error_code& _Right) {return !(_Left == _Right);}
-
-inline bool operator==(asio::error::misc_errors _Left, const asio::error_code& _Right) {return _Left == _Right.value();}
-inline bool operator!=(asio::error::misc_errors _Left, const asio::error_code& _Right) {return !(_Left == _Right);}
-#endif
-
-class scope_atomic_lock : public asio::noncopyable
+class scope_atomic_lock : public boost::noncopyable
 {
 public:
 	scope_atomic_lock(std::atomic_flag& atomic_) : _locked(false), atomic(atomic_) {lock();} //atomic_ must has been initialized with false

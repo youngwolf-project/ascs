@@ -1,7 +1,7 @@
 
-# If your compiler cannot find asio, please specify it explicitly like this:
-asio_dir = -I../../asio/asio/include/
-# asio.hpp and asio directory should be available in this place.
+# If your compiler cannot find boost, please specify it explicitly like this:
+#boost_include_dir = -I/usr/local/include/
+#boost_lib_dir = -I/usr/local/lib/
 
 # If possible, a higher edition of c++ would be always better.
 cflag = -Wall -fexceptions -std=c++11
@@ -13,7 +13,7 @@ else
 	lflag = -s
 	dir = release
 endif
-cflag += -DASIO_STANDALONE -DASIO_NO_DEPRECATED
+cflag += -DBOOST_ASIO_NO_DEPRECATED -DBOOST_CHRONO_HEADER_ONLY
 
 target_machine = ${shell ${CXX} -dumpmachine}
 ifneq (, ${findstring solaris, ${target_machine}})
@@ -42,8 +42,8 @@ else
 	del_dirs = -rm -rf debug release
 endif
 
-cflag += ${ext_cflag} ${asio_dir} -I../../include/
-lflag += ${ext_libs}
+cflag += ${ext_cflag} ${boost_include_dir} -I../../include/
+lflag += ${ext_libs} ${boost_lib_dir}
 
 target = ${dir}/${module}
 objects = ${patsubst %.cpp,${dir}/%.o,${wildcard *.cpp}}
