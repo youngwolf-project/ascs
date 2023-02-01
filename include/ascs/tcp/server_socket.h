@@ -91,7 +91,7 @@ template<typename Packer, typename Unpacker, typename Server = i_server, typenam
 	template<typename, typename> class ReaderWriter = reader_writer>
 using server_socket_base = generic_server_socket<socket_base<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>, Server>;
 
-#ifdef ASIO_HAS_LOCAL_SOCKETS
+#ifdef BOOST_ASIO_HAS_LOCAL_SOCKETS
 template<typename Packer, typename Unpacker, typename Server = i_server,
 	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER,

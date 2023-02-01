@@ -1,5 +1,6 @@
 
 #include <iostream>
+#include <boost/tokenizer.hpp>
 
 //configuration
 #define ASCS_SERVER_PORT	9527
@@ -551,7 +552,8 @@ int main(int argc, const char* argv[])
 			char mode = 0; //0 broadcast, 1 randomly pick one link per msg
 			auto repeat_times = 1;
 
-			auto parameters = split_string(str);
+			boost::char_separator<char> sep(" \t");
+			boost::tokenizer<boost::char_separator<char>> parameters(str, sep);
 			auto iter = std::begin(parameters);
 			if (iter != std::end(parameters)) msg_num = std::max((size_t) atoll(iter++->data()), (size_t) 1);
 

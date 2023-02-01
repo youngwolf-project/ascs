@@ -45,7 +45,7 @@ template<typename Server = ascs::tcp::i_server> using server_socket2 = ascs::tcp
 typedef ascs::tcp::server_base<server_socket> server;
 template<typename Socket, typename Server = ascs::tcp::i_server> using server2 = ascs::tcp::server_base<Socket, object_pool<Socket>, Server>;
 
-#ifdef ASIO_HAS_LOCAL_SOCKETS
+#ifdef BOOST_ASIO_HAS_LOCAL_SOCKETS
 typedef ascs::tcp::unix_client_socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UNPACKER> unix_client_socket;
 template<typename Matrix = i_matrix> using unix_client_socket2 = ascs::tcp::unix_client_socket_base<ASCS_DEFAULT_PACKER, ASCS_DEFAULT_UNPACKER, Matrix>;
 typedef ascs::tcp::single_client_base<unix_client_socket> unix_single_client;

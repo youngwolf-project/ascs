@@ -14,9 +14,9 @@
 #define _ASCS_TIMER_H_
 
 #ifdef ASCS_USE_STEADY_TIMER
-#include <asio/steady_timer.hpp>
-#else
-#include <asio/system_timer.hpp>
+#include <boost/asio/steady_timer.hpp>
+#elif defined(ASCS_USE_SYSTEM_TIMER)
+#include <boost/asio/system_timer.hpp>
 #endif
 
 #include "base.h"
@@ -37,10 +37,17 @@ template<typename Executor>
 class timer : public Executor
 {
 public:
-#ifdef ASCS_USE_STEADY_TIMER
-	typedef asio::steady_timer timer_type;
+#if defined(ASCS_USE_STEADY_TIMER) || defined(ASCS_USE_SYSTEM_TIMER)
+	typedef std::chrono::milliseconds milliseconds;
+
+	#ifdef ASCS_USE_STEADY_TIMER
+		typedef asio::steady_timer timer_type;
+	#else
+		typedef asio::system_timer timer_type;
+	#endif
 #else
-	typedef asio::system_timer timer_type;
+	typedef boost::posix_time::milliseconds milliseconds;
+	typedef boost::asio::deadline_timer timer_type;
 #endif
 
 	typedef unsigned short tid;
@@ -134,8 +141,8 @@ public:
 	bool is_timer(tid id) {auto ti = find_timer(id); return nullptr != ti ? timer_info::TIMER_STARTED == ti->status : false;}
 	bool start_timer(tid id) {auto ti = find_timer(id); return nullptr != ti ? start_timer(*ti) : false;}
 	void stop_timer(tid id) {auto ti = find_timer(id); if (nullptr != ti) stop_timer(*ti);}
-	void stop_all_timer() {do_something_to_all([this](timer_info& item) {this->stop_timer(item);});}
-	void stop_all_timer(tid excepted_id) {do_something_to_all(ASCS_COPY_ALL_AND_THIS(timer_info& item) {if (excepted_id != item.id) this->stop_timer(item);});}
+	void stop_all_timer() {do_something_to_all([this](timer_info& item) {stop_timer(item);});}
+	void stop_all_timer(tid excepted_id) {do_something_to_all(ASCS_COPY_ALL_AND_THIS(timer_info& item) {if (excepted_id != item.id) stop_timer(item);});}
 
 	DO_SOMETHING_TO_ALL_MUTEX(timer_can, timer_can_mutex, std::lock_guard<std::mutex>)
 	DO_SOMETHING_TO_ONE_MUTEX(timer_can, timer_can_mutex, std::lock_guard<std::mutex>)
@@ -147,10 +154,10 @@ protected:
 			return false;
 
 		ti.status = timer_info::TIMER_STARTED;
-#if ASIO_VERSION >= 101100
-		ti.timer.expires_after(std::chrono::milliseconds(interval_ms));
+#if BOOST_ASIO_VERSION >= 101100 && (defined(ASCS_USE_STEADY_TIMER) || defined(ASCS_USE_SYSTEM_TIMER))
+		ti.timer.expires_after(milliseconds(interval_ms));
 #else
-		ti.timer.expires_from_now(std::chrono::milliseconds(interval_ms));
+		ti.timer.expires_from_now(milliseconds(interval_ms));
 #endif
 
 		//if timer already started, this will cancel it first
@@ -170,11 +177,11 @@ protected:
 				if (elapsed_ms > ti.interval_ms)
 					elapsed_ms %= ti.interval_ms;
 
-				this->start_timer(ti, ti.interval_ms - elapsed_ms);
+				start_timer(ti, ti.interval_ms - elapsed_ms);
 			}
 #else
 			if (timer_info::TIMER_STARTED == ti.status && !ec && ti.call_back(ti.id) && timer_info::TIMER_STARTED == ti.status)
-				this->start_timer(ti);
+				start_timer(ti);
 #endif
 			else if (prev_seq == ti.seq) //exclude a particular situation--start the same timer in call_back and return false
 				ti.status = timer_info::TIMER_CANCELED;
@@ -190,7 +197,7 @@ protected:
 		{
 			ti.status = timer_info::TIMER_CANCELED; //invalidate cumulative timer callbacks first
 			try {ti.timer.cancel();}
-			catch (const asio::system_error& e) {unified_out::error_out("cannot stop timer %d (%d %s)", ti.id, e.code().value(), e.what());}
+			catch (const boost::system::system_error& e) {unified_out::error_out("cannot stop timer %d (%d %s)", ti.id, e.code().value(), e.what());}
 		}
 	}
 

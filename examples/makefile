@@ -24,6 +24,8 @@ release debug clean :
 	cd debug_assistant && ${ASCS_MAKE}
 	cd udp_test && ${ASCS_MAKE}
 	cd ssl_test && ${ASCS_MAKE}
+	cd websocket_test && ${ASCS_MAKE}
+	cd ssl_websocket_test && ${ASCS_MAKE}
 ifeq (, ${findstring cygwin, ${target_machine}})
 ifeq (, ${findstring mingw, ${target_machine}})
 	cd unix_socket && ${ASCS_MAKE}

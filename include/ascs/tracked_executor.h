@@ -22,8 +22,8 @@ namespace ascs
 class tracked_executor
 {
 protected:
+	tracked_executor(asio::io_context& _io_context_) : io_context_(_io_context_), aci(std::make_shared<char>((char) ASCS_MIN_ACI_REF)) {}
 	virtual ~tracked_executor() {}
-	tracked_executor(asio::io_context& _io_context_) : io_context_(_io_context_), aci(std::make_shared<char>('\0')) {}
 
 public:
 	typedef std::function<void(const asio::error_code&)> handler_with_error;
@@ -32,7 +32,7 @@ public:
 	bool stopped() const {return io_context_.stopped();}
 
 #if (defined(_MSC_VER) && _MSC_VER > 1800) || (defined(__cplusplus) && __cplusplus > 201103L)
-	#if ASIO_VERSION >= 101100
+	#if BOOST_ASIO_VERSION >= 101100
 	template<typename F> void post(F&& handler) {asio::post(io_context_, [ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
 	template<typename F> void defer(F&& handler) {asio::defer(io_context_, [ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
 	template<typename F> void dispatch(F&& handler) {asio::dispatch(io_context_, [ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
@@ -50,7 +50,7 @@ public:
 	template<typename F> handler_with_error_size make_handler_error_size(F&& handler) const
 		{return [ref_holder(aci), handler(std::forward<F>(handler))](const auto& ec, auto bytes_transferred) {handler(ec, bytes_transferred);};}
 #else
-	#if ASIO_VERSION >= 101100
+	#if BOOST_ASIO_VERSION >= 101100
 	template<typename F> void post(const F& handler) {auto ref_holder(aci); asio::post(io_context_, [=]() {(void) ref_holder; handler();});}
 	template<typename F> void defer(const F& handler) {auto ref_holder(aci); asio::defer(io_context_, [=]() {(void) ref_holder; handler();});}
 	template<typename F> void dispatch(const F& handler) {auto ref_holder(aci); asio::dispatch(io_context_, [=]() {(void) ref_holder; handler();});}
@@ -69,8 +69,16 @@ public:
 		{auto ref_holder(aci); return [=](const asio::error_code& ec, size_t bytes_transferred) {(void) ref_holder; handler(ec, bytes_transferred);};}
 #endif
 
+	long get_aci_ref() const {return aci.use_count();}
 	bool is_async_calling() const {return !aci.unique();}
-	bool is_last_async_call() const {return aci.use_count() <= 2;} //can only be called in callbacks
+	int is_last_async_call() const //can only be called in callbacks, 0-not, -1-fault error, 1-yes
+	{
+		long cur_ref = aci.use_count();
+		if (cur_ref > *aci)
+			return 0;
+
+		return cur_ref < *aci ? -1 : 1;
+	}
 	inline void set_async_calling(bool) {}
 
 protected:
@@ -86,8 +94,9 @@ protected:
 	tracked_executor(asio::io_context& io_context_) : executor(io_context_), aci(false) {}
 
 public:
+	inline long get_aci_ref() const {return -1;} //na
 	inline bool is_async_calling() const {return aci;}
-	inline bool is_last_async_call() const {return true;}
+	inline int is_last_async_call() const {return 1;} //1-yes
 	inline void set_async_calling(bool value) {aci = value;}
 
 private:

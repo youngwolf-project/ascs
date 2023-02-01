@@ -1,5 +1,6 @@
 
 #include <iostream>
+#include <boost/tokenizer.hpp>
 
 //configuration
 #define ASCS_REUSE_OBJECT		//use objects pool
@@ -57,7 +58,8 @@ int main(int argc, const char* argv[])
 			sp.stop_service();
 		else
 		{
-			auto parameters = split_string(str);
+			boost::char_separator<char> sep(" \t");
+			boost::tokenizer<boost::char_separator<char>> parameters(str, sep);
 			auto iter = std::begin(parameters);
 			if (iter == std::end(parameters))
 				continue;

@@ -105,7 +105,7 @@ protected:
 		if (nullptr != kcp)
 		{
 			IUINT32 now = iclock();
-			this->set_timer(TIMER_KCP_UPDATE, ikcp_check(kcp, now) - now, [this](typename super::tid id)->bool {return this->timer_handler(id);});
+			this->set_timer(TIMER_KCP_UPDATE, ikcp_check(kcp, now) - now, [this](typename super::tid id)->bool {return timer_handler(id);});
 		}
 
 		return super::do_start();
@@ -119,7 +119,7 @@ protected:
 		if (nullptr == kcp || kcp->nsnd_que <= max_nsnd_que)
 			return true;
 
-		this->set_timer(TIMER_CC, 10, [this](typename super::tid id)->bool {return this->timer_handler(id);});
+		this->set_timer(TIMER_CC, 10, [this](typename super::tid id)->bool {return timer_handler(id);});
 		return false;
 	}
 
