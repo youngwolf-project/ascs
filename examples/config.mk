@@ -43,7 +43,7 @@ else
 endif
 
 cflag += ${ext_cflag} ${boost_include_dir} -I../../include/
-lflag += ${ext_libs} ${boost_lib_dir}
+lflag += ${boost_lib_dir} ${ext_libs}
 
 target = ${dir}/${module}
 objects = ${patsubst %.cpp,${dir}/%.o,${wildcard *.cpp}}

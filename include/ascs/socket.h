@@ -734,18 +734,12 @@ private:
 			post_in_dis_strand([this]() {do_dispatch_msg();});
 			break;
 		case TIMER_DELAY_CLOSE:
+			if (!is_last_async_call())
 			{
-				auto re = is_last_async_call();
-				if (0 == re)
-				{
-					stop_all_timer(id);
-					return true;
-				}
-				else if (1 != re)
-					unified_out::fatal_out("fatal error, please contact the author immediately with the version of your boost and compiler.");
+				stop_all_timer(id);
+				return true;
 			}
-
-			if (lowest_layer().is_open())
+			else if (lowest_layer().is_open())
 			{
 				asio::error_code ec;
 				lowest_layer().close(ec);
