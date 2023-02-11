@@ -22,8 +22,8 @@ namespace ascs
 class tracked_executor
 {
 protected:
-	tracked_executor(asio::io_context& _io_context_) : io_context_(_io_context_), aci(std::make_shared<char>((char) ASCS_MIN_ACI_REF)) {}
 	virtual ~tracked_executor() {}
+	tracked_executor(asio::io_context& _io_context_) : io_context_(_io_context_), aci(std::make_shared<char>('\0')) {}
 
 public:
 	typedef std::function<void(const asio::error_code&)> handler_with_error;
@@ -69,16 +69,8 @@ public:
 		{auto ref_holder(aci); return [=](const asio::error_code& ec, size_t bytes_transferred) {(void) ref_holder; handler(ec, bytes_transferred);};}
 #endif
 
-	long get_aci_ref() const {return aci.use_count();}
 	bool is_async_calling() const {return !aci.unique();}
-	int is_last_async_call() const //can only be called in callbacks, 0-not, -1-fault error, 1-yes
-	{
-		long cur_ref = aci.use_count();
-		if (cur_ref > *aci)
-			return 0;
-
-		return cur_ref < *aci ? -1 : 1;
-	}
+	bool is_last_async_call() const {return aci.use_count() <= 2;} //can only be called in callbacks
 	inline void set_async_calling(bool) {}
 
 protected:
@@ -94,9 +86,8 @@ protected:
 	tracked_executor(asio::io_context& io_context_) : executor(io_context_), aci(false) {}
 
 public:
-	inline long get_aci_ref() const {return -1;} //na
 	inline bool is_async_calling() const {return aci;}
-	inline int is_last_async_call() const {return 1;} //1-yes
+	inline bool is_last_async_call() const {return true;}
 	inline void set_async_calling(bool value) {aci = value;}
 
 private:

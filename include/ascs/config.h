@@ -884,36 +884,8 @@
 #ifdef _MSC_VER
 	#define ASCS_SF "%Iu" //format used to print 'size_t'
 
-	#ifndef ASCS_MIN_ACI_REF
-		#if BOOST_VERSION < 105500
-			#define ASCS_MIN_ACI_REF 3
-		#elif BOOST_VERSION < 107000
-			#define ASCS_MIN_ACI_REF 2
-		#elif BOOST_VERSION < 107400
-			#define ASCS_MIN_ACI_REF 3
-		#else
-			#define ASCS_MIN_ACI_REF 2
-		#endif
-	#endif
-
 	static_assert(_MSC_VER >= 1800, "ascs needs Visual C++ 12.0 (2013) or higher.");
 #elif defined(__GNUC__)
-	#ifndef ASCS_MIN_ACI_REF
-		#if BOOST_VERSION < 105500
-			#define ASCS_MIN_ACI_REF 3
-		#elif BOOST_VERSION < 107000
-			#define ASCS_MIN_ACI_REF 2
-		#elif BOOST_VERSION < 107400
-			#if defined(__GXX_EXPERIMENTAL_CXX0X__) || __cplusplus >= 201103L
-				#define ASCS_MIN_ACI_REF 2
-			#else
-				#define ASCS_MIN_ACI_REF 3
-			#endif
-		#else
-			#define ASCS_MIN_ACI_REF 2
-		#endif
-	#endif
-
 	#ifdef __clang__
 		static_assert(__clang_major__ > 3 || (__clang_major__ == 3 && __clang_minor__ >= 1), "ascs needs Clang 3.1 or higher.");
 	#else
