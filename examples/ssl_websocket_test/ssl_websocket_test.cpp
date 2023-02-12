@@ -2,8 +2,8 @@
 #include <iostream>
 
 //configuration
-//#define ST_ASIO_SYNC_RECV
-//#define ST_ASIO_SYNC_SEND
+//#define ASCS_SYNC_RECV
+//#define ASCS_SYNC_SEND
 //configuration
 
 #include <ascs/ext/ssl_websocket.h>
