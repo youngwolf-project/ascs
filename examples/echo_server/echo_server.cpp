@@ -31,7 +31,7 @@
 #define ASCS_MAX_SEND_BUF (10 * ASCS_MSG_BUFFER_SIZE)
 #define ASCS_MAX_RECV_BUF (10 * ASCS_MSG_BUFFER_SIZE)
 #define ASCS_DEFAULT_UNPACKER flexible_unpacker<std::string>
-//this unpacker only pre-allocated a buffer of 4000 bytes, but it can parse messages up to ST_ASIO_MSG_BUFFER_SIZE (here is 1000000) bytes,
+//this unpacker only pre-allocated a buffer of 4000 bytes, but it can parse messages up to ASCS_MSG_BUFFER_SIZE (here is 1000000) bytes,
 //it works as the default unpacker for messages <= 4000, otherwise, it works as non_copy_unpacker
 #elif 1 == PACKER_UNPACKER_TYPE
 #define ASCS_DEFAULT_PACKER packer2<unique_buffer<basic_buffer>, basic_buffer, packer<basic_buffer>>
