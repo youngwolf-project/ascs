@@ -1,7 +1,7 @@
 
 # If your compiler cannot find boost, please specify it explicitly like this:
 #boost_include_dir = -I/usr/local/include/
-#boost_lib_dir = -I/usr/local/lib/
+#boost_lib_dir = -L/usr/local/lib/
 
 # If possible, a higher edition of c++ would be always better.
 cflag = -Wall -fexceptions -std=c++11
