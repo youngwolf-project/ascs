@@ -41,9 +41,9 @@ public:
 	typedef std::chrono::milliseconds milliseconds;
 
 	#ifdef ASCS_USE_STEADY_TIMER
-		typedef asio::steady_timer timer_type;
+		typedef boost::asio::steady_timer timer_type;
 	#else
-		typedef asio::system_timer timer_type;
+		typedef boost::asio::system_timer timer_type;
 	#endif
 #else
 	typedef boost::posix_time::milliseconds milliseconds;
@@ -64,13 +64,13 @@ public:
 		timer_type timer;
 		std::function<bool(tid)> call_back; //return true from call_back to continue the timer, or the timer will stop
 
-		timer_info(tid id_, asio::io_context& io_context_) : id(id_), seq(-1), status(TIMER_CREATED), interval_ms(0), timer(io_context_) {}
+		timer_info(tid id_, boost::asio::io_context& io_context_) : id(id_), seq(-1), status(TIMER_CREATED), interval_ms(0), timer(io_context_) {}
 		bool operator ==(const timer_info& other) {return id == other.id;}
 		bool operator ==(tid id_) {return id == id_;}
 	};
 	typedef const timer_info timer_cinfo;
 
-	timer(asio::io_context& io_context_) : Executor(io_context_), io_context_refs(1) {}
+	timer(boost::asio::io_context& io_context_) : Executor(io_context_), io_context_refs(1) {}
 	~timer() {stop_all_timer();}
 
 	unsigned get_io_context_refs() const {return io_context_refs;}
@@ -162,10 +162,10 @@ protected:
 
 		//if timer already started, this will cancel it first
 #if (defined(_MSC_VER) && _MSC_VER > 1800) || (defined(__cplusplus) && __cplusplus > 201103L)
-		ti.timer.async_wait(this->make_handler_error([this, &ti, prev_seq(++ti.seq)](const asio::error_code& ec) {
+		ti.timer.async_wait(this->make_handler_error([this, &ti, prev_seq(++ti.seq)](const boost::system::error_code& ec) {
 #else
 		auto prev_seq = ++ti.seq;
-		ti.timer.async_wait(this->make_handler_error([this, &ti, prev_seq](const asio::error_code& ec) {
+		ti.timer.async_wait(this->make_handler_error([this, &ti, prev_seq](const boost::system::error_code& ec) {
 #endif
 			//the first 'timer_info::TIMER_STARTED == ti.status' judgement means stop_timer can also invalidate cumulative timer callbacks
 			//the second 'timer_info::TIMER_STARTED == ti.status' judgement is used to exclude a particular situation--stop the same timer in call_back and return true
@@ -202,8 +202,8 @@ protected:
 	}
 
 	void reset_io_context_refs() {if (0 == io_context_refs) add_io_context_refs(1);}
-	virtual void attach_io_context(asio::io_context& io_context_, unsigned refs) {}
-	virtual void detach_io_context(asio::io_context& io_context_, unsigned refs) {}
+	virtual void attach_io_context(boost::asio::io_context& io_context_, unsigned refs) {}
+	virtual void detach_io_context(boost::asio::io_context& io_context_, unsigned refs) {}
 
 private:
 	typedef std::list<timer_info> container_type;

@@ -52,7 +52,7 @@ public:
 	echo_server(service_pump& service_pump_) : server_base<echo_socket>(service_pump_) {}
 
 protected:
-	virtual bool on_accept(object_ctype& socket_ptr) {asio::ip::tcp::no_delay option(true); socket_ptr->lowest_layer().set_option(option); return true;}
+	virtual bool on_accept(object_ctype& socket_ptr) {boost::asio::ip::tcp::no_delay option(true); socket_ptr->lowest_layer().set_option(option); return true;}
 };
 
 int main(int argc, const char* argv[])

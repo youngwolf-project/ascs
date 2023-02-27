@@ -371,7 +371,7 @@ private:
 	size_t max_size_;
 
 	//because all objects are dynamic created and stored in object_can, after receiving error occurred (you are recommended to delete the object from object_can,
-	//for example via i_server::del_socket), maybe some other asynchronous calls are still queued in asio::io_context, and will be dequeued in the future,
+	//for example via i_server::del_socket), maybe some other asynchronous calls are still queued in boost::asio::io_context, and will be dequeued in the future,
 	//we must guarantee these objects not be freed from the heap or reused, so we move these objects from object_can to invalid_object_can, and free them
 	//from the heap or reuse them in the near future. if ASCS_CLEAR_OBJECT_INTERVAL been defined, clear_obsoleted_object() will be invoked automatically and
 	//periodically to move all invalid objects into invalid_object_can.

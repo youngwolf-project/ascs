@@ -3,14 +3,14 @@
 
 #include "common.h"
 
-class file_unpacker : public i_unpacker<std::string>, public asio::noncopyable
+class file_unpacker : public i_unpacker<std::string>, public boost::noncopyable
 {
 public:
 	file_unpacker(FILE* file, fl_type total_len_, std::atomic_int_fast64_t* transmit_size_ = nullptr)  : _file(file), total_len(total_len_), transmit_size(transmit_size_)
 	{
 		assert(nullptr != _file);
 
-		buffer = new char[asio::detail::default_max_transfer_size];
+		buffer = new char[boost::asio::detail::default_max_transfer_size];
 		assert(nullptr != buffer);
 	}
 	~file_unpacker() {delete[] buffer;}
@@ -33,14 +33,14 @@ public:
 		return false;
 	}
 
-	virtual size_t completion_condition(const asio::error_code& ec, size_t bytes_transferred) {return ec ? 0 : asio::detail::default_max_transfer_size;}
+	virtual size_t completion_condition(const boost::system::error_code& ec, size_t bytes_transferred) {return ec ? 0 : boost::asio::detail::default_max_transfer_size;}
 	virtual buffer_type prepare_next_recv()
 	{
-		auto data_len = total_len > asio::detail::default_max_transfer_size ? asio::detail::default_max_transfer_size : (size_t) total_len;
+		auto data_len = total_len > boost::asio::detail::default_max_transfer_size ? boost::asio::detail::default_max_transfer_size : (size_t) total_len;
 #ifdef ASCS_SCATTERED_RECV_BUFFER
-		return buffer_type(1, asio::buffer(buffer, data_len));
+		return buffer_type(1, boost::asio::buffer(buffer, data_len));
 #else
-		return asio::buffer(buffer, data_len);
+		return boost::asio::buffer(buffer, data_len);
 #endif
 	}
 

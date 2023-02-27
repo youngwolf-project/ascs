@@ -3,7 +3,7 @@
 
 //configuration
 #define ASCS_DEFAULT_PACKER packer2<>
-//#define ASCS_RECV_BUFFER_TYPE std::vector<asio::mutable_buffer> //scatter-gather buffer, it's very useful under certain situations (for example, ring buffer).
+//#define ASCS_RECV_BUFFER_TYPE std::vector<boost::asio::mutable_buffer> //scatter-gather buffer, it's very useful under certain situations (for example, ring buffer).
 //#define ASCS_SCATTERED_RECV_BUFFER //used by unpackers, not belongs to ascs
 //note, these two macro are not requisite, I'm just showing how to use them.
 
@@ -60,14 +60,14 @@ int main(int argc, const char* argv[])
 #if !defined(_MSC_VER) && !defined(__MINGW64__) && !defined(__MINGW32__)
 	if (1 == index)
 	{
-		asio::signal_set signal_receiver(sp.assign_io_context(), SIGINT, SIGTERM);
-		std::function<void(const asio::error_code&, int)> signal_handler = [&](const asio::error_code& ec, int signal_number) {
+		boost::asio::signal_set signal_receiver(sp.assign_io_context(), SIGINT, SIGTERM);
+		std::function<void(const boost::system::error_code&, int)> signal_handler = [&](const boost::system::error_code& ec, int signal_number) {
 			if (!ec)
 				return sp.end_service();
 
-			signal_receiver.async_wait([&](const asio::error_code& ec, int signal_number) {signal_handler(ec, signal_number);});
+			signal_receiver.async_wait([&](const boost::system::error_code& ec, int signal_number) {signal_handler(ec, signal_number);});
 		};
-		signal_receiver.async_wait([&](const asio::error_code& ec, int signal_number) {signal_handler(ec, signal_number);});
+		signal_receiver.async_wait([&](const boost::system::error_code& ec, int signal_number) {signal_handler(ec, signal_number);});
 
 		sp.run_service();
 		return 0;

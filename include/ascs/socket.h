@@ -36,8 +36,8 @@ public:
 	static const tid TIMER_END = TIMER_BEGIN + 10;
 
 protected:
-	socket(asio::io_context& io_context_) : super(io_context_), rw_strand(io_context_), next_layer_(io_context_), dis_strand(io_context_) {first_init();}
-	template<typename Arg> socket(asio::io_context& io_context_, Arg&& arg) :
+	socket(boost::asio::io_context& io_context_) : super(io_context_), rw_strand(io_context_), next_layer_(io_context_), dis_strand(io_context_) {first_init();}
+	template<typename Arg> socket(boost::asio::io_context& io_context_, Arg&& arg) :
 		super(io_context_), rw_strand(io_context_), next_layer_(io_context_, std::forward<Arg>(arg)), dis_strand(io_context_) {first_init();}
 
 	//helper function, just call it in constructor
@@ -73,7 +73,7 @@ protected:
 	template<typename Arg>
 	void reset_next_layer(Arg&& arg) {reset_next_layer(next_layer_.get_executor().context(), std::forward<Arg>(arg));}
 #else
-	void reset_next_layer() {reset_next_layer((const asio::any_io_executor&) next_layer_.get_executor());}
+	void reset_next_layer() {reset_next_layer((const boost::asio::any_io_executor&) next_layer_.get_executor());}
 	template<typename Arg> void reset_next_layer(Arg&& arg) {reset_next_layer(next_layer_.get_executor(), std::forward<Arg>(arg));}
 #endif
 
@@ -448,8 +448,8 @@ protected:
 
 		if (lowest_layer().is_open())
 		{
-			asio::error_code ec;
-			use_close ? lowest_layer().close(ec) : lowest_layer().shutdown(asio::socket_base::shutdown_both, ec);
+			boost::system::error_code ec;
+			use_close ? lowest_layer().close(ec) : lowest_layer().shutdown(boost::asio::socket_base::shutdown_both, ec);
 
 			stat.break_time = time(nullptr);
 		}
@@ -615,13 +615,13 @@ private:
 	template<typename> friend class single_socket_service;
 	void id(uint_fast64_t id) {_id = id;}
 
-	void reset_next_layer(asio::io_context& io_context) {(&next_layer_)->~Socket(); new (&next_layer_) Socket(io_context);}
+	void reset_next_layer(boost::asio::io_context& io_context) {(&next_layer_)->~Socket(); new (&next_layer_) Socket(io_context);}
 	template<typename Arg>
-	void reset_next_layer(asio::io_context& io_context, Arg&& arg) {(&next_layer_)->~Socket(); new (&next_layer_) Socket(io_context, std::forward<Arg>(arg));}
+	void reset_next_layer(boost::asio::io_context& io_context, Arg&& arg) {(&next_layer_)->~Socket(); new (&next_layer_) Socket(io_context, std::forward<Arg>(arg));}
 #if BOOST_ASIO_VERSION >= 101300
-	void reset_next_layer(const asio::any_io_executor& executor) {(&next_layer_)->~Socket(); new (&next_layer_) Socket(executor);}
+	void reset_next_layer(const boost::asio::any_io_executor& executor) {(&next_layer_)->~Socket(); new (&next_layer_) Socket(executor);}
 	template<typename Arg>
-	void reset_next_layer(const asio::any_io_executor& executor, Arg&& arg) {(&next_layer_)->~Socket(); new (&next_layer_) Socket(executor, std::forward<Arg>(arg));}
+	void reset_next_layer(const boost::asio::any_io_executor& executor, Arg&& arg) {(&next_layer_)->~Socket(); new (&next_layer_) Socket(executor, std::forward<Arg>(arg));}
 #endif
 
 	void _send_msg() {dispatch_in_io_strand([this]() {do_send_msg();});}
@@ -741,7 +741,7 @@ private:
 			}
 			else if (lowest_layer().is_open())
 			{
-				asio::error_code ec;
+				boost::system::error_code ec;
 				lowest_layer().close(ec);
 			}
 			unpacker_->reset(); //very important, otherwise, the unpacker will never be able to parse any more messages if its buffer has legacy data
@@ -764,7 +764,7 @@ protected:
 	std::list<OutMsgType> temp_msg_can;
 
 	in_queue_type send_buffer;
-	asio::io_context::strand rw_strand;
+	boost::asio::io_context::strand rw_strand;
 
 private:
 	std::shared_ptr<i_packer<typename Packer::msg_type>> packer_;
@@ -790,7 +790,7 @@ private:
 #endif
 	std::atomic_size_t sending;
 	std::atomic_flag start_atomic;
-	asio::io_context::strand dis_strand;
+	boost::asio::io_context::strand dis_strand;
 
 #ifdef ASCS_SYNC_RECV
 	enum sync_recv_status {NOT_REQUESTED, REQUESTED, RESPONDED, RESPONDED_FAILURE};

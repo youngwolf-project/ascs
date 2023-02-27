@@ -74,13 +74,13 @@ int main(int argc, const char* argv[])
 
 	sp.start_service();
 	//for broadcast
-//	service.lowest_layer().set_option(asio::socket_base::broadcast(true)); //usage: ./udp_test 5000 5000 "255.255.255.255"
+//	service.lowest_layer().set_option(boost::asio::socket_base::broadcast(true)); //usage: ./udp_test 5000 5000 "255.255.255.255"
 	//for multicast, join it after start_service():
-//	service.lowest_layer().set_option(asio::ip::multicast::join_group(asio::ip::make_address("x.x.x.x"))); // >= asio 1.11
+//	service.lowest_layer().set_option(boost::asio::ip::multicast::join_group(boost::asio::ip::make_address("x.x.x.x"))); // >= asio 1.11
 
 	//if you must join it before start_service():
 //	service.lowest_layer().open(ASCS_UDP_DEFAULT_IP_VERSION);
-//	service.lowest_layer().set_option(asio::ip::multicast::join_group(asio::ip::address::from_string("x.x.x.x"))); // < asio 1.11
+//	service.lowest_layer().set_option(boost::asio::ip::multicast::join_group(boost::asio::ip::address::from_string("x.x.x.x"))); // < asio 1.11
 //	sp.start_service();
 
 	//demonstrate how to change local address if the binding was failed.
@@ -109,7 +109,7 @@ int main(int argc, const char* argv[])
 			t = create_sync_recv_thread(service);
 		}
 		else
-			service.sync_safe_send_native_msg(str); //to send to different endpoints, use overloads that take a const asio::ip::udp::endpoint& parameter
+			service.sync_safe_send_native_msg(str); //to send to different endpoints, use overloads that take a const boost::asio::ip::udp::endpoint& parameter
 	}
 
 	return 0;

@@ -30,24 +30,24 @@ int main(int argc, const char* argv[])
 
 	service_pump sp;
 
-	server server_(sp, asio::ssl::context::sslv23_server);
+	server server_(sp, boost::asio::ssl::context::sslv23_server);
 	server_.set_start_object_id(1000);
 
-	server_.context().set_options(asio::ssl::context::default_workarounds | asio::ssl::context::no_sslv2 | asio::ssl::context::single_dh_use);
-	server_.context().set_verify_mode(asio::ssl::context::verify_peer | asio::ssl::context::verify_fail_if_no_peer_cert);
+	server_.context().set_options(boost::asio::ssl::context::default_workarounds | boost::asio::ssl::context::no_sslv2 | boost::asio::ssl::context::single_dh_use);
+	server_.context().set_verify_mode(boost::asio::ssl::context::verify_peer | boost::asio::ssl::context::verify_fail_if_no_peer_cert);
 	server_.context().load_verify_file("client_certs/server.crt");
 	server_.context().use_certificate_chain_file("certs/server.crt");
-	server_.context().use_private_key_file("certs/server.key", asio::ssl::context::pem);
+	server_.context().use_private_key_file("certs/server.key", boost::asio::ssl::context::pem);
 	server_.context().use_tmp_dh_file("certs/dh2048.pem");
 
 ///*
 	//method #1
-	multi_client client_(sp, asio::ssl::context::sslv23_client);
-	client_.context().set_options(asio::ssl::context::default_workarounds | asio::ssl::context::no_sslv2 | asio::ssl::context::single_dh_use);
-	client_.context().set_verify_mode(asio::ssl::context::verify_peer | asio::ssl::context::verify_fail_if_no_peer_cert);
+	multi_client client_(sp, boost::asio::ssl::context::sslv23_client);
+	client_.context().set_options(boost::asio::ssl::context::default_workarounds | boost::asio::ssl::context::no_sslv2 | boost::asio::ssl::context::single_dh_use);
+	client_.context().set_verify_mode(boost::asio::ssl::context::verify_peer | boost::asio::ssl::context::verify_fail_if_no_peer_cert);
 	client_.context().load_verify_file("certs/server.crt");
 	client_.context().use_certificate_chain_file("client_certs/server.crt");
-	client_.context().use_private_key_file("client_certs/server.key", asio::ssl::context::pem);
+	client_.context().use_private_key_file("client_certs/server.key", boost::asio::ssl::context::pem);
 	client_.context().use_tmp_dh_file("client_certs/dh2048.pem");
 
 	//please config the ssl context before creating any clients.
@@ -57,12 +57,12 @@ int main(int argc, const char* argv[])
 /*
 	//method #2
 	//to use single_client, we must construct ssl context first.
-	auto ctx = std::make_shared<asio::ssl::context>(asio::ssl::context::sslv23_client);
-	ctx->set_options(asio::ssl::context::default_workarounds | asio::ssl::context::no_sslv2 | asio::ssl::context::single_dh_use);
-	ctx->set_verify_mode(asio::ssl::context::verify_peer | asio::ssl::context::verify_fail_if_no_peer_cert);
+	auto ctx = std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::sslv23_client);
+	ctx->set_options(boost::asio::ssl::context::default_workarounds | boost::asio::ssl::context::no_sslv2 | boost::asio::ssl::context::single_dh_use);
+	ctx->set_verify_mode(boost::asio::ssl::context::verify_peer | boost::asio::ssl::context::verify_fail_if_no_peer_cert);
 	ctx->load_verify_file("certs/server.crt");
 	ctx->use_certificate_chain_file("client_certs/server.crt");
-	ctx->use_private_key_file("client_certs/server.key", asio::ssl::context::pem);
+	ctx->use_private_key_file("client_certs/server.key", boost::asio::ssl::context::pem);
 	ctx->use_tmp_dh_file("client_certs/dh2048.pem");
 
 	single_client client_(sp, ctx);

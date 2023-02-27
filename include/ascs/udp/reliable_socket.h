@@ -49,8 +49,8 @@ public:
 
 	int output(const char* buf, int len)
 	{
-		asio::error_code ec;
-		this->next_layer().send(asio::buffer(buf, (size_t) len), 0, ec);
+		boost::system::error_code ec;
+		this->next_layer().send(boost::asio::buffer(buf, (size_t) len), 0, ec);
 		return ec ? (unified_out::error_out(ASCS_LLF " send msg error (%d)", this->id(), ec.value()), 0) : len;
 	}
 

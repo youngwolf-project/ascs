@@ -35,7 +35,7 @@ protected:
 #endif
 	//msg handling end
 
-	virtual void on_recv_error(const asio::error_code& ec) {get_matrix()->del_link(_name); client_socket_base::on_recv_error(ec);}
+	virtual void on_recv_error(const boost::system::error_code& ec) {get_matrix()->del_link(_name); client_socket_base::on_recv_error(ec);}
 
 private:
 	std::string _name;

@@ -98,7 +98,7 @@ public:
 	virtual void reset() {super::reset();}
 
 protected:
-	virtual void on_recv_error(const asio::error_code& ec)
+	virtual void on_recv_error(const boost::system::error_code& ec)
 	{
 		//the type of tcp::server_socket_base::server now can be controlled by derived class(echo_socket),
 		//which is actually i_echo_server, so, we can invoke i_echo_server::test virtual function.
@@ -248,7 +248,7 @@ int main(int argc, const char* argv[])
 #endif
 	echo_server echo_server_(sp); //echo server
 	echo_server_.add_io_context_refs(1); //the acceptor takes 2 references on the io_context that assigned to it.
-	((timer<ascs::executor>&) echo_server_).add_io_context_refs(1); //the timer object in server_base takes 2 references on the io_context that assigned to it.
+	((timer<executor>&) echo_server_).add_io_context_refs(1); //the timer object in server_base takes 2 references on the io_context that assigned to it.
 	dump_io_context_refs(sp);
 
 	//demonstrate how to use singel_service
