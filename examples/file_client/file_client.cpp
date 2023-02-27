@@ -8,7 +8,7 @@
 #ifndef ASCS_DECREASE_THREAD_AT_RUNTIME
 #define ASCS_AVOID_AUTO_STOP_SERVICE
 #endif
-#define ASCS_RECV_BUFFER_TYPE std::vector<asio::mutable_buffer> //scatter-gather buffer, it's very useful under certain situations (for example, ring buffer).
+#define ASCS_RECV_BUFFER_TYPE std::vector<boost::asio::mutable_buffer> //scatter-gather buffer, it's very useful under certain situations (for example, ring buffer).
 #define ASCS_SCATTERED_RECV_BUFFER //used by unpackers, not belongs to ascs
 #define ASCS_WANT_MSG_SEND_NOTIFY
 #define ASCS_DEFAULT_PACKER packer2<>

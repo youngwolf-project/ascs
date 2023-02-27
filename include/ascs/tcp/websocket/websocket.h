@@ -178,11 +178,11 @@ protected:
 		// Provide the value of the Host HTTP header during the WebSocket handshake.
 		// See https://tools.ietf.org/html/rfc7230#section-5.4
 		// Perform the websocket handshake
-		this->next_layer().async_handshake(this->endpoint_to_string(this->get_server_addr()), "/", this->make_handler_error([this](const asio::error_code& ec) {handle_handshake(ec);}));
+		this->next_layer().async_handshake(this->endpoint_to_string(this->get_server_addr()), "/", this->make_handler_error([this](const boost::system::error_code& ec) {handle_handshake(ec);}));
 	}
 
 private:
-	void handle_handshake(const asio::error_code& ec)
+	void handle_handshake(const boost::system::error_code& ec)
 	{
 		this->on_handshake(ec);
 		ec ? this->force_shutdown() : super::connect_handler(ec); //return to tcp::client_socket_base::connect_handler
@@ -227,14 +227,14 @@ protected:
 		}));
 #endif
 		// Accept the websocket handshake
-		this->next_layer().async_accept(this->make_handler_error([this](const asio::error_code& ec) {handle_handshake(ec);}));
+		this->next_layer().async_accept(this->make_handler_error([this](const boost::system::error_code& ec) {handle_handshake(ec);}));
 		return true;
 	}
 
 	virtual void on_unpack_error() {unified_out::info_out(ASCS_LLF " can not unpack msg.", this->id()); this->unpacker()->dump_left_data(); this->force_shutdown();}
 
 private:
-	void handle_handshake(const asio::error_code& ec)
+	void handle_handshake(const boost::system::error_code& ec)
 	{
 		this->on_handshake(ec);
 		ec ? this->get_server().del_socket(this->shared_from_this()) : super::do_start(); //return to tcp::server_socket_base::do_start

@@ -48,8 +48,8 @@ public:
 	typedef void fo_send_heartbeat(Socket*);
 	typedef void fo_reset(Socket*);
 	typedef bool fo_on_heartbeat_error(Socket*);
-	typedef void fo_on_send_error(Socket*, const asio::error_code&, typename Socket::in_container_type&);
-	typedef void fo_on_recv_error(Socket*, const asio::error_code&);
+	typedef void fo_on_send_error(Socket*, const boost::system::error_code&, typename Socket::in_container_type&);
+	typedef void fo_on_recv_error(Socket*, const boost::system::error_code&);
 	typedef void fo_on_close(Socket*);
 	typedef void fo_after_close(Socket*);
 
@@ -110,8 +110,8 @@ private:
 	call_cb_combine(Socket, is_ready)
 	call_cb_void(Socket, send_heartbeat)
 	call_cb_combine(Socket, on_heartbeat_error)
-	virtual void on_send_error(const asio::error_code& ec, typename Socket::in_container_type& msg_can) call_cb_2_void(Socket, on_send_error, ec, msg_can)
-	virtual void on_recv_error(const asio::error_code& ec) call_cb_1_void(Socket, on_recv_error, ec)
+	virtual void on_send_error(const boost::system::error_code& ec, typename Socket::in_container_type& msg_can) call_cb_2_void(Socket, on_send_error, ec, msg_can)
+	virtual void on_recv_error(const boost::system::error_code& ec) call_cb_1_void(Socket, on_recv_error, ec)
 	call_cb_void(Socket, on_close)
 	call_cb_void(Socket, after_close)
 
@@ -234,7 +234,7 @@ private:
 template<typename Socket> class c_socket : public tcp_socket<Socket> //for client socket
 {
 public:
-	typedef int fo_prepare_reconnect(Socket*, const asio::error_code&);
+	typedef int fo_prepare_reconnect(Socket*, const boost::system::error_code&);
 
 public:
 	template<typename Arg> c_socket(Arg& arg) : tcp_socket<Socket>(arg) {first_init();}
@@ -243,7 +243,7 @@ public:
 	register_cb_2(prepare_reconnect, false)
 
 private:
-	virtual int prepare_reconnect(const asio::error_code& ec) call_cb_1_return(Socket, int, prepare_reconnect, ec)
+	virtual int prepare_reconnect(const boost::system::error_code& ec) call_cb_1_return(Socket, int, prepare_reconnect, ec)
 
 	void first_init() {cb_prepare_reconnect.second = true;}
 
@@ -278,7 +278,7 @@ public:
 	typedef int fo_async_accept_num(Server*);
 	typedef void fo_start_next_accept(Server*);
 	typedef bool fo_on_accept(Server*, typename Server::object_ctype&);
-	typedef bool fo_on_accept_error(Server*, const asio::error_code&, typename Server::object_ctype&);
+	typedef bool fo_on_accept_error(Server*, const boost::system::error_code&, typename Server::object_ctype&);
 
 public:
 	template<typename Arg> server(Arg& arg) : Server(arg) {first_init();}
@@ -293,7 +293,7 @@ private:
 	call_cb_return(Server, int, async_accept_num)
 	call_cb_void(Server, start_next_accept)
 	virtual bool on_accept(typename Server::object_ctype& socket_ptr) call_cb_1_combine(Server, on_accept, socket_ptr)
-	virtual bool on_accept_error(const asio::error_code& ec, typename Server::object_ctype& socket_ptr) call_cb_2_combine(Server, on_accept_error, ec, socket_ptr)
+	virtual bool on_accept_error(const boost::system::error_code& ec, typename Server::object_ctype& socket_ptr) call_cb_2_combine(Server, on_accept_error, ec, socket_ptr)
 
 	void first_init()
 	{

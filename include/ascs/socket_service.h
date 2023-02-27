@@ -34,8 +34,8 @@ protected:
 	virtual void uninit() {this->graceful_shutdown();} //if you wanna force shutdown, call force_shutdown before service_pump::stop_service invocation.
 
 private:
-	virtual void attach_io_context(asio::io_context& io_context_, unsigned refs) {get_service_pump().assign_io_context(io_context_, refs);}
-	virtual void detach_io_context(asio::io_context& io_context_, unsigned refs) {get_service_pump().return_io_context(io_context_, refs);}
+	virtual void attach_io_context(boost::asio::io_context& io_context_, unsigned refs) {get_service_pump().assign_io_context(io_context_, refs);}
+	virtual void detach_io_context(boost::asio::io_context& io_context_, unsigned refs) {get_service_pump().return_io_context(io_context_, refs);}
 
 private:
 	//hide these functions
@@ -89,8 +89,8 @@ public:
 	}
 
 private:
-	virtual void attach_io_context(asio::io_context& io_context_, unsigned refs) {get_service_pump().assign_io_context(io_context_, refs);}
-	virtual void detach_io_context(asio::io_context& io_context_, unsigned refs) {get_service_pump().return_io_context(io_context_, refs);}
+	virtual void attach_io_context(boost::asio::io_context& io_context_, unsigned refs) {get_service_pump().assign_io_context(io_context_, refs);}
+	virtual void detach_io_context(boost::asio::io_context& io_context_, unsigned refs) {get_service_pump().return_io_context(io_context_, refs);}
 };
 
 } //namespace

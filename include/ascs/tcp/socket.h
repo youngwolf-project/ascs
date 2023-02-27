@@ -20,23 +20,23 @@ namespace ascs { namespace tcp {
 template<typename Socket, typename OutMsgType> class reader_writer : public Socket
 {
 public:
-	reader_writer(asio::io_context& io_context_) : Socket(io_context_) {}
-	template<typename Arg> reader_writer(asio::io_context& io_context_, Arg&& arg) : Socket(io_context_, std::forward<Arg>(arg)) {}
+	reader_writer(boost::asio::io_context& io_context_) : Socket(io_context_) {}
+	template<typename Arg> reader_writer(boost::asio::io_context& io_context_, Arg&& arg) : Socket(io_context_, std::forward<Arg>(arg)) {}
 
-	typedef std::function<void(const asio::error_code& ec, size_t bytes_transferred)> ReadWriteCallBack;
+	typedef std::function<void(const boost::system::error_code& ec, size_t bytes_transferred)> ReadWriteCallBack;
 
 protected:
 	bool async_read(ReadWriteCallBack&& call_back)
 	{
 		auto recv_buff = this->unpacker()->prepare_next_recv();
-		assert(asio::buffer_size(recv_buff) > 0);
-		if (0 == asio::buffer_size(recv_buff))
+		assert(boost::asio::buffer_size(recv_buff) > 0);
+		if (0 == boost::asio::buffer_size(recv_buff))
 		{
 			unified_out::error_out(ASCS_LLF " the unpacker returned an empty buffer, quit receiving!", this->id());
 			return false;
 		}
 
-		asio::async_read(this->next_layer(), recv_buff, [this](const asio::error_code& ec, size_t bytes_transferred)->size_t {
+		boost::asio::async_read(this->next_layer(), recv_buff, [this](const boost::system::error_code& ec, size_t bytes_transferred)->size_t {
 			return completion_checker(ec, bytes_transferred);}, std::forward<ReadWriteCallBack>(call_back));
 		return true;
 	}
@@ -47,14 +47,14 @@ protected:
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
 		return 0;
 #else
-		return asio::detail::default_max_transfer_size;
+		return boost::asio::detail::default_max_transfer_size;
 #endif
 	}
 	template<typename Buffer> void async_write(const Buffer& msg_can, ReadWriteCallBack&& call_back)
-		{asio::async_write(this->next_layer(), msg_can, std::forward<ReadWriteCallBack>(call_back));}
+		{boost::asio::async_write(this->next_layer(), msg_can, std::forward<ReadWriteCallBack>(call_back));}
 
 private:
-	size_t completion_checker(const asio::error_code& ec, size_t bytes_transferred)
+	size_t completion_checker(const boost::system::error_code& ec, size_t bytes_transferred)
 	{
 		auto_duration dur(this->stat.unpack_time_sum);
 		return this->unpacker()->completion_condition(ec, bytes_transferred);
@@ -78,8 +78,8 @@ private:
 protected:
 	enum link_status {CONNECTED, FORCE_SHUTTING_DOWN, GRACEFUL_SHUTTING_DOWN, BROKEN, HANDSHAKING};
 
-	socket_base(asio::io_context& io_context_) : super(io_context_), status(link_status::BROKEN) {}
-	template<typename Arg> socket_base(asio::io_context& io_context_, Arg&& arg) : super(io_context_, std::forward<Arg>(arg)), status(link_status::BROKEN) {}
+	socket_base(boost::asio::io_context& io_context_) : super(io_context_), status(link_status::BROKEN) {}
+	template<typename Arg> socket_base(boost::asio::io_context& io_context_, Arg&& arg) : super(io_context_, std::forward<Arg>(arg)), status(link_status::BROKEN) {}
 
 public:
 	static const typename super::tid TIMER_BEGIN = super::TIMER_END;
@@ -110,14 +110,14 @@ public:
 	bool is_connected() const {return link_status::CONNECTED == status;}
 	bool is_shutting_down() const {return link_status::FORCE_SHUTTING_DOWN == status || link_status::GRACEFUL_SHUTTING_DOWN == status;}
 
-	static std::string endpoint_to_string(const asio::ip::tcp::endpoint& ep) {return ep.address().to_string() + ':' + std::to_string(ep.port());}
+	static std::string endpoint_to_string(const boost::asio::ip::tcp::endpoint& ep) {return ep.address().to_string() + ':' + std::to_string(ep.port());}
 #ifdef BOOST_ASIO_HAS_LOCAL_SOCKETS
-	static std::string endpoint_to_string(const asio::local::stream_protocol::endpoint& ep) {return ep.path();}
+	static std::string endpoint_to_string(const boost::asio::local::stream_protocol::endpoint& ep) {return ep.path();}
 #endif
 
 	void show_info(const char* head = nullptr, const char* tail = nullptr) const
 	{
-		asio::error_code ec;
+		boost::system::error_code ec;
 		std::string local_addr, remote_addr;
 		auto ep = this->lowest_layer().local_endpoint(ec);
 		if (!ec)
@@ -132,12 +132,12 @@ public:
 			local_addr.data(), remote_addr.data(), nullptr == tail ? "" : tail);
 	}
 
-	void show_info(const asio::error_code& ec, const char* head = nullptr, const char* tail = nullptr) const
+	void show_info(const boost::system::error_code& ec, const char* head = nullptr, const char* tail = nullptr) const
 	{
 		if (!ec)
 			return show_info(head, tail);
 
-		asio::error_code ec2;
+		boost::system::error_code ec2;
 		std::string local_addr, remote_addr;
 		auto ep = this->lowest_layer().local_endpoint(ec2);
 		if (!ec2)
@@ -261,10 +261,10 @@ protected:
 	//msg_can contains messages that were failed to send and tcp::socket_base will not hold them any more, if you want to re-send them in the future,
 	// you must take over them and re-send (at any time) them via direct_send_msg.
 	//DO NOT hold msg_can for further usage, just swap its content with your own container in this virtual function.
-	virtual void on_send_error(const asio::error_code& ec, typename super::in_container_type& msg_can)
+	virtual void on_send_error(const boost::system::error_code& ec, typename super::in_container_type& msg_can)
 		{unified_out::error_out(ASCS_LLF " send msg error (%d %s)", this->id(), ec.value(), ec.message().data());}
 
-	virtual void on_recv_error(const asio::error_code& ec) = 0;
+	virtual void on_recv_error(const boost::system::error_code& ec) = 0;
 
 	virtual void on_close()
 	{
@@ -299,8 +299,8 @@ private:
 		{
 			status = link_status::GRACEFUL_SHUTTING_DOWN;
 
-			asio::error_code ec;
-			this->lowest_layer().shutdown(asio::socket_base::shutdown_send, ec);
+			boost::system::error_code ec;
+			this->lowest_layer().shutdown(boost::asio::socket_base::shutdown_send, ec);
 			if (ec) //graceful shutdown is impossible
 				shutdown();
 			else
@@ -329,15 +329,15 @@ private:
 #endif
 #ifdef ASCS_PASSIVE_RECV
 		if (!this->async_read(make_strand_handler(rw_strand,
-			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}))))
+			this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}))))
 			this->clear_reading();
 #else
 		this->async_read(make_strand_handler(rw_strand,
-			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);})));
+			this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);})));
 #endif
 	}
 
-	void recv_handler(const asio::error_code& ec, size_t bytes_transferred)
+	void recv_handler(const boost::system::error_code& ec, size_t bytes_transferred)
 	{
 #ifdef ASCS_PASSIVE_RECV
 		this->clear_reading(); //clear reading flag before calling handle_msg() to make sure that recv_msg() is available in on_msg() and on_msg_handle()
@@ -402,7 +402,7 @@ private:
 		{
 			sending_msgs.front().restart();
 			this->async_write(sending_buffer, make_strand_handler(rw_strand,
-				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);})));
+				this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);})));
 			return true;
 		}
 		else
@@ -411,7 +411,7 @@ private:
 		return false;
 	}
 
-	void send_handler(const asio::error_code& ec, size_t bytes_transferred)
+	void send_handler(const boost::system::error_code& ec, size_t bytes_transferred)
 	{
 		if (!ec)
 		{
@@ -497,7 +497,7 @@ private:
 	//before gcc 5.0, std::list::size() has linear complexity, very embarrassing!
 	//so use std::vector (member variable) to reduce memory allocation and keep the number of sending msgs (its size() has constant complexity, it's very important).
 	typename super::in_container_type sending_msgs;
-	std::vector<asio::const_buffer> sending_buffer;
+	std::vector<boost::asio::const_buffer> sending_buffer;
 };
 
 }} //namespace

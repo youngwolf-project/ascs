@@ -27,7 +27,7 @@ private:
 
 protected:
 	timed_object_pool(service_pump& service_pump_) : ObjectPool(service_pump_) {}
-	timed_object_pool(service_pump& service_pump_, const asio::ssl::context::method& m) : ObjectPool(service_pump_, m) {}
+	timed_object_pool(service_pump& service_pump_, const boost::asio::ssl::context::method& m) : ObjectPool(service_pump_, m) {}
 
 	void start()
 	{
@@ -70,7 +70,7 @@ protected:
 class echo_ssl_socket : public ext::ssl::server_socket
 {
 public:
-	echo_ssl_socket(i_server& server_, asio::ssl::context& ctx) : ext::ssl::server_socket(server_, ctx) {}
+	echo_ssl_socket(i_server& server_, boost::asio::ssl::context& ctx) : ext::ssl::server_socket(server_, ctx) {}
 
 protected:
 	//msg handling: send the original msg back(echo server)
@@ -121,12 +121,12 @@ int main(int argc, const char* argv[])
 	server_base<echo_socket, timed_object_pool<object_pool<echo_socket>>> echo_server(sp);
 	server_base<echo_stream_socket, timed_object_pool<object_pool<echo_stream_socket>>> echo_stream_server(sp);
 	single_udp_service udp_service(sp);
-	ascs::ssl::server_base<echo_ssl_socket, timed_object_pool<ascs::ssl::object_pool<echo_ssl_socket>>> echo_ssl_server(sp, asio::ssl::context::sslv23_server);
-	echo_ssl_server.context().set_options(asio::ssl::context::default_workarounds | asio::ssl::context::no_sslv2 | asio::ssl::context::single_dh_use);
-	echo_ssl_server.context().set_verify_mode(asio::ssl::context::verify_peer | asio::ssl::context::verify_fail_if_no_peer_cert);
+	ascs::ssl::server_base<echo_ssl_socket, timed_object_pool<ascs::ssl::object_pool<echo_ssl_socket>>> echo_ssl_server(sp, boost::asio::ssl::context::sslv23_server);
+	echo_ssl_server.context().set_options(boost::asio::ssl::context::default_workarounds | boost::asio::ssl::context::no_sslv2 | boost::asio::ssl::context::single_dh_use);
+	echo_ssl_server.context().set_verify_mode(boost::asio::ssl::context::verify_peer | boost::asio::ssl::context::verify_fail_if_no_peer_cert);
 	echo_ssl_server.context().load_verify_file("client_certs/server.crt");
 	echo_ssl_server.context().use_certificate_chain_file("certs/server.crt");
-	echo_ssl_server.context().use_private_key_file("certs/server.key", asio::ssl::context::pem);
+	echo_ssl_server.context().use_private_key_file("certs/server.key", boost::asio::ssl::context::pem);
 	echo_ssl_server.context().use_tmp_dh_file("certs/dh2048.pem");
 
 	echo_stream_server.set_server_addr(9528);
@@ -136,8 +136,8 @@ int main(int argc, const char* argv[])
 #if !defined(_MSC_VER) && !defined(__MINGW64__) && !defined(__MINGW32__)
 	if (daemon)
 	{
-		asio::signal_set signal_receiver(sp.assign_io_context(), SIGINT, SIGTERM, SIGUSR1);
-		std::function<void (const asio::error_code&, int)> signal_handler = [&](const asio::error_code& ec, int signal_number) {
+		boost::asio::signal_set signal_receiver(sp.assign_io_context(), SIGINT, SIGTERM, SIGUSR1);
+		std::function<void (const boost::system::error_code&, int)> signal_handler = [&](const boost::system::error_code& ec, int signal_number) {
 			if (!ec)
 			{
 				if (SIGUSR1 == signal_number)
@@ -149,9 +149,9 @@ int main(int argc, const char* argv[])
 					return sp.end_service();
 			}
 
-			signal_receiver.async_wait([&](const asio::error_code& ec, int signal_number) {signal_handler(ec, signal_number);});
+			signal_receiver.async_wait([&](const boost::system::error_code& ec, int signal_number) {signal_handler(ec, signal_number);});
 		};
-		signal_receiver.async_wait([&](const asio::error_code& ec, int signal_number) {signal_handler(ec, signal_number);});
+		signal_receiver.async_wait([&](const boost::system::error_code& ec, int signal_number) {signal_handler(ec, signal_number);});
 
 		sp.run_service();
 		return 0;

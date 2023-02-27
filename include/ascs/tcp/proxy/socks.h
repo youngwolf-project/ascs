@@ -19,7 +19,7 @@ namespace ascs { namespace tcp { namespace proxy {
 
 namespace socks4 {
 
-template<typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = asio::ip::tcp::socket,
+template<typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = boost::asio::ip::tcp::socket,
 	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
 class client_socket_base : public ascs::tcp::client_socket_base<Packer, Unpacker, Matrix, Socket, InQueue, InContainer, OutQueue, OutContainer>
@@ -28,7 +28,7 @@ private:
 	typedef ascs::tcp::client_socket_base<Packer, Unpacker, Matrix, Socket, InQueue, InContainer, OutQueue, OutContainer> super;
 
 public:
-	client_socket_base(asio::io_context& io_context_) : super(io_context_), req_len(0) {}
+	client_socket_base(boost::asio::io_context& io_context_) : super(io_context_), req_len(0) {}
 	client_socket_base(Matrix& matrix_) : super(matrix_), req_len(0) {}
 
 	virtual const char* type_name() const {return "SOCKS4 (client endpoint)";}
@@ -44,7 +44,7 @@ public:
 		buff[1] = 1;
 		*((unsigned short*) std::next(buff, 2)) = htons(target_addr.port());
 #if BOOST_ASIO_VERSION == 101100
-		memcpy(std::next(buff, 4), asio::ip::address_cast<asio::ip::address_v4>(target_addr.address()).to_bytes().data(), 4);
+		memcpy(std::next(buff, 4), boost::asio::ip::address_cast<boost::asio::ip::address_v4>(target_addr.address()).to_bytes().data(), 4);
 #else
 		memcpy(std::next(buff, 4), target_addr.address().to_v4().to_bytes().data(), 4);
 #endif
@@ -53,21 +53,21 @@ public:
 
 		return true;
 	}
-	const asio::ip::tcp::endpoint& get_target_addr() const {return target_addr;}
+	const boost::asio::ip::tcp::endpoint& get_target_addr() const {return target_addr;}
 
 private:
-	virtual void connect_handler(const asio::error_code& ec) //intercept tcp::client_socket_base::connect_handler
+	virtual void connect_handler(const boost::system::error_code& ec) //intercept tcp::client_socket_base::connect_handler
 	{
 		if (ec || 0 == req_len)
 			return super::connect_handler(ec);
 
 		unified_out::info_out("connected to the proxy server, begin to negotiate with it.");
 		this->status = super::link_status::HANDSHAKING;
-		asio::async_write(this->next_layer(), asio::buffer(buff, req_len),
-			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);}));
+		boost::asio::async_write(this->next_layer(), boost::asio::buffer(buff, req_len),
+			this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);}));
 	}
 
-	void send_handler(const asio::error_code& ec, size_t bytes_transferred)
+	void send_handler(const boost::system::error_code& ec, size_t bytes_transferred)
 	{
 		if (ec || req_len != bytes_transferred)
 		{
@@ -75,11 +75,11 @@ private:
 			this->force_shutdown(false);
 		}
 		else
-			asio::async_read(this->next_layer(), asio::buffer(buff, 8),
-				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}));
+			boost::asio::async_read(this->next_layer(), boost::asio::buffer(buff, 8),
+				this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}));
 	}
 
-	void recv_handler(const asio::error_code& ec, size_t bytes_transferred)
+	void recv_handler(const boost::system::error_code& ec, size_t bytes_transferred)
 	{
 		if (ec || 8 != bytes_transferred)
 		{
@@ -99,14 +99,14 @@ private:
 	char buff[16];
 	size_t req_len;
 
-	asio::ip::tcp::endpoint target_addr;
+	boost::asio::ip::tcp::endpoint target_addr;
 };
 
 }
 
 namespace socks5 {
 
-template<typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = asio::ip::tcp::socket,
+template<typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = boost::asio::ip::tcp::socket,
 	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
 class client_socket_base : public ascs::tcp::client_socket_base<Packer, Unpacker, Matrix, Socket, InQueue, InContainer, OutQueue, OutContainer>
@@ -115,7 +115,7 @@ private:
 	typedef ascs::tcp::client_socket_base<Packer, Unpacker, Matrix, Socket, InQueue, InContainer, OutQueue, OutContainer> super;
 
 public:
-	client_socket_base(asio::io_context& io_context_) : super(io_context_), req_len(0), res_len(0), step(-1), target_port(0) {}
+	client_socket_base(boost::asio::io_context& io_context_) : super(io_context_), req_len(0), res_len(0), step(-1), target_port(0) {}
 	client_socket_base(Matrix& matrix_) : super(matrix_), req_len(0), res_len(0), step(-1), target_port(0) {}
 
 	virtual const char* type_name() const {return "SOCKS5 (client endpoint)";}
@@ -143,7 +143,7 @@ public:
 		step = 0;
 		return true;
 	}
-	const asio::ip::tcp::endpoint& get_target_addr() const {return target_addr;}
+	const boost::asio::ip::tcp::endpoint& get_target_addr() const {return target_addr;}
 
 	bool set_auth(const std::string& usr, const std::string& pwd)
 	{
@@ -159,7 +159,7 @@ public:
 	}
 
 private:
-	virtual void connect_handler(const asio::error_code& ec) //intercept tcp::client_socket_base::connect_handler
+	virtual void connect_handler(const boost::system::error_code& ec) //intercept tcp::client_socket_base::connect_handler
 	{
 		if (ec || -1 == step)
 			return super::connect_handler(ec);
@@ -188,8 +188,8 @@ private:
 		}
 		buff[2] = 0;
 
-		asio::async_write(this->next_layer(), asio::buffer(buff, req_len),
-			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);}));
+		boost::asio::async_write(this->next_layer(), boost::asio::buffer(buff, req_len),
+			this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);}));
 	}
 
 	void send_auth()
@@ -203,8 +203,8 @@ private:
 		memcpy(std::next(buff, 3 + username.size()), password.data(), password.size());
 		req_len = 1 + 1 + username.size() + 1 + password.size();
 
-		asio::async_write(this->next_layer(), asio::buffer(buff, req_len),
-			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);}));
+		boost::asio::async_write(this->next_layer(), boost::asio::buffer(buff, req_len),
+			this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);}));
 	}
 
 	void send_request()
@@ -226,7 +226,7 @@ private:
 		{
 			buff[3] = 1;
 #if BOOST_ASIO_VERSION == 101100
-			memcpy(std::next(buff, 4), asio::ip::address_cast<asio::ip::address_v4>(target_addr.address()).to_bytes().data(), 4);
+			memcpy(std::next(buff, 4), boost::asio::ip::address_cast<boost::asio::ip::address_v4>(target_addr.address()).to_bytes().data(), 4);
 #else
 			memcpy(std::next(buff, 4), target_addr.address().to_v4().to_bytes().data(), 4);
 #endif
@@ -237,7 +237,7 @@ private:
 		{
 			buff[3] = 4;
 #if BOOST_ASIO_VERSION == 101100
-			memcpy(std::next(buff, 4), asio::ip::address_cast<asio::ip::address_v6>(target_addr.address()).to_bytes().data(), 16);
+			memcpy(std::next(buff, 4), boost::asio::ip::address_cast<boost::asio::ip::address_v6>(target_addr.address()).to_bytes().data(), 16);
 #else
 			memcpy(std::next(buff, 4), target_addr.address().to_v6().to_bytes().data(), 16);
 #endif
@@ -245,11 +245,11 @@ private:
 			req_len = 22;
 		}
 
-		asio::async_write(this->next_layer(), asio::buffer(buff, req_len),
-			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);}));
+		boost::asio::async_write(this->next_layer(), boost::asio::buffer(buff, req_len),
+			this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);}));
 	}
 
-	void send_handler(const asio::error_code& ec, size_t bytes_transferred)
+	void send_handler(const boost::system::error_code& ec, size_t bytes_transferred)
 	{
 		if (ec || req_len != bytes_transferred)
 		{
@@ -259,12 +259,12 @@ private:
 		else
 		{
 			++step;
-			this->next_layer().async_read_some(asio::buffer(buff, sizeof(buff)),
-				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}));
+			this->next_layer().async_read_some(boost::asio::buffer(buff, sizeof(buff)),
+				this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}));
 		}
 	}
 
-	void recv_handler(const asio::error_code& ec, size_t bytes_transferred)
+	void recv_handler(const boost::system::error_code& ec, size_t bytes_transferred)
 	{
 		res_len += bytes_transferred;
 		if (ec)
@@ -359,8 +359,8 @@ private:
 				this->force_shutdown(false);
 			}
 			else
-				this->next_layer().async_read_some(asio::buffer(std::next(buff, res_len), sizeof(buff) - res_len),
-					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}));
+				this->next_layer().async_read_some(boost::asio::buffer(std::next(buff, res_len), sizeof(buff) - res_len),
+					this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}));
 		}
 	}
 
@@ -369,7 +369,7 @@ private:
 	size_t req_len, res_len;
 	int step;
 
-	asio::ip::tcp::endpoint target_addr;
+	boost::asio::ip::tcp::endpoint target_addr;
 	std::string target_domain;
 	unsigned short target_port;
 	std::string username, password;

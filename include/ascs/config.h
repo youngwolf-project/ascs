@@ -847,10 +847,10 @@
  * REPLACEMENTS:
  *
  * ===============================================================
- * 2022.3.21	version 1.8.0
+ * 2023.3.21	version 1.8.0
  *
  * SPECIAL ATTENTION (incompatible with old editions):
- * Use Boost.Asio from Boost_1.81 on since standalone Asio will retire soon, to reduce the changes, ascs will using namespace boost, please be aware.
+ * Use Boost.Asio from Boost_1.81 on since standalone Asio will retire soon.
  * Give up the support of gcc 4.7 (it's too old to supports c++ standards well).
  *
  * HIGHLIGHT:
@@ -926,10 +926,7 @@
 #else
 	#define make_strand_handler(S, F) boost::asio::bind_executor(S, F)
 #endif
-
-namespace boost {namespace asio {typedef boost::system::error_code error_code;}}
 //boost and compiler check
-using namespace boost;
 
 //configurations
 
@@ -986,14 +983,14 @@ static_assert(ASCS_MAX_RECV_BUF > 0, "recv buffer capacity must be bigger than z
 //don't write any logs.
 //#define ASCS_NO_UNIFIED_OUT
 
-//if defined, service_pump will not catch exceptions for asio::io_context::run().
+//if defined, service_pump will not catch exceptions for boost::asio::io_context::run().
 //#define ASCS_NO_TRY_CATCH
 
-//if defined, asio::steady_timer will be used in ascs::timer.
+//if defined, boost::asio::steady_timer will be used in ascs::timer.
 //#define ASCS_USE_STEADY_TIMER
-//if defined, asio::system_timer will be used in ascs::timer.
+//if defined, boost::asio::system_timer will be used in ascs::timer.
 //#define ASCS_USE_SYSTEM_TIMER
-//otherwise, asio::deadline_timer will be used
+//otherwise, boost::asio::deadline_timer will be used
 
 //after this duration, this socket can be freed from the heap or reused,
 //you must define this macro as a value, not just define it, the value means the duration, unit is second.
@@ -1115,12 +1112,12 @@ static_assert(ASCS_ASYNC_ACCEPT_NUM > 0, "async accept number must be bigger tha
 
 //in server_base::set_server_addr and set_local_addr, if the IP is empty, ASCS_(TCP/UDP)_DEFAULT_IP_VERSION will define the IP version,
 // or the IP version will be deduced by the IP address.
-//asio::ip::(tcp/udp)::v4() means ipv4 and asio::ip::(tcp/udp)::v6() means ipv6.
+//boost::asio::ip::(tcp/udp)::v4() means ipv4 and boost::asio::ip::(tcp/udp)::v6() means ipv6.
 #ifndef ASCS_TCP_DEFAULT_IP_VERSION
-#define ASCS_TCP_DEFAULT_IP_VERSION asio::ip::tcp::v4()
+#define ASCS_TCP_DEFAULT_IP_VERSION boost::asio::ip::tcp::v4()
 #endif
 #ifndef ASCS_UDP_DEFAULT_IP_VERSION
-#define ASCS_UDP_DEFAULT_IP_VERSION asio::ip::udp::v4()
+#define ASCS_UDP_DEFAULT_IP_VERSION boost::asio::ip::udp::v4()
 #endif
 
 #ifndef ASCS_UDP_CONNECT_MODE
@@ -1159,9 +1156,9 @@ static_assert(ASCS_RELIABLE_UDP_NSND_QUE >= 0, "kcp send queue must be bigger th
 //buffer type used when receiving messages (unpacker's prepare_next_recv() need to return this type)
 #ifndef ASCS_RECV_BUFFER_TYPE
 	#if BOOST_ASIO_VERSION > 101100
-	#define ASCS_RECV_BUFFER_TYPE asio::mutable_buffer
+	#define ASCS_RECV_BUFFER_TYPE boost::asio::mutable_buffer
 	#else
-	#define ASCS_RECV_BUFFER_TYPE asio::mutable_buffers_1
+	#define ASCS_RECV_BUFFER_TYPE boost::asio::mutable_buffers_1
 	#endif
 #endif
 
@@ -1184,7 +1181,7 @@ static_assert(ASCS_HEARTBEAT_MAX_ABSENCE > 0, "heartbeat absence must be bigger 
 //always send heartbeat in each ASCS_HEARTBEAT_INTERVAL seconds without checking if we're sending other messages or not.
 
 //#define ASCS_AVOID_AUTO_STOP_SERVICE
-//wrap service_pump with asio::io_service::work (asio::executor_work_guard), then it will never run out until you explicitly call stop_service().
+//wrap service_pump with boost::asio::io_service::work (boost::asio::executor_work_guard), then it will never run out until you explicitly call stop_service().
 
 //#define ASCS_DECREASE_THREAD_AT_RUNTIME
 //enable decreasing service thread at runtime.
@@ -1207,9 +1204,9 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 //this value can be changed via ascs::socket::msg_handling_interval(size_t) at runtime.
 
 //#define ASCS_EXPOSE_SEND_INTERFACE
-//for some reason (i still not met yet), the message sending has stopped but some messages left behind in the sending buffer, they won't be
+//for some reason (I still not met yet), the message sending has stopped but some messages left behind in the sending buffer, they won't be
 // sent until new messages come in, define this macro to expose send_msg() interface, then you can call it manually to fix this situation.
-//during message sending, calling send_msg() will fail, this is by design to avoid asio::io_context using up all virtual memory, this also
+//during message sending, calling send_msg() will fail, this is by design to avoid boost::asio::io_context using up all virtual memory, this also
 // means that before the sending really started, you can greedily call send_msg() and may exhaust all virtual memory, please note.
 
 //#define ASCS_ARBITRARY_SEND
@@ -1221,7 +1218,7 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 //to gain the ability of changing the unpacker at runtime, with this macro, ascs will not do message receiving automatically (except
 // the first one, if macro ASCS_SYNC_RECV been defined, the first one will be omitted too), so you need to manually call recv_msg(),
 // if you need to change the unpacker, do it before recv_msg() invocation, please note.
-//during message receiving, calling recv_msg() will fail, this is by design to avoid asio::io_context using up all virtual memory, this also
+//during message receiving, calling recv_msg() will fail, this is by design to avoid boost::asio::io_context using up all virtual memory, this also
 // means that before the receiving really started, you can greedily call recv_msg() and may exhaust all virtual memory, please note.
 //because user can greedily call recv_msg(), it's your responsibility to keep the recv buffer from overflowed, please pay special attention.
 //this macro also makes you to be able to pause message receiving, then, if there's no other tasks (like timers), service_pump will stop itself,

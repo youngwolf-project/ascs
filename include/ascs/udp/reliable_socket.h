@@ -37,7 +37,7 @@ public:
 	static const typename super::tid TIMER_END = TIMER_BEGIN + 5;
 
 public:
-	reliable_socket_base(asio::io_context& io_context_) : super(io_context_), kcp(nullptr), max_nsnd_que(ASCS_RELIABLE_UDP_NSND_QUE) {}
+	reliable_socket_base(boost::asio::io_context& io_context_) : super(io_context_), kcp(nullptr), max_nsnd_que(ASCS_RELIABLE_UDP_NSND_QUE) {}
 	reliable_socket_base(Matrix& matrix_) : super(matrix_), kcp(nullptr), max_nsnd_que(ASCS_RELIABLE_UDP_NSND_QUE) {}
 	~reliable_socket_base() {release_kcp();}
 
@@ -49,8 +49,8 @@ public:
 
 	int output(const char* buf, int len)
 	{
-		asio::error_code ec;
-		this->next_layer().send(asio::buffer(buf, (size_t) len), 0, ec);
+		boost::system::error_code ec;
+		this->next_layer().send(boost::asio::buffer(buf, (size_t) len), 0, ec);
 		return ec ? (unified_out::error_out(ASCS_LLF " send msg error (%d)", this->id(), ec.value()), 0) : len;
 	}
 

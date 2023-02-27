@@ -3,14 +3,14 @@
 
 #include "common.h"
 
-class file_buffer : public i_buffer, public asio::noncopyable
+class file_buffer : public i_buffer, public boost::noncopyable
 {
 public:
 	file_buffer(FILE* file, fl_type total_len_, std::atomic_int_fast64_t* transmit_size_ = nullptr) : _file(file), total_len(total_len_), transmit_size(transmit_size_)
 	{
 		assert(nullptr != _file);
 
-		buffer = new char[asio::detail::default_max_transfer_size];
+		buffer = new char[boost::asio::detail::default_max_transfer_size];
 		assert(nullptr != buffer);
 
 		good = read();
@@ -29,7 +29,7 @@ public:
 			data_len = 0;
 		else
 		{
-			data_len = total_len > asio::detail::default_max_transfer_size ? asio::detail::default_max_transfer_size : (size_t) total_len;
+			data_len = total_len > boost::asio::detail::default_max_transfer_size ? boost::asio::detail::default_max_transfer_size : (size_t) total_len;
 			total_len -= data_len;
 			if (data_len != fread(buffer, 1, data_len, _file))
 			{

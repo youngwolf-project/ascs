@@ -17,7 +17,7 @@
 
 namespace ascs { namespace tcp {
 
-template<typename Socket, typename Matrix = i_matrix, typename Family = asio::ip::tcp> class generic_client_socket : public Socket
+template<typename Socket, typename Matrix = i_matrix, typename Family = boost::asio::ip::tcp> class generic_client_socket : public Socket
 {
 private:
 	typedef Socket super;
@@ -27,17 +27,17 @@ public:
 	static const typename super::tid TIMER_CONNECT = TIMER_BEGIN;
 	static const typename super::tid TIMER_END = TIMER_BEGIN + 5;
 
-	static bool set_addr(asio::ip::tcp::endpoint& endpoint, unsigned short port, const std::string& ip)
+	static bool set_addr(boost::asio::ip::tcp::endpoint& endpoint, unsigned short port, const std::string& ip)
 	{
 		if (ip.empty())
-			endpoint = asio::ip::tcp::endpoint(ASCS_TCP_DEFAULT_IP_VERSION, port);
+			endpoint = boost::asio::ip::tcp::endpoint(ASCS_TCP_DEFAULT_IP_VERSION, port);
 		else
 		{
-			asio::error_code ec;
+			boost::system::error_code ec;
 #if BOOST_ASIO_VERSION >= 101100
-			auto addr = asio::ip::make_address(ip, ec); assert(!ec);
+			auto addr = boost::asio::ip::make_address(ip, ec); assert(!ec);
 #else
-			auto addr = asio::ip::address::from_string(ip, ec); assert(!ec);
+			auto addr = boost::asio::ip::address::from_string(ip, ec); assert(!ec);
 #endif
 			if (ec)
 			{
@@ -45,15 +45,15 @@ public:
 				return false;
 			}
 
-			endpoint = asio::ip::tcp::endpoint(addr, port);
+			endpoint = boost::asio::ip::tcp::endpoint(addr, port);
 		}
 
 		return true;
 	}
 
 protected:
-	generic_client_socket(asio::io_context& io_context_) : super(io_context_) {first_init();}
-	template<typename Arg> generic_client_socket(asio::io_context& io_context_, Arg&& arg) : super(io_context_, std::forward<Arg>(arg)) {first_init();}
+	generic_client_socket(boost::asio::io_context& io_context_) : super(io_context_) {first_init();}
+	template<typename Arg> generic_client_socket(boost::asio::io_context& io_context_, Arg&& arg) : super(io_context_, std::forward<Arg>(arg)) {first_init();}
 
 	generic_client_socket(Matrix& matrix_) : super(matrix_.get_service_pump()) {first_init(&matrix_);}
 	template<typename Arg> generic_client_socket(Matrix& matrix_, Arg&& arg) : super(matrix_.get_service_pump(), std::forward<Arg>(arg)) {first_init(&matrix_);}
@@ -127,7 +127,7 @@ protected:
 		return bind() && this->set_timer(TIMER_CONNECT, 50, [this](typename super::tid id)->bool {connect(true); return false;});
 	}
 
-	virtual void connect_handler(const asio::error_code& ec)
+	virtual void connect_handler(const boost::system::error_code& ec)
 	{
 		if (!ec) //already started, so cannot call start()
 			super::do_start();
@@ -136,10 +136,10 @@ protected:
 	}
 
 	//after how much time (ms), generic_client_socket will try to reconnect the server, negative value means give up.
-	virtual int prepare_reconnect(const asio::error_code& ec) {return ASCS_RECONNECT_INTERVAL;}
+	virtual int prepare_reconnect(const boost::system::error_code& ec) {return ASCS_RECONNECT_INTERVAL;}
 	virtual void on_connect() {unified_out::info_out(ASCS_LLF " connecting success.", this->id());}
 	virtual void on_unpack_error() {unified_out::info_out(ASCS_LLF " can not unpack msg.", this->id()); this->unpacker()->dump_left_data(); force_shutdown(need_reconnect);}
-	virtual void on_recv_error(const asio::error_code& ec) {this->show_info(ec, "client link:", "broken/been shut down"); force_shutdown(need_reconnect);}
+	virtual void on_recv_error(const boost::system::error_code& ec) {this->show_info(ec, "client link:", "broken/been shut down"); force_shutdown(need_reconnect);}
 	virtual void on_async_shutdown_error() {force_shutdown(need_reconnect);}
 	virtual bool on_heartbeat_error() {this->show_info("client link:", "broke unexpectedly."); force_shutdown(need_reconnect); return false;}
 
@@ -169,27 +169,27 @@ private:
 	// 2. use this->post or this->set_timer to emit an async event, then in the callback.
 	//otherwise, you must protect them to not be called with reset and on_close simultaneously
 	//actually, you're recommended to not use them, use add_socket instead.
-	virtual void attach_io_context(asio::io_context& io_context_, unsigned refs) {if (nullptr != matrix) matrix->get_service_pump().assign_io_context(io_context_, refs);}
-	virtual void detach_io_context(asio::io_context& io_context_, unsigned refs) {if (nullptr != matrix) matrix->get_service_pump().return_io_context(io_context_, refs);}
+	virtual void attach_io_context(boost::asio::io_context& io_context_, unsigned refs) {if (nullptr != matrix) matrix->get_service_pump().assign_io_context(io_context_, refs);}
+	virtual void detach_io_context(boost::asio::io_context& io_context_, unsigned refs) {if (nullptr != matrix) matrix->get_service_pump().return_io_context(io_context_, refs);}
 
 	bool connect(bool first)
 	{
 		if (!first && !bind())
 			return false;
 
-		this->lowest_layer().async_connect(server_addr, this->make_handler_error([this](const asio::error_code& ec) {connect_handler(ec);}));
+		this->lowest_layer().async_connect(server_addr, this->make_handler_error([this](const boost::system::error_code& ec) {connect_handler(ec);}));
 		return true;
 	}
 
-	bool prepare_next_reconnect(const asio::error_code& ec)
+	bool prepare_next_reconnect(const boost::system::error_code& ec)
 	{
 		if (need_reconnect && this->started() && !this->stopped())
 		{
 #ifdef _WIN32
-			if (asio::error::connection_refused != ec && asio::error::network_unreachable != ec && asio::error::timed_out != ec)
+			if (boost::asio::error::connection_refused != ec && boost::asio::error::network_unreachable != ec && boost::asio::error::timed_out != ec)
 #endif
 			{
-				asio::error_code ec;
+				boost::system::error_code ec;
 				this->lowest_layer().close(ec);
 			}
 
@@ -212,7 +212,7 @@ private:
 	Matrix* matrix;
 };
 
-template<typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = asio::ip::tcp::socket,
+template<typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = boost::asio::ip::tcp::socket,
 	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER,
 	template<typename, typename> class ReaderWriter = reader_writer>
@@ -222,15 +222,15 @@ private:
 	typedef generic_client_socket<socket_base<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>, Matrix> super;
 
 public:
-	client_socket_base(asio::io_context& io_context_) : super(io_context_) {this->set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
+	client_socket_base(boost::asio::io_context& io_context_) : super(io_context_) {this->set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
 	template<typename Arg>
-	client_socket_base(asio::io_context& io_context_, Arg&& arg) : super(io_context_, std::forward<Arg>(arg)) {this->set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
+	client_socket_base(boost::asio::io_context& io_context_, Arg&& arg) : super(io_context_, std::forward<Arg>(arg)) {this->set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
 
 	client_socket_base(Matrix& matrix_) : super(matrix_) {this->set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
 	template<typename Arg> client_socket_base(Matrix& matrix_, Arg&& arg) : super(matrix_, std::forward<Arg>(arg)) {this->set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
 
 	bool set_local_addr(unsigned short port, const std::string& ip = std::string()) {return super::set_addr(local_addr, port, ip);}
-	const asio::ip::tcp::endpoint& get_local_addr() const {return local_addr;}
+	const boost::asio::ip::tcp::endpoint& get_local_addr() const {return local_addr;}
 
 protected:
 	virtual bool bind()
@@ -239,7 +239,7 @@ protected:
 		{
 			auto& lowest_object = this->lowest_layer();
 
-			asio::error_code ec;
+			boost::system::error_code ec;
 			if (!lowest_object.is_open()) //user maybe has opened this socket (to set options for example)
 			{
 				lowest_object.open(local_addr.protocol(), ec); assert(!ec);
@@ -251,7 +251,7 @@ protected:
 			}
 
 			lowest_object.bind(local_addr, ec);
-			if (ec && asio::error::invalid_argument != ec)
+			if (ec && boost::asio::error::invalid_argument != ec)
 			{
 				unified_out::error_out("cannot bind socket: %s", ec.message().data());
 				return false;
@@ -262,7 +262,7 @@ protected:
 	}
 
 private:
-	asio::ip::tcp::endpoint local_addr;
+	boost::asio::ip::tcp::endpoint local_addr;
 };
 
 #ifdef BOOST_ASIO_HAS_LOCAL_SOCKETS
@@ -270,13 +270,13 @@ template<typename Packer, typename Unpacker, typename Matrix = i_matrix,
 	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER,
 	template<typename, typename> class ReaderWriter = reader_writer>
-class unix_client_socket_base : public generic_client_socket<socket_base<asio::local::stream_protocol::socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>, Matrix, asio::local::stream_protocol>
+class unix_client_socket_base : public generic_client_socket<socket_base<boost::asio::local::stream_protocol::socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>, Matrix, boost::asio::local::stream_protocol>
 {
 private:
-	typedef generic_client_socket<socket_base<asio::local::stream_protocol::socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>, Matrix, asio::local::stream_protocol> super;
+	typedef generic_client_socket<socket_base<boost::asio::local::stream_protocol::socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>, Matrix, boost::asio::local::stream_protocol> super;
 
 public:
-	unix_client_socket_base(asio::io_context& io_context_) : super(io_context_) {this->set_server_addr("./ascs-unix-socket");}
+	unix_client_socket_base(boost::asio::io_context& io_context_) : super(io_context_) {this->set_server_addr("./ascs-unix-socket");}
 	unix_client_socket_base(Matrix& matrix_) : super(matrix_) {this->set_server_addr("./ascs-unix-socket");}
 };
 #endif

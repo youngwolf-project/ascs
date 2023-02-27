@@ -60,13 +60,13 @@ public:
 protected:
 	struct context
 	{
-		asio::io_context io_context;
+		boost::asio::io_context io_context;
 		unsigned refs;
 #ifdef ASCS_AVOID_AUTO_STOP_SERVICE
 #if BOOST_ASIO_VERSION > 101100
-		asio::executor_work_guard<asio::io_context::executor_type> work;
+		boost::asio::executor_work_guard<boost::asio::io_context::executor_type> work;
 #else
-		std::shared_ptr<asio::io_context::work> work;
+		std::shared_ptr<boost::asio::io_context::work> work;
 #endif
 #endif
 		std::list<std::thread> threads;
@@ -80,7 +80,7 @@ protected:
 #if BOOST_ASIO_VERSION > 101100
 			, work(io_context.get_executor())
 #else
-			, work(std::make_shared<asio::io_context::work>(io_context))
+			, work(std::make_shared<boost::asio::io_context::work>(io_context))
 #endif
 #endif
 		{}
@@ -143,9 +143,9 @@ public:
 	// but in 1.6 and later, a service_pump is not an io_context anymore, then it is just provided to accommodate legacy usage in class
 	// (unix_)server_base, (unix_)server_socket_base, (unix_)client_socket_base, udp::(unix_)socket_base and their subclasses.
 	//according to the implementation, it picks the io_context who has the least references, so the return values are not consistent.
-	operator asio::io_context& () {return assign_io_context();}
+	operator boost::asio::io_context& () {return assign_io_context();}
 
-	asio::io_context& assign_io_context(bool increase_ref = true) //pick the context which has the least references
+	boost::asio::io_context& assign_io_context(bool increase_ref = true) //pick the context which has the least references
 	{
 		if (single_ctx)
 			return context_can.front().io_context;
@@ -175,12 +175,12 @@ public:
 		throw std::runtime_error("no available io_context");
 	}
 
-	void return_io_context(const asio::execution_context& io_context, unsigned refs = 1)
+	void return_io_context(const boost::asio::execution_context& io_context, unsigned refs = 1)
 	{
 		if (!single_ctx)
 			ascs::do_something_to_one(context_can, context_can_mutex, [&](context& item) {return &io_context != &item.io_context ? false : (item.refs -= refs, true);});
 	}
-	void assign_io_context(const asio::execution_context& io_context, unsigned refs = 1)
+	void assign_io_context(const boost::asio::execution_context& io_context, unsigned refs = 1)
 	{
 		if (!single_ctx)
 			ascs::do_something_to_one(context_can, context_can_mutex, [&](context& item) {return &io_context != &item.io_context ? false : (item.refs += refs, true);});
@@ -352,9 +352,9 @@ protected:
 			ascs::do_something_to_all(context_can, [](context& item) {
 #if BOOST_ASIO_VERSION > 101100
 				(&item.work)->~executor_work_guard();
-				new(&item.work) asio::executor_work_guard<asio::io_context::executor_type>(item.io_context.get_executor());
+				new(&item.work) boost::asio::executor_work_guard<boost::asio::io_context::executor_type>(item.io_context.get_executor());
 #else
-				item.work = std::make_shared<asio::io_context::work>(item.io_context);
+				item.work = std::make_shared<boost::asio::io_context::work>(item.io_context);
 #endif
 			});
 #endif

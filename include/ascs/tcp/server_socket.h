@@ -60,7 +60,7 @@ protected:
 	const Server& get_server() const {return server;}
 
 	virtual void on_unpack_error() {unified_out::error_out(ASCS_LLF " can not unpack msg.", this->id()); this->unpacker()->dump_left_data(); force_shutdown();}
-	virtual void on_recv_error(const asio::error_code& ec) {this->show_info(ec, "server link:", "broken/been shut down"); force_shutdown();}
+	virtual void on_recv_error(const boost::system::error_code& ec) {this->show_info(ec, "server link:", "broken/been shut down"); force_shutdown();}
 	virtual void on_async_shutdown_error() {force_shutdown();}
 	virtual bool on_heartbeat_error() {this->show_info("server link:", "broke unexpectedly."); force_shutdown(); return false;}
 
@@ -78,14 +78,14 @@ private:
 	// 1. on_xxxx callbacks on this object;
 	// 2. use this->post or this->set_timer to emit an async event, then in the callback.
 	//otherwise, you must protect them to not be called with reset and on_close simultaneously
-	virtual void attach_io_context(asio::io_context& io_context_, unsigned refs) {server.get_service_pump().assign_io_context(io_context_, refs);}
-	virtual void detach_io_context(asio::io_context& io_context_, unsigned refs) {server.get_service_pump().return_io_context(io_context_, refs);}
+	virtual void attach_io_context(boost::asio::io_context& io_context_, unsigned refs) {server.get_service_pump().assign_io_context(io_context_, refs);}
+	virtual void detach_io_context(boost::asio::io_context& io_context_, unsigned refs) {server.get_service_pump().return_io_context(io_context_, refs);}
 
 private:
 	Server& server;
 };
 
-template<typename Packer, typename Unpacker, typename Server = i_server, typename Socket = asio::ip::tcp::socket,
+template<typename Packer, typename Unpacker, typename Server = i_server, typename Socket = boost::asio::ip::tcp::socket,
 	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER,
 	template<typename, typename> class ReaderWriter = reader_writer>
@@ -96,7 +96,7 @@ template<typename Packer, typename Unpacker, typename Server = i_server,
 	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER,
 	template<typename, typename> class ReaderWriter = reader_writer>
-using unix_server_socket_base = generic_server_socket<socket_base<asio::local::stream_protocol::socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>, Server>;
+using unix_server_socket_base = generic_server_socket<socket_base<boost::asio::local::stream_protocol::socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>, Server>;
 #endif
 
 }} //namespace

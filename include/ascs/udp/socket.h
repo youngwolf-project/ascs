@@ -17,7 +17,7 @@
 
 namespace ascs { namespace udp {
 
-template<typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = asio::ip::udp::socket, typename Family = asio::ip::udp,
+template<typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = boost::asio::ip::udp::socket, typename Family = boost::asio::ip::udp,
 	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
 class generic_socket : public socket4<Socket, Family, Packer, Unpacker, udp_msg, InQueue, InContainer, OutQueue, OutContainer>
@@ -32,17 +32,17 @@ private:
 	typedef socket4<Socket, Family, Packer, Unpacker, udp_msg, InQueue, InContainer, OutQueue, OutContainer> super;
 
 public:
-	static bool set_addr(asio::ip::udp::endpoint& endpoint, unsigned short port, const std::string& ip)
+	static bool set_addr(boost::asio::ip::udp::endpoint& endpoint, unsigned short port, const std::string& ip)
 	{
 		if (ip.empty())
-			endpoint = asio::ip::udp::endpoint(ASCS_UDP_DEFAULT_IP_VERSION, port);
+			endpoint = boost::asio::ip::udp::endpoint(ASCS_UDP_DEFAULT_IP_VERSION, port);
 		else
 		{
-			asio::error_code ec;
+			boost::system::error_code ec;
 #if BOOST_ASIO_VERSION >= 101100
-			auto addr = asio::ip::make_address(ip, ec); assert(!ec);
+			auto addr = boost::asio::ip::make_address(ip, ec); assert(!ec);
 #else
-			auto addr = asio::ip::address::from_string(ip, ec); assert(!ec);
+			auto addr = boost::asio::ip::address::from_string(ip, ec); assert(!ec);
 #endif
 			if (ec)
 			{
@@ -50,14 +50,14 @@ public:
 				return false;
 			}
 
-			endpoint = asio::ip::udp::endpoint(addr, port);
+			endpoint = boost::asio::ip::udp::endpoint(addr, port);
 		}
 
 		return true;
 	}
 
 protected:
-	generic_socket(asio::io_context& io_context_) : super(io_context_), is_bound(false), is_connected(false), connect_mode(ASCS_UDP_CONNECT_MODE), matrix(nullptr) {}
+	generic_socket(boost::asio::io_context& io_context_) : super(io_context_), is_bound(false), is_connected(false), connect_mode(ASCS_UDP_CONNECT_MODE), matrix(nullptr) {}
 	generic_socket(Matrix& matrix_) : super(matrix_.get_service_pump()), is_bound(false), is_connected(false), connect_mode(ASCS_UDP_CONNECT_MODE), matrix(&matrix_) {}
 	~generic_socket() {this->clear_io_context_refs();}
 
@@ -100,9 +100,9 @@ public:
 	void force_shutdown() {show_info("link:", "been shutting down."); this->dispatch_in_io_strand([this]() {this->close(true);});}
 	void graceful_shutdown() {force_shutdown();}
 
-	static std::string endpoint_to_string(const asio::ip::udp::endpoint& ep) {return ep.address().to_string() + ':' + std::to_string(ep.port());}
+	static std::string endpoint_to_string(const boost::asio::ip::udp::endpoint& ep) {return ep.address().to_string() + ':' + std::to_string(ep.port());}
 #ifdef BOOST_ASIO_HAS_LOCAL_SOCKETS
-	static std::string endpoint_to_string(const asio::local::datagram_protocol::endpoint& ep) {return ep.path();}
+	static std::string endpoint_to_string(const boost::asio::local::datagram_protocol::endpoint& ep) {return ep.path();}
 #endif
 
 	void show_info(const char* head = nullptr, const char* tail = nullptr) const
@@ -184,7 +184,7 @@ protected:
 		auto& lowest_object = this->lowest_layer();
 		if (!lowest_object.is_open()) //user maybe has opened this socket (to set options for example)
 		{
-			asio::error_code ec;
+			boost::system::error_code ec;
 			lowest_object.open(local_addr.protocol(), ec); assert(!ec);
 			if (ec)
 			{
@@ -193,7 +193,7 @@ protected:
 			}
 
 #ifndef ASCS_NOT_REUSE_ADDRESS
-			lowest_object.set_option(asio::socket_base::reuse_address(true), ec); assert(!ec);
+			lowest_object.set_option(boost::asio::socket_base::reuse_address(true), ec); assert(!ec);
 #endif
 		}
 
@@ -208,12 +208,12 @@ protected:
 	//msg was failed to send and udp::generic_socket will not hold it any more, if you want to re-send it in the future,
 	// you must take over it and re-send (at any time) it via direct_send_msg.
 	//DO NOT hold msg for further usage, just swap its content with your own message in this virtual function.
-	virtual void on_send_error(const asio::error_code& ec, typename super::in_msg& msg)
+	virtual void on_send_error(const boost::system::error_code& ec, typename super::in_msg& msg)
 		{unified_out::error_out(ASCS_LLF " send msg error (%d %s)", this->id(), ec.value(), ec.message().data());}
 
-	virtual void on_recv_error(const asio::error_code& ec)
+	virtual void on_recv_error(const boost::system::error_code& ec)
 	{
-		if (asio::error::operation_aborted != ec)
+		if (boost::asio::error::operation_aborted != ec)
 			unified_out::error_out(ASCS_LLF " recv msg error (%d %s)", this->id(), ec.value(), ec.message().data());
 	}
 
@@ -259,8 +259,8 @@ private:
 	// 2. use this->post or this->set_timer to emit an async event, then in the callback.
 	//otherwise, you must protect them to not be called with reset and on_close simultaneously
 	//actually, you're recommended to not use them, use add_socket instead.
-	virtual void attach_io_context(asio::io_context& io_context_, unsigned refs) {if (nullptr != matrix) matrix->get_service_pump().assign_io_context(io_context_, refs);}
-	virtual void detach_io_context(asio::io_context& io_context_, unsigned refs) {if (nullptr != matrix) matrix->get_service_pump().return_io_context(io_context_, refs);}
+	virtual void attach_io_context(boost::asio::io_context& io_context_, unsigned refs) {if (nullptr != matrix) matrix->get_service_pump().assign_io_context(io_context_, refs);}
+	virtual void detach_io_context(boost::asio::io_context& io_context_, unsigned refs) {if (nullptr != matrix) matrix->get_service_pump().return_io_context(io_context_, refs);}
 
 	virtual void do_recv_msg()
 	{
@@ -269,17 +269,17 @@ private:
 			return;
 #endif
 		auto recv_buff = this->unpacker()->prepare_next_recv();
-		assert(asio::buffer_size(recv_buff) > 0);
-		if (0 == asio::buffer_size(recv_buff))
+		assert(boost::asio::buffer_size(recv_buff) > 0);
+		if (0 == boost::asio::buffer_size(recv_buff))
 			unified_out::error_out(ASCS_LLF " the unpacker returned an empty buffer, quit receiving!", this->id());
 		else
 		{
 			if (is_connected)
 				this->next_layer().async_receive(recv_buff, make_strand_handler(rw_strand,
-					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);})));
+					this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);})));
 			else
 				this->next_layer().async_receive_from(recv_buff, temp_addr, make_strand_handler(rw_strand,
-					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);})));
+					this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);})));
 			return;
 		}
 
@@ -288,7 +288,7 @@ private:
 #endif
 	}
 
-	void recv_handler(const asio::error_code& ec, size_t bytes_transferred)
+	void recv_handler(const boost::system::error_code& ec, size_t bytes_transferred)
 	{
 #ifdef ASCS_PASSIVE_RECV
 		this->clear_reading(); //clear reading flag before calling handle_msg() to make sure that recv_msg() is available in on_msg() and on_msg_handle()
@@ -312,7 +312,7 @@ private:
 		else
 		{
 #if defined(_MSC_VER) || defined(__CYGWIN__) || defined(__MINGW32__) || defined(__MINGW64__)
-			if (ec && asio::error::connection_refused != ec && asio::error::connection_reset != ec)
+			if (ec && boost::asio::error::connection_refused != ec && boost::asio::error::connection_reset != ec)
 #else
 			if (ec)
 #endif
@@ -343,13 +343,13 @@ private:
 			stat.send_delay_sum += statistic::now() - sending_msg.begin_time;
 			sending_msg.restart();
 			if (!is_connected)
-				this->next_layer().async_send_to(asio::buffer(sending_msg.data(), sending_msg.size()), sending_msg.peer_addr, make_strand_handler(rw_strand,
-					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);})));
+				this->next_layer().async_send_to(boost::asio::buffer(sending_msg.data(), sending_msg.size()), sending_msg.peer_addr, make_strand_handler(rw_strand,
+					this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);})));
 			else if (do_send_msg(sending_msg))
-				this->post_in_io_strand([this]() {send_handler(asio::error_code(), sending_msg.size());});
+				this->post_in_io_strand([this]() {send_handler(boost::system::error_code(), sending_msg.size());});
 			else
-				this->next_layer().async_send(asio::buffer(sending_msg.data(), sending_msg.size()), make_strand_handler(rw_strand,
-					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);})));
+				this->next_layer().async_send(boost::asio::buffer(sending_msg.data(), sending_msg.size()), make_strand_handler(rw_strand,
+					this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);})));
 			return true;
 		}
 		else
@@ -358,7 +358,7 @@ private:
 		return false;
 	}
 
-	void send_handler(const asio::error_code& ec, size_t bytes_transferred)
+	void send_handler(const boost::system::error_code& ec, size_t bytes_transferred)
 	{
 		if (!ec)
 		{
@@ -389,7 +389,7 @@ private:
 		}
 		sending_msg.clear(); //clear sending message after on_send_error, then user can decide how to deal with it in on_send_error
 
-		if (ec && (asio::error::not_socket == ec || asio::error::bad_descriptor == ec))
+		if (ec && (boost::asio::error::not_socket == ec || boost::asio::error::bad_descriptor == ec))
 			this->clear_sending();
 		//send msg in sequence
 		//on windows, sending a msg to addr_any may cause errors, please note
@@ -417,23 +417,23 @@ private:
 template<typename Packer, typename Unpacker, typename Matrix = i_matrix,
 	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
-class socket_base : public generic_socket<Packer, Unpacker, Matrix, asio::ip::udp::socket, asio::ip::udp, InQueue, InContainer, OutQueue, OutContainer>
+class socket_base : public generic_socket<Packer, Unpacker, Matrix, boost::asio::ip::udp::socket, boost::asio::ip::udp, InQueue, InContainer, OutQueue, OutContainer>
 {
 private:
-	typedef generic_socket<Packer, Unpacker, Matrix, asio::ip::udp::socket, asio::ip::udp, InQueue, InContainer, OutQueue, OutContainer> super;
+	typedef generic_socket<Packer, Unpacker, Matrix, boost::asio::ip::udp::socket, boost::asio::ip::udp, InQueue, InContainer, OutQueue, OutContainer> super;
 
 public:
-	socket_base(asio::io_context& io_context_) : super(io_context_) {}
+	socket_base(boost::asio::io_context& io_context_) : super(io_context_) {}
 	socket_base(Matrix& matrix_) : super(matrix_) {}
 
 protected:
-	virtual bool bind(const asio::ip::udp::endpoint& local_addr)
+	virtual bool bind(const boost::asio::ip::udp::endpoint& local_addr)
 	{
 		if (0 != local_addr.port() || !local_addr.address().is_unspecified())
 		{
-			asio::error_code ec;
+			boost::system::error_code ec;
 			this->lowest_layer().bind(local_addr, ec);
-			if (ec && asio::error::invalid_argument != ec)
+			if (ec && boost::asio::error::invalid_argument != ec)
 			{
 				unified_out::error_out("cannot bind socket: %s", ec.message().data());
 				return false;
@@ -443,11 +443,11 @@ protected:
 		return true;
 	}
 
-	virtual bool connect(const asio::ip::udp::endpoint& peer_addr)
+	virtual bool connect(const boost::asio::ip::udp::endpoint& peer_addr)
 	{
 		if (0 != peer_addr.port() || !peer_addr.address().is_unspecified())
 		{
-			asio::error_code ec;
+			boost::system::error_code ec;
 			this->lowest_layer().connect(peer_addr, ec);
 			if (ec)
 				unified_out::error_out("cannot connect to the peer");
@@ -465,23 +465,23 @@ protected:
 template<typename Packer, typename Unpacker, typename Matrix = i_matrix,
 	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
-class unix_socket_base : public generic_socket<Packer, Unpacker, Matrix, asio::local::datagram_protocol::socket, asio::local::datagram_protocol, InQueue, InContainer, OutQueue, OutContainer>
+class unix_socket_base : public generic_socket<Packer, Unpacker, Matrix, boost::asio::local::datagram_protocol::socket, boost::asio::local::datagram_protocol, InQueue, InContainer, OutQueue, OutContainer>
 {
 private:
-	typedef generic_socket<Packer, Unpacker, Matrix, asio::local::datagram_protocol::socket, asio::local::datagram_protocol, InQueue, InContainer, OutQueue, OutContainer> super;
+	typedef generic_socket<Packer, Unpacker, Matrix, boost::asio::local::datagram_protocol::socket, boost::asio::local::datagram_protocol, InQueue, InContainer, OutQueue, OutContainer> super;
 
 public:
-	unix_socket_base(asio::io_context& io_context_) : super(io_context_) {}
+	unix_socket_base(boost::asio::io_context& io_context_) : super(io_context_) {}
 	unix_socket_base(Matrix& matrix_) : super(matrix_) {}
 
 protected:
-	virtual bool bind(const asio::local::datagram_protocol::endpoint& local_addr)
+	virtual bool bind(const boost::asio::local::datagram_protocol::endpoint& local_addr)
 	{
 		if (!local_addr.path().empty())
 		{
-			asio::error_code ec;
+			boost::system::error_code ec;
 			this->lowest_layer().bind(local_addr, ec);
-			if (ec && asio::error::invalid_argument != ec)
+			if (ec && boost::asio::error::invalid_argument != ec)
 			{
 				unified_out::error_out("cannot bind socket: %s", ec.message().data());
 				return false;
@@ -491,11 +491,11 @@ protected:
 		return true;
 	}
 
-	virtual bool connect(const asio::local::datagram_protocol::endpoint& peer_addr)
+	virtual bool connect(const boost::asio::local::datagram_protocol::endpoint& peer_addr)
 	{
 		if (!peer_addr.path().empty())
 		{
-			asio::error_code ec;
+			boost::system::error_code ec;
 			this->lowest_layer().connect(peer_addr, ec);
 			if (ec)
 				unified_out::error_out("cannot connect to the peer");
