@@ -838,12 +838,32 @@
  *  if your container's empty() function is not thread safe, please define macro ASCS_CAN_EMPTY_NOT_SAFE, then ascs will make it thread safe for you.
  * Maintain the ssl::context in ssl::single_client_base.
  * Make function endpoint_to_string static.
- * Introduce macro ASCS_UNPACKER_STRIPPED to control i_unpacker's default value of the stripped property.
  *
  * DELETION:
  *
  * REFACTORING:
  * Add some default implementations for i_matrix interface, which is useful for a dummy matrix.
+ *
+ * REPLACEMENTS:
+ *
+ * ===============================================================
+ * 2023.9.13	version 1.8.0
+ *
+ * SPECIAL ATTENTION (incompatible with old editions):
+ *
+ * HIGHLIGHT:
+ *
+ * FIX:
+ * Fix msvc++'s complaint -- ambiguous namespace proxy.
+ * Close connected UDP for normal UDP (to support receiving messages from multipile peers).
+ *
+ * ENHANCEMENTS:
+ * Introduce macro ASCS_UNPACKER_STRIPPED to control i_unpacker's default value of the stripped property.
+ *
+ * DELETION:
+ *
+ * REFACTORING:
+ * Refactoring of callback mechanism.
  *
  * REPLACEMENTS:
  *
@@ -856,8 +876,8 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#define ASCS_VER		10700	//[x]xyyzz -> [x]x.[y]y.[z]z
-#define ASCS_VERSION	"1.7.0"
+#define ASCS_VER		10800	//[x]xyyzz -> [x]x.[y]y.[z]z
+#define ASCS_VERSION	"1.8.0"
 
 //asio and compiler check
 #ifdef _MSC_VER
