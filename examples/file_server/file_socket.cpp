@@ -1,7 +1,7 @@
 
 //configuration
 #define ASCS_DEFAULT_PACKER packer2<>
-//#define ASCS_RECV_BUFFER_TYPE std::vector<asio::mutable_buffer> //scatter-gather buffer, it's very useful under certain situations (for example, ring buffer).
+//#define ASCS_RECV_BUFFER_TYPE std::vector<boost::asio::mutable_buffer> //scatter-gather buffer, it's very useful under certain situations (for example, ring buffer).
 //#define ASCS_SCATTERED_RECV_BUFFER //used by unpackers, not belongs to ascs
 //note, these two macro are not requisite, I'm just showing how to use them.
 

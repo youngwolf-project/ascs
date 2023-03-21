@@ -51,7 +51,7 @@ protected:
 
 	virtual void on_connect()
 	{
-		asio::ip::tcp::no_delay option(true);
+		boost::asio::ip::tcp::no_delay option(true);
 		lowest_layer().set_option(option);
 
 		char* buff = new char[msg_len];

@@ -130,9 +130,9 @@ public:
 	}
 
 	//a return value of 0 indicates that the read operation is complete. a non-zero value indicates the maximum number
-	//of bytes to be read on the next call to the stream's async_read_some function. ---asio::async_read
+	//of bytes to be read on the next call to the stream's async_read_some function. ---boost::asio::async_read
 	//read as many as possible to reduce asynchronous call-back, and don't forget to handle sticky package carefully in parse_msg function.
-	virtual size_t completion_condition(const asio::error_code& ec, size_t bytes_transferred)
+	virtual size_t completion_condition(const boost::system::error_code& ec, size_t bytes_transferred)
 	{
 		if (ec)
 			return 0;
@@ -156,11 +156,11 @@ public:
 #ifdef ASCS_SCATTERED_RECV_BUFFER
 	//this is just to satisfy the compiler, it's not a real scatter-gather buffer,
 	//if you introduce a ring buffer, then you will have the chance to provide a real scatter-gather buffer.
-	virtual typename super::buffer_type prepare_next_recv() {assert(remain_len < ASCS_MSG_BUFFER_SIZE); return typename super::buffer_type(1, asio::buffer(raw_buff) + remain_len);}
-#elif ASIO_VERSION <= 101100
-	virtual typename super::buffer_type prepare_next_recv() {assert(remain_len < ASCS_MSG_BUFFER_SIZE); return asio::buffer(asio::buffer(raw_buff) + remain_len);}
+	virtual typename super::buffer_type prepare_next_recv() {assert(remain_len < ASCS_MSG_BUFFER_SIZE); return typename super::buffer_type(1, boost::asio::buffer(raw_buff) + remain_len);}
+#elif BOOST_ASIO_VERSION <= 101100
+	virtual typename super::buffer_type prepare_next_recv() {assert(remain_len < ASCS_MSG_BUFFER_SIZE); return boost::asio::buffer(boost::asio::buffer(raw_buff) + remain_len);}
 #else
-	virtual typename super::buffer_type prepare_next_recv() {assert(remain_len < ASCS_MSG_BUFFER_SIZE); return asio::buffer(raw_buff) + remain_len;}
+	virtual typename super::buffer_type prepare_next_recv() {assert(remain_len < ASCS_MSG_BUFFER_SIZE); return boost::asio::buffer(raw_buff) + remain_len;}
 #endif
 
 	//msg must has been unpacked by this unpacker
@@ -284,9 +284,9 @@ public:
 	}
 
 	//a return value of 0 indicates that the read operation is complete. a non-zero value indicates the maximum number
-	//of bytes to be read on the next call to the stream's async_read_some function. ---asio::async_read
+	//of bytes to be read on the next call to the stream's async_read_some function. ---boost::asio::async_read
 	//read as many as possible to reduce asynchronous call-back, and don't forget to handle sticky package carefully in parse_msg function.
-	virtual size_t completion_condition(const asio::error_code& ec, size_t bytes_transferred)
+	virtual size_t completion_condition(const boost::system::error_code& ec, size_t bytes_transferred)
 	{
 		if (ec)
 			return 0;
@@ -315,27 +315,27 @@ public:
 	{
 		assert(remain_len < (big_msg.empty() ? raw_buff.size() : big_msg.size()));
 		if (big_msg.empty())
-			return typename super::buffer_type(1, asio::buffer(raw_buff) + remain_len);
+			return typename super::buffer_type(1, boost::asio::buffer(raw_buff) + remain_len);
 
-		return typename super::buffer_type(1, asio::buffer(const_cast<char*>(big_msg.data()), big_msg.size()) + remain_len);
+		return typename super::buffer_type(1, boost::asio::buffer(const_cast<char*>(big_msg.data()), big_msg.size()) + remain_len);
 	}
-#elif ASIO_VERSION <= 101100
+#elif BOOST_ASIO_VERSION <= 101100
 	virtual typename super::buffer_type prepare_next_recv()
 	{
 		assert(remain_len < (big_msg.empty() ? raw_buff.size() : big_msg.size()));
 		if (big_msg.empty())
-			return asio::buffer(asio::buffer(raw_buff) + remain_len);
+			return boost::asio::buffer(boost::asio::buffer(raw_buff) + remain_len);
 
-		return asio::buffer(asio::buffer(const_cast<char*>(big_msg.data()), big_msg.size()) + remain_len);
+		return boost::asio::buffer(boost::asio::buffer(const_cast<char*>(big_msg.data()), big_msg.size()) + remain_len);
 	}
 #else
 	virtual typename super::buffer_type prepare_next_recv()
 	{
 		assert(remain_len < (big_msg.empty() ? raw_buff.size() : big_msg.size()));
 		if (big_msg.empty())
-			return asio::buffer(raw_buff) + remain_len;
+			return boost::asio::buffer(raw_buff) + remain_len;
 
-		return asio::buffer(const_cast<char*>(big_msg.data()), big_msg.size()) + remain_len;
+		return boost::asio::buffer(const_cast<char*>(big_msg.data()), big_msg.size()) + remain_len;
 	}
 #endif
 
@@ -379,9 +379,9 @@ public:
 #ifdef ASCS_SCATTERED_RECV_BUFFER
 	//this is just to satisfy the compiler, it's not a real scatter-gather buffer,
 	//if you introduce a ring buffer, then you will have the chance to provide a real scatter-gather buffer.
-	virtual buffer_type prepare_next_recv() {return buffer_type(1, asio::buffer(raw_buff));}
+	virtual buffer_type prepare_next_recv() {return buffer_type(1, boost::asio::buffer(raw_buff));}
 #else
-	virtual buffer_type prepare_next_recv() {return asio::buffer(raw_buff);}
+	virtual buffer_type prepare_next_recv() {return boost::asio::buffer(raw_buff);}
 #endif
 
 protected:
@@ -413,7 +413,7 @@ public:
 		return unpack_ok;
 	}
 
-	virtual size_t completion_condition(const asio::error_code& ec, size_t bytes_transferred) {return unpacker_.completion_condition(ec, bytes_transferred);}
+	virtual size_t completion_condition(const boost::system::error_code& ec, size_t bytes_transferred) {return unpacker_.completion_condition(ec, bytes_transferred);}
 	virtual typename super::buffer_type prepare_next_recv() {return unpacker_.prepare_next_recv();}
 
 	//msg must has been unpacked by this unpacker
@@ -448,9 +448,9 @@ public:
 #ifdef ASCS_SCATTERED_RECV_BUFFER
 	//this is just to satisfy the compiler, it's not a real scatter-gather buffer,
 	//if you introduce a ring buffer, then you will have the chance to provide a real scatter-gather buffer.
-	virtual typename super::buffer_type prepare_next_recv() {return typename super::buffer_type(1, asio::buffer(raw_buff));}
+	virtual typename super::buffer_type prepare_next_recv() {return typename super::buffer_type(1, boost::asio::buffer(raw_buff));}
 #else
-	virtual typename super::buffer_type prepare_next_recv() {return asio::buffer(raw_buff);}
+	virtual typename super::buffer_type prepare_next_recv() {return boost::asio::buffer(raw_buff);}
 #endif
 
 protected:
@@ -515,8 +515,8 @@ public:
 	}
 
 	//a return value of 0 indicates that the read operation is complete. a non-zero value indicates the maximum number
-	//of bytes to be read on the next call to the stream's async_read_some function. ---asio::async_read
-	virtual size_t completion_condition(const asio::error_code& ec, size_t bytes_transferred)
+	//of bytes to be read on the next call to the stream's async_read_some function. ---boost::asio::async_read
+	virtual size_t completion_condition(const boost::system::error_code& ec, size_t bytes_transferred)
 	{
 		if (ec)
 			return 0;
@@ -540,9 +540,9 @@ public:
 	//this is just to satisfy the compiler, it's not a real scatter-gather buffer,
 	//if you introduce a ring buffer, then you will have the chance to provide a real scatter-gather buffer.
 #ifdef ASCS_SCATTERED_RECV_BUFFER
-	virtual buffer_type prepare_next_recv() {return buffer_type(1, raw_buff.empty() ? asio::buffer((char*) &head, ASCS_HEAD_LEN) : asio::buffer(raw_buff.data(), raw_buff.size()));}
+	virtual buffer_type prepare_next_recv() {return buffer_type(1, raw_buff.empty() ? boost::asio::buffer((char*) &head, ASCS_HEAD_LEN) : boost::asio::buffer(raw_buff.data(), raw_buff.size()));}
 #else
-	virtual buffer_type prepare_next_recv() {return raw_buff.empty() ? asio::buffer((char*) &head, ASCS_HEAD_LEN) : asio::buffer(raw_buff.data(), raw_buff.size());}
+	virtual buffer_type prepare_next_recv() {return raw_buff.empty() ? boost::asio::buffer((char*) &head, ASCS_HEAD_LEN) : boost::asio::buffer(raw_buff.data(), raw_buff.size());}
 #endif
 
 private:
@@ -584,15 +584,15 @@ public:
 	}
 
 	//a return value of 0 indicates that the read operation is complete. a non-zero value indicates the maximum number
-	//of bytes to be read on the next call to the stream's async_read_some function. ---asio::async_read
-	virtual size_t completion_condition(const asio::error_code& ec, size_t bytes_transferred) {return ec || bytes_transferred == raw_buff.size() ? 0 : _fixed_length;}
+	//of bytes to be read on the next call to the stream's async_read_some function. ---boost::asio::async_read
+	virtual size_t completion_condition(const boost::system::error_code& ec, size_t bytes_transferred) {return ec || bytes_transferred == raw_buff.size() ? 0 : _fixed_length;}
 
 	//this is just to satisfy the compiler, it's not a real scatter-gather buffer,
 	//if you introduce a ring buffer, then you will have the chance to provide a real scatter-gather buffer.
 #ifdef ASCS_SCATTERED_RECV_BUFFER
-	virtual buffer_type prepare_next_recv() {raw_buff.assign(_fixed_length); return buffer_type(1, asio::buffer(raw_buff.data(), raw_buff.size()));}
+	virtual buffer_type prepare_next_recv() {raw_buff.assign(_fixed_length); return buffer_type(1, boost::asio::buffer(raw_buff.data(), raw_buff.size()));}
 #else
-	virtual buffer_type prepare_next_recv() {raw_buff.assign(_fixed_length); return asio::buffer(raw_buff.data(), raw_buff.size());}
+	virtual buffer_type prepare_next_recv() {raw_buff.assign(_fixed_length); return boost::asio::buffer(raw_buff.data(), raw_buff.size());}
 #endif
 
 private:
@@ -692,9 +692,9 @@ public:
 	}
 
 	//a return value of 0 indicates that the read operation is complete. a non-zero value indicates the maximum number
-	//of bytes to be read on the next call to the stream's async_read_some function. ---asio::async_read
+	//of bytes to be read on the next call to the stream's async_read_some function. ---boost::asio::async_read
 	//read as many as possible to reduce asynchronous call-back, and don't forget to handle sticky package carefully in parse_msg function.
-	virtual size_t completion_condition(const asio::error_code& ec, size_t bytes_transferred)
+	virtual size_t completion_condition(const boost::system::error_code& ec, size_t bytes_transferred)
 	{
 		if (ec)
 			return 0;
@@ -708,11 +708,11 @@ public:
 	//this is just to satisfy the compiler, it's not a real scatter-gather buffer,
 	//if you introduce a ring buffer, then you will have the chance to provide a real scatter-gather buffer.
 #ifdef ASCS_SCATTERED_RECV_BUFFER
-	virtual buffer_type prepare_next_recv() {assert(remain_len < ASCS_MSG_BUFFER_SIZE); return buffer_type(1, asio::buffer(raw_buff) + remain_len);}
-#elif ASIO_VERSION <= 101100
-	virtual buffer_type prepare_next_recv() {assert(remain_len < ASCS_MSG_BUFFER_SIZE); return asio::buffer(asio::buffer(raw_buff) + remain_len);}
+	virtual buffer_type prepare_next_recv() {assert(remain_len < ASCS_MSG_BUFFER_SIZE); return buffer_type(1, boost::asio::buffer(raw_buff) + remain_len);}
+#elif BOOST_ASIO_VERSION <= 101100
+	virtual buffer_type prepare_next_recv() {assert(remain_len < ASCS_MSG_BUFFER_SIZE); return boost::asio::buffer(boost::asio::buffer(raw_buff) + remain_len);}
 #else
-	virtual buffer_type prepare_next_recv() {assert(remain_len < ASCS_MSG_BUFFER_SIZE); return asio::buffer(raw_buff) + remain_len;}
+	virtual buffer_type prepare_next_recv() {assert(remain_len < ASCS_MSG_BUFFER_SIZE); return boost::asio::buffer(raw_buff) + remain_len;}
 #endif
 
 	//msg must has been unpacked by this unpacker
@@ -744,14 +744,14 @@ public:
 		return true;
 	}
 
-	virtual size_t completion_condition(const asio::error_code& ec, size_t bytes_transferred) {return ec || bytes_transferred > 0 ? 0 : ASCS_MSG_BUFFER_SIZE;}
+	virtual size_t completion_condition(const boost::system::error_code& ec, size_t bytes_transferred) {return ec || bytes_transferred > 0 ? 0 : ASCS_MSG_BUFFER_SIZE;}
 
 	//this is just to satisfy the compiler, it's not a real scatter-gather buffer,
 	//if you introduce a ring buffer, then you will have the chance to provide a real scatter-gather buffer.
 #ifdef ASCS_SCATTERED_RECV_BUFFER
-	virtual buffer_type prepare_next_recv() {return buffer_type(1, asio::buffer(raw_buff));}
+	virtual buffer_type prepare_next_recv() {return buffer_type(1, boost::asio::buffer(raw_buff));}
 #else
-	virtual buffer_type prepare_next_recv() {return asio::buffer(raw_buff);}
+	virtual buffer_type prepare_next_recv() {return boost::asio::buffer(raw_buff);}
 #endif
 
 protected:

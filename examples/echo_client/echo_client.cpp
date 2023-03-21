@@ -1,5 +1,6 @@
 
 #include <iostream>
+#include <boost/tokenizer.hpp>
 
 //configuration
 #define ASCS_SERVER_PORT	9527
@@ -31,7 +32,7 @@
 #define ASCS_MAX_SEND_BUF (10 * ASCS_MSG_BUFFER_SIZE)
 #define ASCS_MAX_RECV_BUF (10 * ASCS_MSG_BUFFER_SIZE)
 #define ASCS_DEFAULT_UNPACKER flexible_unpacker<>
-//this unpacker only pre-allocated a buffer of 4000 bytes, but it can parse messages up to ST_ASIO_MSG_BUFFER_SIZE (here is 1000000) bytes,
+//this unpacker only pre-allocated a buffer of 4000 bytes, but it can parse messages up to ASCS_MSG_BUFFER_SIZE (here is 1000000) bytes,
 //it works as the default unpacker for messages <= 4000, otherwise, it works as non_copy_unpacker
 #elif 1 == PACKER_UNPACKER_TYPE
 #define ASCS_DEFAULT_PACKER packer2<unique_buffer<std::string>, std::string>
@@ -551,7 +552,8 @@ int main(int argc, const char* argv[])
 			char mode = 0; //0 broadcast, 1 randomly pick one link per msg
 			auto repeat_times = 1;
 
-			auto parameters = split_string(str);
+			boost::char_separator<char> sep(" \t");
+			boost::tokenizer<boost::char_separator<char>> parameters(str, sep);
 			auto iter = std::begin(parameters);
 			if (iter != std::end(parameters)) msg_num = std::max((size_t) atoll(iter++->data()), (size_t) 1);
 

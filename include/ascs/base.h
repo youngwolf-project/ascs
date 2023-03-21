@@ -32,22 +32,16 @@
 #include <condition_variable>
 #endif
 
-#include <asio.hpp>
+#include <boost/asio.hpp>
+#include <boost/version.hpp>
+#include <boost/noncopyable.hpp>
 
 #include "config.h"
 
 namespace ascs
 {
 
-#if defined(_MSC_VER) && _MSC_VER <= 1800 //terrible VC++
-inline bool operator==(asio::error::basic_errors _Left, const asio::error_code& _Right) {return _Left == _Right.value();}
-inline bool operator!=(asio::error::basic_errors _Left, const asio::error_code& _Right) {return !(_Left == _Right);}
-
-inline bool operator==(asio::error::misc_errors _Left, const asio::error_code& _Right) {return _Left == _Right.value();}
-inline bool operator!=(asio::error::misc_errors _Left, const asio::error_code& _Right) {return !(_Left == _Right);}
-#endif
-
-class scope_atomic_lock : public asio::noncopyable
+class scope_atomic_lock : public boost::noncopyable
 {
 public:
 	scope_atomic_lock(std::atomic_flag& atomic_) : _locked(false), atomic(atomic_) {lock();} //atomic_ must has been initialized with false
@@ -214,7 +208,7 @@ public:
 	//heartbeat must not be included in msg_can, otherwise you must handle heartbeat at where you handle normal messages.
 	virtual bool parse_msg(size_t bytes_transferred, container_type& msg_can) = 0;
 	virtual void compose_msg(const char* data, size_t size, container_type& msg_can) {} //reliable UDP socket needs this
-	virtual size_t completion_condition(const asio::error_code& ec, size_t bytes_transferred) {return 0;}
+	virtual size_t completion_condition(const boost::system::error_code& ec, size_t bytes_transferred) {return 0;}
 	virtual buffer_type prepare_next_recv() = 0;
 
 	//this default implementation is meaningless, just satisfy compilers
@@ -243,7 +237,7 @@ public:
 
 namespace udp
 {
-	template<typename MsgType, typename Family = asio::ip::udp>
+	template<typename MsgType, typename Family = boost::asio::ip::udp>
 	class udp_msg : public MsgType
 	{
 	public:
@@ -435,8 +429,8 @@ struct statistic
 	//send relevant statistic
 	uint_fast64_t send_msg_sum; //not counted msgs in sending buffer
 	uint_fast64_t send_byte_sum; //include data added by packer, not counted msgs in sending buffer
-	stat_duration send_delay_sum; //from send_(native_)msg (exclude msg packing) to asio::async_write
-	stat_duration send_time_sum; //from asio::async_write to send_handler
+	stat_duration send_delay_sum; //from send_(native_)msg (exclude msg packing) to boost::asio::async_write
+	stat_duration send_time_sum; //from boost::asio::async_write to send_handler
 	//above two items indicate your network's speed or load
 	stat_duration pack_time_sum; //udp::socket_base will not gather this item
 

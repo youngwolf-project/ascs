@@ -1,5 +1,6 @@
 
 #include <iostream>
+#include <boost/tokenizer.hpp>
 
 //configuration
 #define ASCS_SERVER_PORT	9527
@@ -47,7 +48,7 @@ public:
 	}
 
 protected:
-	virtual void on_connect() {asio::ip::tcp::no_delay option(true); lowest_layer().set_option(option); client_socket::on_connect();}
+	virtual void on_connect() {boost::asio::ip::tcp::no_delay option(true); lowest_layer().set_option(option); client_socket::on_connect();}
 
 	//msg handling, must define macro ASCS_SYNC_DISPATCH
 	//do not hold msg_can for further usage, access msg_can and return from on_msg as quickly as possible
@@ -173,7 +174,8 @@ int main(int argc, const char* argv[])
 			size_t msg_len = 1024; //must greater than or equal to sizeof(size_t)
 			auto msg_fill = '0';
 
-			auto parameters = split_string(str);
+			boost::char_separator<char> sep(" \t");
+			boost::tokenizer<boost::char_separator<char>> parameters(str, sep);
 			auto iter = std::begin(parameters);
 			if (iter != std::end(parameters)) msg_num = std::max((size_t) atoll(iter++->data()), (size_t) 1);
 			if (iter != std::end(parameters)) msg_len = std::min((size_t) ASCS_MSG_BUFFER_SIZE, std::max((size_t) atoi(iter++->data()), (size_t) 1));

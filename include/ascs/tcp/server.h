@@ -17,7 +17,7 @@
 
 namespace ascs { namespace tcp {
 
-template<typename Socket, typename Family = asio::ip::tcp, typename Pool = object_pool<Socket>, typename Server = i_server>
+template<typename Socket, typename Family = boost::asio::ip::tcp, typename Pool = object_pool<Socket>, typename Server = i_server>
 class generic_server : public Server, public Pool
 {
 protected:
@@ -33,16 +33,16 @@ public:
 			server_addr = typename Family::endpoint(ASCS_TCP_DEFAULT_IP_VERSION, port);
 		else
 		{
-			asio::error_code ec;
-#if ASIO_VERSION >= 101100
-			auto addr = asio::ip::make_address(ip, ec);
+			boost::system::error_code ec;
+#if BOOST_ASIO_VERSION >= 101100
+			auto addr = boost::asio::ip::make_address(ip, ec);
 #else
-			auto addr = asio::ip::address::from_string(ip, ec);
+			auto addr = boost::asio::ip::address::from_string(ip, ec);
 #endif
 			if (ec)
 				return false;
 
-			server_addr = asio::ip::tcp::endpoint(addr, port);
+			server_addr = boost::asio::ip::tcp::endpoint(addr, port);
 		}
 
 		return true;
@@ -56,7 +56,7 @@ public:
 		if (count > 0)
 		{
 			io_context_refs += count;
-#if ASIO_VERSION < 101100
+#if BOOST_ASIO_VERSION < 101100
 			get_service_pump().assign_io_context(acceptor.get_io_service(), count);
 #else
 			get_service_pump().assign_io_context(acceptor.get_executor().context(), count);
@@ -69,7 +69,7 @@ public:
 		if (count > 0 && io_context_refs >= count)
 		{
 			io_context_refs -= count;
-#if ASIO_VERSION < 101100
+#if BOOST_ASIO_VERSION < 101100
 			get_service_pump().return_io_context(acceptor.get_io_service(), count);
 #else
 			get_service_pump().return_io_context(acceptor.get_executor().context(), count);
@@ -84,10 +84,10 @@ public:
 		if (is_listening())
 			return false;
 
-		asio::error_code ec;
+		boost::system::error_code ec;
 		if (!acceptor.is_open()) {acceptor.open(server_addr.protocol(), ec); assert(!ec);} //user maybe has opened this acceptor (to set options for example)
 #ifndef ASCS_NOT_REUSE_ADDRESS
-		acceptor.set_option(typename asio::socket_base::reuse_address(true), ec); assert(!ec);
+		acceptor.set_option(typename boost::asio::socket_base::reuse_address(true), ec); assert(!ec);
 #endif
 		acceptor.bind(server_addr, ec); assert(!ec);
 		if (ec) {unified_out::error_out("bind failed."); return false;}
@@ -113,18 +113,18 @@ public:
 		else
 			unified_out::info_out("finished pre-creating server sockets.");
 
-#if ASIO_VERSION > 101100
-		acceptor.listen(asio::socket_base::max_listen_connections, ec); assert(!ec);
+#if BOOST_ASIO_VERSION > 101100
+		acceptor.listen(boost::asio::socket_base::max_listen_connections, ec); assert(!ec);
 #else
-		acceptor.listen(asio::socket_base::max_connections, ec); assert(!ec);
+		acceptor.listen(boost::asio::socket_base::max_connections, ec); assert(!ec);
 #endif
 		if (ec) {unified_out::error_out("listen failed."); return false;}
 
-		ascs::do_something_to_all(sockets, [this](typename Pool::object_ctype& item) {this->do_async_accept(item);});
+		ascs::do_something_to_all(sockets, [this](typename Pool::object_ctype& item) {do_async_accept(item);});
 		return true;
 	}
 	bool is_listening() const {return listening;}
-	void stop_listen() {std::lock_guard<std::mutex> lock(mutex); listening = false; asio::error_code ec; acceptor.cancel(ec); acceptor.close(ec);}
+	void stop_listen() {std::lock_guard<std::mutex> lock(mutex); listening = false; boost::system::error_code ec; acceptor.cancel(ec); acceptor.close(ec);}
 
 	typename Family::acceptor& next_layer() {return acceptor;}
 	const typename Family::acceptor& next_layer() const {return acceptor;}
@@ -210,9 +210,9 @@ protected:
 	//if you want to ignore this error and continue to accept new connections after a specific delay, start a timer immediately and return false
 	// (don't call stop_listen()), after the timer exhausts, call start_next_accept() in the callback function.
 	//otherwise, don't rewrite this virtual function or call generic_server::on_accept_error() directly after your code.
-	virtual bool on_accept_error(const asio::error_code& ec, typename Pool::object_ctype& socket_ptr)
+	virtual bool on_accept_error(const boost::system::error_code& ec, typename Pool::object_ctype& socket_ptr)
 	{
-		if (asio::error::operation_aborted != ec)
+		if (boost::asio::error::operation_aborted != ec)
 		{
 			unified_out::error_out("failed to accept new connection because of %s, will stop listening.", ec.message().data());
 			stop_listen();
@@ -245,10 +245,10 @@ private:
 	// 1. on_xxxx callbacks on this object;
 	// 2. use this->post or this->set_timer to emit an async event, then in the callback.
 	//otherwise, you must protect them to not be called with reset and on_close simultaneously
-	virtual void attach_io_context(asio::io_context& io_context_, unsigned refs) {get_service_pump().assign_io_context(io_context_, refs);}
-	virtual void detach_io_context(asio::io_context& io_context_, unsigned refs) {get_service_pump().return_io_context(io_context_, refs);}
+	virtual void attach_io_context(boost::asio::io_context& io_context_, unsigned refs) {get_service_pump().assign_io_context(io_context_, refs);}
+	virtual void detach_io_context(boost::asio::io_context& io_context_, unsigned refs) {get_service_pump().return_io_context(io_context_, refs);}
 
-	void accept_handler(const asio::error_code& ec, typename Pool::object_ctype& socket_ptr)
+	void accept_handler(const boost::system::error_code& ec, typename Pool::object_ctype& socket_ptr)
 	{
 		if (!ec)
 		{
@@ -263,7 +263,7 @@ private:
 	}
 
 	void do_async_accept(typename Pool::object_ctype& socket_ptr)
-		{if (socket_ptr) acceptor.async_accept(socket_ptr->lowest_layer(), ASCS_COPY_ALL_AND_THIS(const asio::error_code& ec) {this->accept_handler(ec, socket_ptr);});}
+		{if (socket_ptr) acceptor.async_accept(socket_ptr->lowest_layer(), ASCS_COPY_ALL_AND_THIS(const boost::system::error_code& ec) {accept_handler(ec, socket_ptr);});}
 
 private:
 	typename Family::endpoint server_addr;
@@ -274,22 +274,22 @@ private:
 };
 
 template<typename Socket, typename Pool = object_pool<Socket>, typename Server = i_server>
-class server_base : public generic_server<Socket, asio::ip::tcp, Pool, Server>
+class server_base : public generic_server<Socket, boost::asio::ip::tcp, Pool, Server>
 {
 private:
-	typedef generic_server<Socket, asio::ip::tcp, Pool, Server> super;
+	typedef generic_server<Socket, boost::asio::ip::tcp, Pool, Server> super;
 
 public:
 	server_base(service_pump& service_pump_) : super(service_pump_) {this->set_server_addr(ASCS_SERVER_PORT);}
 	template<typename Arg> server_base(service_pump& service_pump_, Arg&& arg) : super(service_pump_, std::forward<Arg>(arg)) {this->set_server_addr(ASCS_SERVER_PORT);}
 };
 
-#ifdef ASIO_HAS_LOCAL_SOCKETS
+#ifdef BOOST_ASIO_HAS_LOCAL_SOCKETS
 template<typename Socket, typename Pool = object_pool<Socket>, typename Server = i_server>
-class unix_server_base : public generic_server<Socket, asio::local::stream_protocol, Pool, Server>
+class unix_server_base : public generic_server<Socket, boost::asio::local::stream_protocol, Pool, Server>
 {
 private:
-	typedef generic_server<Socket, asio::local::stream_protocol, Pool, Server> super;
+	typedef generic_server<Socket, boost::asio::local::stream_protocol, Pool, Server> super;
 
 public:
 	unix_server_base(service_pump& service_pump_) : super(service_pump_) {this->set_server_addr("./ascs-unix-socket");}
