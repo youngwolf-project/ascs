@@ -202,7 +202,7 @@ public:
 	typedef ASCS_RECV_BUFFER_TYPE buffer_type;
 
 protected:
-	i_unpacker() : _stripped(true) {}
+	i_unpacker() : _stripped(ASCS_UNPACKER_STRIPPED) {}
 	virtual ~i_unpacker() {}
 
 public:
