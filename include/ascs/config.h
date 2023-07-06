@@ -861,6 +861,7 @@
  * FIX:
  *
  * ENHANCEMENTS:
+ * Introduce macro ASCS_UNPACKER_STRIPPED to control i_unpacker's default value of the stripped property.
  *
  * DELETION:
  *
@@ -961,6 +962,11 @@ static_assert(ASCS_MAX_RECV_BUF > 0, "recv buffer capacity must be bigger than z
 //the message mode for websocket, !0 - binary mode (default), 0 - text mode
 #ifndef ASCS_WEBSOCKET_BINARY
 #define ASCS_WEBSOCKET_BINARY		1
+#endif
+
+//i_unpacker's default value of the stripped property, must be boolean.
+#ifndef ASCS_UNPACKER_STRIPPED
+#define ASCS_UNPACKER_STRIPPED		true
 #endif
 
 //by defining this, virtual function socket::calc_shrink_size will be introduced and be called when send buffer is insufficient before sending message,
