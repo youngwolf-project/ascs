@@ -838,6 +838,7 @@
  *  if your container's empty() function is not thread safe, please define macro ASCS_CAN_EMPTY_NOT_SAFE, then ascs will make it thread safe for you.
  * Maintain the ssl::context in ssl::single_client_base.
  * Make function endpoint_to_string static.
+ * Introduce macro ASCS_UNPACKER_STRIPPED to control i_unpacker's default value of the stripped property.
  *
  * DELETION:
  *
@@ -934,6 +935,11 @@ static_assert(ASCS_MAX_SEND_BUF > 0, "send buffer capacity must be bigger than z
 #define ASCS_MAX_RECV_BUF		(1024 * 1024) //1M, 1048576
 #endif
 static_assert(ASCS_MAX_RECV_BUF > 0, "recv buffer capacity must be bigger than zero.");
+
+//i_unpacker's default value of the stripped property, must be boolean.
+#ifndef ASCS_UNPACKER_STRIPPED
+#define ASCS_UNPACKER_STRIPPED		true
+#endif
 
 //by defining this, virtual function socket::calc_shrink_size will be introduced and be called when send buffer is insufficient before sending message,
 //the return value will be used to determine how many messages (in bytes) will be discarded (from the oldest ones), 0 means don't shrink send buffer,
