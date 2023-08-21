@@ -5,7 +5,7 @@
 
 #include <ascs/base.h>
 using namespace ascs;
-using namespace ascs::tcp;
+//using namespace ascs::tcp;
 
 #ifdef _MSC_VER
 #define fseeko _fseeki64

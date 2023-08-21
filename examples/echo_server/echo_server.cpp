@@ -52,7 +52,7 @@
 using namespace ascs;
 using namespace ascs::tcp;
 using namespace ascs::ext;
-using namespace ascs::ext::tcp;
+//using namespace ascs::ext::tcp;
 
 #define QUIT_COMMAND	"quit"
 #define RESTART_COMMAND	"restart"
@@ -76,10 +76,10 @@ public:
 	virtual void test() = 0;
 };
 
-class echo_socket : public server_socket2<i_echo_server>
+class echo_socket : public ext::tcp::server_socket2<i_echo_server>
 {
 private:
-	typedef server_socket2<i_echo_server> super;
+	typedef ext::tcp::server_socket2<i_echo_server> super;
 
 public:
 	echo_socket(i_echo_server& server_) : super(server_)
@@ -155,10 +155,10 @@ protected:
 	//msg handling end
 };
 
-class echo_server : public server2<echo_socket, i_echo_server>
+class echo_server : public ext::tcp::server2<echo_socket, i_echo_server>
 {
 public:
-	echo_server(service_pump& service_pump_) : server2<echo_socket, i_echo_server>(service_pump_) {}
+	echo_server(service_pump& service_pump_) : ext::tcp::server2<echo_socket, i_echo_server>(service_pump_) {}
 
 protected:
 	//from i_echo_server, pure virtual function, we must implement it.
