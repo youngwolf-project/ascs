@@ -3,7 +3,7 @@
 #define FILE_SOCKET_H_
 
 #include <ascs/ext/tcp.h>
-using namespace ascs::tcp;
+//using namespace ascs::tcp;
 using namespace ascs::ext::tcp;
 
 #include "../file_common/common.h"
@@ -11,7 +11,7 @@ using namespace ascs::ext::tcp;
 class file_socket : public base_socket, public server_socket
 {
 public:
-	file_socket(i_server& server_);
+	file_socket(tcp::i_server& server_);
 	virtual ~file_socket();
 
 public:
