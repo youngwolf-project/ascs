@@ -4,7 +4,7 @@
 
 #include <ascs/ext/tcp.h>
 using namespace ascs;
-using namespace ascs::tcp;
+//using namespace ascs::tcp;
 using namespace ascs::ext;
 using namespace ascs::ext::tcp;
 

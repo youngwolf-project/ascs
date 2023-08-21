@@ -17,7 +17,7 @@
 
 #include <ascs/ext/tcp.h>
 using namespace ascs;
-using namespace ascs::tcp;
+//using namespace ascs::tcp;
 using namespace ascs::ext;
 using namespace ascs::ext::tcp;
 
@@ -102,7 +102,7 @@ private:
 	std::mutex mutex;
 };
 
-class echo_client : public multi_client_base<echo_socket>
+class echo_client : public ascs::tcp::multi_client_base<echo_socket>
 {
 public:
 	echo_client(service_pump& service_pump_) : multi_client_base<echo_socket>(service_pump_) {}

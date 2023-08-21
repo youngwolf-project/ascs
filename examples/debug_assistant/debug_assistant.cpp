@@ -14,7 +14,7 @@
 using namespace ascs;
 using namespace ascs::tcp;
 using namespace ascs::ext;
-using namespace ascs::ext::tcp;
+//sing namespace ascs::ext::tcp;
 
 #define QUIT_COMMAND	"quit"
 #define STATUS			"status"
@@ -45,10 +45,10 @@ protected:
 	}
 };
 
-class echo_socket : public server_socket
+class echo_socket : public ext::tcp::server_socket
 {
 public:
-	echo_socket(i_server& server_) : server_socket(server_) {}
+	echo_socket(i_server& server_) : ext::tcp::server_socket(server_) {}
 
 protected:
 	//msg handling: send the original msg back(echo server)
