@@ -40,7 +40,7 @@ public:
 #include <ascs/ext/tcp.h>
 #include <ascs/ext/callbacks.h>
 using namespace ascs;
-using namespace ascs::tcp;
+//using namespace ascs::tcp;
 using namespace ascs::ext;
 using namespace ascs::ext::tcp;
 using namespace ascs::ext::tcp::proxy;
@@ -53,7 +53,7 @@ using namespace ascs::ext::tcp::proxy;
 //we only want close reconnecting mechanism on these sockets, so it cannot be done by defining macro ASCS_RECONNECT to false
 ///*
 //method 1
-class short_client : public multi_client_base<callbacks::c_socket<socks4::client_socket>>
+class short_client : public ascs::tcp::multi_client_base<callbacks::c_socket<socks4::client_socket>>
 {
 public:
 	short_client(service_pump& service_pump_) : multi_client_base(service_pump_) {set_server_addr(ASCS_SERVER_PORT);}

@@ -13,7 +13,7 @@
 
 #include <ascs/ext/tcp.h>
 using namespace ascs;
-using namespace ascs::tcp;
+//using namespace ascs::tcp;
 using namespace ascs::ext::tcp;
 
 #define QUIT_COMMAND	"quit"
@@ -26,7 +26,7 @@ using namespace ascs::ext::tcp;
 class echo_socket : public server_socket
 {
 public:
-	echo_socket(i_server& server_) : server_socket(server_) {}
+	echo_socket(tcp::i_server& server_) : server_socket(server_) {}
 
 protected:
 	//msg handling: send the original msg back (echo server), must define macro ASCS_SYNC_DISPATCH
@@ -46,7 +46,7 @@ protected:
 	//msg handling end
 };
 
-class echo_server : public server_base<echo_socket>
+class echo_server : public tcp::server_base<echo_socket>
 {
 public:
 	echo_server(service_pump& service_pump_) : server_base<echo_socket>(service_pump_) {}
