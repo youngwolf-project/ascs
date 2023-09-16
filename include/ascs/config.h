@@ -859,6 +859,8 @@
  * Add demo websocket_test and ssl_websocket_test which have been introduced in st_asio_wrapper 2.5.
  *
  * FIX:
+ * Fix msvc++'s complaint -- ambiguous namespace proxy.
+ * Close connected UDP for normal UDP (to support receiving messages from multipile peers).
  *
  * ENHANCEMENTS:
  * Introduce macro ASCS_UNPACKER_STRIPPED to control i_unpacker's default value of the stripped property.
@@ -866,6 +868,7 @@
  * DELETION:
  *
  * REFACTORING:
+ * Refactoring of callback mechanism.
  *
  * REPLACEMENTS:
  *
