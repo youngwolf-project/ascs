@@ -69,7 +69,11 @@ public:
 		{auto ref_holder(aci); return [=](const asio::error_code& ec, size_t bytes_transferred) {(void) ref_holder; handler(ec, bytes_transferred);};}
 #endif
 
+#if _MSVC_LANG >= 201703L
+	bool is_async_calling() const {return aci.use_count() > 1;}
+#else
 	bool is_async_calling() const {return !aci.unique();}
+#endif
 	bool is_last_async_call() const {return aci.use_count() <= 2;} //can only be called in callbacks
 	inline void set_async_calling(bool) {}
 
