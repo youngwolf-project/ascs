@@ -67,7 +67,11 @@ using namespace ascs::ext;
 //under the default behavior, each tcp::socket has their own packer, and cause memory waste
 //at here, we make each echo_socket use the same global packer for memory saving
 //notice: do not do this for unpacker, because unpacker has member variables and can't share each other
+#if _MSVC_LANG > 201703L
+auto global_packer = std::make_shared<ASCS_DEFAULT_PACKER>();
+#else
 auto global_packer(std::make_shared<ASCS_DEFAULT_PACKER>());
+#endif
 
 //demonstrate how to control the type of tcp::server_socket_base::server from template parameter
 class i_echo_server : public i_server
