@@ -257,7 +257,11 @@ public:
 	{
 		std::lock_guard<std::mutex> lock(invalid_object_can_mutex);
 		auto iter = std::find_if(std::begin(invalid_object_can), std::end(invalid_object_can), [&](object_ctype& item) {return item->is_equal_to(id);});
-		if (iter != std::end(invalid_object_can) && (*iter).unique() && (*iter)->obsoleted())
+#if _MSVC_LANG >= 201703L
+		if (iter != std::end(invalid_object_can) && 1 == iter->use_count() && (*iter)->obsoleted())
+#else
+		if (iter != std::end(invalid_object_can) && iter->unique() && (*iter)->obsoleted())
+#endif
 		{
 			auto object_ptr(std::move(*iter));
 			invalid_object_can.erase(iter);
@@ -271,7 +275,11 @@ public:
 	{
 		std::lock_guard<std::mutex> lock(invalid_object_can_mutex);
 		for (auto iter = std::begin(invalid_object_can); iter != std::end(invalid_object_can); ++iter)
-			if ((*iter).unique() && (*iter)->obsoleted())
+#if _MSVC_LANG >= 201703L
+			if (iter->use_count() && (*iter)->obsoleted())
+#else
+			if (iter->unique() && (*iter)->obsoleted())
+#endif
 			{
 				auto object_ptr(std::move(*iter));
 				invalid_object_can.erase(iter);
@@ -332,7 +340,11 @@ public:
 			//	socket_ptr->set_timer(...);
 			//}
 			//then in the future, when invoke the timer handler, the socket has been freed and its this pointer already became wild.
-			if ((*iter).unique() && (*iter)->obsoleted())
+#if _MSVC_LANG >= 201703L
+			if (1 == iter->use_count() && (*iter)->obsoleted())
+#else
+			if (iter->unique() && (*iter)->obsoleted())
+#endif
 			{
 				--num;
 				++num_affected;
