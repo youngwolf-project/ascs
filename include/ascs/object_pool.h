@@ -156,7 +156,7 @@ protected:
 		if (old_object_ptr && !init_object_id(object_ptr, id))
 		{
 			std::lock_guard<std::mutex> lock(invalid_object_can_mutex);
-			invalid_object_can.push_back(old_object_ptr);
+			invalid_object_can.emplace_back(old_object_ptr);
 			old_object_ptr.reset();
 		}
 
@@ -276,7 +276,7 @@ public:
 		std::lock_guard<std::mutex> lock(invalid_object_can_mutex);
 		for (auto iter = std::begin(invalid_object_can); iter != std::end(invalid_object_can); ++iter)
 #if _MSVC_LANG >= 201703L
-			if (iter->use_count() && (*iter)->obsoleted())
+			if (1 == iter->use_count() && (*iter)->obsoleted())
 #else
 			if (iter->unique() && (*iter)->obsoleted())
 #endif
