@@ -276,7 +276,7 @@ public:
 		std::lock_guard<std::mutex> lock(invalid_object_can_mutex);
 		for (auto iter = std::begin(invalid_object_can); iter != std::end(invalid_object_can); ++iter)
 #if _MSVC_LANG >= 201703L
-			if (iter->use_count() && (*iter)->obsoleted())
+			if (1 == iter->use_count() && (*iter)->obsoleted())
 #else
 			if (iter->unique() && (*iter)->obsoleted())
 #endif
