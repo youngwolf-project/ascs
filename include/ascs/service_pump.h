@@ -137,7 +137,7 @@ public:
 
 	int get_io_context_num() const {return (int) context_can.size();}
 	void get_io_context_refs(std::list<unsigned>& refs)
-		{if (!single_ctx) ascs::do_something_to_all(context_can, context_can_mutex, [&](context& item) {refs.push_back(item.refs);});}
+		{if (!single_ctx) ascs::do_something_to_all(context_can, context_can_mutex, [&](context& item) {refs.emplace_back(item.refs);});}
 
 	//do not call below function implicitly or explicitly, before 1.6, a service_pump is also an io_context, so we already have it implicitly,
 	// but in 1.6 and later, a service_pump is not an io_context anymore, then it is just provided to accommodate legacy usage in class
