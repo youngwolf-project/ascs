@@ -1065,7 +1065,7 @@ static_assert(ASCS_MAX_OBJECT_NUM > 0, "object capacity must be bigger than zero
 	#endif
 #endif
 
-//define ASCS_CLEAR_OBJECT_INTERVAL macro to let object_pool to invoke clear_obsoleted_object() automatically and periodically
+//define ASCS_CLEAR_OBJECT_INTERVAL macro to let object_pool invoke clear_obsoleted_object() automatically and periodically
 //this feature may affect performance with huge number of objects, so re-write server_socket_base::on_recv_error and invoke object_pool::del_object()
 //is recommended for long-term connection system, but for short-term connection system, you are recommended to open this feature.
 //you must define this macro as a value, not just define it, the value means the interval, unit is second
@@ -1156,7 +1156,7 @@ static_assert(ASCS_RELIABLE_UDP_NSND_QUE >= 0, "kcp send queue must be bigger th
 #endif
 //we also can control the queues (and their containers) via template parameters on class 'client_socket_base'
 //'server_socket_base', 'ssl::client_socket_base' and 'ssl::server_socket_base'.
-//we even can let a socket to use different queue (and / or different container) for input and output via template parameters.
+//we even can let socket use different queue (and / or different container) for input and output via template parameters.
 
 //if your container's empty() function (used by the queue for message sending and receiving) is not thread safe, please define this macro,
 // then ascs will make it thread safe for you.
