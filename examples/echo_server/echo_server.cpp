@@ -255,7 +255,7 @@ int main(int argc, const char* argv[])
 	((timer<executor>&) echo_server_).add_io_context_refs(1); //the timer object in server_base takes 2 references on the io_context that assigned to it.
 	dump_io_context_refs(sp);
 
-	//demonstrate how to use singel_service
+	//demonstrate how to use single_service_pump
 	//because of normal_socket, this server cannot support fixed_length_packer/fixed_length_unpacker and prefix_suffix_packer/prefix_suffix_unpacker,
 	//the reason is these packer and unpacker need additional initializations that normal_socket not implemented, see echo_socket's constructor for more details.
 	single_service_pump<callbacks::server<server_base<normal_socket>>> normal_server_;
@@ -263,7 +263,7 @@ int main(int argc, const char* argv[])
 	normal_server_.register_async_accept_num([](server_base<normal_socket>*) {return 1;});
 	normal_server_.register_on_accept([](server_base<normal_socket>* server, server_base<normal_socket>::object_ctype&) {server->stop_listen(); return true;}, false);
 
-	//demonstrate how to use singel_service
+	//demonstrate how to use single_service_pump
 	single_service_pump<server_base<short_connection>> short_server;
 
 	unsigned short port = ASCS_SERVER_PORT;
