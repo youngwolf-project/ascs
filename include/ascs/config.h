@@ -995,11 +995,8 @@ static_assert(ASCS_MAX_RECV_BUF > 0, "recv buffer capacity must be bigger than z
 //if defined, service_pump will not catch exceptions for boost::asio::io_context::run().
 //#define ASCS_NO_TRY_CATCH
 
-//if defined, boost::asio::steady_timer will be used in ascs::timer.
+//if defined, boost::asio::steady_timer will be used in ascs::timer, otherwise, boost::asio::system_timer will be used.
 //#define ASCS_USE_STEADY_TIMER
-//if defined, boost::asio::system_timer will be used in ascs::timer.
-//#define ASCS_USE_SYSTEM_TIMER
-//otherwise, boost::asio::deadline_timer will be used
 
 //after this duration, this socket can be freed from the heap or reused,
 //you must define this macro as a value, not just define it, the value means the duration, unit is second.
