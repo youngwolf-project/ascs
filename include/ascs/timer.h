@@ -37,17 +37,10 @@ template<typename Executor>
 class timer : public Executor
 {
 public:
-#if defined(ASCS_USE_STEADY_TIMER) || defined(ASCS_USE_SYSTEM_TIMER)
-	typedef std::chrono::milliseconds milliseconds;
-
-	#ifdef ASCS_USE_STEADY_TIMER
-		typedef boost::asio::steady_timer timer_type;
-	#else
-		typedef boost::asio::system_timer timer_type;
-	#endif
+#ifdef ASCS_USE_STEADY_TIMER
+	typedef boost::asio::steady_timer timer_type;
 #else
-	typedef boost::posix_time::milliseconds milliseconds;
-	typedef boost::asio::deadline_timer timer_type;
+	typedef boost::asio::system_timer timer_type;
 #endif
 
 	typedef unsigned short tid;
@@ -154,10 +147,10 @@ protected:
 			return false;
 
 		ti.status = timer_info::TIMER_STARTED;
-#if BOOST_ASIO_VERSION >= 101100 && (defined(ASCS_USE_STEADY_TIMER) || defined(ASCS_USE_SYSTEM_TIMER))
-		ti.timer.expires_after(milliseconds(interval_ms));
+#if BOOST_ASIO_VERSION >= 101100
+		ti.timer.expires_after(std::chrono::milliseconds(interval_ms));
 #else
-		ti.timer.expires_from_now(milliseconds(interval_ms));
+		ti.timer.expires_from_now(std::chrono::milliseconds(interval_ms));
 #endif
 
 		//if timer already started, this will cancel it first
