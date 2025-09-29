@@ -24,7 +24,7 @@ public:
 	class i_service
 	{
 	protected:
-		i_service(service_pump& service_pump_) : sp(service_pump_), started_(false), id_(0), data(nullptr) {sp.add(this);}
+		i_service(service_pump& service_pump_) : sp(service_pump_) {sp.add(this);}
 		virtual ~i_service() {sp.remove(this);}
 
 	public:
@@ -52,9 +52,9 @@ public:
 		service_pump& sp;
 
 	private:
-		bool started_;
-		int id_;
-		void* data; //magic data, you can use it in any way
+		bool started_{false};
+		int id_{0};
+		void* data{nullptr}; //magic data, you can use it in any way
 	};
 
 protected:
@@ -93,12 +93,11 @@ public:
 
 #if BOOST_ASIO_VERSION >= 101200
 #ifdef ASCS_DECREASE_THREAD_AT_RUNTIME
-	service_pump(int concurrency_hint = BOOST_ASIO_CONCURRENCY_HINT_SAFE) : started(false), first(true), real_thread_num(0), del_thread_num(0), single_ctx(true)
-		{context_can.emplace_back(concurrency_hint);}
+	service_pump(int concurrency_hint = BOOST_ASIO_CONCURRENCY_HINT_SAFE) : single_ctx(true) {context_can.emplace_back(concurrency_hint);}
 #else
 	//basically, the parameter multi_ctx is designed to be used by single_service_pump, which means single_service_pump always think it's using multiple io_context
 	//for service_pump, you should use set_io_context_num function instead if you really need multiple io_context.
-	service_pump(int concurrency_hint = BOOST_ASIO_CONCURRENCY_HINT_SAFE, bool multi_ctx = false) : started(false), first(true), single_ctx(!multi_ctx)
+	service_pump(int concurrency_hint = BOOST_ASIO_CONCURRENCY_HINT_SAFE, bool multi_ctx = false) : single_ctx(!multi_ctx)
 		{context_can.emplace_back(concurrency_hint);}
 	bool set_io_context_num(int io_context_num, int concurrency_hint = BOOST_ASIO_CONCURRENCY_HINT_SAFE) //call this before construct any services on this service_pump
 	{
@@ -115,11 +114,11 @@ public:
 #endif
 #else
 #ifdef ASCS_DECREASE_THREAD_AT_RUNTIME
-	service_pump() : started(false), first(true), real_thread_num(0), del_thread_num(0), single_ctx(true), context_can(1) {}
+	service_pump() : single_ctx(true), context_can(1) {}
 #else
 	//basically, the parameter multi_ctx is designed to be used by single_service_pump, which means single_service_pump always think it's using multiple io_context
 	//for service_pump, you should use set_io_context_num function instead if you really need multiple io_context.
-	service_pump(bool multi_ctx = false) : started(false), first(true), single_ctx(!multi_ctx), context_can(1) {}
+	service_pump(bool multi_ctx = false) : single_ctx(!multi_ctx), context_can(1) {}
 	bool set_io_context_num(int io_context_num) //call this before construct any services on this service_pump
 	{
 		if (io_context_num < 1 || is_service_started() || context_can.size() > 1) //can only be called once
@@ -488,13 +487,13 @@ private:
 	}
 
 private:
-	bool started, first;
+	bool started{false}, first{true};
 	container_type service_can;
 	std::mutex service_can_mutex;
 
 #ifdef ASCS_DECREASE_THREAD_AT_RUNTIME
-	std::atomic_int_fast32_t real_thread_num;
-	std::atomic_int_fast32_t del_thread_num;
+	std::atomic_int_fast32_t real_thread_num{0};
+	std::atomic_int_fast32_t del_thread_num{0};
 #endif
 
 	bool single_ctx;

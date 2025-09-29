@@ -21,9 +21,9 @@ template<typename Socket, typename Family = boost::asio::ip::tcp, typename Pool 
 class generic_server : public Server, public Pool
 {
 protected:
-	generic_server(service_pump& service_pump_) : Pool(service_pump_), acceptor(service_pump_.assign_io_context()), io_context_refs(1), listening(false) {}
+	generic_server(service_pump& service_pump_) : Pool(service_pump_), acceptor(service_pump_.assign_io_context()) {}
 	template<typename Arg> generic_server(service_pump& service_pump_, Arg&& arg) :
-		Pool(service_pump_, std::forward<Arg>(arg)), acceptor(service_pump_.assign_io_context()), io_context_refs(1), listening(false) {}
+		Pool(service_pump_, std::forward<Arg>(arg)), acceptor(service_pump_.assign_io_context()) {}
 	~generic_server() {clear_io_context_refs(); Pool::clear_io_context_refs();}
 
 public:
@@ -268,9 +268,9 @@ private:
 private:
 	typename Family::endpoint server_addr;
 	typename Family::acceptor acceptor;
-	unsigned io_context_refs;
+	unsigned io_context_refs{1};
 	std::mutex mutex;
-	bool listening;
+	bool listening{false};
 };
 
 template<typename Socket, typename Pool = object_pool<Socket>, typename Server = i_server>

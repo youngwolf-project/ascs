@@ -37,8 +37,8 @@ public:
 	static const typename super::tid TIMER_END = TIMER_BEGIN + 5;
 
 public:
-	reliable_socket_base(boost::asio::io_context& io_context_) : super(io_context_), kcp(nullptr), max_nsnd_que(ASCS_RELIABLE_UDP_NSND_QUE) {}
-	reliable_socket_base(Matrix& matrix_) : super(matrix_), kcp(nullptr), max_nsnd_que(ASCS_RELIABLE_UDP_NSND_QUE) {}
+	reliable_socket_base(boost::asio::io_context& io_context_) : super(io_context_) {}
+	reliable_socket_base(Matrix& matrix_) : super(matrix_) {}
 	~reliable_socket_base() {release_kcp();}
 
 	ikcpcb* get_kcpcb() {return kcp;}
@@ -202,10 +202,10 @@ private:
 	void release_kcp() {if (nullptr != kcp) ikcp_release(kcp); kcp = nullptr;}
 
 private:
-	ikcpcb* kcp;
+	ikcpcb* kcp{nullptr};
 	std::mutex mutex;
 
-	IUINT32 max_nsnd_que;
+	IUINT32 max_nsnd_que{ASCS_RELIABLE_UDP_NSND_QUE};
 };
 
 }} //namespace

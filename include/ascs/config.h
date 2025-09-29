@@ -962,9 +962,9 @@ static_assert(ASCS_MAX_SEND_BUF > 0, "send buffer capacity must be bigger than z
 #endif
 static_assert(ASCS_MAX_RECV_BUF > 0, "recv buffer capacity must be bigger than zero.");
 
-//the message mode for websocket, !0 - binary mode (default), 0 - text mode
+//the message mode for websocket, true - binary mode (default), false - text mode
 #ifndef ASCS_WEBSOCKET_BINARY
-#define ASCS_WEBSOCKET_BINARY		1
+#define ASCS_WEBSOCKET_BINARY		true
 #endif
 
 //i_unpacker's default value of the stripped property, must be boolean.
