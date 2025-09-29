@@ -55,7 +55,7 @@ public:
 
 protected:
 	generic_client_socket(service_pump& service_pump_) : super(service_pump_) {first_init(service_pump_);}
-	template<typename Arg> generic_client_socket(service_pump& service_pump_, Arg&& arg) : super(service_pump_, std::forward<Arg>(arg)) {first_init(service_pump_); }
+	template<typename Arg> generic_client_socket(service_pump& service_pump_, Arg&& arg) : super(service_pump_, std::forward<Arg>(arg)) {first_init(service_pump_);}
 
 	generic_client_socket(Matrix& matrix_) : super(matrix_.get_service_pump()) {first_init(&matrix_);}
 	template<typename Arg> generic_client_socket(Matrix& matrix_, Arg&& arg) : super(matrix_.get_service_pump(), std::forward<Arg>(arg)) {first_init(&matrix_);}
@@ -118,8 +118,8 @@ public:
 
 protected:
 	//helper function, just call it in constructor
-	void first_init(const service_pump& service_pump_) {need_reconnect = ASCS_RECONNECT; matrix = nullptr; if (service_pump_.is_single_thread()) this->set_single_thread();}
-	void first_init(Matrix* matrix_) {need_reconnect = ASCS_RECONNECT; matrix = matrix_; if (matrix_->get_service_pump().is_single_thread()) this->set_single_thread();}
+	void first_init(const service_pump& service_pump_) {matrix = nullptr; if (service_pump_.is_single_thread()) this->set_single_thread();}
+	void first_init(Matrix* matrix_) {matrix = matrix_; if (matrix_->get_service_pump().is_single_thread()) this->set_single_thread();}
 
 	Matrix* get_matrix() {return matrix;}
 	const Matrix* get_matrix() const {return matrix;}
@@ -215,7 +215,7 @@ private:
 	}
 
 private:
-	bool need_reconnect;
+	bool need_reconnect{ASCS_RECONNECT};
 	typename Family::endpoint server_addr;
 
 	Matrix* matrix;

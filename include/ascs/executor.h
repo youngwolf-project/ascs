@@ -26,7 +26,7 @@ class executor
 {
 protected:
 	virtual ~executor() {}
-	executor(asio::io_context& _io_context_) : io_context_(_io_context_), single_thread(false) {}
+	executor(asio::io_context& _io_context_) : io_context_(_io_context_) {}
 
 	void set_single_thread() {single_thread = true;}
 	bool is_single_thread() const {return single_thread;}
@@ -63,7 +63,7 @@ public:
 
 protected:
 	asio::io_context& io_context_;
-	bool single_thread;
+	bool single_thread{false};
 };
 
 } //namespace

@@ -60,23 +60,22 @@ public:
 class basic_buffer
 {
 public:
-	basic_buffer() {do_detach();}
+	basic_buffer() {}
 	virtual ~basic_buffer() {clean();}
-	basic_buffer(size_t len) {do_detach(); resize(len);}
-	basic_buffer(int len) {do_detach(); if (len > 0) resize((size_t) len);}
-	basic_buffer(size_t count, char c) {do_detach(); append(count, c);}
-	basic_buffer(char* buff) {do_detach(); operator+=(buff);}
-	basic_buffer(const char* buff) {do_detach(); operator+=(buff);}
-	basic_buffer(const char* buff, size_t len) {do_detach(); append(buff, len);}
-	template<size_t size> basic_buffer(char(&buff)[size], size_t len) {do_detach(); append(buff, len);}
-	template<size_t size> basic_buffer(const char(&buff)[size], size_t len) {do_detach(); append(buff, len);}
-	basic_buffer(std::initializer_list<char> ilist) {do_detach(); operator+=(ilist);}
-	basic_buffer(const basic_buffer& other) {do_detach(); append(other);}
-	template<typename Buff> basic_buffer(const Buff& other) {do_detach(); append(other);}
-	template<typename Buff> basic_buffer(const Buff& other, size_t pos) {do_detach(); if (pos < other.size()) append(std::next(other.data(), pos), other.size() - pos);}
+	basic_buffer(size_t len) {resize(len);}
+	basic_buffer(int len) {if (len > 0) resize((size_t) len);}
+	basic_buffer(size_t count, char c) {append(count, c);}
+	basic_buffer(char* buff) {operator+=(buff);}
+	basic_buffer(const char* buff) {operator+=(buff);}
+	basic_buffer(const char* buff, size_t len) {append(buff, len);}
+	template<size_t size> basic_buffer(char(&buff)[size], size_t len) {append(buff, len);}
+	template<size_t size> basic_buffer(const char(&buff)[size], size_t len) {append(buff, len);}
+	basic_buffer(std::initializer_list<char> ilist) {operator+=(ilist);}
+	basic_buffer(const basic_buffer& other) {append(other);}
+	template<typename Buff> basic_buffer(const Buff& other) {append(other);}
+	template<typename Buff> basic_buffer(const Buff& other, size_t pos) {if (pos < other.size()) append(std::next(other.data(), pos), other.size() - pos);}
 	template<typename Buff> basic_buffer(const Buff& other, size_t pos, size_t len)
 	{
-		do_detach();
 		if (pos < other.size())
 			append(std::next(other.data(), pos), pos + len > other.size() ? other.size() - pos : len);
 	}
@@ -264,14 +263,14 @@ protected:
 	void check_length(size_t add_len) {if (add_len > max_size() || max_size() - add_len < len) throw std::length_error("too big memory request");}
 
 protected:
-	char* buff;
-	unsigned len, cap;
+	char* buff{nullptr};
+	unsigned len{0}, cap{0};
 };
 
 class cpu_timer //a substitute of boost::timer::cpu_timer
 {
 public:
-	cpu_timer() {restart();}
+	cpu_timer() {start();}
 
 	void restart() {started = false; elapsed_seconds = .0f; start();}
 	void start() {if (started) return; started = true; start_time = std::chrono::system_clock::now();}
@@ -282,8 +281,8 @@ public:
 	float elapsed() const {if (!started) return elapsed_seconds; return std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::system_clock::now() - start_time).count();}
 
 protected:
-	bool started;
-	float elapsed_seconds;
+	bool started{false};
+	float elapsed_seconds{.0f};
 	std::chrono::system_clock::time_point start_time;
 };
 

@@ -51,19 +51,19 @@ public:
 		enum timer_status : char {TIMER_CREATED, TIMER_STARTED, TIMER_CANCELED};
 
 		tid id;
-		unsigned char seq;
-		timer_status status;
-		unsigned interval_ms;
+		unsigned char seq = -1;
+		timer_status status{TIMER_CREATED};
+		unsigned interval_ms{0};
 		timer_type timer;
 		std::function<bool(tid)> call_back; //return true from call_back to continue the timer, or the timer will stop
 
-		timer_info(tid id_, asio::io_context& io_context_) : id(id_), seq(-1), status(TIMER_CREATED), interval_ms(0), timer(io_context_) {}
+		timer_info(tid id_, asio::io_context& io_context_) : id(id_), timer(io_context_) {}
 		bool operator ==(const timer_info& other) {return id == other.id;}
 		bool operator ==(tid id_) {return id == id_;}
 	};
 	typedef const timer_info timer_cinfo;
 
-	timer(asio::io_context& io_context_) : Executor(io_context_), io_context_refs(1) {}
+	timer(asio::io_context& io_context_) : Executor(io_context_) {}
 	~timer() {stop_all_timer();}
 
 	unsigned get_io_context_refs() const {return io_context_refs;}
@@ -204,7 +204,7 @@ private:
 	std::mutex timer_can_mutex;
 
 	using Executor::io_context_;
-	unsigned io_context_refs;
+	unsigned io_context_refs{1};
 };
 
 } //namespace
