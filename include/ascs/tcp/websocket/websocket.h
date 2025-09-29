@@ -50,7 +50,7 @@ public:
 	typedef std::function<void(const boost::system::error_code& ec, size_t bytes_transferred)> ReadWriteCallBack;
 
 public:
-	template<class... Args> explicit stream(Args&&... args) : super(std::forward<Args>(args)...) {first_init();}
+	template<class... Args> explicit stream(Args&&... args) : super(std::forward<Args>(args)...) {this->binary(ASCS_WEBSOCKET_BINARY);}
 
 	void async_read(const ReadWriteCallBack& call_back) {super::async_read(recv_buff, call_back);}
 	template<typename OutMsgType> bool parse_msg(list<OutMsgType>& msg_can)
@@ -66,10 +66,6 @@ public:
 		return re;
 	}
 	template<typename Buffer> void async_write(const Buffer& buff, const ReadWriteCallBack& call_back) {super::async_write(buff, call_back);}
-
-protected:
-	//helper function, just call it in constructor
-	void first_init() {this->binary(0 != ASCS_WEBSOCKET_BINARY);}
 
 private:
 	boost::beast::flat_buffer recv_buff;

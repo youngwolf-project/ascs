@@ -23,7 +23,7 @@ class tracked_executor
 {
 protected:
 	virtual ~tracked_executor() {}
-	tracked_executor(boost::asio::io_context& _io_context_) : io_context_(_io_context_), aci(std::make_shared<char>('\0')) {}
+	tracked_executor(boost::asio::io_context& _io_context_) : io_context_(_io_context_) {}
 
 public:
 	typedef std::function<void(const boost::system::error_code&)> handler_with_error;
@@ -81,13 +81,13 @@ protected:
 	boost::asio::io_context& io_context_;
 
 private:
-	std::shared_ptr<char> aci; //asynchronous calling indicator
+	std::shared_ptr<char> aci{std::make_shared<char>('\0')}; //asynchronous calling indicator
 };
 #else
 class tracked_executor : public executor
 {
 protected:
-	tracked_executor(boost::asio::io_context& io_context_) : executor(io_context_), aci(false) {}
+	tracked_executor(boost::asio::io_context& io_context_) : executor(io_context_) {}
 
 public:
 	inline bool is_async_calling() const {return aci;}
@@ -95,7 +95,7 @@ public:
 	inline void set_async_calling(bool value) {aci = value;}
 
 private:
-	bool aci; //asynchronous calling indicator
+	bool aci{false}; //asynchronous calling indicator
 };
 #endif
 

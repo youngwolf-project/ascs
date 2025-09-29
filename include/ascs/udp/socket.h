@@ -57,8 +57,8 @@ public:
 	}
 
 protected:
-	generic_socket(boost::asio::io_context& io_context_) : super(io_context_), is_bound(false), is_connected(false), connect_mode(ASCS_UDP_CONNECT_MODE), matrix(nullptr) {}
-	generic_socket(Matrix& matrix_) : super(matrix_.get_service_pump()), is_bound(false), is_connected(false), connect_mode(ASCS_UDP_CONNECT_MODE), matrix(&matrix_) {}
+	generic_socket(boost::asio::io_context& io_context_) : super(io_context_), matrix(nullptr) {}
+	generic_socket(Matrix& matrix_) : super(matrix_.get_service_pump()), matrix(&matrix_) {}
 	~generic_socket() {this->clear_io_context_refs();}
 
 public:
@@ -405,7 +405,7 @@ private:
 	using super::send_buffer;
 	using super::rw_strand;
 
-	bool is_bound, is_connected, connect_mode;
+	bool is_bound{false}, is_connected{false}, connect_mode{ASCS_UDP_CONNECT_MODE};
 	typename super::in_msg sending_msg;
 	typename Family::endpoint local_addr;
 	typename Family::endpoint temp_addr; //used when receiving messages

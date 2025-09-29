@@ -44,7 +44,7 @@ namespace ascs
 class scope_atomic_lock : public boost::noncopyable
 {
 public:
-	scope_atomic_lock(std::atomic_flag& atomic_) : _locked(false), atomic(atomic_) {lock();} //atomic_ must has been initialized with false
+	scope_atomic_lock(std::atomic_flag& atomic_) : atomic(atomic_) {lock();} //atomic_ must has been initialized with false
 	~scope_atomic_lock() {unlock();}
 
 	void lock() {if (!_locked) _locked = !atomic.test_and_set(std::memory_order_acq_rel);}
@@ -52,7 +52,7 @@ public:
 	bool locked() const {return _locked;}
 
 private:
-	bool _locked;
+	bool _locked{false};
 	std::atomic_flag& atomic;
 };
 
@@ -196,7 +196,6 @@ public:
 	typedef ASCS_RECV_BUFFER_TYPE buffer_type;
 
 protected:
-	i_unpacker() : _stripped(ASCS_UNPACKER_STRIPPED) {}
 	virtual ~i_unpacker() {}
 
 public:
@@ -217,7 +216,7 @@ public:
 	virtual size_t raw_data_len(msg_ctype& msg) const {return msg.size();}
 
 private:
-	bool _stripped;
+	bool _stripped{ASCS_UNPACKER_STRIPPED};
 };
 
 //just provide msg_type definition, you should not call any functions of it nor store msg in it
@@ -267,9 +266,8 @@ struct statistic
 	{
 		typedef std::chrono::system_clock::duration super;
 
-		duration() {reset();}
 		super get_avg() const {return 0 == num ? super(*this) : *this / num;}
-		void reset() {super::operator=(min_duration = max_duration = super(0)); num = 0;}
+		void reset() {super::operator=(min_duration = max_duration = super::zero()); num = 0;}
 
 		duration& operator+=(const super& other)
 		{
@@ -307,7 +305,7 @@ struct statistic
 		}
 
 		super min_duration, max_duration;
-		int_fast64_t num;
+		int_fast64_t num{0};
 	};
 
 	typedef std::chrono::system_clock::time_point stat_time;
@@ -325,7 +323,6 @@ struct statistic
 	static stat_time now() {return stat_time();}
 	typedef dummy_duration stat_duration;
 #endif
-	statistic() {reset();}
 
 	void reset_number()
 	{
@@ -427,39 +424,39 @@ struct statistic
 	}
 
 	//send relevant statistic
-	uint_fast64_t send_msg_sum; //not counted msgs in sending buffer
-	uint_fast64_t send_byte_sum; //include data added by packer, not counted msgs in sending buffer
+	uint_fast64_t send_msg_sum{0}; //msgs in sending buffer are not counted
+	uint_fast64_t send_byte_sum{0}; //include data added by packer, msgs in sending buffer are not counted
 	stat_duration send_delay_sum; //from send_(native_)msg (exclude msg packing) to boost::asio::async_write
 	stat_duration send_time_sum; //from boost::asio::async_write to send_handler
 	//above two items indicate your network's speed or load
 	stat_duration pack_time_sum; //udp::socket_base will not gather this item
 
 	//recv relevant statistic
-	uint_fast64_t recv_msg_sum; //msgs returned by i_unpacker::parse_msg
-	uint_fast64_t recv_byte_sum; //msgs (in bytes) returned by i_unpacker::parse_msg
+	uint_fast64_t recv_msg_sum{0}; //msgs returned by i_unpacker::parse_msg
+	uint_fast64_t recv_byte_sum{0}; //msgs (in bytes) returned by i_unpacker::parse_msg
 	stat_duration dispatch_delay_sum; //from parse_msg(exclude msg unpacking) to on_msg_handle
 	stat_duration recv_idle_sum; //during this duration, socket suspended msg reception (receiving buffer overflow)
 	stat_duration handle_time_sum; //on_msg_handle (and on_msg) consumed time, this indicate the performance of msg handling
 	stat_duration unpack_time_sum; //udp::socket_base will not gather this item
 
-	time_t establish_time; //time of link establishment
-	time_t break_time; //time of link broken
+	time_t establish_time{0}; //time of link establishment
+	time_t break_time{0}; //time of link broken
 
-	time_t last_send_time; //include heartbeat
-	time_t last_recv_time; //include heartbeat
+	time_t last_send_time{0}; //include heartbeat
+	time_t last_recv_time{0}; //include heartbeat
 };
 
 class auto_duration
 {
 public:
-	auto_duration(statistic::stat_duration& duration_) : started(true), begin_time(statistic::now()), duration(duration_) {}
+	auto_duration(statistic::stat_duration& duration_) : duration(duration_) {}
 	virtual ~auto_duration() {end();}
 
 	void end() {if (started) duration += statistic::now() - begin_time; started = false;}
 
 private:
-	bool started;
-	statistic::stat_time begin_time;
+	bool started{true};
+	statistic::stat_time begin_time{statistic::now()};
 	statistic::stat_duration& duration;
 };
 
