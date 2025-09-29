@@ -28,8 +28,8 @@ private:
 	typedef ascs::tcp::client_socket_base<Packer, Unpacker, Matrix, Socket, InQueue, InContainer, OutQueue, OutContainer> super;
 
 public:
-	client_socket_base(asio::io_context& io_context_) : super(io_context_), req_len(0) {}
-	client_socket_base(Matrix& matrix_) : super(matrix_), req_len(0) {}
+	client_socket_base(asio::io_context& io_context_) : super(io_context_) {}
+	client_socket_base(Matrix& matrix_) : super(matrix_) {}
 
 	virtual const char* type_name() const {return "SOCKS4 (client endpoint)";}
 	virtual int type_id() const {return 5;}
@@ -97,7 +97,7 @@ private:
 
 private:
 	char buff[16];
-	size_t req_len;
+	size_t req_len{0};
 
 	asio::ip::tcp::endpoint target_addr;
 };
@@ -115,8 +115,8 @@ private:
 	typedef ascs::tcp::client_socket_base<Packer, Unpacker, Matrix, Socket, InQueue, InContainer, OutQueue, OutContainer> super;
 
 public:
-	client_socket_base(asio::io_context& io_context_) : super(io_context_), req_len(0), res_len(0), step(-1), target_port(0) {}
-	client_socket_base(Matrix& matrix_) : super(matrix_), req_len(0), res_len(0), step(-1), target_port(0) {}
+	client_socket_base(asio::io_context& io_context_) : super(io_context_) {}
+	client_socket_base(Matrix& matrix_) : super(matrix_) {}
 
 	virtual const char* type_name() const {return "SOCKS5 (client endpoint)";}
 	virtual int type_id() const {return 6;}
@@ -366,12 +366,12 @@ private:
 
 private:
 	char buff[64];
-	size_t req_len, res_len;
-	int step;
+	size_t req_len{0}, res_len{0};
+	int step{-1};
 
 	asio::ip::tcp::endpoint target_addr;
 	std::string target_domain;
-	unsigned short target_port;
+	unsigned short target_port{0};
 	std::string username, password;
 };
 

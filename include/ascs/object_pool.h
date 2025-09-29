@@ -44,7 +44,7 @@ public:
 	void set_start_object_id(uint_fast64_t id) {cur_id.store(id - 1, std::memory_order_relaxed);} //call this right after object_pool been constructed
 
 protected:
-	object_pool(service_pump& service_pump_) : i_service(service_pump_), timer<executor>(service_pump_), cur_id(ASCS_START_OBJECT_ID - 1), max_size_(ASCS_MAX_OBJECT_NUM) {}
+	object_pool(service_pump& service_pump_) : i_service(service_pump_), timer<executor>(service_pump_) {}
 
 	void start()
 	{
@@ -376,11 +376,11 @@ public:
 	}
 
 private:
-	std::atomic_uint_fast64_t cur_id;
+	std::atomic_uint_fast64_t cur_id{(uint_fast64_t) (ASCS_START_OBJECT_ID - 1)};
 
 	container_type object_can;
 	ASCS_SHARED_MUTEX_TYPE object_can_mutex;
-	size_t max_size_;
+	size_t max_size_{ASCS_MAX_OBJECT_NUM};
 
 	//because all objects are dynamic created and stored in object_can, after receiving error occurred (you are recommended to delete the object from object_can,
 	//for example via i_server::del_socket), maybe some other asynchronous calls are still queued in asio::io_context, and will be dequeued in the future,

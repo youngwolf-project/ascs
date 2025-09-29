@@ -36,33 +36,9 @@ public:
 	static const tid TIMER_END = TIMER_BEGIN + 10;
 
 protected:
-	socket(asio::io_context& io_context_) : super(io_context_), rw_strand(io_context_), next_layer_(io_context_), dis_strand(io_context_) {first_init();}
+	socket(asio::io_context& io_context_) : super(io_context_), rw_strand(io_context_), next_layer_(io_context_), dis_strand(io_context_) {}
 	template<typename Arg> socket(asio::io_context& io_context_, Arg&& arg) :
-		super(io_context_), rw_strand(io_context_), next_layer_(io_context_, std::forward<Arg>(arg)), dis_strand(io_context_) {first_init();}
-
-	//helper function, just call it in constructor
-	void first_init()
-	{
-		_id = -1;
-		packer_ = std::make_shared<Packer>();
-		unpacker_ = std::make_shared<Unpacker>();
-		clear_sending();
-#ifdef ASCS_PASSIVE_RECV
-		clear_reading();
-#endif
-#ifdef ASCS_SYNC_RECV
-		sr_status = sync_recv_status::NOT_REQUESTED;
-#endif
-		started_ = false;
-		obsoleted_ = false;
-		dispatching = false;
-		recv_idle_began = false;
-		send_buf_size_ = ASCS_MAX_SEND_BUF;
-		recv_buf_size_ = ASCS_MAX_RECV_BUF;
-		msg_resuming_interval_ = ASCS_MSG_RESUMING_INTERVAL;
-		msg_handling_interval_ = ASCS_MSG_HANDLING_INTERVAL;
-		start_atomic.clear(std::memory_order_relaxed);
-	}
+		super(io_context_), rw_strand(io_context_), next_layer_(io_context_, std::forward<Arg>(arg)), dis_strand(io_context_) {}
 
 	//guarantee no operations (include asynchronous operations) be performed on this socket during call following reset_next_layer functions.
 #if ASIO_VERSION < 101100
@@ -767,14 +743,14 @@ protected:
 	asio::io_context::strand rw_strand;
 
 private:
-	std::shared_ptr<i_packer<typename Packer::msg_type>> packer_;
-	std::shared_ptr<i_unpacker<typename Unpacker::msg_type>> unpacker_;
+	std::shared_ptr<i_packer<typename Packer::msg_type>> packer_{std::make_shared<Packer>()};
+	std::shared_ptr<i_unpacker<typename Unpacker::msg_type>> unpacker_{std::make_shared<Unpacker>()};
 
-	bool recv_idle_began;
-	volatile bool started_; //has started or not
-	volatile bool obsoleted_;
+	bool recv_idle_began{false};
+	volatile bool started_{false}; //has started or not
+	volatile bool obsoleted_{false};
 
-	volatile bool dispatching;
+	volatile bool dispatching{false};
 #ifndef ASCS_DISPATCH_BATCH_MSG
 	out_msg dispatching_msg;
 #endif
@@ -782,7 +758,7 @@ private:
 	typename statistic::stat_time recv_idle_begin_time;
 	out_queue_type recv_buffer;
 
-	uint_fast64_t _id;
+	uint_fast64_t _id = -1;
 	Socket next_layer_;
 
 #ifdef ASCS_PASSIVE_RECV
@@ -794,14 +770,14 @@ private:
 
 #ifdef ASCS_SYNC_RECV
 	enum sync_recv_status {NOT_REQUESTED, REQUESTED, RESPONDED, RESPONDED_FAILURE};
-	sync_recv_status sr_status;
+	sync_recv_status sr_status{sync_recv_status::NOT_REQUESTED};
 
 	std::mutex sync_recv_mutex;
 	std::condition_variable sync_recv_cv;
 #endif
 
-	size_t send_buf_size_, recv_buf_size_;
-	unsigned msg_resuming_interval_, msg_handling_interval_;
+	size_t send_buf_size_{ASCS_MAX_SEND_BUF}, recv_buf_size_{ASCS_MAX_RECV_BUF};
+	unsigned msg_resuming_interval_{ASCS_MSG_RESUMING_INTERVAL}, msg_handling_interval_{ASCS_MSG_HANDLING_INTERVAL};
 };
 
 template<typename Socket, typename Packer, typename Unpacker,

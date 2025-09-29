@@ -78,8 +78,8 @@ private:
 protected:
 	enum link_status {CONNECTED, FORCE_SHUTTING_DOWN, GRACEFUL_SHUTTING_DOWN, BROKEN, HANDSHAKING};
 
-	socket_base(asio::io_context& io_context_) : super(io_context_), status(link_status::BROKEN) {}
-	template<typename Arg> socket_base(asio::io_context& io_context_, Arg&& arg) : super(io_context_, std::forward<Arg>(arg)), status(link_status::BROKEN) {}
+	socket_base(asio::io_context& io_context_) : super(io_context_) {}
+	template<typename Arg> socket_base(asio::io_context& io_context_, Arg&& arg) : super(io_context_, std::forward<Arg>(arg)) {}
 
 public:
 	static const typename super::tid TIMER_BEGIN = super::TIMER_END;
@@ -485,7 +485,7 @@ private:
 	}
 
 protected:
-	volatile link_status status;
+	volatile link_status status{link_status::BROKEN};
 
 private:
 	using super::stat;

@@ -53,11 +53,11 @@ public:
 	}
 
 protected:
-	generic_client_socket(asio::io_context& io_context_) : super(io_context_) {first_init();}
-	template<typename Arg> generic_client_socket(asio::io_context& io_context_, Arg&& arg) : super(io_context_, std::forward<Arg>(arg)) {first_init();}
+	generic_client_socket(asio::io_context& io_context_) : super(io_context_), matrix(nullptr) {}
+	template<typename Arg> generic_client_socket(asio::io_context& io_context_, Arg&& arg) : super(io_context_, std::forward<Arg>(arg)), matrix(nullptr) {}
 
-	generic_client_socket(Matrix& matrix_) : super(matrix_.get_service_pump()) {first_init(&matrix_);}
-	template<typename Arg> generic_client_socket(Matrix& matrix_, Arg&& arg) : super(matrix_.get_service_pump(), std::forward<Arg>(arg)) {first_init(&matrix_);}
+	generic_client_socket(Matrix& matrix_) : super(matrix_.get_service_pump()), matrix(&matrix_) {}
+	template<typename Arg> generic_client_socket(Matrix& matrix_, Arg&& arg) : super(matrix_.get_service_pump(), std::forward<Arg>(arg)), matrix(&matrix_) {}
 
 	~generic_client_socket() {this->clear_io_context_refs();}
 
@@ -116,9 +116,6 @@ public:
 	}
 
 protected:
-	//helper function, just call it in constructor
-	void first_init(Matrix* matrix_ = nullptr) {need_reconnect = ASCS_RECONNECT; matrix = matrix_;}
-
 	Matrix* get_matrix() {return matrix;}
 	const Matrix* get_matrix() const {return matrix;}
 
@@ -213,7 +210,7 @@ private:
 	}
 
 private:
-	bool need_reconnect;
+	bool need_reconnect{ASCS_RECONNECT};
 	typename Family::endpoint server_addr;
 
 	Matrix* matrix;

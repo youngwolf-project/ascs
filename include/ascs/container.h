@@ -70,8 +70,6 @@ public:
 	//since some implementations (such as gcc before 5.0) of std::list::size() have linear complexity, we don't expose this size() function
 	//using Container::size;
 
-	queue() : total_size(0) {}
-
 	//thread safe
 	bool is_thread_safe() const {return Lockable::is_lockable();}
 	size_t size_in_byte() const {return total_size;}
@@ -218,7 +216,7 @@ protected:
 	}
 
 private:
-	size_t total_size;
+	size_t total_size{0};
 };
 
 //ascs requires that queue must take one and only one template argument
