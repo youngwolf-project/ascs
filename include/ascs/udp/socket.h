@@ -58,11 +58,8 @@ public:
 	}
 
 protected:
-	generic_socket(service_pump& service_pump_) : super(service_pump_), is_bound(false), is_connected(false), connect_mode(ASCS_UDP_CONNECT_MODE), matrix(nullptr)
-		{if (service_pump_.is_single_thread()) this->set_single_thread();}
-	generic_socket(Matrix& matrix_) : super(matrix_.get_service_pump()), is_bound(false), is_connected(false), connect_mode(ASCS_UDP_CONNECT_MODE), matrix(&matrix_)
-		{if (matrix_->get_service_pump().is_single_thread()) this->set_single_thread();}
-
+	generic_socket(service_pump& service_pump_) : super(service_pump_), matrix(nullptr) {if (service_pump_.is_single_thread()) this->set_single_thread();}
+	generic_socket(Matrix& matrix_) : super(matrix_.get_service_pump()), matrix(&matrix_) {if (matrix_->get_service_pump().is_single_thread()) this->set_single_thread();}
 	~generic_socket() {this->clear_io_context_refs();}
 
 public:
@@ -409,7 +406,7 @@ private:
 	using super::send_buffer;
 	using super::rw_strand;
 
-	bool is_bound, is_connected, connect_mode;
+	bool is_bound{false}, is_connected{false}, connect_mode{ASCS_UDP_CONNECT_MODE};
 	typename super::in_msg sending_msg;
 	typename Family::endpoint local_addr;
 	typename Family::endpoint temp_addr; //used when receiving messages

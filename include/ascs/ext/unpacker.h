@@ -57,7 +57,6 @@ private:
 	typedef i_unpacker<T> super;
 
 public:
-	unpacker() {reset();}
 	size_t current_msg_length() const {return cur_msg_len;} //current msg's total length, -1 means not available
 
 	bool parse_msg(std::list<std::pair<const char*, size_t>>& msg_can)
@@ -170,8 +169,8 @@ public:
 
 protected:
 	std::array<char, ASCS_MSG_BUFFER_SIZE> raw_buff;
-	size_t cur_msg_len; //-1 means head not received, so msg length is not available.
-	size_t remain_len; //half-baked msg
+	size_t cur_msg_len = -1; //-1 means head not received, so msg length is not available.
+	size_t remain_len{0}; //half-baked msg
 };
 
 //protocol: length + body
@@ -185,7 +184,6 @@ private:
 	typedef i_unpacker<T> super;
 
 public:
-	flexible_unpacker() {reset();}
 	size_t current_msg_length() const {return cur_msg_len;} //current msg's total length, -1 means not available
 
 	bool parse_msg(std::list<std::pair<const char*, size_t>>& msg_can)
@@ -362,8 +360,8 @@ private:
 protected:
 	std::array<char, 4000> raw_buff;
 	typename super::msg_type big_msg;
-	size_t cur_msg_len; //-1 means head not received, so msg length is not available.
-	size_t remain_len; //half-baked msg
+	size_t cur_msg_len = -1; //-1 means head not received, so msg length is not available.
+	size_t remain_len{0}; //half-baked msg
 };
 
 //protocol: UDP has message boundary, so we don't need a specific protocol to unpack it.
@@ -467,7 +465,6 @@ private:
 	typedef i_unpacker<basic_buffer> super;
 
 public:
-	non_copy_unpacker() {reset();}
 	size_t current_msg_length() const {return raw_buff.size();} //current msg's total length(not include the head), 0 means not available
 
 public:
@@ -553,7 +550,7 @@ private:
 	//this will cause your application to occupy very large memory but with very low utilization ratio.
 	//this non_copy_unpacker will resolve above problem, and with another benefit: no memory replication needed any more.
 	msg_type raw_buff;
-	int step; //-1-error format, 0-want the head, 1-want the body
+	int step{0}; //-1-error format, 0-want the head, 1-want the body
 };
 
 //protocol: fixed length
@@ -564,8 +561,6 @@ private:
 class fixed_length_unpacker : public i_unpacker<basic_buffer>
 {
 public:
-	fixed_length_unpacker() : _fixed_length(1024) {}
-
 	void fixed_length(size_t fixed_length) {assert(0 < fixed_length && fixed_length <= ASCS_MSG_BUFFER_SIZE); _fixed_length = fixed_length;}
 	size_t fixed_length() const {return _fixed_length;}
 
@@ -597,15 +592,13 @@ public:
 
 private:
 	msg_type raw_buff;
-	size_t _fixed_length;
+	size_t _fixed_length{1024};
 };
 
 //protocol: [prefix] + body + suffix
 class prefix_suffix_unpacker : public i_unpacker<std::string>
 {
 public:
-	prefix_suffix_unpacker() {reset();}
-
 	void prefix_suffix(const std::string& prefix, const std::string& suffix) {assert(!suffix.empty() && prefix.size() + suffix.size() < ASCS_MSG_BUFFER_SIZE); _prefix = prefix; _suffix = suffix;}
 	const std::string& prefix() const {return _prefix;}
 	const std::string& suffix() const {return _suffix;}
@@ -723,8 +716,8 @@ public:
 private:
 	std::array<char, ASCS_MSG_BUFFER_SIZE> raw_buff;
 	std::string _prefix, _suffix;
-	size_t cur_msg_len; //-1 means prefix not received, 0 means prefix received but suffix not received, otherwise message length (include prefix and suffix)
-	size_t remain_len; //half-baked msg
+	size_t cur_msg_len = -1; //-1 means prefix not received, 0 means prefix received but suffix not received, otherwise message length (include prefix and suffix)
+	size_t remain_len{0}; //half-baked msg
 };
 
 //protocol: stream (non-protocol)
