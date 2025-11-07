@@ -133,7 +133,7 @@ protected:
 		if (!ec) //already started, so cannot call start()
 			super::do_start();
 		else
-			this->set_timer(TIMER_CONNECT_DELAY, 50, [&](typename super::tid id)->bool {
+			this->set_timer(TIMER_CONNECT_DELAY, 50, ASCS_COPY_ALL_AND_THIS(typename super::tid id)->bool {
 				return this->is_timer(TIMER_CONNECT) ? true : (prepare_next_reconnect(ec), false);
 			});
 			//prepare_next_reconnect(ec);
