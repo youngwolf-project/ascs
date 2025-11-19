@@ -8,8 +8,6 @@ else
 	endif
 endif
 
-target_machine = ${shell ${CXX} -dumpmachine}
-
 release debug clean :
 	cd echo_server && ${ASCS_MAKE}
 	cd echo_client && ${ASCS_MAKE}
@@ -26,10 +24,5 @@ release debug clean :
 	cd ssl_test && ${ASCS_MAKE}
 	cd websocket_test && ${ASCS_MAKE}
 	cd ssl_websocket_test && ${ASCS_MAKE}
-ifeq (, ${findstring cygwin, ${target_machine}})
-ifeq (, ${findstring mingw, ${target_machine}})
 	cd unix_socket && ${ASCS_MAKE}
 	cd unix_udp_test && ${ASCS_MAKE}
-endif
-endif
-
