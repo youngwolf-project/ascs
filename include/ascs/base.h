@@ -517,7 +517,7 @@ public:
 
 		char time_buff[64];
 		auto now = time(nullptr);
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(__MSVCRT__)
 		ctime_s(time_buff, sizeof(time_buff), &now);
 #else
 		ctime_r(&now, time_buff);
