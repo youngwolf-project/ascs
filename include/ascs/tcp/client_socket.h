@@ -122,7 +122,7 @@ protected:
 	virtual bool do_start() //connect
 	{
 		assert(!this->is_connected());
-		return bind() && this->set_timer(TIMER_CONNECT, 50, [this](typename super::tid id)->bool {this->connect(true); return false;});
+		return bind() && this->set_timer(TIMER_CONNECT, 50, [this](typename super::tid id)->bool {connect(true); return false;});
 	}
 
 	virtual void connect_handler(const asio::error_code& ec)
@@ -181,7 +181,7 @@ private:
 		if (!first && !bind())
 			return false;
 
-		this->lowest_layer().async_connect(server_addr, this->make_handler_error([this](const asio::error_code& ec) {this->connect_handler(ec);}));
+		this->lowest_layer().async_connect(server_addr, this->make_handler_error([this](const asio::error_code& ec) {connect_handler(ec);}));
 		return true;
 	}
 
@@ -200,7 +200,7 @@ private:
 			auto delay = prepare_reconnect(ec);
 			if (delay < 0)
 				need_reconnect = false;
-			else if (this->set_timer(TIMER_CONNECT, delay, [this](typename super::tid id)->bool {this->connect(false); return false;}))
+			else if (this->set_timer(TIMER_CONNECT, delay, [this](typename super::tid id)->bool {connect(false); return false;}))
 				return true;
 		}
 

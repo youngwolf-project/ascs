@@ -225,7 +225,7 @@ public:
 		temp_service_can.splice(std::end(temp_service_can), service_can);
 		lock.unlock();
 
-		ascs::do_something_to_all(temp_service_can, [this](object_type& item) {this->stop_and_free(item);});
+		ascs::do_something_to_all(temp_service_can, [this](object_type& item) {stop_and_free(item);});
 	}
 
 	//stop io_context directly, call this only if the stop_service invocation cannot stop the io_context
@@ -328,7 +328,7 @@ public:
 			else if (block && i + 1 == thread_num)
 				run(ctx); //block at here
 			else
-				ctx->threads.emplace_back([this, ctx]() {this->run(ctx);});
+				ctx->threads.emplace_back([this, ctx]() {run(ctx);});
 		}
 	}
 

@@ -850,6 +850,7 @@
  * 2023.9.13	version 1.8.0
  *
  * SPECIAL ATTENTION (incompatible with old editions):
+ * Give up the support of gcc 4.7 (it's too old to supports c++ standards well).
  *
  * HIGHLIGHT:
  *
@@ -882,6 +883,7 @@
 //asio and compiler check
 #ifdef _MSC_VER
 	#define ASCS_SF "%Iu" //format used to print 'size_t'
+
 	static_assert(_MSC_VER >= 1800, "ascs needs Visual C++ 12.0 (2013) or higher.");
 #elif defined(__GNUC__)
 	#ifdef __clang__
@@ -1199,7 +1201,7 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 //this value can be changed via ascs::socket::msg_handling_interval(size_t) at runtime.
 
 //#define ASCS_EXPOSE_SEND_INTERFACE
-//for some reason (i still not met yet), the message sending has stopped but some messages left behind in the sending buffer, they won't be
+//for some reason (I still not met yet), the message sending has stopped but some messages left behind in the sending buffer, they won't be
 // sent until new messages come in, define this macro to expose send_msg() interface, then you can call it manually to fix this situation.
 //during message sending, calling send_msg() will fail, this is by design to avoid asio::io_context using up all virtual memory, this also
 // means that before the sending really started, you can greedily call send_msg() and may exhaust all virtual memory, please note.

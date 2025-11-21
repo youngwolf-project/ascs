@@ -37,7 +37,7 @@ protected:
 		}
 
 		asio::async_read(this->next_layer(), recv_buff, [this](const asio::error_code& ec, size_t bytes_transferred)->size_t {
-			return this->completion_checker(ec, bytes_transferred);}, std::forward<ReadWriteCallBack>(call_back));
+			return completion_checker(ec, bytes_transferred);}, std::forward<ReadWriteCallBack>(call_back));
 		return true;
 	}
 	bool parse_msg(size_t bytes_transferred, std::list<OutMsgType>& msg_can) {return this->unpacker()->parse_msg(bytes_transferred, msg_can);}
@@ -226,12 +226,12 @@ public:
 	///////////////////////////////////////////////////
 
 protected:
-	void force_shutdown() {this->dispatch_in_io_strand([this]() {this->_force_shutdown();});}
-	void graceful_shutdown() {this->dispatch_in_io_strand([this]() {this->_graceful_shutdown();});}
+	void force_shutdown() {this->dispatch_in_io_strand([this]() {_force_shutdown();});}
+	void graceful_shutdown() {this->dispatch_in_io_strand([this]() {_graceful_shutdown();});}
 
 	//used by ssl and websocket
 	void start_graceful_shutdown_monitoring()
-		{this->set_timer(TIMER_ASYNC_SHUTDOWN, ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION * 1000, [this](typename super::tid id)->bool {return this->shutdown_handler(1);});}
+		{this->set_timer(TIMER_ASYNC_SHUTDOWN, ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION * 1000, [this](typename super::tid id)->bool {return shutdown_handler(1);});}
 	void stop_graceful_shutdown_monitoring() {this->stop_timer(TIMER_ASYNC_SHUTDOWN);}
 
 	virtual bool do_start()
@@ -304,7 +304,7 @@ private:
 			if (ec) //graceful shutdown is impossible
 				shutdown();
 			else
-				this->set_timer(TIMER_ASYNC_SHUTDOWN, 10, [this](typename super::tid id)->bool {return this->shutdown_handler(ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION * 100);});
+				this->set_timer(TIMER_ASYNC_SHUTDOWN, 10, [this](typename super::tid id)->bool {return shutdown_handler(ASCS_GRACEFUL_SHUTDOWN_MAX_DURATION * 100);});
 		}
 	}
 
@@ -329,11 +329,11 @@ private:
 #endif
 #ifdef ASCS_PASSIVE_RECV
 		if (!this->async_read(make_strand_handler(rw_strand,
-			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);}))))
+			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}))))
 			this->clear_reading();
 #else
 		this->async_read(make_strand_handler(rw_strand,
-			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->recv_handler(ec, bytes_transferred);})));
+			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);})));
 #endif
 	}
 
@@ -395,14 +395,14 @@ private:
 		sending_buffer.clear(); //this buffer will not be refreshed according to sending_msgs timely
 		ascs::do_something_to_all(sending_msgs, [&](typename super::in_msg& item) {
 			this->stat.send_delay_sum += end_time - item.begin_time;
-			this->sending_buffer.emplace_back(item.data(), item.size());
+			sending_buffer.emplace_back(item.data(), item.size());
 		});
 
 		if (!sending_buffer.empty())
 		{
 			sending_msgs.front().restart();
 			this->async_write(sending_buffer, make_strand_handler(rw_strand,
-				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {this->send_handler(ec, bytes_transferred);})));
+				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);})));
 			return true;
 		}
 		else
@@ -471,7 +471,7 @@ private:
 			--loop_num;
 			if (loop_num > 0)
 			{
-				this->change_timer_call_back(TIMER_ASYNC_SHUTDOWN, ASCS_COPY_ALL_AND_THIS(typename super::tid id)->bool {return this->shutdown_handler(loop_num);});
+				this->change_timer_call_back(TIMER_ASYNC_SHUTDOWN, ASCS_COPY_ALL_AND_THIS(typename super::tid id)->bool {return shutdown_handler(loop_num);});
 				return true;
 			}
 			else

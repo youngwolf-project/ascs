@@ -106,7 +106,7 @@ private:
 		if (!ec)
 		{
 			this->status = super::link_status::HANDSHAKING;
-			this->next_layer().async_handshake(asio::ssl::stream_base::client, this->make_handler_error([this](const asio::error_code& ec) {this->handle_handshake(ec);}));
+			this->next_layer().async_handshake(asio::ssl::stream_base::client, this->make_handler_error([this](const asio::error_code& ec) {handle_handshake(ec);}));
 		}
 		else
 			super::connect_handler(ec);
@@ -161,7 +161,7 @@ protected:
 	virtual bool do_start() //intercept tcp::server_socket_base::do_start (to add handshake)
 	{
 		this->status = super::link_status::HANDSHAKING;
-		this->next_layer().async_handshake(asio::ssl::stream_base::server, this->make_handler_error([this](const asio::error_code& ec) {this->handle_handshake(ec);}));
+		this->next_layer().async_handshake(asio::ssl::stream_base::server, this->make_handler_error([this](const asio::error_code& ec) {handle_handshake(ec);}));
 		return true;
 	}
 

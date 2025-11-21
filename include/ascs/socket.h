@@ -144,10 +144,10 @@ public:
 
 #ifdef ASCS_PASSIVE_RECV
 	bool is_reading() const {return 1 == reading.load(std::memory_order_relaxed);}
-	void recv_msg() {if (is_ready() && !is_reading()) dispatch_in_io_strand([this]() {this->do_recv_msg();});}
+	void recv_msg() {if (is_ready() && !is_reading()) dispatch_in_io_strand([this]() {do_recv_msg();});}
 #else
 private:
-	void recv_msg() {dispatch_in_io_strand([this]() {this->do_recv_msg();});}
+	void recv_msg() {dispatch_in_io_strand([this]() {do_recv_msg();});}
 public:
 #endif
 #ifndef ASCS_EXPOSE_SEND_INTERFACE
@@ -165,7 +165,7 @@ public:
 		assert(interval > 0 && max_absence > 0);
 
 		if (!is_timer(TIMER_HEARTBEAT_CHECK))
-			set_timer(TIMER_HEARTBEAT_CHECK, interval * 1000, ASCS_COPY_ALL_AND_THIS(tid id)->bool {return this->check_heartbeat(interval, max_absence);});
+			set_timer(TIMER_HEARTBEAT_CHECK, interval * 1000, ASCS_COPY_ALL_AND_THIS(tid id)->bool {return check_heartbeat(interval, max_absence);});
 	}
 
 	//interval's unit is second
@@ -328,7 +328,7 @@ protected:
 	{
 		//it's always thread safe in this virtual function, because it blocks message receiving
 		ascs::do_something_to_all(msg_can, [this](OutMsgType& msg) {
-			unified_out::debug_out(ASCS_LLF " recv(" ASCS_SF "): %s", this->id(), msg.size(), msg.data());
+			unified_out::debug_out(ASCS_LLF " recv(" ASCS_SF "): %s", id(), msg.size(), msg.data());
 		});
 		msg_can.clear(); //have handled all messages
 
@@ -344,7 +344,7 @@ protected:
 		msg_can.swap(tmp_can); //must be thread safe, or avoid race condition from your business logic
 
 		ascs::do_something_to_all(tmp_can, [this](OutMsgType& msg) {
-			unified_out::debug_out(ASCS_LLF " recv(" ASCS_SF "): %s", this->id(), msg.size(), msg.data());
+			unified_out::debug_out(ASCS_LLF " recv(" ASCS_SF "): %s", id(), msg.size(), msg.data());
 		});
 		return 1;
 	}
@@ -440,7 +440,7 @@ protected:
 		else
 		{
 			set_async_calling(true);
-			set_timer(TIMER_DELAY_CLOSE, ASCS_DELAY_CLOSE * 1000 + 50, [this](tid id)->bool {return this->timer_handler(id);});
+			set_timer(TIMER_DELAY_CLOSE, ASCS_DELAY_CLOSE * 1000 + 50, [this](tid id)->bool {return timer_handler(id);});
 		}
 
 		return true;
@@ -455,7 +455,7 @@ protected:
 			sr_status = sync_recv_status::RESPONDED_FAILURE;
 			sync_recv_cv.notify_one();
 
-			sync_recv_cv.wait(lock, [this]() {return !this->started_ || sync_recv_status::RESPONDED_FAILURE != this->sr_status;});
+			sync_recv_cv.wait(lock, [this]() {return !started_ || sync_recv_status::RESPONDED_FAILURE != sr_status;});
 		}
 #endif
 	}
@@ -473,7 +473,7 @@ protected:
 			sr_status = sync_recv_status::RESPONDED;
 			sync_recv_cv.notify_one();
 
-			sync_recv_cv.wait(lock, [this]() {return !this->started_ || sync_recv_status::RESPONDED != this->sr_status;});
+			sync_recv_cv.wait(lock, [this]() {return !started_ || sync_recv_status::RESPONDED != sr_status;});
 			if (sync_recv_status::RESPONDED == sr_status) //eliminate race condition on temp_msg_can with sync_recv_msg
 				return false;
 			else if (temp_msg_can.empty())
@@ -600,12 +600,12 @@ private:
 	void reset_next_layer(const asio::any_io_executor& executor, Arg&& arg) {(&next_layer_)->~Socket(); new (&next_layer_) Socket(executor, std::forward<Arg>(arg));}
 #endif
 
-	void _send_msg() {dispatch_in_io_strand([this]() {this->do_send_msg();});}
+	void _send_msg() {dispatch_in_io_strand([this]() {do_send_msg();});}
 
 #ifdef ASCS_SYNC_RECV
 	sync_call_result sync_recv_waiting(std::unique_lock<std::mutex>& lock, unsigned duration)
 	{
-		auto pred = [this]() {return !this->started_ || sync_recv_status::REQUESTED != this->sr_status;};
+		auto pred = [this]() {return !started_ || sync_recv_status::REQUESTED != sr_status;};
 		if (0 == duration)
 			sync_recv_cv.wait(lock, std::move(pred));
 		else if (!sync_recv_cv.wait_for(lock, std::chrono::milliseconds(duration), std::move(pred)))
@@ -645,13 +645,13 @@ private:
 		if (check_receiving(false))
 			return true;
 
-		set_timer(TIMER_CHECK_RECV, msg_resuming_interval_, [this](tid id)->bool {return !this->check_receiving(true);});
+		set_timer(TIMER_CHECK_RECV, msg_resuming_interval_, [this](tid id)->bool {return !check_receiving(true);});
 #endif
 		return false;
 	}
 
 	//do not use dispatch_strand/dispatch_in_dis_strand at here, because the handler (do_dispatch_msg) may call this function, which can lead stack overflow.
-	void dispatch_msg() {if (!dispatching) post_in_dis_strand([this]() {this->do_dispatch_msg();});}
+	void dispatch_msg() {if (!dispatching) post_in_dis_strand([this]() {do_dispatch_msg();});}
 	void do_dispatch_msg()
 	{
 #ifdef ASCS_DISPATCH_BATCH_MSG
@@ -660,7 +660,7 @@ private:
 			dispatching = true;
 			auto begin_time = statistic::now();
 #ifdef ASCS_FULL_STATISTIC
-			recv_buffer.do_something_to_all([&](out_msg& msg) {this->stat.dispatch_delay_sum += begin_time - msg.begin_time;});
+			recv_buffer.do_something_to_all([&](out_msg& msg) {stat.dispatch_delay_sum += begin_time - msg.begin_time;});
 #endif
 			auto re = on_msg_handle(recv_buffer);
 			auto end_time = statistic::now();
@@ -671,7 +671,7 @@ private:
 #ifdef ASCS_FULL_STATISTIC
 				recv_buffer.do_something_to_all([&](out_msg& msg) {msg.restart(end_time);});
 #endif
-				set_timer(TIMER_DISPATCH_MSG, msg_handling_interval_, [this](tid id)->bool {return this->timer_handler(id);}); //hold dispatching
+				set_timer(TIMER_DISPATCH_MSG, msg_handling_interval_, [this](tid id)->bool {return timer_handler(id);}); //hold dispatching
 			}
 			else
 			{
@@ -688,14 +688,14 @@ private:
 			if (!re) //dispatch failed, re-dispatch
 			{
 				dispatching_msg.restart(end_time);
-				set_timer(TIMER_DISPATCH_MSG, msg_handling_interval_, [this](tid id)->bool {return this->timer_handler(id);}); //hold dispatching
+				set_timer(TIMER_DISPATCH_MSG, msg_handling_interval_, [this](tid id)->bool {return timer_handler(id);}); //hold dispatching
 			}
 			else
 			{
 				dispatching_msg.clear();
 #endif
 				dispatching = false;
-				post_in_dis_strand([this]() {this->do_dispatch_msg();}); //dispatch msg in sequence
+				post_in_dis_strand([this]() {do_dispatch_msg();}); //dispatch msg in sequence
 			}
 		}
 		else
@@ -707,7 +707,7 @@ private:
 		switch (id)
 		{
 		case TIMER_DISPATCH_MSG:
-			post_in_dis_strand([this]() {this->do_dispatch_msg();});
+			post_in_dis_strand([this]() {do_dispatch_msg();});
 			break;
 		case TIMER_DELAY_CLOSE:
 			if (!is_last_async_call())
