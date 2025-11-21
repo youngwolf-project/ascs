@@ -13,6 +13,7 @@
 #ifndef _ASCS_UDP_SOCKET_H_
 #define _ASCS_UDP_SOCKET_H_
 
+#include "../service_pump.h"
 #include "../socket.h"
 
 namespace ascs { namespace udp {
@@ -57,8 +58,8 @@ public:
 	}
 
 protected:
-	generic_socket(asio::io_context& io_context_) : super(io_context_), matrix(nullptr) {}
-	generic_socket(Matrix& matrix_) : super(matrix_.get_service_pump()), matrix(&matrix_) {}
+	generic_socket(service_pump& service_pump_) : super(service_pump_), matrix(nullptr) {if (service_pump_.is_single_thread()) this->set_single_thread();}
+	generic_socket(Matrix& matrix_) : super(matrix_.get_service_pump()), matrix(&matrix_) {if (matrix_->get_service_pump().is_single_thread()) this->set_single_thread();}
 	~generic_socket() {this->clear_io_context_refs();}
 
 public:
@@ -274,12 +275,10 @@ private:
 			unified_out::error_out(ASCS_LLF " the unpacker returned an empty buffer, quit receiving!", this->id());
 		else
 		{
-			if (is_connected)
-				this->next_layer().async_receive(recv_buff, make_strand_handler(rw_strand,
-					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);})));
-			else
-				this->next_layer().async_receive_from(recv_buff, temp_addr, make_strand_handler(rw_strand,
-					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);})));
+			auto cb = this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);});
+			if (!this->is_single_thread())
+				cb = make_strand_handler(rw_strand, std::move(cb));
+			is_connected ? this->next_layer().async_receive(recv_buff, std::move(cb)) : this->next_layer().async_receive_from(recv_buff, temp_addr, std::move(cb));
 			return;
 		}
 
@@ -342,14 +341,16 @@ private:
 		{
 			stat.send_delay_sum += statistic::now() - sending_msg.begin_time;
 			sending_msg.restart();
-			if (!is_connected)
-				this->next_layer().async_send_to(asio::buffer(sending_msg.data(), sending_msg.size()), sending_msg.peer_addr, make_strand_handler(rw_strand,
-					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);})));
-			else if (do_send_msg(sending_msg))
+			if (is_connected && do_send_msg(sending_msg))
 				this->post_in_io_strand([this]() {send_handler(asio::error_code(), sending_msg.size());});
 			else
-				this->next_layer().async_send(asio::buffer(sending_msg.data(), sending_msg.size()), make_strand_handler(rw_strand,
-					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);})));
+			{
+				auto cb = this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);});
+				if (!this->is_single_thread())
+					cb = make_strand_handler(rw_strand, std::move(cb));
+				auto buf = asio::buffer(sending_msg.data(), sending_msg.size());
+				is_connected ? this->next_layer().async_send(std::move(buf), std::move(cb)) : this->next_layer().async_send_to(std::move(buf), sending_msg.peer_addr, std::move(cb));
+			}
 			return true;
 		}
 		else

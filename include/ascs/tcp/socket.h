@@ -325,13 +325,12 @@ private:
 		else if (this->test_and_set_reading())
 			return;
 #endif
+		auto cb = this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);});
 #ifdef ASCS_PASSIVE_RECV
-		if (!this->async_read(make_strand_handler(rw_strand,
-			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}))))
+		if (!this->async_read(this->is_single_thread() ? std::move(cb) : make_strand_handler(rw_strand, std::move(cb))))
 			this->clear_reading();
 #else
-		this->async_read(make_strand_handler(rw_strand,
-			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);})));
+		this->async_read(this->is_single_thread() ? std::move(cb) : make_strand_handler(rw_strand, std::move(cb)));
 #endif
 	}
 
@@ -399,8 +398,8 @@ private:
 		if (!sending_buffer.empty())
 		{
 			sending_msgs.front().restart();
-			this->async_write(sending_buffer, make_strand_handler(rw_strand,
-				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);})));
+			auto cb = this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);});
+			this->async_write(sending_buffer, this->is_single_thread() ? std::move(cb) : make_strand_handler(rw_strand, std::move(cb)));
 			return true;
 		}
 		else

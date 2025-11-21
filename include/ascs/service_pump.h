@@ -292,6 +292,7 @@ public:
 
 	bool is_service_started() const {return started;}
 	bool is_first_running() const {return first;}
+	bool is_single_thread() const {return single_thread;}
 
 	//not thread safe
 #if ASIO_VERSION >= 101200
@@ -300,6 +301,35 @@ public:
 	void add_service_thread(int thread_num, bool block = false, int io_context_num = 0)
 #endif
 	{
+		if (!is_service_started())
+			unified_out::error_out("call add_service_thread after start_service, please!");
+		else
+#if ASIO_VERSION >= 101200
+			do_add_service_thread(false, thread_num, block, io_context_num, concurrency_hint);
+#else
+			do_add_service_thread(false, thread_num, block, io_context_num);
+#endif
+	}
+
+#ifdef ASCS_DECREASE_THREAD_AT_RUNTIME
+	void del_service_thread(int thread_num) {if (thread_num > 0) del_thread_num += thread_num;}
+	int service_thread_num() const {return real_thread_num;}
+#endif
+
+protected:
+	//not thread safe
+#if ASIO_VERSION >= 101200
+	void do_add_service_thread(bool first, int thread_num, bool block = false, int io_context_num = 0, int concurrency_hint = ASIO_CONCURRENCY_HINT_SAFE)
+#else
+	void do_add_service_thread(bool first, int thread_num, bool block = false, int io_context_num = 0)
+#endif
+	{
+		if (!first && is_single_thread() && thread_num > 0 && thread_num != io_context_num)
+		{
+			unified_out::error_out("for single thread mode, thread_num must equals to io_context_num!");
+			return;
+		}
+
 		if (io_context_num > 0)
 		{
 			if (thread_num < io_context_num)
@@ -332,19 +362,20 @@ public:
 		}
 	}
 
-#ifdef ASCS_DECREASE_THREAD_AT_RUNTIME
-	void del_service_thread(int thread_num) {if (thread_num > 0) del_thread_num += thread_num;}
-	int service_thread_num() const {return real_thread_num;}
-#endif
-
-protected:
 	void do_service(int thread_num, bool block = false)
 	{
-		if (thread_num <= 0 || (size_t) thread_num < context_can.size())
+		if (thread_num <= 0)
+		{
+			single_thread = true;
+			thread_num = (int) context_can.size();
+		}
+		else if ((size_t) thread_num < context_can.size())
 		{
 			unified_out::error_out("thread_num must be bigger than or equal to io_context_num.");
 			return;
 		}
+		else
+			single_thread = false;
 
 #ifdef ASCS_AVOID_AUTO_STOP_SERVICE
 		if (!is_first_running())
@@ -367,7 +398,7 @@ protected:
 		ascs::do_something_to_all(context_can, [](context& item) {item.io_context.reset();}); //this is needed when restart service
 #endif
 		do_something_to_all([](object_type& item) {item->start_service();});
-		add_service_thread(thread_num, block);
+		do_add_service_thread(true, thread_num, block);
 	}
 
 	void wait_service()
@@ -496,7 +527,7 @@ private:
 	std::atomic_int_fast32_t del_thread_num{0};
 #endif
 
-	bool single_ctx;
+	bool single_ctx, single_thread{false};
 	std::list<context> context_can;
 	std::mutex context_can_mutex;
 };
