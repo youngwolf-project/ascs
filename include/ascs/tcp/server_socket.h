@@ -26,8 +26,11 @@ private:
 	typedef Socket super;
 
 public:
-	generic_server_socket(Server& server_) : super(server_.get_service_pump()), server(server_) {}
-	template<typename Arg> generic_server_socket(Server& server_, Arg&& arg) : super(server_.get_service_pump(), std::forward<Arg>(arg)), server(server_) {}
+	generic_server_socket(Server& server_) : super(server_.get_service_pump()), server(server_)
+		{if (server_.get_service_pump().is_single_thread()) this->set_single_thread();}
+	template<typename Arg> generic_server_socket(Server& server_, Arg&& arg) : super(server_.get_service_pump(), std::forward<Arg>(arg)), server(server_)
+		{if (server_.get_service_pump().is_single_thread()) this->set_single_thread();}
+
 	~generic_server_socket() {this->clear_io_context_refs();}
 
 	virtual const char* type_name() const {return "TCP (server endpoint)";}

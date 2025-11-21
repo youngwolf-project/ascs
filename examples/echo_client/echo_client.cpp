@@ -475,7 +475,14 @@ int main(int argc, const char* argv[])
 	//or just add up total message size), under this scenario, just one service thread without receiving buffer will obtain the best IO throughput.
 	//the server has such behavior too.
 
-	sp.start_service(std::max(thread_num, sp.get_io_context_num()));
+	//explicitly apply single thread mode by setting the thread_num to be <= 0
+	//even the thread_num equals to io_context_num, ascs will not apply single thread mode automatically,
+	//this is because we can increase thread_num at runtime.
+	//with single thread mode, we'd better use BOOST_ASIO_CONCURRENCY_HINT_UNSAFE to construct service_pump.
+	if (sp.get_io_context_num() > 0)
+		sp.start_service(0);
+	else
+		sp.start_service(std::max(thread_num, sp.get_io_context_num()));
 	while(sp.is_running())
 	{
 		std::string str;
@@ -514,7 +521,11 @@ int main(int argc, const char* argv[])
 			//add all clients back
 			for (size_t i = 0; i < link_num; ++i)
 				client.add_socket(port, ip);
-			sp.start_service(std::max(thread_num, sp.get_io_context_num()));
+
+			if (sp.get_io_context_num() > 0)
+				sp.start_service(0);
+			else
+				sp.start_service(std::max(thread_num, sp.get_io_context_num()));
 		}
 		else
 		{

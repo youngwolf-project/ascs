@@ -285,7 +285,14 @@ int main(int argc, const char* argv[])
 	global_packer->prefix_suffix("begin", "end");
 #endif
 
-	sp.start_service(std::max(thread_num, sp.get_io_context_num()));
+	//explicitly apply single thread mode by setting the thread_num to be <= 0
+	//even the thread_num equals to io_context_num, ascs will not apply single thread mode automatically,
+	//this is because we can increase thread_num at runtime.
+	//with single thread mode, we'd better use BOOST_ASIO_CONCURRENCY_HINT_UNSAFE to construct service_pump.
+	if (sp.get_io_context_num() > 0)
+		sp.start_service(0);
+	else
+		sp.start_service(std::max(thread_num, sp.get_io_context_num()));
 	normal_server_.start_service(1);
 	short_server.start_service(1);
 	while(sp.is_running())
@@ -306,7 +313,10 @@ int main(int argc, const char* argv[])
 		{
 			sp.stop_service();
 			dump_io_context_refs(sp);
-			sp.start_service(std::max(thread_num, sp.get_io_context_num()));
+			if (sp.get_io_context_num() > 0)
+				sp.start_service(0);
+			else
+				sp.start_service(std::max(thread_num, sp.get_io_context_num()));
 			dump_io_context_refs(sp);
 		}
 		else if (STATISTIC == str)
