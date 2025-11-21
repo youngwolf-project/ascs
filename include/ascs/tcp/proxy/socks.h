@@ -28,7 +28,7 @@ private:
 	typedef ascs::tcp::client_socket_base<Packer, Unpacker, Matrix, Socket, InQueue, InContainer, OutQueue, OutContainer> super;
 
 public:
-	client_socket_base(asio::io_context& io_context_) : super(io_context_) {}
+	client_socket_base(service_pump& service_pump_) : super(service_pump_) {}
 	client_socket_base(Matrix& matrix_) : super(matrix_) {}
 
 	virtual const char* type_name() const {return "SOCKS4 (client endpoint)";}
@@ -115,7 +115,7 @@ private:
 	typedef ascs::tcp::client_socket_base<Packer, Unpacker, Matrix, Socket, InQueue, InContainer, OutQueue, OutContainer> super;
 
 public:
-	client_socket_base(asio::io_context& io_context_) : super(io_context_) {}
+	client_socket_base(service_pump& service_pump_) : super(service_pump_) {}
 	client_socket_base(Matrix& matrix_) : super(matrix_) {}
 
 	virtual const char* type_name() const {return "SOCKS5 (client endpoint)";}

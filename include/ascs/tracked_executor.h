@@ -25,6 +25,9 @@ protected:
 	virtual ~tracked_executor() {}
 	tracked_executor(asio::io_context& _io_context_) : io_context_(_io_context_) {}
 
+	void set_single_thread() {single_thread = true;}
+	bool is_single_thread() const {return single_thread;}
+
 public:
 	typedef std::function<void(const asio::error_code&)> handler_with_error;
 	typedef std::function<void(const asio::error_code&, size_t)> handler_with_error_size;
@@ -36,14 +39,21 @@ public:
 	template<typename F> void post(F&& handler) {asio::post(io_context_, [ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
 	template<typename F> void defer(F&& handler) {asio::defer(io_context_, [ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
 	template<typename F> void dispatch(F&& handler) {asio::dispatch(io_context_, [ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
-	template<typename F> void post_strand(asio::io_context::strand& strand, F&& handler) {asio::post(strand, [ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
-	template<typename F> void defer_strand(asio::io_context::strand& strand, F&& handler) {asio::defer(strand, [ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
-	template<typename F> void dispatch_strand(asio::io_context::strand& strand, F&& handler) {asio::dispatch(strand, [ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
+
+	template<typename F> void post_strand(asio::io_context::strand& strand, F&& handler)
+		{single_thread ? post(std::forward<F>(handler)) : asio::post(strand, [ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
+	template<typename F> void defer_strand(asio::io_context::strand& strand, F&& handler)
+		{single_thread ? defer(std::forward<F>(handler)) : asio::defer(strand, [ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
+	template<typename F> void dispatch_strand(asio::io_context::strand& strand, F&& handler)
+		{single_thread ? dispatch(std::forward<F>(handler)) : asio::dispatch(strand, [ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
 	#else
 	template<typename F> void post(F&& handler) {io_context_.post([ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
 	template<typename F> void dispatch(F&& handler) {io_context_.dispatch([ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
-	template<typename F> void post_strand(asio::io_context::strand& strand, F&& handler) {strand.post([ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
-	template<typename F> void dispatch_strand(asio::io_context::strand& strand, F&& handler) {strand.dispatch([ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
+
+	template<typename F> void post_strand(asio::io_context::strand& strand, F&& handler)
+		{single_thread ? post(std::forward<F>(handler)) : strand.post([ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
+	template<typename F> void dispatch_strand(asio::io_context::strand& strand, F&& handler)
+		{single_thread ? dispatch(std::forward<F>(handler)) : strand.dispatch([ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
 	#endif
 
 	template<typename F> handler_with_error make_handler_error(F&& handler) const {return [ref_holder(aci), handler(std::forward<F>(handler))](const auto& ec) {handler(ec);};}
@@ -54,14 +64,21 @@ public:
 	template<typename F> void post(const F& handler) {auto ref_holder(aci); asio::post(io_context_, [=]() {(void) ref_holder; handler();});}
 	template<typename F> void defer(const F& handler) {auto ref_holder(aci); asio::defer(io_context_, [=]() {(void) ref_holder; handler();});}
 	template<typename F> void dispatch(const F& handler) {auto ref_holder(aci); asio::dispatch(io_context_, [=]() {(void) ref_holder; handler();});}
-	template<typename F> void post_strand(asio::io_context::strand& strand, const F& handler) {auto ref_holder(aci); asio::post(strand, [=]() {(void) ref_holder; handler();});}
-	template<typename F> void defer_strand(asio::io_context::strand& strand, const F& handler) {auto ref_holder(aci); asio::defer(strand, [=]() {(void) ref_holder; handler();});}
-	template<typename F> void dispatch_strand(asio::io_context::strand& strand, const F& handler) {auto ref_holder(aci); asio::dispatch(strand, [=]() {(void) ref_holder; handler();});}
+
+	template<typename F> void post_strand(asio::io_context::strand& strand, const F& handler)
+		{if (single_thread) return post(handler); auto ref_holder(aci); asio::post(strand, [=]() {(void) ref_holder; handler();});}
+	template<typename F> void defer_strand(asio::io_context::strand& strand, const F& handler)
+		{if (single_thread) return defer(handler); auto ref_holder(aci); asio::defer(strand, [=]() {(void) ref_holder; handler();});}
+	template<typename F> void dispatch_strand(asio::io_context::strand& strand, const F& handler)
+		{if (single_thread) return dispatch(handler); auto ref_holder(aci); asio::dispatch(strand, [=]() {(void) ref_holder; handler();});}
 	#else
 	template<typename F> void post(const F& handler) {auto ref_holder(aci); io_context_.post([=]() {(void) ref_holder; handler();});}
 	template<typename F> void dispatch(const F& handler) {auto ref_holder(aci); io_context_.dispatch([=]() {(void) ref_holder; handler();});}
-	template<typename F> void post_strand(asio::io_context::strand& strand, const F& handler) {auto ref_holder(aci); strand.post([=]() {(void) ref_holder; handler();});}
-	template<typename F> void dispatch_strand(asio::io_context::strand& strand, const F& handler) {auto ref_holder(aci); strand.dispatch([=]() {(void) ref_holder; handler();});}
+
+	template<typename F> void post_strand(asio::io_context::strand& strand, const F& handler)
+		{if (single_thread) return post(handler); auto ref_holder(aci); strand.post([=]() {(void) ref_holder; handler();});}
+	template<typename F> void dispatch_strand(asio::io_context::strand& strand, const F& handler)
+		{if (single_thread) return dispatch(handler); auto ref_holder(aci); strand.dispatch([=]() {(void) ref_holder; handler();});}
 	#endif
 
 	template<typename F> handler_with_error make_handler_error(const F& handler) const {auto ref_holder(aci); return [=](const asio::error_code& ec) {(void) ref_holder; handler(ec);};}
@@ -79,6 +96,7 @@ public:
 
 protected:
 	asio::io_context& io_context_;
+	bool single_thread{false};
 
 private:
 	std::shared_ptr<char> aci{std::make_shared<char>('\0')}; //asynchronous calling indicator

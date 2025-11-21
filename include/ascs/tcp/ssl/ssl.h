@@ -72,7 +72,7 @@ private:
 	typedef socket<tcp::client_socket_base<Packer, Unpacker, Matrix, asio::ssl::stream<asio::ip::tcp::socket>, InQueue, InContainer, OutQueue, OutContainer>> super;
 
 public:
-	client_socket_base(asio::io_context& io_context_, asio::ssl::context& ctx_) : super(io_context_, ctx_) {}
+	client_socket_base(service_pump& service_pump_, asio::ssl::context& ctx_) : super(service_pump_, ctx_) {}
 	client_socket_base(Matrix& matrix_, asio::ssl::context& ctx_) : super(matrix_, ctx_) {}
 
 	virtual const char* type_name() const {return "SSL (client endpoint)";}
