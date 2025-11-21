@@ -13,6 +13,7 @@
 #ifndef _ASCS_CLIENT_SOCKET_H_
 #define _ASCS_CLIENT_SOCKET_H_
 
+#include "../service_pump.h"
 #include "socket.h"
 
 namespace ascs { namespace tcp {
@@ -53,11 +54,11 @@ public:
 	}
 
 protected:
-	generic_client_socket(boost::asio::io_context& io_context_) : super(io_context_), matrix(nullptr) {}
-	template<typename Arg> generic_client_socket(boost::asio::io_context& io_context_, Arg&& arg) : super(io_context_, std::forward<Arg>(arg)), matrix(nullptr) {}
+	generic_client_socket(service_pump& service_pump_) : super(service_pump_) {first_init(service_pump_);}
+	template<typename Arg> generic_client_socket(service_pump& service_pump_, Arg&& arg) : super(service_pump_, std::forward<Arg>(arg)) {first_init(service_pump_);}
 
-	generic_client_socket(Matrix& matrix_) : super(matrix_.get_service_pump()), matrix(&matrix_) {}
-	template<typename Arg> generic_client_socket(Matrix& matrix_, Arg&& arg) : super(matrix_.get_service_pump(), std::forward<Arg>(arg)), matrix(&matrix_) {}
+	generic_client_socket(Matrix& matrix_) : super(matrix_.get_service_pump()) {first_init(&matrix_);}
+	template<typename Arg> generic_client_socket(Matrix& matrix_, Arg&& arg) : super(matrix_.get_service_pump(), std::forward<Arg>(arg)) {first_init(&matrix_);}
 
 	~generic_client_socket() {this->clear_io_context_refs();}
 
@@ -116,6 +117,10 @@ public:
 	}
 
 protected:
+	//helper function, just call it in constructor
+	void first_init(const service_pump& service_pump_) {matrix = nullptr; if (service_pump_.is_single_thread()) this->set_single_thread();}
+	void first_init(Matrix* matrix_) {matrix = matrix_; if (matrix_->get_service_pump().is_single_thread()) this->set_single_thread();}
+
 	Matrix* get_matrix() {return matrix;}
 	const Matrix* get_matrix() const {return matrix;}
 
@@ -226,9 +231,9 @@ private:
 	typedef generic_client_socket<socket_base<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>, Matrix> super;
 
 public:
-	client_socket_base(boost::asio::io_context& io_context_) : super(io_context_) {this->set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
+	client_socket_base(service_pump& service_pump_) : super(service_pump_) {this->set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
 	template<typename Arg>
-	client_socket_base(boost::asio::io_context& io_context_, Arg&& arg) : super(io_context_, std::forward<Arg>(arg)) {this->set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
+	client_socket_base(service_pump& service_pump_, Arg&& arg) : super(service_pump_, std::forward<Arg>(arg)) {this->set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
 
 	client_socket_base(Matrix& matrix_) : super(matrix_) {this->set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
 	template<typename Arg> client_socket_base(Matrix& matrix_, Arg&& arg) : super(matrix_, std::forward<Arg>(arg)) {this->set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
@@ -280,7 +285,7 @@ private:
 	typedef generic_client_socket<socket_base<boost::asio::local::stream_protocol::socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>, Matrix, boost::asio::local::stream_protocol> super;
 
 public:
-	unix_client_socket_base(boost::asio::io_context& io_context_) : super(io_context_) {this->set_server_addr("./ascs-unix-socket");}
+	unix_client_socket_base(service_pump& service_pump_) : super(service_pump_) {this->set_server_addr("./ascs-unix-socket");}
 	unix_client_socket_base(Matrix& matrix_) : super(matrix_) {this->set_server_addr("./ascs-unix-socket");}
 };
 #endif
