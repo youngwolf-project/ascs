@@ -108,7 +108,7 @@ public:
 	object_buffer(T* _buffer) : buffer(_buffer) {}
 	object_buffer(buffer_type&& _buffer) : buffer(std::forward<buffer_type>(_buffer)) {}
 
-#if defined(_MSC_VER) && _MSC_VER <= 1800
+#if defined(_MSVC_LANG) && _MSVC_LANG <= 201103L
 	object_buffer(object_buffer&& other) : buffer(std::move(other.buffer)) {}
 	object_buffer& operator=(object_buffer&& other) {clear(); buffer = std::move(other.buffer); return *this;}
 #endif
@@ -251,7 +251,7 @@ namespace udp
 		using MsgType::swap;
 		void swap(udp_msg& other) {MsgType::swap(other); std::swap(peer_addr, other.peer_addr);}
 
-#if defined(_MSC_VER) && _MSC_VER <= 1800
+#if defined(_MSVC_LANG) && _MSVC_LANG <= 201103L
 		udp_msg(udp_msg&& other) : MsgType(std::move(other)), peer_addr(std::move(other.peer_addr)) {}
 		udp_msg& operator=(udp_msg&& other) {MsgType::clear(); swap(other); return *this;}
 #endif
