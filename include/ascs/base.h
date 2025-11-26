@@ -920,7 +920,7 @@ public:
 		to_time_str(time(nullptr), os);
 		os << " -> ";
 
-#if defined _MSC_VER || defined __clang__
+#if defined(_MSC_VER) || defined(__clang__)
 		os.rdbuf()->sgetn(buff, buff_len);
 #endif
 		auto len = (size_t) os.tellp();
