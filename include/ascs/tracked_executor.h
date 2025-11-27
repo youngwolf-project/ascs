@@ -31,7 +31,7 @@ public:
 
 	bool stopped() const {return io_context_.stopped();}
 
-#if (defined(_MSC_VER) && _MSC_VER > 1800) || (defined(__cplusplus) && __cplusplus > 201103L)
+#if (_MSVC_LANG > 201103L || __cplusplus > 201103L)
 	#if ASIO_VERSION >= 101100
 	template<typename F> void post(F&& handler) {asio::post(io_context_, [ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
 	template<typename F> void defer(F&& handler) {asio::defer(io_context_, [ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}

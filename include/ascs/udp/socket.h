@@ -311,7 +311,7 @@ private:
 		}
 		else
 		{
-#if defined(_MSC_VER) || defined(__CYGWIN__) || defined(__MINGW32__) || defined(__MINGW64__)
+#ifdef _WIN32
 			if (ec && asio::error::connection_refused != ec && asio::error::connection_reset != ec)
 #else
 			if (ec)

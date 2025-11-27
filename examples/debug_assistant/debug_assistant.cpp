@@ -95,7 +95,7 @@ int main(int argc, const char* argv[])
 	auto daemon = false;
 	if (argc >= 2 && 0 == strcmp(argv[1], "-d"))
 	{
-#if defined(_MSC_VER) || defined(__MINGW64__) || defined(__MINGW32__)
+#ifdef _WIN32
 		puts("on windows, -d is not supported!");
 		return 1;
 #endif
@@ -133,7 +133,7 @@ int main(int argc, const char* argv[])
 	udp_service.set_local_addr(9528);
 	echo_ssl_server.set_server_addr(9529);
 
-#if !defined(_MSC_VER) && !defined(__MINGW64__) && !defined(__MINGW32__)
+#ifndef _WIN32
 	if (daemon)
 	{
 		asio::signal_set signal_receiver(sp.assign_io_context(), SIGINT, SIGTERM, SIGUSR1);

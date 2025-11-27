@@ -22,7 +22,7 @@
 int main(int argc, const char* argv[])
 {
 	puts("this is a file transmission server.");
-#if defined(_MSC_VER) || defined(__MINGW64__) || defined(__MINGW32__)
+#ifdef _WIN32
 	printf("usage: %s [<port=%d> [ip=0.0.0.0]]\n", argv[0], ASCS_SERVER_PORT);
 #else
 	printf("usage: %s [-d] [<port=%d> [ip=0.0.0.0]]\n", argv[0], ASCS_SERVER_PORT);
@@ -36,7 +36,7 @@ int main(int argc, const char* argv[])
 	auto index = 0;
 	if (argc >= 2 && 0 == strcmp(argv[1], "-d"))
 	{
-#if defined(_MSC_VER) || defined(__MINGW64__) || defined(__MINGW32__)
+#ifdef _WIN32
 		puts("on windows, -d is not supported!");
 		return 1;
 #endif
@@ -57,7 +57,7 @@ int main(int argc, const char* argv[])
 	else if (argc > 1 + index)
 		file_server_.set_server_addr(atoi(argv[1 + index]));
 
-#if !defined(_MSC_VER) && !defined(__MINGW64__) && !defined(__MINGW32__)
+#ifndef _WIN32
 	if (1 == index)
 	{
 		asio::signal_set signal_receiver(sp.assign_io_context(), SIGINT, SIGTERM);
