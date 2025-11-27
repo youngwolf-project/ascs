@@ -154,7 +154,7 @@ protected:
 #endif
 
 		//if timer already started, this will cancel it first
-#if (defined(_MSC_VER) && _MSC_VER > 1800) || (defined(__cplusplus) && __cplusplus > 201103L)
+#if (_MSVC_LANG > 201103L || __cplusplus > 201103L)
 		ti.timer.async_wait(this->make_handler_error([this, &ti, prev_seq(++ti.seq)](const boost::system::error_code& ec) {
 #else
 		auto prev_seq = ++ti.seq;
