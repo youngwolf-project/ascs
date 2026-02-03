@@ -358,7 +358,7 @@ public:
 	static const tid UPDATE_PROGRESS = TIMER_BEGIN;
 	static const tid TIMER_END = TIMER_BEGIN + 5;
 
-	file_client(service_pump& service_pump_) : multi_client2<file_socket, file_matrix>(service_pump_) {}
+	using multi_client2<file_socket, file_matrix>::multi_client2;
 
 	void get_file(const std::list<std::string>& files)
 	{

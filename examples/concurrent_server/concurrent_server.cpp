@@ -64,7 +64,7 @@ protected:
 class echo_server : public tcp::server_base<echo_socket>
 {
 public:
-	echo_server(service_pump& service_pump_) : server_base<echo_socket>(service_pump_) {}
+	using tcp::server_base<echo_socket>::server_base;
 
 protected:
 	virtual bool on_accept(object_ctype& socket_ptr) {boost::asio::ip::tcp::no_delay option(true); socket_ptr->lowest_layer().set_option(option); return true;}

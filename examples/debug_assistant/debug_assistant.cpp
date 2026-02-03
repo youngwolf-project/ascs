@@ -26,8 +26,7 @@ private:
 	typedef typename ObjectPool::tid tid; //old gcc needs this
 
 protected:
-	timed_object_pool(service_pump& service_pump_) : ObjectPool(service_pump_) {}
-	timed_object_pool(service_pump& service_pump_, const boost::asio::ssl::context::method& m) : ObjectPool(service_pump_, m) {}
+	using ObjectPool::ObjectPool;
 
 	void start()
 	{
@@ -48,7 +47,7 @@ protected:
 class echo_socket : public ext::tcp::server_socket
 {
 public:
-	echo_socket(i_server& server_) : ext::tcp::server_socket(server_) {}
+	using ext::tcp::server_socket::server_socket;
 
 protected:
 	//msg handling: send the original msg back(echo server)
@@ -59,7 +58,7 @@ protected:
 class echo_stream_socket : public server_socket_base<dummy_packer<std::string>, stream_unpacker>
 {
 public:
-	echo_stream_socket(i_server& server_) : server_socket_base<dummy_packer<std::string>, stream_unpacker>(server_) {}
+	using server_socket_base<dummy_packer<std::string>, stream_unpacker>::server_socket_base;
 
 protected:
 	//msg handling: send the original msg back(echo server)
@@ -70,7 +69,7 @@ protected:
 class echo_ssl_socket : public ext::ssl::server_socket
 {
 public:
-	echo_ssl_socket(i_server& server_, boost::asio::ssl::context& ctx) : ext::ssl::server_socket(server_, ctx) {}
+	using ext::ssl::server_socket::server_socket;
 
 protected:
 	//msg handling: send the original msg back(echo server)
@@ -81,7 +80,7 @@ protected:
 class single_udp_service : public ascs::ext::udp::single_socket_service
 {
 public:
-	single_udp_service(service_pump& service_pump_) : ascs::ext::udp::single_socket_service(service_pump_) {}
+	using ascs::ext::udp::single_socket_service::single_socket_service;
 
 protected:
 	//msg handling: send the original msg back(echo server)

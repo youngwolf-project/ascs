@@ -26,7 +26,7 @@ using namespace ascs::ext::tcp;
 class echo_socket : public server_socket
 {
 public:
-	echo_socket(tcp::i_server& server_) : server_socket(server_) {}
+	using server_socket::server_socket;
 
 protected:
 	//msg handling: send the original msg back (echo server), must define macro ASCS_SYNC_DISPATCH
@@ -49,7 +49,7 @@ protected:
 class echo_server : public tcp::server_base<echo_socket>
 {
 public:
-	echo_server(service_pump& service_pump_) : server_base<echo_socket>(service_pump_) {}
+	using tcp::server_base<echo_socket>::server_base;
 
 protected:
 	virtual bool on_accept(object_ctype& socket_ptr) {boost::asio::ip::tcp::no_delay option(true); socket_ptr->lowest_layer().set_option(option); return true;}

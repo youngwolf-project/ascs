@@ -26,8 +26,7 @@ private:
 	typedef multi_socket_service<Socket, Pool, Matrix> super;
 
 public:
-	multi_client_base(service_pump& service_pump_) : super(service_pump_) {}
-	template<typename Arg> multi_client_base(service_pump& service_pump_, Arg&& arg) : super(service_pump_, std::forward<Arg>(arg)) {}
+	using super::super;
 
 	//connected link size, may smaller than total object size (object_pool::size)
 	size_t valid_size()
