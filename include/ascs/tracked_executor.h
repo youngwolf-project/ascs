@@ -87,7 +87,7 @@ private:
 class tracked_executor : public executor
 {
 protected:
-	tracked_executor(boost::asio::io_context& io_context_) : executor(io_context_) {}
+	using executor::executor;
 
 public:
 	inline bool is_async_calling() const {return aci;}

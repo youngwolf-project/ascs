@@ -20,8 +20,7 @@ namespace ascs { namespace tcp {
 template<typename Socket, typename OutMsgType> class reader_writer : public Socket
 {
 public:
-	reader_writer(boost::asio::io_context& io_context_) : Socket(io_context_) {}
-	template<typename Arg> reader_writer(boost::asio::io_context& io_context_, Arg&& arg) : Socket(io_context_, std::forward<Arg>(arg)) {}
+	using Socket::Socket;
 
 	typedef std::function<void(const boost::system::error_code& ec, size_t bytes_transferred)> ReadWriteCallBack;
 
@@ -78,8 +77,7 @@ private:
 protected:
 	enum link_status {CONNECTED, FORCE_SHUTTING_DOWN, GRACEFUL_SHUTTING_DOWN, BROKEN, HANDSHAKING};
 
-	socket_base(boost::asio::io_context& io_context_) : super(io_context_) {}
-	template<typename Arg> socket_base(boost::asio::io_context& io_context_, Arg&& arg) : super(io_context_, std::forward<Arg>(arg)) {}
+	using super::super;
 
 public:
 	static const typename super::tid TIMER_BEGIN = super::TIMER_END;

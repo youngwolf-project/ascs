@@ -63,7 +63,7 @@ public:
 	};
 	typedef const timer_info timer_cinfo;
 
-	timer(boost::asio::io_context& io_context_) : Executor(io_context_) {}
+	using Executor::Executor;
 	~timer() {stop_all_timer();}
 
 	unsigned get_io_context_refs() const {return io_context_refs;}

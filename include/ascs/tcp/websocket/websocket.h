@@ -37,7 +37,7 @@ public:
 #endif
 
 public:
-	template<class... Args> explicit lowest_layer_getter(Args&&... args) : Stream(std::forward<Args>(args)...) {}
+	using Stream::Stream;
 };
 
 template<typename NextLayer, template<typename> class LowestLayerGetter = lowest_layer_getter>
@@ -74,8 +74,7 @@ private:
 template<typename Socket, typename OutMsgType> class reader_writer : public Socket
 {
 public:
-	reader_writer(boost::asio::io_context& io_context_) : Socket(io_context_) {}
-	template<typename Arg> reader_writer(boost::asio::io_context& io_context_, Arg& arg) : Socket(io_context_, arg) {}
+	using Socket::Socket;
 
 protected:
 	template<typename CallBack> bool async_read(const CallBack& call_back) {this->next_layer().async_read(call_back); return true;}
@@ -88,8 +87,7 @@ protected:
 template<typename Socket> class socket : public Socket
 {
 public:
-	template<typename Arg> socket(Arg& arg) : Socket(arg) {}
-	template<typename Arg1, typename Arg2> socket(Arg1& arg1, Arg2& arg2) : Socket(arg1, arg2) {}
+	using Socket::Socket;
 
 protected:
 	virtual void on_handshake(const boost::system::error_code& ec)
@@ -125,8 +123,7 @@ private:
 	typedef socket<tcp::client_socket_base<Packer, Unpacker, Matrix, stream<Socket, LowestLayerGetter>, InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>> super;
 
 public:
-	client_socket_base(boost::asio::io_context& io_context_) : super(io_context_) {}
-	template<typename Arg> client_socket_base(boost::asio::io_context& io_context_, Arg& arg) : super(io_context_, arg) {}
+	using super::super;
 
 	client_socket_base(Matrix& matrix_) : super(matrix_) {}
 	template<typename Arg> client_socket_base(Matrix& matrix_, Arg& arg) : super(matrix_, arg) {}
@@ -197,8 +194,7 @@ private:
 	typedef socket<tcp::server_socket_base<Packer, Unpacker, Server, stream<Socket, LowestLayerGetter>, InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>> super;
 
 public:
-	server_socket_base(Server& server_) : super(server_) {}
-	template<typename Arg> server_socket_base(Server& server_, Arg& arg) : super(server_, arg) {}
+	using super::super;
 
 	virtual const char* type_name() const {return "websocket (server endpoint)";}
 	virtual int type_id() const {return 8;}

@@ -162,7 +162,7 @@ protected:
 class echo_server : public ext::tcp::server2<echo_socket, i_echo_server>
 {
 public:
-	echo_server(service_pump& service_pump_) : ext::tcp::server2<echo_socket, i_echo_server>(service_pump_) {}
+	using ext::tcp::server2<echo_socket, i_echo_server>::server2;
 
 protected:
 	//from i_echo_server, pure virtual function, we must implement it.
@@ -176,7 +176,7 @@ typedef server_socket_base<packer<>, unpacker<>> normal_socket;
 class normal_socket : public server_socket_base<packer<>, unpacker<>>
 {
 public:
-	normal_socket(i_server& server_) : server_socket_base<ext::packer<>, ext::unpacker<>>(server_) {}
+	using server_socket_base<ext::packer<>, ext::unpacker<>>::server_socket_base;
 	//sometime, the default packer brings name conflict with the socket's packer member function, prefix namespace can resolve this conflict.
 
 protected:

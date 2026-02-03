@@ -11,7 +11,7 @@ using namespace ascs::ext::tcp;
 class file_socket : public base_socket, public server_socket
 {
 public:
-	file_socket(tcp::i_server& server_);
+	using server_socket::server_socket;
 	virtual ~file_socket();
 
 public:
