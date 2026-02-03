@@ -105,7 +105,7 @@ private:
 class echo_client : public ascs::tcp::multi_client_base<echo_socket>
 {
 public:
-	echo_client(service_pump& service_pump_) : multi_client_base<echo_socket>(service_pump_) {}
+	using ascs::tcp::multi_client_base<echo_socket>::multi_client_base;
 	void begin(float max_delay, size_t msg_len) {do_something_to_all([&](object_ctype& item) {item->begin(max_delay, msg_len);});}
 };
 

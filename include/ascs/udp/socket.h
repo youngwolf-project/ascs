@@ -423,8 +423,7 @@ private:
 	typedef generic_socket<Packer, Unpacker, Matrix, asio::ip::udp::socket, asio::ip::udp, InQueue, InContainer, OutQueue, OutContainer> super;
 
 public:
-	socket_base(asio::io_context& io_context_) : super(io_context_) {}
-	socket_base(Matrix& matrix_) : super(matrix_) {}
+	using super::super;
 
 protected:
 	virtual bool bind(const asio::ip::udp::endpoint& local_addr)
@@ -471,8 +470,7 @@ private:
 	typedef generic_socket<Packer, Unpacker, Matrix, asio::local::datagram_protocol::socket, asio::local::datagram_protocol, InQueue, InContainer, OutQueue, OutContainer> super;
 
 public:
-	unix_socket_base(asio::io_context& io_context_) : super(io_context_) {}
-	unix_socket_base(Matrix& matrix_) : super(matrix_) {}
+	using super::super;
 
 protected:
 	virtual bool bind(const asio::local::datagram_protocol::endpoint& local_addr)

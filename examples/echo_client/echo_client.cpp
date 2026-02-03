@@ -186,7 +186,7 @@ private:
 class echo_client : public ascs::tcp::multi_client_base<echo_socket>
 {
 public:
-	echo_client(service_pump& service_pump_) : multi_client_base<echo_socket>(service_pump_) {}
+	using ascs::tcp::multi_client_base<echo_socket>::multi_client_base;
 
 	uint64_t get_recv_bytes()
 	{

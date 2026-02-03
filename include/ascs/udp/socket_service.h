@@ -26,7 +26,7 @@ private:
 	typedef multi_socket_service<Socket, Pool, Matrix> super;
 
 public:
-	multi_socket_service_base(service_pump& service_pump_) : super(service_pump_) {}
+	using super::super;
 
 	using super::add_socket;
 	typename Pool::object_type add_socket(unsigned short port, const std::string& ip = std::string(), unsigned additional_io_context_refs = 0)

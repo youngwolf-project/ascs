@@ -75,8 +75,7 @@ public:
 #endif
 
 public:
-	template<typename Arg> g_socket(Arg& arg) : Socket(arg) {}
-	template<typename Arg1, typename Arg2> g_socket(Arg1& arg1, Arg2&& arg2) : Socket(arg1, std::forward<Arg2>(arg2)) {}
+	using Socket::Socket;
 
 	register_cb_1(obsoleted, true)
 	register_cb_1(is_ready, true)
@@ -172,8 +171,7 @@ public:
 	typedef void fo_on_async_shutdown_error(Socket*);
 
 public:
-	template<typename Arg> tcp_socket(Arg& arg) : g_socket<Socket>(arg) {}
-	template<typename Arg1, typename Arg2> tcp_socket(Arg1& arg1, Arg2&& arg2) : g_socket<Socket>(arg1, std::forward<Arg2>(arg2)) {}
+	using g_socket<Socket>::g_socket;
 
 	register_cb_1(on_connect, false)
 	register_cb_1(on_unpack_error, true)
@@ -196,8 +194,7 @@ public:
 	typedef int fo_prepare_reconnect(Socket*, const asio::error_code&);
 
 public:
-	template<typename Arg> c_socket(Arg& arg) : tcp_socket<Socket>(arg) {}
-	template<typename Arg1, typename Arg2> c_socket(Arg1& arg1, Arg2&& arg2) : tcp_socket<Socket>(arg1, std::forward<Arg2>(arg2)) {}
+	using tcp_socket<Socket>::tcp_socket;
 
 	register_cb_2(prepare_reconnect, false)
 
@@ -214,8 +211,7 @@ public:
 	typedef void fo_take_over(Socket*, std::shared_ptr<typename Socket::type_of_object_restore>);
 
 public:
-	template<typename Arg> s_socket(Arg& arg) : tcp_socket<Socket>(arg) {}
-	template<typename Arg1, typename Arg2> s_socket(Arg1& arg1, Arg2&& arg2) : tcp_socket<Socket>(arg1, std::forward<Arg2>(arg2)) {}
+	using tcp_socket<Socket>::tcp_socket;
 
 	register_cb_2(take_over, false)
 
@@ -235,8 +231,7 @@ public:
 	typedef bool fo_on_accept_error(Server*, const asio::error_code&, typename Server::object_ctype&);
 
 public:
-	template<typename Arg> server(Arg& arg) : Server(arg) {}
-	template<typename Arg1, typename Arg2> server(Arg1& arg1, Arg2&& arg2) : Server(arg1, std::forward<Arg2>(arg2)) {}
+	using Server::Server;
 
 	register_cb_1(async_accept_num, false)
 	register_cb_1(start_next_accept, true)
@@ -262,7 +257,7 @@ public:
 	typedef void fo_on_create(ObjectPool*, typename ObjectPool::object_ctype&);
 
 public:
-	template<typename Arg> object_pool(Arg& arg) : ObjectPool(arg) {}
+	using ObjectPool::ObjectPool;
 
 	register_cb_2(on_create, false)
 
