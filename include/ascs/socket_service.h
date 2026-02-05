@@ -49,8 +49,7 @@ template<typename Socket, typename Pool, typename Matrix>
 class multi_socket_service : public Matrix, public Pool
 {
 public:
-	multi_socket_service(service_pump& service_pump_) : Pool(service_pump_) {}
-	template<typename Arg> multi_socket_service(service_pump& service_pump_, Arg&& arg) : Pool(service_pump_, std::forward<Arg>(arg)) {}
+	using Pool::Pool;
 
 protected:
 	~multi_socket_service() {this->clear_io_context_refs();}

@@ -25,8 +25,11 @@ class timed_object_pool : public ObjectPool
 private:
 	typedef typename ObjectPool::tid tid; //old gcc needs this
 
-protected:
+public:
 	using ObjectPool::ObjectPool;
+
+protected:
+	~timed_object_pool() {}
 
 	void start()
 	{
