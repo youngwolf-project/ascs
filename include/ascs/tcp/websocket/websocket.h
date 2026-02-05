@@ -125,9 +125,6 @@ private:
 public:
 	using super::super;
 
-	client_socket_base(Matrix& matrix_) : super(matrix_) {}
-	template<typename Arg> client_socket_base(Matrix& matrix_, Arg& arg) : super(matrix_, arg) {}
-
 	virtual const char* type_name() const {return "websocket (client endpoint)";}
 	virtual int type_id() const {return 7;}
 

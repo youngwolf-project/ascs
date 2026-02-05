@@ -38,7 +38,7 @@ public:
 #endif
 
 public:
-	template<class... Args> explicit lowest_layer_getter(Args&&... args) : Stream(std::forward<Args>(args)...) {}
+	using Stream::Stream;
 };
 
 template<typename Socket> class socket : public Socket
@@ -77,8 +77,7 @@ private:
 	typedef socket<websocket::client_socket_base<Packer, Unpacker, Matrix, boost::beast::ssl_stream<boost::beast::tcp_stream>, lowest_layer_getter, InQueue, InContainer, OutQueue, OutContainer>> super;
 
 public:
-	client_socket_base(boost::asio::io_context& io_context_, boost::asio::ssl::context& ctx_) : super(io_context_, ctx_) {}
-	client_socket_base(Matrix& matrix_, boost::asio::ssl::context& ctx_) : super(matrix_, ctx_) {}
+	using super::super;
 
 	virtual const char* type_name() const {return "ssl websocket (client endpoint)";}
 	virtual int type_id() const {return 9;}
@@ -126,7 +125,7 @@ private:
 	typedef socket<websocket::server_socket_base<Packer, Unpacker, Server, boost::beast::ssl_stream<boost::beast::tcp_stream>, lowest_layer_getter, InQueue, InContainer, OutQueue, OutContainer>> super;
 
 public:
-	server_socket_base(Server& server_, boost::asio::ssl::context& ctx_) : super(server_, ctx_) {}
+	using super::super;
 
 	virtual const char* type_name() const {return "ssl websocket (server endpoint)";}
 	virtual int type_id() const {return 10;}

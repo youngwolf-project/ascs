@@ -41,10 +41,11 @@ public:
 	static const tid TIMER_END = TIMER_BEGIN + 10;
 
 public:
+	object_pool(service_pump& service_pump_) : i_service(service_pump_), timer<executor>(service_pump_) {}
 	void set_start_object_id(uint_fast64_t id) {cur_id.store(id - 1, std::memory_order_relaxed);} //call this right after object_pool been constructed
 
 protected:
-	object_pool(service_pump& service_pump_) : i_service(service_pump_), timer<executor>(service_pump_) {}
+	~object_pool() {}
 
 	void start()
 	{
