@@ -44,7 +44,7 @@ private:
 class my_client : public multi_client_base<my_client_socket, object_pool<my_client_socket>, my_matrix>
 {
 public:
-	my_client(service_pump& service_pump_) : multi_client_base(service_pump_) {}
+	using multi_client_base<my_client_socket, object_pool<my_client_socket>, my_matrix>::multi_client_base;
 
 	bool add_link(const std::string& name)
 	{

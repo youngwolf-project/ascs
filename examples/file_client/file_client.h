@@ -24,7 +24,7 @@ public:
 class file_socket : public base_socket, public client_socket2<file_matrix>
 {
 public:
-	file_socket(file_matrix& matrix_) : client_socket2<file_matrix>(matrix_), index(-1) {}
+	using client_socket2<file_matrix>::client_socket2;
 	virtual ~file_socket() {clear();}
 
 	//reset all, be ensure that there's no any operations performed on this file_socket when invoke it
@@ -348,7 +348,7 @@ private:
 	}
 
 private:
-	int index;
+	int index{-1};
 };
 
 class file_client : public multi_client2<file_socket, file_matrix>

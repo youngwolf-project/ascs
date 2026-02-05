@@ -39,8 +39,7 @@ public:
 #endif
 #else
 #ifdef ASCS_DECREASE_THREAD_AT_RUNTIME
-	single_service_pump() : Service((service_pump&) *this) {}
-	template<typename Arg> single_service_pump(Arg&& arg) : Service((service_pump&) *this, std::forward<Arg>(arg)) {}
+	using Service::Service;
 #else
 	//single_service_pump always think it's using multiple io_context
 	single_service_pump() : service_pump(true), Service((service_pump&) *this) {}
