@@ -26,7 +26,7 @@
 
 int link_num = 1;
 fl_type file_size;
-std::atomic_int_fast64_t transmit_size;
+std::atomic_int_fast64_t transmit_size{};
 
 void add_socket(file_client& client, int argc, const char* argv[])
 {

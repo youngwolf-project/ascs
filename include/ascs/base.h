@@ -50,7 +50,7 @@ inline bool operator!=(asio::error::misc_errors _Left, const asio::error_code& _
 class scope_atomic_lock : public asio::noncopyable
 {
 public:
-	scope_atomic_lock(std::atomic_flag& atomic_) : atomic(atomic_) {lock();} //atomic_ must has been initialized with false
+	scope_atomic_lock(std::atomic_flag& atomic_) : atomic(atomic_) {lock();} //atomic_ must has been initialized as clear state
 	~scope_atomic_lock() {unlock();}
 
 	void lock() {if (!_locked) _locked = !atomic.test_and_set(std::memory_order_acq_rel);}

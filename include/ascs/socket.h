@@ -762,10 +762,10 @@ private:
 	Socket next_layer_;
 
 #ifdef ASCS_PASSIVE_RECV
-	std::atomic_size_t reading;
+	std::atomic_size_t reading{};
 #endif
-	std::atomic_size_t sending;
-	std::atomic_flag start_atomic;
+	std::atomic_size_t sending{};
+	std::atomic_flag start_atomic{};
 	asio::io_context::strand dis_strand;
 
 #ifdef ASCS_SYNC_RECV

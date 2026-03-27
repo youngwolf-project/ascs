@@ -336,7 +336,7 @@ void send_msg_concurrently(echo_client& client, size_t send_thread_num, size_t m
 
 	cpu_timer begin_time;
 	std::list<std::thread> threads;
-	std::atomic_uint finished_sending;
+	std::atomic_uint finished_sending{};
 	do_something_to_all(link_groups, [&](const std::list<echo_client::object_type>& item) {
 		threads.emplace_back([=, &finished_sending, &item]() {
 			auto buff = new char[msg_len];
