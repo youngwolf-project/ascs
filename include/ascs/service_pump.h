@@ -523,8 +523,8 @@ private:
 	std::mutex service_can_mutex;
 
 #ifdef ASCS_DECREASE_THREAD_AT_RUNTIME
-	std::atomic_int_fast32_t real_thread_num{0};
-	std::atomic_int_fast32_t del_thread_num{0};
+	std::atomic_int_fast32_t real_thread_num{};
+	std::atomic_int_fast32_t del_thread_num{};
 #endif
 
 	bool single_ctx, single_thread{false};
