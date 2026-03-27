@@ -31,7 +31,7 @@ using namespace ascs::ext::tcp;
 #define DECREASE_THREAD	"decrease thread"
 
 cpu_timer begin_time;
-std::atomic_ushort completed_session_num;
+std::atomic_ushort completed_session_num{};
 
 class echo_socket : public client_socket
 {
