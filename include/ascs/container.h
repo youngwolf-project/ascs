@@ -69,15 +69,16 @@ public:
 	using typename Container::const_reference;
 	//since some implementations (such as gcc before 5.0) of std::list::size() have linear complexity, we don't expose this size() function
 	//using Container::size;
+	using Container::empty;
 
 	//thread safe
 	bool is_thread_safe() const {return Lockable::is_lockable();}
 	size_t size_in_byte() const {return total_size;}
-#ifdef ASCS_CAN_EMPTY_NOT_SAFE //container's empty() function is not thread safe
-	bool empty() {typename Lockable::lock_guard lock(*this); return Container::empty();}
-#else
-	using Container::empty; //almost all implementations of list::empty() in the world are thread safe (not means correctness, but just no memory access violation)
-#endif
+	/*
+	if your queue is lock free, you must guarantee that after the content of the container been changed in one thread, function 'is_empty' (not 'empty')
+	should returns exact state (empty or not) of the container in another thread, for example, via an std::atomic with appropriate std::memory_order.
+	*/
+	bool is_empty() {typename Lockable::lock_guard lock(*this); return empty();}
 	void clear() {typename Lockable::lock_guard lock(*this); Container::clear(); total_size = 0;}
 	void swap(Container& can)
 	{
