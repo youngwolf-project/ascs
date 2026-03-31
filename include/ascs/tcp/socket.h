@@ -340,7 +340,6 @@ private:
 #ifdef ASCS_PASSIVE_RECV
 		this->clear_reading(); //clear reading flag before calling handle_msg() to make sure that recv_msg() is available in on_msg() and on_msg_handle()
 #endif
-		auto need_next_recv = false;
 		if (bytes_transferred > 0)
 		{
 			stat.last_recv_time = time(nullptr);
@@ -357,7 +356,8 @@ private:
 				this->unpacker()->reset(); //user can get the left half-baked msg in unpacker's reset()
 			}
 
-			need_next_recv = handle_msg(); //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
+			if (handle_msg() && !ec) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
+				do_recv_msg(); //receive msg in sequence
 		}
 		else if (!ec)
 		{
@@ -370,22 +370,11 @@ private:
 			handle_error();
 			on_recv_error(ec);
 		}
-		//if you wrote an terrible unpacker whoes completion_condition always returns 0, it will cause ascs to occupies almost all CPU resources
-		// because of following do_recv_msg() invocation (rapidly and repeatedly), please note.
-		else if (need_next_recv)
-			do_recv_msg(); //receive msg in sequence
 	}
 
 	virtual bool do_send_msg(bool in_strand = false)
 	{
-		if (send_buffer.empty()) //without this, in extreme circumstances, messages can leave behind in the send buffer until the next message sending
-		{
-			if (in_strand)
-				this->clear_sending();
-
-			return false;
-		}
-		else if (!in_strand && this->test_and_set_sending())
+		if (!in_strand && this->test_and_set_sending())
 			return true;
 
 		auto end_time = statistic::now();
@@ -403,10 +392,9 @@ private:
 				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);})));
 			return true;
 		}
-		else
-			this->clear_sending();
 
-		return false;
+		this->clear_sending();
+		return send_buffer.is_empty() ? false : do_send_msg(); //send msg in sequence, just make sure no pending msgs
 	}
 
 	void send_handler(const asio::error_code& ec, size_t bytes_transferred)
@@ -427,7 +415,7 @@ private:
 			on_msg_send(sending_msgs);
 #endif
 #ifdef ASCS_WANT_ALL_MSG_SEND_NOTIFY
-			if (send_buffer.empty())
+			if (send_buffer.is_empty())
 #if defined(ASCS_WANT_MSG_SEND_NOTIFY) || !defined(ASCS_WANT_BATCH_MSG_SEND_NOTIFY)
 				this->on_all_msg_send(sending_msgs.back());
 #else
@@ -443,12 +431,7 @@ private:
 #endif
 #endif
 			sending_msgs.clear();
-#ifdef ASCS_ARBITRARY_SEND
 			do_send_msg(true);
-#else
-			if (!do_send_msg(true) && !send_buffer.empty()) //send msg in sequence
-				super::send_msg(); //just make sure no pending msgs
-#endif
 		}
 		else
 		{

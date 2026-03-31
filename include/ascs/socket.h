@@ -153,11 +153,8 @@ public:
 #ifndef ASCS_EXPOSE_SEND_INTERFACE
 protected:
 #endif
-#ifdef ASCS_ARBITRARY_SEND
-	void send_msg() {_send_msg();}
-#else
-	void send_msg() {if (is_ready() && 1 != sending.load(std::memory_order_acquire)) _send_msg();} //here we cannot use is_sending(), because we need memory fence
-#endif
+	//here we cannot use is_sending(), because we need memory fence
+	void send_msg() {if (is_ready() && 1 != sending.load(std::memory_order_acquire)) dispatch_in_io_strand([this]() {do_send_msg();});}
 
 public:
 	void start_heartbeat(int interval, int max_absence = ASCS_HEARTBEAT_MAX_ABSENCE)
@@ -600,8 +597,6 @@ private:
 	void reset_next_layer(const asio::any_io_executor& executor, Arg&& arg) {(&next_layer_)->~Socket(); new (&next_layer_) Socket(executor, std::forward<Arg>(arg));}
 #endif
 
-	void _send_msg() {dispatch_in_io_strand([this]() {do_send_msg();});}
-
 #ifdef ASCS_SYNC_RECV
 	sync_call_result sync_recv_waiting(std::unique_lock<std::mutex>& lock, unsigned duration)
 	{
@@ -655,7 +650,7 @@ private:
 	void do_dispatch_msg()
 	{
 #ifdef ASCS_DISPATCH_BATCH_MSG
-		if (!recv_buffer.empty())
+		if (!recv_buffer.is_empty())
 		{
 			dispatching = true;
 			auto begin_time = statistic::now();
