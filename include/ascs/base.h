@@ -44,7 +44,7 @@ namespace ascs
 class scope_atomic_lock : public boost::noncopyable
 {
 public:
-	scope_atomic_lock(std::atomic_flag& atomic_) : atomic(atomic_) {lock();} //atomic_ must has been initialized as clear state
+	scope_atomic_lock(std::atomic_flag& atomic_) : atomic(atomic_) {lock();} //atomic_ must has been initialized
 	~scope_atomic_lock() {unlock();}
 
 	void lock() {if (!_locked) _locked = !atomic.test_and_set(std::memory_order_acq_rel);}
