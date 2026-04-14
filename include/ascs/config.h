@@ -872,6 +872,26 @@
  *
  * REPLACEMENTS:
  *
+ * ===============================================================
+ * 2026.5.1		version 1.8.1
+ *
+ * SPECIAL ATTENTION (incompatible with old editions):
+ * Macro ASCS_CAN_EMPTY_NOT_SAFE and ASCS_ARBITRARY_SEND are removed, then your queue must provide 'is_empty' function.
+ *
+ * HIGHLIGHT:
+ *
+ * FIX:
+ *
+ * ENHANCEMENTS:
+ *
+ * DELETION:
+ * Delete macro ASCS_CAN_EMPTY_NOT_SAFE and ASCS_ARBITRARY_SEND, then your queue must provide 'is_empty' function,
+ *  see queue::is_empty in container.h for more details.
+ *
+ * REFACTORING:
+ *
+ * REPLACEMENTS:
+ *
  */
 
 #ifndef _ASCS_CONFIG_H_
@@ -1157,10 +1177,6 @@ static_assert(ASCS_RELIABLE_UDP_NSND_QUE >= 0, "kcp send queue must be bigger th
 //'server_socket_base', 'ssl::client_socket_base' and 'ssl::server_socket_base'.
 //we even can let socket use different queue (and / or different container) for input and output via template parameters.
 
-//if your container's empty() function (used by the queue for message sending and receiving) is not thread safe, please define this macro,
-// then ascs will make it thread safe for you.
-//#define ASCS_CAN_EMPTY_NOT_SAFE
-
 //buffer type used when receiving messages (unpacker's prepare_next_recv() need to return this type)
 #ifndef ASCS_RECV_BUFFER_TYPE
 	#if BOOST_ASIO_VERSION > 101100
@@ -1214,13 +1230,8 @@ static_assert(ASCS_MSG_HANDLING_INTERVAL >= 0, "the interval of msg handling mus
 //#define ASCS_EXPOSE_SEND_INTERFACE
 //for some reason (I still not met yet), the message sending has stopped but some messages left behind in the sending buffer, they won't be
 // sent until new messages come in, define this macro to expose send_msg() interface, then you can call it manually to fix this situation.
-//during message sending, calling send_msg() will fail, this is by design to avoid boost::asio::io_context using up all virtual memory, this also
-// means that before the sending really started, you can greedily call send_msg() and may exhaust all virtual memory, please note.
-
-//#define ASCS_ARBITRARY_SEND
-//dispatch an async do_send_msg invocation for each message, this feature brings 2 behaviors:
-// 1. it can also fix the situation i described for macro ASCS_EXPOSE_SEND_INTERFACE,
-// 2. it brings better effeciency for specific ENV, try to find them by you own.
+//during message sending, calling send_msg() will fail, this is by design to avoid too many useless async invocations, this also
+// means that before the sending really started, you should not greedily call send_msg().
 
 //#define ASCS_PASSIVE_RECV
 //to gain the ability of changing the unpacker at runtime, with this macro, ascs will not do message receiving automatically (except
