@@ -925,9 +925,6 @@
 	#endif
 
 	#define ASCS_SF "%zu" //format used to print 'size_t'
-	#if defined(__x86_64__) && !defined(__MINGW64__) //terrible mingw
-	#define ASCS_LLF "%ld" //format used to print 'uint_fast64_t'
-	#endif
 #else
 	#error ascs only support Visual C++, GCC and Clang.
 #endif
@@ -936,8 +933,11 @@
 #define ASCS_COPY_ALL_AND_THIS [=]
 #endif
 
-#ifndef ASCS_LLF
-#define ASCS_LLF "%lld" //format used to print 'uint_fast64_t'
+//format used to print 'uint_fast64_t'
+#ifdef __LP64__
+	#define ASCS_LLF "%ld"
+#else
+	#define ASCS_LLF "%lld"
 #endif
 
 #if BOOST_ASIO_VERSION < 101100
