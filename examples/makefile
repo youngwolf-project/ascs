@@ -24,3 +24,4 @@ release debug clean :
 	cd ssl_test && ${ASCS_MAKE}
 	cd unix_socket && ${ASCS_MAKE}
 	cd unix_udp_test && ${ASCS_MAKE}
+	cd callback && ${ASCS_MAKE}
