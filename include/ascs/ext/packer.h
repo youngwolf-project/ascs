@@ -164,7 +164,7 @@ public:
 	virtual typename super::msg_type pack_msg(const char* const pstr[], const size_t len[], size_t num, bool native = false)
 	{
 		auto raw_msg = new T();
-		auto str = Packer().pack_msg(pstr, len, num, native);
+		auto str = impl.pack_msg(pstr, len, num, native);
 		raw_msg->swap(str);
 		return typename super::msg_type(raw_msg);
 	}
@@ -214,7 +214,7 @@ public:
 	virtual typename super::msg_type pack_heartbeat()
 	{
 		auto raw_msg = new T();
-		auto str = Packer().pack_heartbeat();
+		auto str = impl.pack_heartbeat();
 		raw_msg->swap(str);
 		return typename super::msg_type(raw_msg);
 	}
@@ -223,6 +223,9 @@ public:
 	virtual char* raw_data(typename super::msg_type& msg) const {return const_cast<char*>(std::next(msg.data(), ASCS_HEAD_LEN));}
 	virtual const char* raw_data(typename super::msg_ctype& msg) const {return std::next(msg.data(), ASCS_HEAD_LEN);}
 	virtual size_t raw_data_len(typename super::msg_ctype& msg) const {return msg.size() - ASCS_HEAD_LEN;}
+
+private:
+	Packer impl;
 };
 
 //protocol: fixed length
