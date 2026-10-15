@@ -326,11 +326,11 @@ private:
 			return;
 #endif
 #ifdef ASCS_PASSIVE_RECV
-		if (!this->async_read(make_strand_handler(rw_strand,
+		if (!this->async_read(make_strand_handler(this->rw_strand,
 			this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}))))
 			this->clear_reading();
 #else
-		this->async_read(make_strand_handler(rw_strand,
+		this->async_read(make_strand_handler(this->rw_strand,
 			this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);})));
 #endif
 	}
@@ -388,7 +388,7 @@ private:
 		if (!sending_buffer.empty())
 		{
 			sending_msgs.front().restart();
-			this->async_write(sending_buffer, make_strand_handler(rw_strand,
+			this->async_write(sending_buffer, make_strand_handler(this->rw_strand,
 				this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);})));
 			return true;
 		}
@@ -473,7 +473,6 @@ private:
 	using super::temp_msg_can;
 
 	using super::send_buffer;
-	using super::rw_strand;
 
 	//before gcc 5.0, std::list::size() has linear complexity, very embarrassing!
 	//so use std::vector (member variable) to reduce memory allocation and keep the number of sending msgs (its size() has constant complexity, it's very important).

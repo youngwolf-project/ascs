@@ -128,12 +128,8 @@ protected:
 	buffer_type buffer;
 };
 
-#ifdef _MSC_VER
-template<typename T> using unique_ptr = std::unique_ptr<T, std::default_delete<T>>;
-#else
+//ascs requires that unique_ptr must take one and only one template argument
 template<typename T> using unique_ptr = std::unique_ptr<T>;
-#endif
-
 template<typename T> using unique_buffer = object_buffer<unique_ptr, T>;
 //unlike unique_buffer, shared_buffer is copyable (seemingly), but unique_buffer is a bit more efficient.
 template<typename T> using shared_buffer = object_buffer<std::shared_ptr, T>;
