@@ -327,10 +327,10 @@ private:
 #endif
 		auto cb = this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);});
 #ifdef ASCS_PASSIVE_RECV
-		if (!this->async_read(this->is_single_thread() ? std::move(cb) : make_strand_handler(rw_strand, std::move(cb))))
+		if (!this->async_read(this->is_single_thread() ? std::move(cb) : make_strand_handler(this->rw_strand, std::move(cb))))
 			this->clear_reading();
 #else
-		this->async_read(this->is_single_thread() ? std::move(cb) : make_strand_handler(rw_strand, std::move(cb)));
+		this->async_read(this->is_single_thread() ? std::move(cb) : make_strand_handler(this->rw_strand, std::move(cb)));
 #endif
 	}
 
@@ -388,7 +388,7 @@ private:
 		{
 			sending_msgs.front().restart();
 			auto cb = this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);});
-			this->async_write(sending_buffer, this->is_single_thread() ? std::move(cb) : make_strand_handler(rw_strand, std::move(cb)));
+			this->async_write(sending_buffer, this->is_single_thread() ? std::move(cb) : make_strand_handler(this->rw_strand, std::move(cb)));
 			return true;
 		}
 
@@ -472,7 +472,6 @@ private:
 	using super::temp_msg_can;
 
 	using super::send_buffer;
-	using super::rw_strand;
 
 	//before gcc 5.0, std::list::size() has linear complexity, very embarrassing!
 	//so use std::vector (member variable) to reduce memory allocation and keep the number of sending msgs (its size() has constant complexity, it's very important).
