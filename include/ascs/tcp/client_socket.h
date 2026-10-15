@@ -25,8 +25,7 @@ private:
 
 public:
 	static const typename super::tid TIMER_BEGIN = super::TIMER_END;
-	static const typename super::tid TIMER_CONNECT_DELAY = TIMER_BEGIN;
-	static const typename super::tid TIMER_CONNECT = TIMER_BEGIN + 1;
+	static const typename super::tid TIMER_CONNECT = TIMER_BEGIN;
 	static const typename super::tid TIMER_END = TIMER_BEGIN + 5;
 
 	static bool set_addr(boost::asio::ip::tcp::endpoint& endpoint, unsigned short port, const std::string& ip)
@@ -127,7 +126,7 @@ protected:
 	virtual bool do_start() //connect
 	{
 		assert(!this->is_connected());
-		return bind() && this->set_timer(TIMER_CONNECT, 50, [this](typename super::tid id)->bool {connect(true); return false;});
+		return bind() && this->set_timer(TIMER_CONNECT, 50, make_strand_handler(rw_strand, [this](typename super::tid id)->bool {connect(true); return false;}));
 	}
 
 	virtual void connect_handler(const boost::system::error_code& ec)
@@ -135,13 +134,7 @@ protected:
 		if (!ec) //already started, so cannot call start()
 			super::do_start();
 		else
-			this->set_timer(TIMER_CONNECT_DELAY, 50, ASCS_COPY_ALL_AND_THIS(typename super::tid id)->bool {
-				return this->is_timer(TIMER_CONNECT) ? true : (prepare_next_reconnect(ec), false);
-			});
-			//prepare_next_reconnect(ec);
-			//do not call prepare_next_reconnect directly at here, otherwise, there's a posibility that the next set_timer (reconnecting failed immediately)
-			// be called concurrently with the callback of this timer.
-			//for the same timer in the same timer object, any manipulations are not thread safe ---ascs::timer
+			prepare_next_reconnect(ec);
 	}
 
 	//after how much time (ms), generic_client_socket will try to reconnect the server, negative value means give up.
@@ -186,7 +179,8 @@ private:
 		if (!first && !bind())
 			return false;
 
-		this->lowest_layer().async_connect(server_addr, this->make_handler_error([this](const boost::system::error_code& ec) {connect_handler(ec);}));
+		this->lowest_layer().async_connect(server_addr, make_strand_handler(rw_strand,
+			this->make_handler_error([this](const boost::system::error_code& ec) {connect_handler(ec);})));
 		return true;
 	}
 
@@ -205,7 +199,7 @@ private:
 			auto delay = prepare_reconnect(ec);
 			if (delay < 0)
 				need_reconnect = false;
-			else if (this->set_timer(TIMER_CONNECT, delay, [this](typename super::tid id)->bool {connect(false); return false;}))
+			else if (this->set_timer(TIMER_CONNECT, delay, make_strand_handler(rw_strand, [this](typename super::tid id)->bool {connect(false); return false;})))
 				return true;
 		}
 
@@ -215,6 +209,8 @@ private:
 	}
 
 private:
+	using super::rw_strand;
+
 	bool need_reconnect{ASCS_RECONNECT};
 	typename Family::endpoint server_addr;
 
