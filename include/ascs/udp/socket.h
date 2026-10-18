@@ -275,10 +275,10 @@ private:
 			unified_out::error_out(ASCS_LLF " the unpacker returned an empty buffer, quit receiving!", this->id());
 		else
 		{
-			auto cb = this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);});
-			if (!this->is_single_thread())
-				cb = make_strand_handler(rw_strand, std::move(cb));
-			is_connected ? this->next_layer().async_receive(recv_buff, std::move(cb)) : this->next_layer().async_receive_from(recv_buff, temp_addr, std::move(cb));
+			auto cb = this->template make_io_strand_handler<typename super::handler_with_error_size>(
+				this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}));
+			is_connected ? this->next_layer().async_receive(std::move(recv_buff), std::move(cb)) :
+				this->next_layer().async_receive_from(std::move(recv_buff), temp_addr, std::move(cb));
 			return;
 		}
 
@@ -338,11 +338,11 @@ private:
 				this->post_in_io_strand([this]() {send_handler(boost::system::error_code(), sending_msg.size());});
 			else
 			{
-				auto cb = this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);});
-				if (!this->is_single_thread())
-					cb = make_strand_handler(rw_strand, std::move(cb));
-				auto buf = boost::asio::buffer(sending_msg.data(), sending_msg.size());
-				is_connected ? this->next_layer().async_send(std::move(buf), std::move(cb)) : this->next_layer().async_send_to(std::move(buf), sending_msg.peer_addr, std::move(cb));
+				auto send_buff = boost::asio::buffer(sending_msg.data(), sending_msg.size());
+				auto cb = this->template make_io_strand_handler<typename super::handler_with_error_size>(
+					this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);}));
+				is_connected ? this->next_layer().async_send(std::move(send_buff), std::move(cb)) :
+					this->next_layer().async_send_to(std::move(send_buff), sending_msg.peer_addr, std::move(cb));
 			}
 			return true;
 		}
@@ -396,7 +396,6 @@ private:
 	using super::temp_msg_can;
 
 	using super::send_buffer;
-	using super::rw_strand;
 
 	bool is_bound{false}, is_connected{false}, connect_mode{ASCS_UDP_CONNECT_MODE};
 	typename super::in_msg sending_msg;

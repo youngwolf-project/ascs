@@ -56,8 +56,8 @@ public:
 		{single_thread ? dispatch(std::forward<F>(handler)) : strand.dispatch([ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
 	#endif
 
-	template<typename F> handler_with_error make_handler_error(F&& handler) const {return [ref_holder(aci), handler(std::forward<F>(handler))](const auto& ec) {handler(ec);};}
-	template<typename F> handler_with_error_size make_handler_error_size(F&& handler) const
+	template<typename F> auto make_handler_error(F&& handler) const {return [ref_holder(aci), handler(std::forward<F>(handler))](const auto& ec) {handler(ec);};}
+	template<typename F> auto make_handler_error_size(F&& handler) const
 		{return [ref_holder(aci), handler(std::forward<F>(handler))](const auto& ec, auto bytes_transferred) {handler(ec, bytes_transferred);};}
 #else
 	#if BOOST_ASIO_VERSION >= 101100
@@ -81,7 +81,9 @@ public:
 		{if (single_thread) return dispatch(handler); auto ref_holder(aci); strand.dispatch([=]() {(void) ref_holder; handler();});}
 	#endif
 
-	template<typename F> handler_with_error make_handler_error(const F& handler) const {auto ref_holder(aci); return [=](const boost::system::error_code& ec) {(void) ref_holder; handler(ec);};}
+	//convert lambda to std::function is a waste, but we have no choice without c++14
+	template<typename F> handler_with_error make_handler_error(const F& handler) const
+		{auto ref_holder(aci); return [=](const boost::system::error_code& ec) {(void) ref_holder; handler(ec);};}
 	template<typename F> handler_with_error_size make_handler_error_size(const F& handler) const
 		{auto ref_holder(aci); return [=](const boost::system::error_code& ec, size_t bytes_transferred) {(void) ref_holder; handler(ec, bytes_transferred);};}
 #endif
@@ -108,6 +110,9 @@ protected:
 	using executor::executor;
 
 public:
+	typedef std::function<void(const boost::system::error_code&)> handler_with_error;
+	typedef std::function<void(const boost::system::error_code&, size_t)> handler_with_error_size;
+
 	inline bool is_async_calling() const {return aci;}
 	inline bool is_last_async_call() const {return true;}
 	inline void set_async_calling(bool value) {aci = value;}

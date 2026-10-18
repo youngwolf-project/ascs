@@ -32,9 +32,6 @@ protected:
 	bool is_single_thread() const {return single_thread;}
 
 public:
-	typedef std::function<void(const boost::system::error_code&)> handler_with_error;
-	typedef std::function<void(const boost::system::error_code&, size_t)> handler_with_error_size;
-
 	bool stopped() const {return io_context_.stopped();}
 
 #if BOOST_ASIO_VERSION >= 101100
@@ -58,8 +55,8 @@ public:
 		{single_thread ? dispatch(std::forward<F>(handler)) : strand.dispatch(std::forward<F>(handler));}
 #endif
 
-	template<typename F> inline handler_with_error make_handler_error(F&& f) const {return std::forward<F>(f);}
-	template<typename F> inline handler_with_error_size make_handler_error_size(F&& f) const {return std::forward<F>(f);}
+	template<typename F> inline F&& make_handler_error(F&& f) const {return std::forward<F>(f);}
+	template<typename F> inline F&& make_handler_error_size(F&& f) const {return std::forward<F>(f);}
 
 protected:
 	boost::asio::io_context& io_context_;
