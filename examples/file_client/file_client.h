@@ -442,7 +442,7 @@ private:
 				printf("\r%u%%", new_percent);
 				fflush(stdout);
 
-				change_timer_call_back(id, ASCS_COPY_ALL_AND_THIS(tid id)->bool {return update_progress_handler(id, new_percent);});
+				change_timer_handler(id, ASCS_COPY_ALL_AND_THIS(tid id)->bool {return update_progress_handler(id, new_percent);});
 			}
 		}
 
