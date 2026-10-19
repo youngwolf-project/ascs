@@ -1,6 +1,7 @@
 
 # If your compiler cannot find asio, please specify it explicitly like this:
-asio_dir = -I../../asio/asio/include/
+#asio_dir = -I../../asio/asio/include/ #before asio version 1.38
+asio_dir = -I../../asio/include/ #since asio version 1.38
 # asio.hpp and asio directory should be available in this place.
 
 # If possible, a higher edition of c++ would be always better.

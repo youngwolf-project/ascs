@@ -36,9 +36,9 @@ public:
 	static const tid TIMER_END = TIMER_BEGIN + 10;
 
 protected:
-	socket(asio::io_context& io_context_) : super(io_context_), rw_strand(io_context_), next_layer_(io_context_), dis_strand(io_context_) {}
+	socket(asio::io_context& io_context_) : super(io_context_), next_layer_(io_context_), rw_strand(io_context_), dis_strand(io_context_) {}
 	template<typename Arg> socket(asio::io_context& io_context_, Arg&& arg) :
-		super(io_context_), rw_strand(io_context_), next_layer_(io_context_, std::forward<Arg>(arg)), dis_strand(io_context_) {}
+		super(io_context_), next_layer_(io_context_, std::forward<Arg>(arg)), rw_strand(io_context_), dis_strand(io_context_) {}
 
 	//guarantee no operations (include asynchronous operations) be performed on this socket during call following reset_next_layer functions.
 #if ASIO_VERSION < 101100
@@ -87,15 +87,19 @@ protected:
 		recv_buffer.clear();
 	}
 
+	//convert the result to RE is a waste
+	template<typename RE, typename F> RE make_io_strand_handler(F&& handler)
+		{return is_single_thread() ? std::forward<F>(handler) : RE(make_strand_handler(rw_strand, std::forward<F>(handler)));}
+
 	//execute in the IO strand -- rw_strand
-	void post_in_io_strand(const std::function<void()>& handler) {post_strand(rw_strand, handler);}
+	template<typename F> void post_in_io_strand(F&& handler) {post_strand(rw_strand, std::forward<F>(handler));}
 	//execute in the IO strand -- rw_strand, or current thead, use it carefully
-	void dispatch_in_io_strand(const std::function<void()>& handler) {dispatch_strand(rw_strand, handler);}
+	template<typename F> void dispatch_in_io_strand(F&& handler) {dispatch_strand(rw_strand, std::forward<F>(handler));}
 
 	//execute in the dispatch strand -- dis_strand
-	void post_in_dis_strand(const std::function<void()>& handler) {post_strand(dis_strand, handler);}
+	template<typename F> void post_in_dis_strand(F&& handler) {post_strand(dis_strand, std::forward<F>(handler));}
 	//execute in the dispatch strand -- dis_strand, or current thead, use it carefully
-	void dispatch_in_dis_strand(const std::function<void()>& handler) {dispatch_strand(dis_strand, handler);}
+	template<typename F> void dispatch_in_dis_strand(F&& handler) {dispatch_strand(dis_strand, std::forward<F>(handler));}
 
 public:
 #ifdef ASCS_SYNC_SEND
@@ -547,10 +551,10 @@ protected:
 			return sync_call_result::SUCCESS;
 		}
 
-		auto unused = in_msg(std::forward<T>(msg), true);
-		auto p = unused.p;
+		auto xvalue = in_msg(std::forward<T>(msg), true);
+		auto p = xvalue.p;
 		auto f = p->get_future();
-		if (!(prior ? send_buffer.enqueue_front(std::move(unused)) : send_buffer.enqueue(std::move(unused))))
+		if (!(prior ? send_buffer.enqueue_front(std::move(xvalue)) : send_buffer.enqueue(std::move(xvalue))))
 			return sync_call_result::NOT_APPLICABLE;
 
 		send_msg();
@@ -735,7 +739,6 @@ protected:
 	std::list<OutMsgType> temp_msg_can;
 
 	in_queue_type send_buffer;
-	asio::io_context::strand rw_strand;
 
 private:
 	std::shared_ptr<i_packer<typename Packer::msg_type>> packer_{std::make_shared<Packer>()};
@@ -761,7 +764,7 @@ private:
 #endif
 	std::atomic_size_t sending{};
 	std::atomic_flag start_atomic{};
-	asio::io_context::strand dis_strand;
+	asio::io_context::strand rw_strand, dis_strand;
 
 #ifdef ASCS_SYNC_RECV
 	enum sync_recv_status {NOT_REQUESTED, REQUESTED, RESPONDED, RESPONDED_FAILURE};
