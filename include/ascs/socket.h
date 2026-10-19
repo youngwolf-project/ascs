@@ -87,15 +87,22 @@ protected:
 		recv_buffer.clear();
 	}
 
+private:
+	asio::io_context::strand rw_strand; //gcc/clang need this declaration before following decltype
+protected:
+	//if this decltype cannot work, please upgrade your standalone asio
+	template<typename F> auto make_io_strand_handler(F&& handler) -> decltype(make_strand_handler(rw_strand, std::forward<F>(handler)))
+		{return make_strand_handler(rw_strand, std::forward<F>(handler));}
+
 	//execute in the IO strand -- rw_strand
-	void post_in_io_strand(const std::function<void()>& handler) {post_strand(rw_strand, handler);}
+	template<typename F> void post_in_io_strand(F&& handler) {post_strand(rw_strand, std::forward<F>(handler));}
 	//execute in the IO strand -- rw_strand, or current thead, use it carefully
-	void dispatch_in_io_strand(const std::function<void()>& handler) {dispatch_strand(rw_strand, handler);}
+	template<typename F> void dispatch_in_io_strand(F&& handler) {dispatch_strand(rw_strand, std::forward<F>(handler));}
 
 	//execute in the dispatch strand -- dis_strand
-	void post_in_dis_strand(const std::function<void()>& handler) {post_strand(dis_strand, handler);}
+	template<typename F> void post_in_dis_strand(F&& handler) {post_strand(dis_strand, std::forward<F>(handler));}
 	//execute in the dispatch strand -- dis_strand, or current thead, use it carefully
-	void dispatch_in_dis_strand(const std::function<void()>& handler) {dispatch_strand(dis_strand, handler);}
+	template<typename F> void dispatch_in_dis_strand(F&& handler) {dispatch_strand(dis_strand, std::forward<F>(handler));}
 
 public:
 #ifdef ASCS_SYNC_SEND
@@ -547,10 +554,10 @@ protected:
 			return sync_call_result::SUCCESS;
 		}
 
-		auto unused = in_msg(std::forward<T>(msg), true);
-		auto p = unused.p;
+		auto xvalue = in_msg(std::forward<T>(msg), true);
+		auto p = xvalue.p;
 		auto f = p->get_future();
-		if (!(prior ? send_buffer.enqueue_front(std::move(unused)) : send_buffer.enqueue(std::move(unused))))
+		if (!(prior ? send_buffer.enqueue_front(std::move(xvalue)) : send_buffer.enqueue(std::move(xvalue))))
 			return sync_call_result::NOT_APPLICABLE;
 
 		send_msg();
@@ -735,7 +742,6 @@ protected:
 	std::list<OutMsgType> temp_msg_can;
 
 	in_queue_type send_buffer;
-	asio::io_context::strand rw_strand;
 
 private:
 	std::shared_ptr<i_packer<typename Packer::msg_type>> packer_{std::make_shared<Packer>()};

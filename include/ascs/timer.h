@@ -44,6 +44,7 @@ public:
 #endif
 
 	typedef unsigned short tid;
+	typedef std::function<bool(tid)> handler_with_tid;
 	static const tid TIMER_END = 0; //subclass' id must begin from parent class' TIMER_END
 
 	struct timer_info
@@ -55,7 +56,7 @@ public:
 		timer_status status{TIMER_CREATED};
 		unsigned interval_ms{0};
 		timer_type timer;
-		std::function<bool(tid)> call_back; //return true from call_back to continue the timer, or the timer will stop
+		handler_with_tid handler; //return true from handler to continue the timer, or the timer will stop
 
 		timer_info(tid id_, asio::io_context& io_context_) : id(id_), timer(io_context_) {}
 		bool operator ==(const timer_info& other) {return id == other.id;}
@@ -85,7 +86,7 @@ public:
 	}
 	void clear_io_context_refs() {sub_io_context_refs(io_context_refs);}
 
-	bool create_or_update_timer(tid id, unsigned interval, std::function<bool(tid)>&& call_back, bool start = false)
+	template<typename T> bool create_or_update_timer(tid id, unsigned interval, T&& handler, bool start = false)
 	{
 		timer_info* ti = nullptr;
 		{
@@ -102,24 +103,17 @@ public:
 		assert (nullptr != ti);
 
 		ti->interval_ms = interval;
-		ti->call_back.swap(call_back);
+		ti->handler = std::forward<T>(handler);
 
 		if (start)
 			start_timer(*ti);
 
 		return true;
 	}
-	bool create_or_update_timer(tid id, unsigned interval, const std::function<bool(tid)>& call_back, bool start = false)
-		{return create_or_update_timer(id, interval, std::function<bool(tid)>(call_back), start);}
-
 	bool change_timer_status(tid id, typename timer_info::timer_status status) {auto ti = find_timer(id); return nullptr != ti ? ti->status = status, true : false;}
 	bool change_timer_interval(tid id, unsigned interval) {auto ti = find_timer(id); return nullptr != ti ? ti->interval_ms = interval, true : false;}
-
-	bool change_timer_call_back(tid id, std::function<bool(tid)>&& call_back) {auto ti = find_timer(id); return nullptr != ti ? ti->call_back.swap(call_back), true : false;}
-	bool change_timer_call_back(tid id, const std::function<bool(tid)>& call_back) {return change_timer_call_back(id, std::function<bool(tid)>(call_back));}
-
-	bool set_timer(tid id, unsigned interval, std::function<bool(tid)>&& call_back) {return create_or_update_timer(id, interval, std::move(call_back), true);}
-	bool set_timer(tid id, unsigned interval, const std::function<bool(tid)>& call_back) {return create_or_update_timer(id, interval, call_back, true);}
+	template<typename T> bool change_timer_handler(tid id, T&& handler) {auto ti = find_timer(id); return nullptr != ti ? ti->handler = std::forward<T>(handler), true : false;}
+	template<typename T> bool set_timer(tid id, unsigned interval, T&& handler) {return create_or_update_timer(id, interval, std::forward<T>(handler), true);}
 
 	timer_info* find_timer(tid id)
 	{
@@ -143,7 +137,7 @@ public:
 protected:
 	bool start_timer(timer_info& ti, unsigned interval_ms)
 	{
-		if (!ti.call_back)
+		if (!ti.handler)
 			return false;
 
 		ti.status = timer_info::TIMER_STARTED;
@@ -161,10 +155,10 @@ protected:
 		ti.timer.async_wait(this->make_handler_error([this, &ti, prev_seq](const asio::error_code& ec) {
 #endif
 			//the first 'timer_info::TIMER_STARTED == ti.status' judgement means stop_timer can also invalidate cumulative timer callbacks
-			//the second 'timer_info::TIMER_STARTED == ti.status' judgement is used to exclude a particular situation--stop the same timer in call_back and return true
+			//the second 'timer_info::TIMER_STARTED == ti.status' judgement is used to exclude a particular situation--stop the same timer in handler and return true
 #ifdef ASCS_ALIGNED_TIMER
 			auto begin_time = std::chrono::system_clock::now();
-			if (timer_info::TIMER_STARTED == ti.status && !ec && ti.call_back(ti.id) && timer_info::TIMER_STARTED == ti.status)
+			if (timer_info::TIMER_STARTED == ti.status && !ec && ti.handler(ti.id) && timer_info::TIMER_STARTED == ti.status)
 			{
 				auto elapsed_ms = (unsigned) std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - begin_time).count();
 				if (elapsed_ms > ti.interval_ms)
@@ -173,10 +167,10 @@ protected:
 				start_timer(ti, ti.interval_ms - elapsed_ms);
 			}
 #else
-			if (timer_info::TIMER_STARTED == ti.status && !ec && ti.call_back(ti.id) && timer_info::TIMER_STARTED == ti.status)
+			if (timer_info::TIMER_STARTED == ti.status && !ec && ti.handler(ti.id) && timer_info::TIMER_STARTED == ti.status)
 				start_timer(ti);
 #endif
-			else if (prev_seq == ti.seq) //exclude a particular situation--start the same timer in call_back and return false
+			else if (prev_seq == ti.seq) //exclude a particular situation--start the same timer in handler and return false
 				ti.status = timer_info::TIMER_CANCELED;
 		}));
 

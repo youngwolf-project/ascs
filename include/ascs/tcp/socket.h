@@ -22,10 +22,8 @@ template<typename Socket, typename OutMsgType> class reader_writer : public Sock
 public:
 	using Socket::Socket;
 
-	typedef std::function<void(const asio::error_code& ec, size_t bytes_transferred)> ReadWriteCallBack;
-
 protected:
-	bool async_read(ReadWriteCallBack&& call_back)
+	template<typename F> bool async_read(F&& handler)
 	{
 		auto recv_buff = this->unpacker()->prepare_next_recv();
 		assert(asio::buffer_size(recv_buff) > 0);
@@ -35,8 +33,8 @@ protected:
 			return false;
 		}
 
-		asio::async_read(this->next_layer(), recv_buff, [this](const asio::error_code& ec, size_t bytes_transferred)->size_t {
-			return completion_checker(ec, bytes_transferred);}, std::forward<ReadWriteCallBack>(call_back));
+		asio::async_read(this->next_layer(), std::move(recv_buff), [this](const asio::error_code& ec, size_t bytes_transferred) {
+			return completion_checker(ec, bytes_transferred);}, std::forward<F>(handler));
 		return true;
 	}
 	bool parse_msg(size_t bytes_transferred, std::list<OutMsgType>& msg_can) {return this->unpacker()->parse_msg(bytes_transferred, msg_can);}
@@ -49,8 +47,8 @@ protected:
 		return asio::detail::default_max_transfer_size;
 #endif
 	}
-	template<typename Buffer> void async_write(const Buffer& msg_can, ReadWriteCallBack&& call_back)
-		{asio::async_write(this->next_layer(), msg_can, std::forward<ReadWriteCallBack>(call_back));}
+	template<typename Buffer, typename F> void async_write(const Buffer& msg_can, F&& handler)
+		{asio::async_write(this->next_layer(), msg_can, std::forward<F>(handler));}
 
 private:
 	size_t completion_checker(const asio::error_code& ec, size_t bytes_transferred)
@@ -325,13 +323,13 @@ private:
 		else if (this->test_and_set_reading())
 			return;
 #endif
+		auto cb = this->make_io_strand_handler(
+			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}));
 #ifdef ASCS_PASSIVE_RECV
-		if (!this->async_read(make_strand_handler(this->rw_strand,
-			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}))))
+		if (!this->async_read(std::move(cb)))
 			this->clear_reading();
 #else
-		this->async_read(make_strand_handler(this->rw_strand,
-			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);})));
+		this->async_read(std::move(cb));
 #endif
 	}
 
@@ -388,7 +386,7 @@ private:
 		if (!sending_buffer.empty())
 		{
 			sending_msgs.front().restart();
-			this->async_write(sending_buffer, make_strand_handler(this->rw_strand,
+			this->async_write(sending_buffer, this->make_io_strand_handler(
 				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);})));
 			return true;
 		}
@@ -452,7 +450,7 @@ private:
 			--loop_num;
 			if (loop_num > 0)
 			{
-				this->change_timer_call_back(TIMER_ASYNC_SHUTDOWN, ASCS_COPY_ALL_AND_THIS(typename super::tid id)->bool {return shutdown_handler(loop_num);});
+				this->change_timer_handler(TIMER_ASYNC_SHUTDOWN, ASCS_COPY_ALL_AND_THIS(typename super::tid id)->bool {return shutdown_handler(loop_num);});
 				return true;
 			}
 			else

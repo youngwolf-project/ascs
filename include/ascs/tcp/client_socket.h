@@ -121,16 +121,10 @@ protected:
 	virtual bool do_start() //connect
 	{
 		assert(!this->is_connected());
-		return bind() && this->set_timer(TIMER_CONNECT, 50, make_strand_handler(rw_strand, [this](typename super::tid id)->bool {connect(true); return false;}));
+		return bind() && this->set_timer(TIMER_CONNECT, 50, this->make_io_strand_handler([this](typename super::tid id)->bool {connect(true); return false;}));
 	}
 
-	virtual void connect_handler(const asio::error_code& ec)
-	{
-		if (!ec) //already started, so cannot call start()
-			super::do_start();
-		else
-			prepare_next_reconnect(ec);
-	}
+	virtual void connect_handler(const asio::error_code& ec) {ec ? prepare_next_reconnect(ec) : super::do_start();} //already started, so cannot call start()
 
 	//after how much time (ms), generic_client_socket will try to reconnect the server, negative value means give up.
 	virtual int prepare_reconnect(const asio::error_code& ec) {return ASCS_RECONNECT_INTERVAL;}
@@ -174,7 +168,7 @@ private:
 		if (!first && !bind())
 			return false;
 
-		this->lowest_layer().async_connect(server_addr, make_strand_handler(rw_strand,
+		this->lowest_layer().async_connect(server_addr, this->make_io_strand_handler(
 			this->make_handler_error([this](const asio::error_code& ec) {connect_handler(ec);})));
 		return true;
 	}
@@ -194,7 +188,7 @@ private:
 			auto delay = prepare_reconnect(ec);
 			if (delay < 0)
 				need_reconnect = false;
-			else if (this->set_timer(TIMER_CONNECT, delay, make_strand_handler(rw_strand, [this](typename super::tid id)->bool {connect(false); return false;})))
+			else if (this->set_timer(TIMER_CONNECT, delay, this->make_io_strand_handler([this](typename super::tid id)->bool {connect(false); return false;})))
 				return true;
 		}
 
@@ -204,8 +198,6 @@ private:
 	}
 
 private:
-	using super::rw_strand;
-
 	bool need_reconnect{ASCS_RECONNECT};
 	typename Family::endpoint server_addr;
 
