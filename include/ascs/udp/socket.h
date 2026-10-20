@@ -274,12 +274,10 @@ private:
 			unified_out::error_out(ASCS_LLF " the unpacker returned an empty buffer, quit receiving!", this->id());
 		else
 		{
-			if (is_connected)
-				this->next_layer().async_receive(recv_buff, this->make_io_strand_handler(
-					this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);})));
-			else
-				this->next_layer().async_receive_from(recv_buff, temp_addr, this->make_io_strand_handler(
-					this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);})));
+			auto cb = this->make_io_strand_handler(
+				this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}));
+			is_connected ? this->next_layer().async_receive(std::move(recv_buff), std::move(cb)) :
+				this->next_layer().async_receive_from(std::move(recv_buff), temp_addr, std::move(cb));
 			return;
 		}
 
@@ -335,14 +333,16 @@ private:
 		{
 			stat.send_delay_sum += statistic::now() - sending_msg.begin_time;
 			sending_msg.restart();
-			if (!is_connected)
-				this->next_layer().async_send_to(boost::asio::buffer(sending_msg.data(), sending_msg.size()), sending_msg.peer_addr, this->make_io_strand_handler(
-					this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);})));
-			else if (do_send_msg(sending_msg))
+			if (is_connected && do_send_msg(sending_msg))
 				this->post_in_io_strand([this]() {send_handler(boost::system::error_code(), sending_msg.size());});
 			else
-				this->next_layer().async_send(boost::asio::buffer(sending_msg.data(), sending_msg.size()), this->make_io_strand_handler(
-					this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);})));
+			{
+				auto send_buff = boost::asio::buffer(sending_msg.data(), sending_msg.size());
+				auto cb = this->make_io_strand_handler(
+					this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);}));
+				is_connected ? this->next_layer().async_send(std::move(send_buff), std::move(cb)) :
+					this->next_layer().async_send_to(std::move(send_buff), sending_msg.peer_addr, std::move(cb));
+			}
 			return true;
 		}
 

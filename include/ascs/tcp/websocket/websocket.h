@@ -78,7 +78,7 @@ protected:
 	bool parse_msg(size_t bytes_transferred, list<OutMsgType>& msg_can) {return this->next_layer().parse_msg(msg_can);}
 
 	size_t batch_msg_send_size() const {return 0;}
-	template<typename Buffer, typename F> void async_write(const Buffer& msg_can, F&& handler) {this->next_layer().async_write(msg_can, std::forward<F>(handler));}
+	template<typename Buffer, typename F> void async_write(const Buffer& buff, F&& handler) {this->next_layer().async_write(buff, std::forward<F>(handler));}
 };
 
 template<typename Socket> class socket : public Socket

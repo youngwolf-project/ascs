@@ -33,7 +33,7 @@ protected:
 			return false;
 		}
 
-		boost::asio::async_read(this->next_layer(), recv_buff, [this](const boost::system::error_code& ec, size_t bytes_transferred)->size_t {
+		boost::asio::async_read(this->next_layer(), std::move(recv_buff), [this](const boost::system::error_code& ec, size_t bytes_transferred) {
 			return completion_checker(ec, bytes_transferred);}, std::forward<F>(handler));
 		return true;
 	}
@@ -323,13 +323,13 @@ private:
 		else if (this->test_and_set_reading())
 			return;
 #endif
+		auto cb = this->make_io_strand_handler(
+			this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}));
 #ifdef ASCS_PASSIVE_RECV
-		if (!this->async_read(this->make_io_strand_handler(
-			this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}))))
+		if (!this->async_read(std::move(cb)))
 			this->clear_reading();
 #else
-		this->async_read(this->make_io_strand_handler(
-			this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);})));
+		this->async_read(std::move(cb));
 #endif
 	}
 
