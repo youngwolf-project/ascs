@@ -450,7 +450,7 @@ private:
 			--loop_num;
 			if (loop_num > 0)
 			{
-				this->change_timer_call_back(TIMER_ASYNC_SHUTDOWN, ASCS_COPY_ALL_AND_THIS(typename super::tid id)->bool {return shutdown_handler(loop_num);});
+				this->change_timer_handler(TIMER_ASYNC_SHUTDOWN, ASCS_COPY_ALL_AND_THIS(typename super::tid id)->bool {return shutdown_handler(loop_num);});
 				return true;
 			}
 			else

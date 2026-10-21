@@ -90,7 +90,7 @@ protected:
 private:
 	boost::asio::io_context::strand rw_strand; //gcc/clang need this declaration before following decltype
 protected:
-	//if this decltype cannot work, please upgrade your Boost or standalone asio library
+	//if this decltype cannot work, please upgrade your Boost
 	template<typename F> auto make_io_strand_handler(F&& handler) -> decltype(make_strand_handler(rw_strand, std::forward<F>(handler)))
 		{return make_strand_handler(rw_strand, std::forward<F>(handler));}
 
