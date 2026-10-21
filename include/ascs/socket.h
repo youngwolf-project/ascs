@@ -554,10 +554,10 @@ protected:
 			return sync_call_result::SUCCESS;
 		}
 
-		auto unused = in_msg(std::forward<T>(msg), true);
-		auto p = unused.p;
+		auto xvalue = in_msg(std::forward<T>(msg), true);
+		auto p = xvalue.p;
 		auto f = p->get_future();
-		if (!(prior ? send_buffer.enqueue_front(std::move(unused)) : send_buffer.enqueue(std::move(unused))))
+		if (!(prior ? send_buffer.enqueue_front(std::move(xvalue)) : send_buffer.enqueue(std::move(xvalue))))
 			return sync_call_result::NOT_APPLICABLE;
 
 		send_msg();
