@@ -916,18 +916,14 @@ public:
 		to_time_str(time(nullptr), os);
 		os << " -> ";
 
-#if defined(_MSC_VER) || defined(__clang__)
+#if defined(_MSVC_STL_VERSION) || defined(_LIBCPP_VERSION)
 		os.rdbuf()->sgetn(buff, buff_len);
 #endif
 		auto len = (size_t) os.tellp();
 		if (len >= buff_len)
 			*std::next(buff, buff_len - 1) = '\0';
 		else
-#ifdef _MSC_VER
-			vsnprintf_s(std::next(buff, len), buff_len - len, _TRUNCATE, fmt, ap);
-#else
 			vsnprintf(std::next(buff, len), buff_len - len, fmt, ap);
-#endif
 	}
 };
 
