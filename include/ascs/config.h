@@ -908,16 +908,9 @@
 #ifdef _MSC_VER
 	#define ASCS_SF "%Iu" //format used to print 'size_t'
 
-	static_assert(_MSC_VER >= 1800, "ascs needs Visual C++ 12.0 (2013) or higher.");
 	static_assert(_MSVC_LANG >= 201103L, "ascs needs c++11 or higher.");
 
 #elif defined(__GNUC__)
-	#ifdef __clang__
-		static_assert(__clang_major__ > 3 || (__clang_major__ == 3 && __clang_minor__ >= 1), "ascs needs Clang 3.1 or higher.");
-	#else
-		static_assert(__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ > 6), "ascs needs GCC 4.7 or higher.");
-	#endif
-
 	#if !defined(__GXX_EXPERIMENTAL_CXX0X__) && (!defined(__cplusplus) || __cplusplus < 201103L)
 		#error ascs needs c++11 or higher.
 	#elif __cplusplus > 201703L

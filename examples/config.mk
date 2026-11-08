@@ -34,12 +34,14 @@ ifneq (, ${findstring mingw, ${target_machine}})
 	SHELL = cmd
 	cflag += -D__USE_MINGW_ANSI_STDIO=1
 	link_to_win = 1
+	exe_ext = .exe
 	ignore = 1>nul
 	make_dir = md ${dir} 2>nul
 	del_dirs = -rd /S /Q debug release 2>nul
 else
 	ifneq (, ${findstring windows, ${target_machine}})
 		link_to_win = 1
+		exe_ext = .exe
 	endif
 	ignore = 1>/dev/null
 	make_dir = mkdir -p ${dir}
@@ -58,9 +60,9 @@ objects = ${patsubst %.cpp,${dir}/%.o,${wildcard *.cpp}}
 deps = ${patsubst %.o,%.d,${objects}}
 ${shell ${make_dir}}
 
-release debug : ${target}
+release debug : ${target}${exe_ext}
 -include ${deps}
-${target} : ${objects}
+${target}${exe_ext} : ${objects}
 	${CXX} -o $@ $^ ${lflag}
 ${objects} : ${dir}/%.o : %.cpp
 	${CXX} ${cflag} -E -MMD -w -MT '$@' -MF ${patsubst %.cpp,%.d,${dir}/$<} $< ${ignore}
