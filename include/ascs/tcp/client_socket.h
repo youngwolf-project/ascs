@@ -28,30 +28,6 @@ public:
 	static const typename super::tid TIMER_CONNECT = TIMER_BEGIN;
 	static const typename super::tid TIMER_END = TIMER_BEGIN + 5;
 
-	static bool set_addr(asio::ip::tcp::endpoint& endpoint, unsigned short port, const std::string& ip)
-	{
-		if (ip.empty())
-			endpoint = asio::ip::tcp::endpoint(ASCS_TCP_DEFAULT_IP_VERSION, port);
-		else
-		{
-			asio::error_code ec;
-#if ASIO_VERSION >= 101100
-			auto addr = asio::ip::make_address(ip, ec); assert(!ec);
-#else
-			auto addr = asio::ip::address::from_string(ip, ec); assert(!ec);
-#endif
-			if (ec)
-			{
-				unified_out::error_out("invalid IP address %s.", ip.data());
-				return false;
-			}
-
-			endpoint = asio::ip::tcp::endpoint(addr, port);
-		}
-
-		return true;
-	}
-
 protected:
 	generic_client_socket(service_pump& service_pump_) : super(service_pump_) {first_init(service_pump_);}
 	template<typename Arg> generic_client_socket(service_pump& service_pump_, Arg&& arg) : super(service_pump_, std::forward<Arg>(arg)) {first_init(service_pump_);}
@@ -65,15 +41,14 @@ public:
 	virtual const char* type_name() const {return "TCP (client endpoint)";}
 	virtual int type_id() const {return 1;}
 
+	virtual bool is_addr_valid(const typename Family::endpoint& addr) const = 0;
 	virtual bool obsoleted() {return !need_reconnect && super::obsoleted();}
 	virtual void reset() {need_reconnect = ASCS_RECONNECT; super::reset();}
 
-#ifdef _MSC_VER
-	bool set_server_addr(unsigned short port, const std::string& ip = ASCS_SERVER_IP) {return set_addr(server_addr, port, ip.empty() ? ASCS_SERVER_IP : ip);}
-#else
-	bool set_server_addr(unsigned short port, const std::string& ip = ASCS_SERVER_IP) {return set_addr(server_addr, port, ip);}
-#endif
-	bool set_server_addr(const std::string& file_name) {server_addr = typename Family::endpoint(file_name); return true;}
+	bool set_local_addr(const typename Family::endpoint& addr) {local_addr = addr; return true;}
+	const typename Family::endpoint& get_local_addr() const {return local_addr;}
+
+	bool set_server_addr(const typename Family::endpoint& addr) {server_addr = addr; return true;}
 	const typename Family::endpoint& get_server_addr() const {return server_addr;}
 
 	//if you don't want to reconnect to the server after link broken, define macro ASCS_RECONNECT as false, call set_reconnect(false) in on_connect()
@@ -123,13 +98,35 @@ protected:
 	Matrix* get_matrix() {return matrix;}
 	const Matrix* get_matrix() const {return matrix;}
 
-	virtual bool do_start() //connect
+	virtual bool bind()
 	{
-		assert(!this->is_connected());
-		return bind() && this->set_timer(TIMER_CONNECT, 50, this->template make_io_strand_handler<typename super::handler_with_tid>(
-			[this](typename super::tid id)->bool {connect(true); return false;}));
+		if (is_addr_valid(local_addr))
+		{
+			asio::error_code ec;
+			auto& lowest_object = this->lowest_layer();
+
+			if (!lowest_object.is_open()) //user maybe has opened this socket (to set options for example)
+			{
+				lowest_object.open(local_addr.protocol(), ec); assert(!ec);
+				if (ec)
+				{
+					unified_out::error_out("cannot create socket: %s", ec.message().data());
+					return false;
+				}
+			}
+
+			lowest_object.bind(local_addr, ec);
+			if (ec && asio::error::invalid_argument != ec)
+			{
+				unified_out::error_out("cannot bind socket: %s", ec.message().data());
+				return false;
+			}
+		}
+
+		return true;
 	}
 
+	virtual bool do_start() {assert(!this->is_connected()); return connect(true);} //connect
 	virtual void connect_handler(const asio::error_code& ec) {ec ? prepare_next_reconnect(ec) : super::do_start();} //already started, so cannot call start()
 
 	//after how much time (ms), generic_client_socket will try to reconnect the server, negative value means give up.
@@ -158,8 +155,6 @@ protected:
 	//if you want to control the retry times and delay time after reconnecting failed, rewrite prepare_reconnect virtual function.
 	virtual void after_close() {if (need_reconnect) this->start();}
 
-	virtual bool bind() {return true;}
-
 private:
 	//call following two functions (via timer object's add_io_context_refs, sub_io_context_refs or clear_io_context_refs) in:
 	// 1. on_xxxx callbacks on this object;
@@ -171,11 +166,9 @@ private:
 
 	bool connect(bool first)
 	{
-		if (!first && !bind())
-			return false;
-
-		this->lowest_layer().async_connect(server_addr, this->template make_io_strand_handler<typename super::handler_with_error>(
-			this->make_handler_error([this](const asio::error_code& ec) {connect_handler(ec);})));
+		auto cb = this->make_handler_error([this](const asio::error_code& ec) {connect_handler(ec);});
+		first ? this->lowest_layer().async_connect(server_addr, std::move(cb)) : this->lowest_layer().async_connect(server_addr,
+			this->template make_io_strand_handler<typename super::handler_with_error>(std::move(cb)));
 		return true;
 	}
 
@@ -194,6 +187,11 @@ private:
 			auto delay = prepare_reconnect(ec);
 			if (delay < 0)
 				need_reconnect = false;
+			else if (!bind())
+			{
+				if (this->set_timer(TIMER_CONNECT, delay, ASCS_COPY_ALL_AND_THIS(typename super::tid id)->bool {prepare_next_reconnect(ec); return false;}))
+					return true;
+			}
 			else if (this->set_timer(TIMER_CONNECT, delay, this->template make_io_strand_handler<typename super::handler_with_tid>(
 				[this](typename super::tid id)->bool {connect(false); return false;})))
 				return true;
@@ -206,7 +204,7 @@ private:
 
 private:
 	bool need_reconnect{ASCS_RECONNECT};
-	typename Family::endpoint server_addr;
+	typename Family::endpoint local_addr, server_addr;
 
 	Matrix* matrix;
 };
@@ -218,50 +216,43 @@ template<typename Packer, typename Unpacker, typename Matrix = i_matrix, typenam
 class client_socket_base : public generic_client_socket<socket_base<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>, Matrix>
 {
 private:
+	typedef asio::ip::tcp Family;
 	typedef generic_client_socket<socket_base<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>, Matrix> super;
 
 public:
-	client_socket_base(service_pump& service_pump_) : super(service_pump_) {this->set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
+	client_socket_base(service_pump& service_pump_) : super(service_pump_) {set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
 	template<typename Arg>
-	client_socket_base(service_pump& service_pump_, Arg&& arg) : super(service_pump_, std::forward<Arg>(arg)) {this->set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
+	client_socket_base(service_pump& service_pump_, Arg&& arg) : super(service_pump_, std::forward<Arg>(arg)) {set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
 
-	client_socket_base(Matrix& matrix_) : super(matrix_) {this->set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
-	template<typename Arg> client_socket_base(Matrix& matrix_, Arg&& arg) : super(matrix_, std::forward<Arg>(arg)) {this->set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
+	client_socket_base(Matrix& matrix_) : super(matrix_) {set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
+	template<typename Arg> client_socket_base(Matrix& matrix_, Arg&& arg) : super(matrix_, std::forward<Arg>(arg)) {set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
 
-	bool set_local_addr(unsigned short port, const std::string& ip = std::string()) {return super::set_addr(local_addr, port, ip);}
-	const asio::ip::tcp::endpoint& get_local_addr() const {return local_addr;}
+	using super::set_local_addr;
+	bool set_local_addr(unsigned short port, const std::string& ip = std::string()) {return set_addr(port, ip, &super::set_local_addr, this);}
 
-protected:
-	virtual bool bind()
-	{
-		if (0 != local_addr.port() || !local_addr.address().is_unspecified())
-		{
-			auto& lowest_object = this->lowest_layer();
+	using super::set_server_addr;
+#ifdef _WIN32
+	bool set_server_addr(unsigned short port, const std::string& ip = ASCS_SERVER_IP) {return set_addr(port, ip.empty() ? ASCS_SERVER_IP : ip, &super::set_server_addr, this);}
+#else
+	bool set_server_addr(unsigned short port, const std::string& ip = ASCS_SERVER_IP) {return set_addr(port, ip, &super::set_server_addr, this);}
+#endif
 
-			asio::error_code ec;
-			if (!lowest_object.is_open()) //user maybe has opened this socket (to set options for example)
-			{
-				lowest_object.open(local_addr.protocol(), ec); assert(!ec);
-				if (ec)
-				{
-					unified_out::error_out("cannot create socket: %s", ec.message().data());
-					return false;
-				}
-			}
-
-			lowest_object.bind(local_addr, ec);
-			if (ec && asio::error::invalid_argument != ec)
-			{
-				unified_out::error_out("cannot bind socket: %s", ec.message().data());
-				return false;
-			}
-		}
-
-		return true;
-	}
+	virtual bool is_addr_valid(const Family::endpoint& addr) const {return 0 != addr.port() || !addr.address().is_unspecified();}
 
 private:
-	asio::ip::tcp::endpoint local_addr;
+	static bool set_addr(unsigned short port, const std::string& ip, bool (super::*setter)(const Family::endpoint&), super* o)
+	{
+		if (ip.empty())
+			return (o->*setter)(Family::endpoint(ASCS_TCP_DEFAULT_IP_VERSION, port));
+
+		asio::error_code ec;
+#if ASIO_VERSION >= 101100
+		auto addr = asio::ip::make_address(ip, ec); assert(!ec);
+#else
+		auto addr = asio::ip::address::from_string(ip, ec); assert(!ec);
+#endif
+		return ec ? false : (o->*setter)(Family::endpoint(addr, port));
+	}
 };
 
 #ifdef ASIO_HAS_LOCAL_SOCKETS
@@ -272,11 +263,22 @@ template<typename Packer, typename Unpacker, typename Matrix = i_matrix,
 class unix_client_socket_base : public generic_client_socket<socket_base<asio::local::stream_protocol::socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>, Matrix, asio::local::stream_protocol>
 {
 private:
-	typedef generic_client_socket<socket_base<asio::local::stream_protocol::socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>, Matrix, asio::local::stream_protocol> super;
+	typedef asio::local::stream_protocol Family;
+	typedef generic_client_socket<socket_base<Family::socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>, Matrix, Family> super;
 
 public:
-	unix_client_socket_base(service_pump& service_pump_) : super(service_pump_) {this->set_server_addr("./ascs-unix-socket");}
-	unix_client_socket_base(Matrix& matrix_) : super(matrix_) {this->set_server_addr("./ascs-unix-socket");}
+	unix_client_socket_base(service_pump& service_pump_) : super(service_pump_) {set_server_addr("./ascs-unix-socket");}
+	unix_client_socket_base(Matrix& matrix_) : super(matrix_) {set_server_addr("./ascs-unix-socket");}
+
+	using super::set_local_addr;
+	bool set_local_addr(const std::string& file_name) {return file_name.empty() ? false : set_local_addr(Family::endpoint(file_name));}
+	bool set_local_addr(const char* file_name) {return nullptr == file_name || '\0' == *file_name ? false : set_local_addr(Family::endpoint(file_name));}
+
+	using super::set_server_addr;
+	bool set_server_addr(const std::string& file_name) {return file_name.empty() ? false : set_server_addr(Family::endpoint(file_name));}
+	bool set_server_addr(const char* file_name) {return nullptr == file_name || '\0' == *file_name ? false : set_server_addr(Family::endpoint(file_name));}
+
+	virtual bool is_addr_valid(const Family::endpoint& addr) const {return !addr.path().empty();}
 };
 #endif
 

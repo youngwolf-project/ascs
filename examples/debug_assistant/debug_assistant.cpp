@@ -80,10 +80,10 @@ protected:
 	//msg handling end
 };
 
-class single_udp_service : public ascs::ext::udp::single_socket_service
+class single_udp_service : public ext::udp::single_socket_service
 {
 public:
-	using ascs::ext::udp::single_socket_service::single_socket_service;
+	using ext::udp::single_socket_service::single_socket_service;
 
 protected:
 	//msg handling: send the original msg back(echo server)

@@ -29,6 +29,19 @@ namespace ascs { namespace ext { namespace callbacks {
 #define call_cb_1_return(super, type, fun, p) {auto re = type(); if (cb_##fun.first) re = cb_##fun.first(this, p); if (!cb_##fun.second) re = super::fun(p); return re;}
 #define call_cb_2_combine(super, fun, p1, p2) {auto re = cb_##fun.first ? cb_##fun.first(this, p1, p2) : true; if (re && !cb_##fun.second) re = super::fun(p1, p2); return re;}
 
+#if (_MSVC_LANG > 201103L || __cplusplus > 201103L)
+#define register_cb_1(fun, init) \
+template<typename CallBack> void register_##fun(CallBack&& cb, bool pass_on = init) {cb_##fun.first = std::forward<CallBack>(cb); cb_##fun.second = !pass_on;} \
+void register_##fun(fo_##fun* cb, bool pass_on = init) {cb_##fun.first = [=](auto&& p1) {return cb(std::forward<decltype(p1)>(p1));}; cb_##fun.second = !pass_on;}
+#define register_cb_2(fun, init) \
+template<typename CallBack> void register_##fun(CallBack&& cb, bool pass_on = init) {cb_##fun.first = std::forward<CallBack>(cb); cb_##fun.second = !pass_on;} \
+void register_##fun(fo_##fun* cb, bool pass_on = init) \
+	{cb_##fun.first = [=](auto&& p1, auto&& p2) {return cb(std::forward<decltype(p1)>(p1), std::forward<decltype(p2)>(p2));}; cb_##fun.second = !pass_on;}
+#define register_cb_3(fun, init) \
+template<typename CallBack> void register_##fun(CallBack&& cb, bool pass_on = init) {cb_##fun.first = std::forward<CallBack>(cb); cb_##fun.second = !pass_on;} \
+void register_##fun(fo_##fun* cb, bool pass_on = init) \
+	{cb_##fun.first = [=](auto&& p1, auto&& p2, auto &&p3) {return cb(std::forward<decltype(p1)>(p1), std::forward<decltype(p2)>(p2), std::forward<decltype(p3)>(p3));}; cb_##fun.second = !pass_on;}
+#else
 #define register_cb_1(fun, init) \
 template<typename CallBack> void register_##fun(CallBack&& cb, bool pass_on = init) {cb_##fun.first = std::forward<CallBack>(cb); cb_##fun.second = !pass_on;} \
 void register_##fun(fo_##fun* cb, bool pass_on = init) {cb_##fun.first = std::bind(cb, std::placeholders::_1); cb_##fun.second = !pass_on;}
@@ -39,6 +52,7 @@ void register_##fun(fo_##fun* cb, bool pass_on = init) {cb_##fun.first = std::bi
 template<typename CallBack> void register_##fun(CallBack&& cb, bool pass_on = init) {cb_##fun.first = std::forward<CallBack>(cb); cb_##fun.second = !pass_on;} \
 void register_##fun(fo_##fun* cb, bool pass_on = init) \
 	{cb_##fun.first = std::bind(cb, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3); cb_##fun.second = !pass_on;}
+#endif
 
 template<typename Socket> class g_socket : public Socket //udp socket will use g_socket only
 {
