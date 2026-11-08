@@ -221,7 +221,7 @@ public:
 	template<typename Arg> client_socket_base(Matrix& matrix_, Arg&& arg) : super(matrix_, std::forward<Arg>(arg)) {set_server_addr(ASCS_SERVER_PORT, ASCS_SERVER_IP);}
 
 	using super::set_local_addr;
-	bool set_local_addr(unsigned short port, const std::string& ip = ASCS_SERVER_IP) {return set_addr(port, ip, &super::set_local_addr, this);}
+	bool set_local_addr(unsigned short port, const std::string& ip = std::string()) {return set_addr(port, ip, &super::set_local_addr, this);}
 
 	using super::set_server_addr;
 #ifdef _WIN32
