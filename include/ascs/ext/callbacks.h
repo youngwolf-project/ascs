@@ -35,13 +35,13 @@ namespace ascs { namespace ext { namespace callbacks {
 template<typename CB> struct forwarder
 {
 	const CB cb;
-	template<typename... Args> auto operator()(Args&&... args) const -> decltype(cb(std::forward<Args>(args)...)) {return cb(std::forward<decltype(args)>(args)...);}
+	template<typename... Args> auto operator()(Args&&... args) const -> decltype(cb(std::forward<Args>(args)...)) {return cb(std::forward<Args>(args)...);}
 };
 #define fun_x forwarder<decltype(cb)>{cb}
 #endif
 
 #define register_cb(fun, init) template<typename CallBack> \
-void register_##fun(CallBack&& cb, bool pass_on = init) {cb_##fun.first = std::forward<CallBack>(cb); cb_##fun.second = !pass_on;} \
+void register_##fun(CallBack&& cb, bool pass_on = init) {cb_##fun = {std::forward<CallBack>(cb), !pass_on};} \
 void register_##fun(fo_##fun* cb, bool pass_on = init) {register_##fun(fun_x, pass_on);}
 
 template<typename Socket> class g_socket : public Socket //udp socket will use g_socket only

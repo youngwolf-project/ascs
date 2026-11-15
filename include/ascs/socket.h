@@ -21,7 +21,7 @@ namespace ascs
 {
 
 template<typename Socket, typename Packer, typename Unpacker, typename InMsgType, typename OutMsgType,
-	template<typename> class InQueue, template<typename> class InContainer, template<typename> class OutQueue, template<typename> class OutContainer>
+	template<typename> class InQueue, template<typename...> class InContainer, template<typename> class OutQueue, template<typename...> class OutContainer>
 class socket : public timer<tracked_executor>
 {
 private:
@@ -467,9 +467,9 @@ protected:
 
 	bool handle_msg()
 	{
-		size_t size = 0;
-		auto size_in_byte = ascs::get_size_in_byte(temp_msg_can, size);
-		stat.recv_msg_sum += size;
+		size_t item_count = 0;
+		auto size_in_byte = ascs::get_size_in_byte(temp_msg_can, item_count);
+		stat.recv_msg_sum += item_count;
 		stat.recv_byte_sum += size_in_byte;
 #ifdef ASCS_SYNC_RECV
 		std::unique_lock<std::mutex> lock(sync_recv_mutex);
@@ -783,15 +783,15 @@ private:
 };
 
 template<typename Socket, typename Packer, typename Unpacker,
-	template<typename> class InQueue, template<typename> class InContainer, template<typename> class OutQueue, template<typename> class OutContainer>
+	template<typename> class InQueue, template<typename...> class InContainer, template<typename> class OutQueue, template<typename...> class OutContainer>
 using socket2 = socket<Socket, Packer, Unpacker, typename Packer::msg_type, typename Unpacker::msg_type, InQueue, InContainer, OutQueue, OutContainer>;
 
 template<typename Socket, typename Family, typename Packer, typename Unpacker, template<typename, typename> class InMsgWrapper, template<typename, typename> class OutMsgWrapper,
-	template<typename> class InQueue, template<typename> class InContainer, template<typename> class OutQueue, template<typename> class OutContainer>
+	template<typename> class InQueue, template<typename...> class InContainer, template<typename> class OutQueue, template<typename...> class OutContainer>
 using socket3 = socket<Socket, Packer, Unpacker, InMsgWrapper<typename Packer::msg_type, Family>, OutMsgWrapper<typename Unpacker::msg_type, Family>, InQueue, InContainer, OutQueue, OutContainer>;
 
 template<typename Socket, typename Family, typename Packer, typename Unpacker, template<typename, typename> class MsgWrapper,
-	template<typename> class InQueue, template<typename> class InContainer, template<typename> class OutQueue, template<typename> class OutContainer>
+	template<typename> class InQueue, template<typename...> class InContainer, template<typename> class OutQueue, template<typename...> class OutContainer>
 using socket4 = socket3<Socket, Family, Packer, Unpacker, MsgWrapper, MsgWrapper, InQueue, InContainer, OutQueue, OutContainer>;
 
 } //namespace

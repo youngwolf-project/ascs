@@ -135,8 +135,8 @@ public:
 	virtual ~service_pump() {stop_service();}
 
 	int get_io_context_num() const {return (int) context_can.size();}
-	void get_io_context_refs(std::list<unsigned>& refs)
-		{if (!single_ctx) ascs::do_something_to_all(context_can, context_can_mutex, [&](context& item) {refs.emplace_back(item.refs);});}
+	void get_io_context_refs(std::list<unsigned>& refs) const
+		{if (!single_ctx) ascs::do_something_to_all(context_can, context_can_mutex, [&](const context& item) {refs.emplace_back(item.refs);});}
 
 	//do not call below function implicitly or explicitly, before 1.6, a service_pump is also an io_context, so we already have it implicitly,
 	// but in 1.6 and later, a service_pump is not an io_context anymore, then it is just provided to accommodate legacy usage in class
@@ -185,7 +185,7 @@ public:
 			ascs::do_something_to_one(context_can, context_can_mutex, [&](context& item) {return &io_context != &item.io_context ? false : (item.refs += refs, true);});
 	}
 
-	object_type find(int id)
+	object_type find(int id) const
 	{
 		std::lock_guard<std::mutex> lock(service_can_mutex);
 		auto iter = std::find_if(std::begin(service_can), std::end(service_can), [&](object_ctype& item) {return id == item->id();});
@@ -489,7 +489,7 @@ private:
 private:
 	bool started{false}, first{true};
 	container_type service_can;
-	std::mutex service_can_mutex;
+	mutable std::mutex service_can_mutex;
 
 #ifdef ASCS_DECREASE_THREAD_AT_RUNTIME
 	std::atomic_int_fast32_t real_thread_num{};
@@ -498,7 +498,7 @@ private:
 
 	bool single_ctx;
 	std::list<context> context_can;
-	std::mutex context_can_mutex;
+	mutable std::mutex context_can_mutex;
 };
 
 } //namespace

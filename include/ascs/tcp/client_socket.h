@@ -203,8 +203,8 @@ private:
 };
 
 template<typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = boost::asio::ip::tcp::socket,
-	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
-	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER,
+	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename...> class InContainer = ASCS_INPUT_CONTAINER,
+	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename...> class OutContainer = ASCS_OUTPUT_CONTAINER,
 	template<typename, typename> class ReaderWriter = reader_writer>
 class client_socket_base : public generic_client_socket<socket_base<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>, Matrix>
 {
@@ -250,8 +250,8 @@ private:
 
 #ifdef BOOST_ASIO_HAS_LOCAL_SOCKETS
 template<typename Packer, typename Unpacker, typename Matrix = i_matrix,
-	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
-	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER,
+	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename...> class InContainer = ASCS_INPUT_CONTAINER,
+	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename...> class OutContainer = ASCS_OUTPUT_CONTAINER,
 	template<typename, typename> class ReaderWriter = reader_writer>
 class unix_client_socket_base : public generic_client_socket<socket_base<boost::asio::local::stream_protocol::socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>, Matrix, boost::asio::local::stream_protocol>
 {

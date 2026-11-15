@@ -204,19 +204,19 @@ public:
 	size_t max_size() const {return max_size_;}
 	void max_size(size_t _max_size) {max_size_ = _max_size;}
 
-	size_t size()
+	size_t size() const
 	{
 		ASCS_SHARED_LOCK_TYPE<ASCS_SHARED_MUTEX_TYPE> lock(object_can_mutex);
 		return object_can.size();
 	}
 
-	bool exist(uint_fast64_t id)
+	bool exist(uint_fast64_t id) const
 	{
 		ASCS_SHARED_LOCK_TYPE<ASCS_SHARED_MUTEX_TYPE> lock(object_can_mutex);
 		return object_can.count(id) > 0;
 	}
 
-	object_type find(uint_fast64_t id)
+	object_type find(uint_fast64_t id) const
 	{
 		ASCS_SHARED_LOCK_TYPE<ASCS_SHARED_MUTEX_TYPE> lock(object_can_mutex);
 		auto iter = object_can.find(id);
@@ -224,21 +224,21 @@ public:
 	}
 
 	//this method has linear complexity, please note.
-	object_type at(size_t index)
+	object_type at(size_t index) const
 	{
 		ASCS_SHARED_LOCK_TYPE<ASCS_SHARED_MUTEX_TYPE> lock(object_can_mutex);
 		assert(index < object_can.size());
 		return index < object_can.size() ? std::next(std::begin(object_can), index)->second : object_type();
 	}
 
-	size_t invalid_object_size()
+	size_t invalid_object_size() const
 	{
 		std::lock_guard<std::mutex> lock(invalid_object_can_mutex);
 		return invalid_object_can.size();
 	}
 
 	//this method has linear complexity, please note.
-	object_type invalid_object_find(uint_fast64_t id)
+	object_type invalid_object_find(uint_fast64_t id) const
 	{
 		std::lock_guard<std::mutex> lock(invalid_object_can_mutex);
 		auto iter = std::find_if(std::begin(invalid_object_can), std::end(invalid_object_can), [&](object_ctype& item) {return item->is_equal_to(id);});
@@ -246,7 +246,7 @@ public:
 	}
 
 	//this method has linear complexity, please note.
-	object_type invalid_object_at(size_t index)
+	object_type invalid_object_at(size_t index) const
 	{
 		std::lock_guard<std::mutex> lock(invalid_object_can_mutex);
 		assert(index < invalid_object_can.size());
@@ -368,7 +368,7 @@ private:
 	std::atomic_uint_fast64_t cur_id{(uint_fast64_t) (ASCS_START_OBJECT_ID - 1)};
 
 	container_type object_can;
-	ASCS_SHARED_MUTEX_TYPE object_can_mutex;
+	mutable ASCS_SHARED_MUTEX_TYPE object_can_mutex;
 	size_t max_size_{ASCS_MAX_OBJECT_NUM};
 
 	//because all objects are dynamic created and stored in object_can, after receiving error occurred (you are recommended to delete the object from object_can,
@@ -377,7 +377,7 @@ private:
 	//from the heap or reuse them in the near future. if ASCS_CLEAR_OBJECT_INTERVAL been defined, clear_obsoleted_object() will be invoked automatically and
 	//periodically to move all invalid objects into invalid_object_can.
 	std::list<object_type> invalid_object_can;
-	std::mutex invalid_object_can_mutex;
+	mutable std::mutex invalid_object_can_mutex;
 };
 
 } //namespace

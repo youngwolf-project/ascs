@@ -26,13 +26,18 @@ namespace ascs
 {
 
 //timers are identified by id.
-//for the same timer in the same timer object, any manipulations are not thread safe, please pay special attention.
-//to resolve this defect, we must add a mutex member variable to timer_info, it's not worth. otherwise, they are thread safe.
+//for the same timer in the same timer object, any concurrent manipulations are not thread safe, we can just manipulate it in its callback, include:
+// create_or_update_timer
+// change_timer_interval
+// change_timer_handler
+// change_timer_status
+// set_timer
+//note, just for the same timer, for other timers, can only manipulate them if they're not started yet.
 //
 //suppose you have more than one service thread(see service_pump for service thread number controlling), then:
-//for same timer object: same timer, on_timer is called in sequence
-//for same timer object: distinct timer, on_timer is called concurrently
-//for distinct timer object: on_timer is always called concurrently
+//in same timer object: same timer, on_timer is called in sequence
+//in same timer object: distinct timer, on_timer is called concurrently
+//in distinct timer objects: on_timer is always called concurrently
 template<typename Executor>
 class timer : public Executor
 {
@@ -59,8 +64,8 @@ public:
 		handler_with_tid handler; //return true from handler to continue the timer, or the timer will stop
 
 		timer_info(tid id_, boost::asio::io_context& io_context_) : id(id_), timer(io_context_) {}
-		bool operator ==(const timer_info& other) {return id == other.id;}
-		bool operator ==(tid id_) {return id == id_;}
+		bool operator ==(const timer_info& other) const {return id == other.id;}
+		bool operator ==(tid id_) const {return id == id_;}
 	};
 	typedef const timer_info timer_cinfo;
 
@@ -115,7 +120,7 @@ public:
 	template<typename T> bool change_timer_handler(tid id, T&& handler) {auto ti = find_timer(id); return nullptr != ti ? ti->handler = std::forward<T>(handler), true : false;}
 	template<typename T> bool set_timer(tid id, unsigned interval, T&& handler) {return create_or_update_timer(id, interval, std::forward<T>(handler), true);}
 
-	timer_info* find_timer(tid id)
+	const timer_info* find_timer(tid id) const
 	{
 		std::lock_guard<std::mutex> lock(timer_can_mutex);
 		auto iter = std::find(std::begin(timer_can), std::end(timer_can), id);
@@ -125,7 +130,7 @@ public:
 		return nullptr;
 	}
 
-	bool is_timer(tid id) {auto ti = find_timer(id); return nullptr != ti ? timer_info::TIMER_STARTED == ti->status : false;}
+	bool is_timer(tid id) const {auto ti = find_timer(id); return nullptr != ti ? timer_info::TIMER_STARTED == ti->status : false;}
 	bool start_timer(tid id) {auto ti = find_timer(id); return nullptr != ti ? start_timer(*ti) : false;}
 	void stop_timer(tid id) {auto ti = find_timer(id); if (nullptr != ti) stop_timer(*ti);}
 	void stop_all_timer() {do_something_to_all([this](timer_info& item) {stop_timer(item);});}
@@ -193,9 +198,12 @@ protected:
 	virtual void detach_io_context(boost::asio::io_context& io_context_, unsigned refs) {}
 
 private:
+	timer_info* find_timer(tid id) {return const_cast<timer_info*>(static_cast<const timer*>(this)->find_timer(id));}
+
+private:
 	typedef std::list<timer_info> container_type;
 	container_type timer_can;
-	std::mutex timer_can_mutex;
+	mutable std::mutex timer_can_mutex;
 
 	using Executor::io_context_;
 	unsigned io_context_refs{1};

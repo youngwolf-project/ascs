@@ -59,7 +59,7 @@ private:
 };
 
 template<typename Socket, typename Packer, typename Unpacker,
-	template<typename> class InQueue, template<typename> class InContainer, template<typename> class OutQueue, template<typename> class OutContainer,
+	template<typename> class InQueue, template<typename...> class InContainer, template<typename> class OutQueue, template<typename...> class OutContainer,
 	template<typename, typename> class ReaderWriter = reader_writer>
 class socket_base : public ReaderWriter<socket2<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer>, typename Unpacker::msg_type>
 {

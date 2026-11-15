@@ -85,8 +85,8 @@ protected:
 	using executor::executor;
 
 public:
-	inline bool is_async_calling() const {return aci;}
-	inline bool is_last_async_call() const {return true;}
+	inline constexpr bool is_async_calling() const {return aci;}
+	inline constexpr bool is_last_async_call() const {return true;}
 	inline void set_async_calling(bool value) {aci = value;}
 
 private:
