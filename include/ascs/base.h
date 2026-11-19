@@ -36,7 +36,7 @@
 #include <boost/version.hpp>
 #include <boost/noncopyable.hpp>
 
-#include "config.h"
+#include "tracked_executor.h"
 
 namespace ascs
 {
@@ -56,7 +56,6 @@ private:
 	std::atomic_flag& atomic;
 };
 
-class tracked_executor;
 class service_pump;
 class i_matrix
 {

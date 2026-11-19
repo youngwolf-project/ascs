@@ -101,7 +101,7 @@ protected:
 		this->dispatch_in_io_strand([this]() {
 			this->show_info("websocket link:", "been shutting down.");
 			this->start_graceful_shutdown_monitoring();
-			this->next_layer().async_close(boost::beast::websocket::close_code::normal, this->make_handler_error([this](const boost::system::error_code& ec) {
+			this->next_layer().async_close(boost::beast::websocket::close_code::normal, this->track_async_call([this](const boost::system::error_code& ec) {
 				this->stop_graceful_shutdown_monitoring();
 				if (ec)
 					this->show_info(ec, "websocket link", "async shutdown failed");
@@ -165,7 +165,7 @@ protected:
 		// Provide the value of the Host HTTP header during the WebSocket handshake.
 		// See https://tools.ietf.org/html/rfc7230#section-5.4
 		// Perform the websocket handshake
-		this->next_layer().async_handshake(this->endpoint_to_string(this->get_server_addr()), "/", this->make_handler_error([this](const boost::system::error_code& ec) {handle_handshake(ec);}));
+		this->next_layer().async_handshake(this->endpoint_to_string(this->get_server_addr()), "/", this->track_async_call([this](const boost::system::error_code& ec) {handle_handshake(ec);}));
 	}
 
 private:
@@ -213,7 +213,7 @@ protected:
 		}));
 #endif
 		// Accept the websocket handshake
-		this->next_layer().async_accept(this->make_handler_error([this](const boost::system::error_code& ec) {handle_handshake(ec);}));
+		this->next_layer().async_accept(this->track_async_call([this](const boost::system::error_code& ec) {handle_handshake(ec);}));
 		return true;
 	}
 

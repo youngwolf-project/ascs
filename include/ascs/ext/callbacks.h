@@ -31,10 +31,12 @@ namespace ascs { namespace ext { namespace callbacks {
 #define call_cb_1_return(super, type, fun, p) {auto re = type(); if (cb_##fun.first) re = cb_##fun.first(this, p); if (!cb_##fun.second) re = super::fun(p); return re;}
 #define call_cb_2_combine(super, fun, p1, p2) {auto re = cb_##fun.first ? cb_##fun.first(this, p1, p2) : true; if (re && !cb_##fun.second) re = super::fun(p1, p2); return re;}
 
+template<typename CB, typename = typename std::enable_if<std::is_pointer<CB>::value && std::is_function<typename std::remove_pointer<CB>::type>::value>::type>
 #if (_MSVC_LANG > 201103L || __cplusplus > 201103L)
-#define fun_x [=](auto&&... args) -> decltype(auto) {return cb(std::forward<decltype(args)>(args)...);}
+auto forwarder(const CB cb) -> decltype(auto) {return [=](auto&&... args) ->decltype(auto) {return cb(std::forward<decltype(args)>(args)...);};}
+#define fun_x forwarder(cb)
 #else
-template<typename CB> struct forwarder
+struct forwarder
 {
 	const CB cb;
 	template<typename... Args> auto operator()(Args&&... args) const -> decltype(cb(std::forward<Args>(args)...)) {return cb(std::forward<Args>(args)...);}

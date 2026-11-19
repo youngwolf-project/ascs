@@ -13,7 +13,6 @@
 #ifndef _ASCS_SOCKET_H_
 #define _ASCS_SOCKET_H_
 
-#include "tracked_executor.h"
 #include "timer.h"
 #include "container.h"
 
@@ -46,10 +45,9 @@ protected:
 	template<typename Arg> void reset_next_layer(Arg&& arg) {reset_next_layer(next_layer_.get_io_service(), std::forward<Arg>(arg));}
 #elif BOOST_ASIO_VERSION < 101300
 	void reset_next_layer() {reset_next_layer(next_layer_.get_executor().context());}
-	template<typename Arg>
-	void reset_next_layer(Arg&& arg) {reset_next_layer(next_layer_.get_executor().context(), std::forward<Arg>(arg));}
+	template<typename Arg> void reset_next_layer(Arg&& arg) {reset_next_layer(next_layer_.get_executor().context(), std::forward<Arg>(arg));}
 #else
-	void reset_next_layer() {reset_next_layer((const boost::asio::any_io_executor&) next_layer_.get_executor());}
+	void reset_next_layer() {reset_next_layer(next_layer_.get_executor());}
 	template<typename Arg> void reset_next_layer(Arg&& arg) {reset_next_layer(next_layer_.get_executor(), std::forward<Arg>(arg));}
 #endif
 
@@ -87,34 +85,27 @@ protected:
 		recv_buffer.clear();
 	}
 
+#define ASCS_STRAND_QUALIFIER
 #if BOOST_ASIO_VERSION >= 101100
-	//execute in the IO strand -- rw_strand
-	template<typename F> void post_in_io_strand(F&& handler) const {post_strand(rw_strand, std::forward<F>(handler));}
-	template<typename F> void defer_in_io_strand(F&& handler) const {defer_strand(rw_strand, std::forward<F>(handler));}
-	//execute in the IO strand -- rw_strand, or current thead, use it carefully
-	template<typename F> void dispatch_in_io_strand(F&& handler) const {dispatch_strand(rw_strand, std::forward<F>(handler));}
-
-	//execute in the dispatch strand -- dis_strand
-	template<typename F> void post_in_dis_strand(F&& handler) const {post_strand(dis_strand, std::forward<F>(handler));}
-	template<typename F> void defer_in_dis_strand(F&& handler) const {defer_strand(dis_strand, std::forward<F>(handler));}
-	//execute in the dispatch strand -- dis_strand, or current thead, use it carefully
-	template<typename F> void dispatch_in_dis_strand(F&& handler) const {dispatch_strand(dis_strand, std::forward<F>(handler));}
-
-	template<typename F> auto make_io_strand_handler(F&& handler) const -> decltype(make_strand_handler(std::declval<const boost::asio::io_context::strand&>(), std::forward<F>(handler)))
-#else
-	//execute in the IO strand -- rw_strand
-	template<typename F> void post_in_io_strand(F&& handler) {post_strand(rw_strand, std::forward<F>(handler));}
-	//execute in the IO strand -- rw_strand, or current thead, use it carefully
-	template<typename F> void dispatch_in_io_strand(F&& handler) {dispatch_strand(rw_strand, std::forward<F>(handler));}
-
-	//execute in the dispatch strand -- dis_strand
-	template<typename F> void post_in_dis_strand(F&& handler) {post_strand(dis_strand, std::forward<F>(handler));}
-	//execute in the dispatch strand -- dis_strand, or current thead, use it carefully
-	template<typename F> void dispatch_in_dis_strand(F&& handler) {dispatch_strand(dis_strand, std::forward<F>(handler));}
-
-	template<typename F> auto make_io_strand_handler(F&& handler) -> decltype(make_strand_handler(std::declval<boost::asio::io_context::strand&>(), std::forward<F>(handler)))
+#undef ASCS_STRAND_QUALIFIER
+#define ASCS_STRAND_QUALIFIER const
+	template<typename F> void defer_in_io_strand(F&& handler) ASCS_STRAND_QUALIFIER {defer_strand(rw_strand, std::forward<F>(handler));}
+	template<typename F> void defer_in_dis_strand(F&& handler) ASCS_STRAND_QUALIFIER {defer_strand(dis_strand, std::forward<F>(handler));}
 #endif
-		{return make_strand_handler(rw_strand, std::forward<F>(handler));}
+
+	template<typename F> auto make_io_strand_handler(F&& handler) ASCS_STRAND_QUALIFIER
+		-> decltype(make_strand_handler(std::declval<ASCS_STRAND_QUALIFIER boost::asio::io_context::strand&>(), track_async_call(std::forward<F>(handler))))
+		{return make_strand_handler(rw_strand, track_async_call(std::forward<F>(handler)));}
+
+	//execute in the IO strand -- rw_strand
+	template<typename F> void post_in_io_strand(F&& handler) ASCS_STRAND_QUALIFIER {post_strand(rw_strand, std::forward<F>(handler));}
+	//execute in the IO strand -- rw_strand, or current thead, use it carefully
+	template<typename F> void dispatch_in_io_strand(F&& handler) ASCS_STRAND_QUALIFIER {dispatch_strand(rw_strand, std::forward<F>(handler));}
+
+	//execute in the dispatch strand -- dis_strand
+	template<typename F> void post_in_dis_strand(F&& handler) ASCS_STRAND_QUALIFIER {post_strand(dis_strand, std::forward<F>(handler));}
+	//execute in the dispatch strand -- dis_strand, or current thead, use it carefully
+	template<typename F> void dispatch_in_dis_strand(F&& handler) ASCS_STRAND_QUALIFIER {dispatch_strand(dis_strand, std::forward<F>(handler));}
 
 public:
 #ifdef ASCS_SYNC_SEND

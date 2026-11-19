@@ -933,8 +933,7 @@
 	#define ASCS_LLF "%lld"
 #endif
 
-//for gcc 6, please define ASCS_NO_CONSTEXPR_IF because even it declares the support of c++17, it still doesn't support constexpr if statement.
-#if !defined(ASCS_NO_CONSTEXPR_IF) && (_MSVC_LANG > 201402L || __cplusplus > 201402L)
+#if _MSVC_LANG > 201402L || (defined(__cpp_if_constexpr) && __cpp_if_constexpr >= 201606L)
 	#define constexpr_if if constexpr
 #else
 	#define constexpr_if if

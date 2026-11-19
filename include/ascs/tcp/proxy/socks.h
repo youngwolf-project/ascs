@@ -63,7 +63,7 @@ private:
 		unified_out::info_out("connected to the proxy server, begin to negotiate with it.");
 		this->status = super::link_status::HANDSHAKING;
 		boost::asio::async_write(this->next_layer(), boost::asio::buffer(buff, req_len),
-			this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);}));
+			this->track_async_call([this](const boost::system::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);}));
 	}
 
 	void send_handler(const boost::system::error_code& ec, size_t bytes_transferred)
@@ -75,7 +75,7 @@ private:
 		}
 		else
 			boost::asio::async_read(this->next_layer(), boost::asio::buffer(buff, 8),
-				this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}));
+				this->track_async_call([this](const boost::system::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}));
 	}
 
 	void recv_handler(const boost::system::error_code& ec, size_t bytes_transferred)
@@ -187,7 +187,7 @@ private:
 		buff[2] = 0;
 
 		boost::asio::async_write(this->next_layer(), boost::asio::buffer(buff, req_len),
-			this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);}));
+			this->track_async_call([this](const boost::system::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);}));
 	}
 
 	void send_auth()
@@ -202,7 +202,7 @@ private:
 		req_len = 1 + 1 + username.size() + 1 + password.size();
 
 		boost::asio::async_write(this->next_layer(), boost::asio::buffer(buff, req_len),
-			this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);}));
+			this->track_async_call([this](const boost::system::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);}));
 	}
 
 	void send_request()
@@ -244,7 +244,7 @@ private:
 		}
 
 		boost::asio::async_write(this->next_layer(), boost::asio::buffer(buff, req_len),
-			this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);}));
+			this->track_async_call([this](const boost::system::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);}));
 	}
 
 	void send_handler(const boost::system::error_code& ec, size_t bytes_transferred)
@@ -258,7 +258,7 @@ private:
 		{
 			++step;
 			this->next_layer().async_read_some(boost::asio::buffer(buff, sizeof(buff)),
-				this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}));
+				this->track_async_call([this](const boost::system::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}));
 		}
 	}
 
@@ -358,7 +358,7 @@ private:
 			}
 			else
 				this->next_layer().async_read_some(boost::asio::buffer(std::next(buff, res_len), sizeof(buff) - res_len),
-					this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}));
+					this->track_async_call([this](const boost::system::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}));
 		}
 	}
 

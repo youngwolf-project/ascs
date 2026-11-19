@@ -323,8 +323,7 @@ private:
 		else if (this->test_and_set_reading())
 			return;
 #endif
-		auto cb = this->make_io_strand_handler(
-			this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}));
+		auto cb = this->make_io_strand_handler([this](const boost::system::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);});
 #ifdef ASCS_PASSIVE_RECV
 		if (!this->async_read(std::move(cb)))
 			this->clear_reading();
@@ -387,7 +386,7 @@ private:
 		{
 			sending_msgs.front().restart();
 			this->async_write(sending_buffer, this->make_io_strand_handler(
-				this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);})));
+				[this](const boost::system::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);}));
 			return true;
 		}
 
