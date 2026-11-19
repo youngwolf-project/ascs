@@ -36,9 +36,9 @@ public:
 	static const tid TIMER_END = TIMER_BEGIN + 10;
 
 protected:
-	socket(boost::asio::io_context& io_context_) : super(io_context_), rw_strand(io_context_), next_layer_(io_context_), dis_strand(io_context_) {}
+	socket(boost::asio::io_context& io_context_) : super(io_context_), next_layer_(io_context_), rw_strand(io_context_), dis_strand(io_context_) {}
 	template<typename Arg> socket(boost::asio::io_context& io_context_, Arg&& arg) :
-		super(io_context_), rw_strand(io_context_), next_layer_(io_context_, std::forward<Arg>(arg)), dis_strand(io_context_) {}
+		super(io_context_), next_layer_(io_context_, std::forward<Arg>(arg)), rw_strand(io_context_), dis_strand(io_context_) {}
 
 	//guarantee no operations (include asynchronous operations) be performed on this socket during call following reset_next_layer functions.
 #if BOOST_ASIO_VERSION < 101100
@@ -87,13 +87,21 @@ protected:
 		recv_buffer.clear();
 	}
 
-private:
-	boost::asio::io_context::strand rw_strand; //gcc/clang need this declaration before following decltype
-protected:
-	//if this decltype cannot work, please upgrade your Boost
-	template<typename F> auto make_io_strand_handler(F&& handler) -> decltype(make_strand_handler(rw_strand, std::forward<F>(handler)))
-		{return make_strand_handler(rw_strand, std::forward<F>(handler));}
+#if BOOST_ASIO_VERSION >= 101100
+	//execute in the IO strand -- rw_strand
+	template<typename F> void post_in_io_strand(F&& handler) const {post_strand(rw_strand, std::forward<F>(handler));}
+	template<typename F> void defer_in_io_strand(F&& handler) const {defer_strand(rw_strand, std::forward<F>(handler));}
+	//execute in the IO strand -- rw_strand, or current thead, use it carefully
+	template<typename F> void dispatch_in_io_strand(F&& handler) const {dispatch_strand(rw_strand, std::forward<F>(handler));}
 
+	//execute in the dispatch strand -- dis_strand
+	template<typename F> void post_in_dis_strand(F&& handler) const {post_strand(dis_strand, std::forward<F>(handler));}
+	template<typename F> void defer_in_dis_strand(F&& handler) const {defer_strand(dis_strand, std::forward<F>(handler));}
+	//execute in the dispatch strand -- dis_strand, or current thead, use it carefully
+	template<typename F> void dispatch_in_dis_strand(F&& handler) const {dispatch_strand(dis_strand, std::forward<F>(handler));}
+
+	template<typename F> auto make_io_strand_handler(F&& handler) const -> decltype(make_strand_handler(std::declval<const boost::asio::io_context::strand&>(), std::forward<F>(handler)))
+#else
 	//execute in the IO strand -- rw_strand
 	template<typename F> void post_in_io_strand(F&& handler) {post_strand(rw_strand, std::forward<F>(handler));}
 	//execute in the IO strand -- rw_strand, or current thead, use it carefully
@@ -103,6 +111,10 @@ protected:
 	template<typename F> void post_in_dis_strand(F&& handler) {post_strand(dis_strand, std::forward<F>(handler));}
 	//execute in the dispatch strand -- dis_strand, or current thead, use it carefully
 	template<typename F> void dispatch_in_dis_strand(F&& handler) {dispatch_strand(dis_strand, std::forward<F>(handler));}
+
+	template<typename F> auto make_io_strand_handler(F&& handler) -> decltype(make_strand_handler(std::declval<boost::asio::io_context::strand&>(), std::forward<F>(handler)))
+#endif
+		{return make_strand_handler(rw_strand, std::forward<F>(handler));}
 
 public:
 #ifdef ASCS_SYNC_SEND
@@ -768,7 +780,7 @@ private:
 #endif
 	std::atomic_size_t sending{};
 	std::atomic_flag start_atomic{};
-	boost::asio::io_context::strand dis_strand;
+	boost::asio::io_context::strand rw_strand, dis_strand;
 
 #ifdef ASCS_SYNC_RECV
 	enum sync_recv_status {NOT_REQUESTED, REQUESTED, RESPONDED, RESPONDED_FAILURE};

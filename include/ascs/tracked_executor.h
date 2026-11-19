@@ -33,9 +33,9 @@ public:
 	template<typename F> void post(F&& handler) {boost::asio::post(io_context_, [ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
 	template<typename F> void defer(F&& handler) {boost::asio::defer(io_context_, [ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
 	template<typename F> void dispatch(F&& handler) {boost::asio::dispatch(io_context_, [ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
-	template<typename F> void post_strand(boost::asio::io_context::strand& strand, F&& handler) {boost::asio::post(strand, [ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
-	template<typename F> void defer_strand(boost::asio::io_context::strand& strand, F&& handler) {boost::asio::defer(strand, [ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
-	template<typename F> void dispatch_strand(boost::asio::io_context::strand& strand, F&& handler) {boost::asio::dispatch(strand, [ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
+	template<typename F> void post_strand(const boost::asio::io_context::strand& strand, F&& handler) const {boost::asio::post(strand, [ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
+	template<typename F> void defer_strand(const boost::asio::io_context::strand& strand, F&& handler) const {boost::asio::defer(strand, [ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
+	template<typename F> void dispatch_strand(const boost::asio::io_context::strand& strand, F&& handler) const {boost::asio::dispatch(strand, [ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
 	#else
 	template<typename F> void post(F&& handler) {io_context_.post([ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
 	template<typename F> void dispatch(F&& handler) {io_context_.dispatch([ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
@@ -51,9 +51,9 @@ public:
 	template<typename F> void post(const F& handler) {auto ref_holder(aci); boost::asio::post(io_context_, [=]() {(void) ref_holder; handler();});}
 	template<typename F> void defer(const F& handler) {auto ref_holder(aci); boost::asio::defer(io_context_, [=]() {(void) ref_holder; handler();});}
 	template<typename F> void dispatch(const F& handler) {auto ref_holder(aci); boost::asio::dispatch(io_context_, [=]() {(void) ref_holder; handler();});}
-	template<typename F> void post_strand(boost::asio::io_context::strand& strand, const F& handler) {auto ref_holder(aci); boost::asio::post(strand, [=]() {(void) ref_holder; handler();});}
-	template<typename F> void defer_strand(boost::asio::io_context::strand& strand, const F& handler) {auto ref_holder(aci); boost::asio::defer(strand, [=]() {(void) ref_holder; handler();});}
-	template<typename F> void dispatch_strand(boost::asio::io_context::strand& strand, const F& handler) {auto ref_holder(aci); boost::asio::dispatch(strand, [=]() {(void) ref_holder; handler();});}
+	template<typename F> void post_strand(const boost::asio::io_context::strand& strand, const F& handler) const {auto ref_holder(aci); boost::asio::post(strand, [=]() {(void) ref_holder; handler();});}
+	template<typename F> void defer_strand(const boost::asio::io_context::strand& strand, const F& handler) const {auto ref_holder(aci); boost::asio::defer(strand, [=]() {(void) ref_holder; handler();});}
+	template<typename F> void dispatch_strand(const boost::asio::io_context::strand& strand, const F& handler) const {auto ref_holder(aci); boost::asio::dispatch(strand, [=]() {(void) ref_holder; handler();});}
 	#else
 	template<typename F> void post(const F& handler) {auto ref_holder(aci); io_context_.post([=]() {(void) ref_holder; handler();});}
 	template<typename F> void dispatch(const F& handler) {auto ref_holder(aci); io_context_.dispatch([=]() {(void) ref_holder; handler();});}
