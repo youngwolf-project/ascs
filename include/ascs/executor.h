@@ -18,52 +18,13 @@
 namespace ascs
 {
 
-class async_call_tracker
+class forwarder
 {
-public:
-	bool is_async_calling() const {return aci.use_count() > 1;}
-	bool is_last_async_call() const {return aci.use_count() <= 2;} //can only be called in callbacks
-	inline void set_async_calling(bool) {}
-
 protected:
-	async_call_tracker() = default;
-	~async_call_tracker() = default;
-
-#if (_MSVC_LANG > 201103L || __cplusplus > 201103L)
-	template<typename F> auto track_async_call(F&& handler) const -> decltype(auto)
-		{return [ref_holder(aci), handler(std::forward<F>(handler))](auto&&... args) -> decltype(auto) {return handler(std::forward<decltype(args)>(args)...);};}
-#else
-	template<typename F, typename = typename std::enable_if<!std::is_reference<F>::value>::type> struct forwarder
-	{
-		std::shared_ptr<char> aci;
-		F handler;
-		template<typename... Args> auto operator()(Args&&... args) -> decltype(handler(std::forward<Args>(args)...)) {return handler(std::forward<Args>(args)...);}
-	};
-	template<typename F> forwarder<F> track_async_call(F&& handler) const {return {aci, std::forward<F>(handler)};}
-#endif
-
-private:
-	std::shared_ptr<char> aci{std::make_shared<char>('\0')}; //asynchronous calling indicator
-};
-
-class dummy_async_call_tracker
-{
-public:
-	inline constexpr bool is_async_calling() const {return aci;}
-	inline constexpr bool is_last_async_call() const {return true;}
-	inline void set_async_calling(bool value) {aci = value;}
-
-protected:
-	dummy_async_call_tracker() = default;
-	~dummy_async_call_tracker() = default;
-
 	template<typename F> auto track_async_call(F&& handler) const -> decltype(std::forward<F>(handler)) {return std::forward<F>(handler);}
-
-private:
-	bool aci{false}; //asynchronous calling indicator
 };
 
-template<typename Tracker> class executor_base : protected Tracker
+template<typename Tracker> class executor_base : public Tracker
 {
 protected:
 	executor_base(boost::asio::io_context& _io_context_) : io_context_(_io_context_) {}
@@ -94,7 +55,7 @@ public:
 protected:
 	boost::asio::io_context& io_context_;
 };
-using executor = executor_base<dummy_async_call_tracker>;
+using executor = executor_base<forwarder>;
 
 } //namespace
 

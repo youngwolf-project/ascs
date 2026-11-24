@@ -163,6 +163,8 @@ protected:
 
 private:
 	timer_info* find_timer(tid id) {return const_cast<timer_info*>(static_cast<const timer*>(this)->find_timer(id));}
+
+	bool start_timer(timer_info& ti) {return start_timer(ti, ti.interval_ms);}
 	bool start_timer(timer_info& ti, unsigned interval_ms)
 	{
 		ti.status = timer_info::TIMER_STARTED;
@@ -223,7 +225,6 @@ private:
 
 		return true;
 	}
-	bool start_timer(timer_info& ti) {return start_timer(ti, ti.interval_ms);}
 
 	void stop_timer(timer_info& ti)
 	{
