@@ -9,7 +9,7 @@ using namespace ascs::ext::callbacks;
 #define QUIT_COMMAND	"quit"
 
 //this callback can be invoked concurrently for different sockets
-template<typename Socket, typename Msg> bool cb_handle_msg(Socket* socket, Msg& msg) {printf("handle msg: %s\n", msg.data()); return true;}
+template<typename Socket, typename Msg> bool cb_handle_msg(Socket*, Msg& msg) {printf("handle msg: %s\n", msg.data()); return true;}
 
 typedef ascs::ext::tcp::client_socket orig_client_socket;
 typedef c_socket<orig_client_socket> cb_client_socket;

@@ -36,7 +36,7 @@
 #include <boost/version.hpp>
 #include <boost/noncopyable.hpp>
 
-#include "config.h"
+#include "tracked_executor.h"
 
 namespace ascs
 {
@@ -56,7 +56,6 @@ private:
 	std::atomic_flag& atomic;
 };
 
-class tracked_executor;
 class service_pump;
 class i_matrix
 {
@@ -66,8 +65,8 @@ public:
 	virtual const service_pump& get_service_pump() const = 0;
 
 	//following implementation is useful for a dummy matrix, for example, in a proxy server, each server_socket (dummy matrix) contains a client_socket
-	virtual bool socket_exist(uint_fast64_t id) {return false;}
-	virtual std::shared_ptr<tracked_executor> find_socket(uint_fast64_t id) {return std::shared_ptr<tracked_executor>();}
+	virtual bool socket_exist(uint_fast64_t id) const {return false;}
+	virtual std::shared_ptr<tracked_executor> find_socket(uint_fast64_t id) const {return std::shared_ptr<tracked_executor>();}
 	virtual bool del_socket(uint_fast64_t id) {return false;}
 };
 
@@ -96,9 +95,9 @@ public:
 
 //convert '->' operation to '.' operation
 //user needs to allocate object, and object_buffer will free it
-//A can be std::unique_ptr or std::shared_ptr
+//A can be std::unique_ptr or std::shared_ptr, and ascs will only provide the first template parameter, please note.
 //T is the object that represent a buffer (a buffer must at least has those interfaces in i_buffer, or inherit from i_buffer).
-template<template<typename> class A, typename T> class object_buffer
+template<template<typename...> class A, typename T> class object_buffer
 {
 public:
 	typedef A<T> buffer_type;
@@ -106,16 +105,13 @@ public:
 
 	object_buffer() {}
 	object_buffer(T* _buffer) : buffer(_buffer) {}
-	object_buffer(buffer_type&& _buffer) : buffer(std::forward<buffer_type>(_buffer)) {}
-
-#if defined(_MSVC_LANG) && _MSVC_LANG <= 201103L
-	object_buffer(object_buffer&& other) : buffer(std::move(other.buffer)) {}
-	object_buffer& operator=(object_buffer&& other) {clear(); buffer = std::move(other.buffer); return *this;}
-#endif
+	object_buffer(buffer_ctype& _buffer) : buffer(_buffer) {}
+	object_buffer(buffer_type&& _buffer) : buffer(std::move(_buffer)) {}
 
 	buffer_ctype& raw_buffer() const {return buffer;}
 	void raw_buffer(T* _buffer) {buffer.reset(_buffer);}
-	void raw_buffer(buffer_type&& _buffer) {buffer = std::forward<buffer_type>(_buffer);}
+	void raw_buffer(buffer_ctype& _buffer) {buffer = _buffer;}
+	void raw_buffer(buffer_type&& _buffer) {buffer = std::move(_buffer);}
 
 	//the following five functions are needed by ascs
 	bool empty() const {return !buffer || buffer->empty();}
@@ -128,14 +124,9 @@ protected:
 	buffer_type buffer;
 };
 
-//ascs requires that unique_ptr must take one and only one template argument
-template<typename T> using unique_ptr = std::unique_ptr<T>;
-template<typename T> using unique_buffer = object_buffer<unique_ptr, T>;
+template<typename T> using unique_buffer = object_buffer<std::unique_ptr, T>;
 //unlike unique_buffer, shared_buffer is copyable (seemingly), but unique_buffer is a bit more efficient.
 template<typename T> using shared_buffer = object_buffer<std::shared_ptr, T>;
-
-//ascs requires that container must take one and only one template argument
-template<typename T> using list = std::list<T>;
 
 //packer concept
 template<typename MsgType>
@@ -246,11 +237,6 @@ namespace udp
 		using MsgType::operator=;
 		using MsgType::swap;
 		void swap(udp_msg& other) {MsgType::swap(other); std::swap(peer_addr, other.peer_addr);}
-
-#if defined(_MSVC_LANG) && _MSVC_LANG <= 201103L
-		udp_msg(udp_msg&& other) : MsgType(std::move(other)), peer_addr(std::move(other.peer_addr)) {}
-		udp_msg& operator=(udp_msg&& other) {MsgType::clear(); swap(other); return *this;}
-#endif
 	};
 } //namespace
 //unpacker concept
@@ -262,7 +248,7 @@ struct statistic
 	{
 		typedef std::chrono::system_clock::duration super;
 
-		super get_avg() const {return 0 == num ? super(*this) : *this / num;}
+		constexpr super get_avg() const {return 0 == num ? super(*this) : *this / num;}
 		void reset() {super::operator=(min_duration = max_duration = super::zero()); num = 0;}
 
 		duration& operator+=(const super& other)
@@ -291,8 +277,8 @@ struct statistic
 		}
 		duration& operator-=(const duration& other) {super::operator-=(other); num -= other.num; return *this;}
 
-		float to_float() const {return to_float(*this);}
-		static float to_float(const super& dur) {return std::chrono::duration_cast<std::chrono::duration<float>>(dur).count();}
+		constexpr float to_float() const {return to_float(*this);}
+		static constexpr float to_float(const super& dur) {return std::chrono::duration_cast<std::chrono::duration<float>>(dur).count();}
 
 		template<typename stream_type> friend stream_type& operator<<(stream_type& stream, const duration& dur)
 		{
@@ -465,10 +451,6 @@ template<typename T> struct obj_with_begin_time : public T
 	obj_with_begin_time(T&& obj) : T(std::move(obj)) {restart();}
 	obj_with_begin_time& operator=(const T& obj) {T::operator=(obj); restart(); return *this;}
 	obj_with_begin_time& operator=(T&& obj) {T::operator=(std::move(obj)); restart(); return *this;}
-	obj_with_begin_time(const obj_with_begin_time& other) : T(other), begin_time(other.begin_time) {}
-	obj_with_begin_time(obj_with_begin_time&& other) : T(std::move(other)), begin_time(std::move(other.begin_time)) {}
-	obj_with_begin_time& operator=(const obj_with_begin_time& other) {T::operator=(other); begin_time = other.begin_time; return *this;}
-	obj_with_begin_time& operator=(obj_with_begin_time&& other) {T::operator=(std::move(other)); begin_time = std::move(other.begin_time); return *this;}
 
 	void restart() {restart(statistic::now());}
 	void restart(const typename statistic::stat_time& begin_time_) {begin_time = begin_time_;}
@@ -488,10 +470,6 @@ template<typename T> struct obj_with_begin_time_promise : public obj_with_begin_
 	obj_with_begin_time_promise(bool need_promise = false) {check_and_create_promise(need_promise);}
 	obj_with_begin_time_promise(const T& obj, bool need_promise = false) : super(obj) {check_and_create_promise(need_promise);}
 	obj_with_begin_time_promise(T&& obj, bool need_promise = false) : super(std::move(obj)) {check_and_create_promise(need_promise);}
-	obj_with_begin_time_promise(const obj_with_begin_time_promise& other) : super(other), p(other.p) {}
-	obj_with_begin_time_promise(obj_with_begin_time_promise&& other) : super(std::move(other)), p(std::move(other.p)) {}
-	obj_with_begin_time_promise& operator=(const obj_with_begin_time_promise& other) {super::operator=(other); p = other.p; return *this;}
-	obj_with_begin_time_promise& operator=(obj_with_begin_time_promise&& other) {super::operator=(std::move(other)); p = std::move(other.p); return *this;}
 
 	void swap(T& obj, bool need_promise = false) {super::swap(obj); check_and_create_promise(need_promise);}
 	void swap(obj_with_begin_time_promise& other) {super::swap(other); p.swap(other.p);}
@@ -529,10 +507,10 @@ size_t get_size_in_byte(const _Can& __can)
 }
 
 template<typename _Can>
-size_t get_size_in_byte(const _Can& __can, size_t& size)
+size_t get_size_in_byte(const _Can& __can, size_t& item_count)
 {
-	auto size_in_byte = size = 0;
-	do_something_to_all(__can, [&](typename _Can::const_reference item) {size_in_byte += item.size(); ++size;});
+	auto size_in_byte = item_count = 0;
+	do_something_to_all(__can, [&](typename _Can::const_reference item) {size_in_byte += item.size(); ++item_count;});
 	return size_in_byte;
 }
 
@@ -586,7 +564,7 @@ bool FUNNAME(in_msg_type&& msg, bool can_overflow = false, bool prior = false) \
 { \
 	if (!can_overflow && !this->shrink_send_buffer()) \
 		return false; \
-	else if (NATIVE) \
+	else constexpr_if (NATIVE) \
 		return do_direct_send_msg(std::move(msg), prior); \
 	typename Packer::container_type msg_can; \
 	auto_duration dur(stat.pack_time_sum); \
@@ -598,7 +576,7 @@ bool FUNNAME(in_msg_ctype& msg, bool can_overflow = false, bool prior = false) \
 { \
 	if (!can_overflow && !this->shrink_send_buffer()) \
 		return false; \
-	else if (NATIVE) \
+	else constexpr_if (NATIVE) \
 		return do_direct_send_msg(msg, prior); \
 	typename Packer::container_type msg_can; \
 	auto_duration dur(stat.pack_time_sum); \
@@ -611,7 +589,7 @@ bool FUNNAME(in_msg_type&& msg1, in_msg_type&& msg2, bool can_overflow = false, 
 	if (!can_overflow && !this->shrink_send_buffer()) \
 		return false; \
 	typename Packer::container_type msg_can; \
-	if (NATIVE) \
+	constexpr_if (NATIVE) \
 	{ \
 		msg_can.emplace_back(std::move(msg1)); msg_can.emplace_back(std::move(msg2)); \
 		return do_direct_send_msg(msg_can, prior); \
@@ -626,7 +604,7 @@ bool FUNNAME(in_msg_ctype& msg1, in_msg_ctype& msg2, bool can_overflow = false, 
 	if (!can_overflow && !this->shrink_send_buffer()) \
 		return false; \
 	typename Packer::container_type msg_can; \
-	if (NATIVE) \
+	constexpr_if (NATIVE) \
 	{ \
 		msg_can.emplace_back(msg1); msg_can.emplace_back(msg2); \
 		return do_direct_send_msg(msg_can, prior); \
@@ -640,7 +618,7 @@ bool FUNNAME(typename Packer::container_type& msg_can, bool can_overflow = false
 { \
 	if (!can_overflow && !this->shrink_send_buffer()) \
 		return false; \
-	else if (NATIVE) \
+	else constexpr_if (NATIVE) \
 		return do_direct_send_msg(msg_can, prior); \
 	typename Packer::container_type out; \
 	auto_duration dur(stat.pack_time_sum); \
@@ -703,7 +681,7 @@ sync_call_result FUNNAME(in_msg_type&& msg, unsigned duration = 0, bool can_over
 { \
 	if (!can_overflow && !this->shrink_send_buffer()) \
 		return sync_call_result::NOT_APPLICABLE; \
-	else if (NATIVE) \
+	else constexpr_if (NATIVE) \
 		return do_direct_sync_send_msg(std::move(msg), duration, prior); \
 	typename Packer::container_type msg_can; \
 	auto_duration dur(stat.pack_time_sum); \
@@ -715,7 +693,7 @@ sync_call_result FUNNAME(in_msg_ctype& msg, unsigned duration = 0, bool can_over
 { \
 	if (!can_overflow && !this->shrink_send_buffer()) \
 		return sync_call_result::NOT_APPLICABLE; \
-	else if (NATIVE) \
+	else constexpr_if (NATIVE) \
 		return do_direct_sync_send_msg(msg, duration, prior); \
 	typename Packer::container_type msg_can; \
 	auto_duration dur(stat.pack_time_sum); \
@@ -728,7 +706,7 @@ sync_call_result FUNNAME(in_msg_type&& msg1, in_msg_type&& msg2, unsigned durati
 	if (!can_overflow && !this->shrink_send_buffer()) \
 		return sync_call_result::NOT_APPLICABLE; \
 	typename Packer::container_type msg_can; \
-	if (NATIVE) \
+	constexpr_if (NATIVE) \
 	{ \
 		msg_can.emplace_back(std::move(msg1)); msg_can.emplace_back(std::move(msg2)); \
 		return do_direct_sync_send_msg(msg_can, duration, prior); \
@@ -743,7 +721,7 @@ sync_call_result FUNNAME(in_msg_ctype& msg1, in_msg_ctype& msg2, unsigned durati
 	if (!can_overflow && !this->shrink_send_buffer()) \
 		return sync_call_result::NOT_APPLICABLE; \
 	typename Packer::container_type msg_can; \
-	if (NATIVE) \
+	constexpr_if (NATIVE) \
 	{ \
 		msg_can.emplace_back(msg1); msg_can.emplace_back(msg2); \
 		return do_direct_sync_send_msg(msg_can, duration, prior); \
@@ -757,7 +735,7 @@ sync_call_result FUNNAME(typename Packer::container_type& msg_can, unsigned dura
 { \
 	if (!can_overflow && !this->shrink_send_buffer()) \
 		return sync_call_result::NOT_APPLICABLE; \
-	else if (NATIVE) \
+	else constexpr_if (NATIVE) \
 		return do_direct_sync_send_msg(msg_can, duration, prior); \
 	typename Packer::container_type out; \
 	auto_duration dur(stat.pack_time_sum); \

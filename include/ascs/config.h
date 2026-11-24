@@ -933,6 +933,12 @@
 	#define ASCS_LLF "%lld"
 #endif
 
+#if _MSVC_LANG > 201402L || (defined(__cpp_if_constexpr) && __cpp_if_constexpr >= 201606L)
+	#define constexpr_if if constexpr
+#else
+	#define constexpr_if if
+#endif
+
 #if BOOST_ASIO_VERSION < 101100
 	namespace boost {namespace asio {typedef io_service io_context; typedef io_context execution_context;}}
 	#define make_strand_handler(S, F) S.wrap(F)
@@ -1158,16 +1164,15 @@ static_assert(ASCS_RELIABLE_UDP_NSND_QUE >= 0, "kcp send queue must be bigger th
 #define ASCS_INPUT_QUEUE lock_queue
 #endif
 #ifndef ASCS_INPUT_CONTAINER
-#define ASCS_INPUT_CONTAINER list
+#define ASCS_INPUT_CONTAINER std::list
 #endif
 #ifndef ASCS_OUTPUT_QUEUE
 #define ASCS_OUTPUT_QUEUE lock_queue
 #endif
 #ifndef ASCS_OUTPUT_CONTAINER
-#define ASCS_OUTPUT_CONTAINER list
+#define ASCS_OUTPUT_CONTAINER std::list
 #endif
-//we also can control the queues (and their containers) via template parameters on class 'client_socket_base'
-//'server_socket_base', 'ssl::client_socket_base' and 'ssl::server_socket_base'.
+//we also can control the queues (and their containers) via template parameters.
 //we even can let socket use different queue (and / or different container) for input and output via template parameters.
 
 //buffer type used when receiving messages (unpacker's prepare_next_recv() need to return this type)
@@ -1183,7 +1188,7 @@ static_assert(ASCS_RELIABLE_UDP_NSND_QUE >= 0, "kcp send queue must be bigger th
 #define ASCS_HEARTBEAT_INTERVAL	0 //second(s), disable heartbeat by default, just for compatibility
 #endif
 //at every ASCS_HEARTBEAT_INTERVAL second(s):
-// 1. tcp::socket_base will send an heartbeat if no messages been sent within this interval,
+// 1. tcp::socket_base will send a heartbeat if no messages been sent within this interval,
 // 2. tcp::socket_base will check the link's connectedness, see ASCS_HEARTBEAT_MAX_ABSENCE macro for more details.
 //less than or equal to zero means disable heartbeat, then you can send and check heartbeat with you own logic by calling
 //tcp::socket_base::check_heartbeat (do above steps one time) or tcp::socket_base::start_heartbeat (do above steps regularly).

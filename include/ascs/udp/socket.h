@@ -18,8 +18,8 @@
 namespace ascs { namespace udp {
 
 template<typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = boost::asio::ip::udp::socket, typename Family = boost::asio::ip::udp,
-	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
-	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
+	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename...> class InContainer = ASCS_INPUT_CONTAINER,
+	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename...> class OutContainer = ASCS_OUTPUT_CONTAINER>
 class generic_socket : public socket4<Socket, Family, Packer, Unpacker, udp_msg, InQueue, InContainer, OutQueue, OutContainer>
 {
 public:
@@ -270,19 +270,17 @@ private:
 		auto recv_buff = this->unpacker()->prepare_next_recv();
 		assert(boost::asio::buffer_size(recv_buff) > 0);
 		if (0 == boost::asio::buffer_size(recv_buff))
-			unified_out::error_out(ASCS_LLF " the unpacker returned an empty buffer, quit receiving!", this->id());
-		else
 		{
-			auto cb = this->make_io_strand_handler(
-				this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}));
-			is_connected ? this->next_layer().async_receive(std::move(recv_buff), std::move(cb)) :
-				this->next_layer().async_receive_from(std::move(recv_buff), temp_addr, std::move(cb));
+			unified_out::error_out(ASCS_LLF " the unpacker returned an empty buffer, quit receiving!", this->id());
+#ifdef ASCS_PASSIVE_RECV
+			this->clear_reading();
+#endif
 			return;
 		}
 
-#ifdef ASCS_PASSIVE_RECV
-		this->clear_reading();
-#endif
+		auto cb = this->make_io_strand_handler([this](const boost::system::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);});
+		is_connected ? this->next_layer().async_receive(std::move(recv_buff), std::move(cb)) :
+			this->next_layer().async_receive_from(std::move(recv_buff), temp_addr, std::move(cb));
 	}
 
 	void recv_handler(const boost::system::error_code& ec, size_t bytes_transferred)
@@ -337,8 +335,7 @@ private:
 			else
 			{
 				auto send_buff = boost::asio::buffer(sending_msg.data(), sending_msg.size());
-				auto cb = this->make_io_strand_handler(
-					this->make_handler_error_size([this](const boost::system::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);}));
+				auto cb = this->make_io_strand_handler([this](const boost::system::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);});
 				is_connected ? this->next_layer().async_send(std::move(send_buff), std::move(cb)) :
 					this->next_layer().async_send_to(std::move(send_buff), sending_msg.peer_addr, std::move(cb));
 			}
@@ -403,8 +400,8 @@ private:
 };
 
 template<typename Packer, typename Unpacker, typename Matrix = i_matrix,
-	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
-	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
+	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename...> class InContainer = ASCS_INPUT_CONTAINER,
+	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename...> class OutContainer = ASCS_OUTPUT_CONTAINER>
 class socket_base : public generic_socket<Packer, Unpacker, Matrix, boost::asio::ip::udp::socket, boost::asio::ip::udp, InQueue, InContainer, OutQueue, OutContainer>
 {
 private:
@@ -440,8 +437,8 @@ private:
 
 #ifdef BOOST_ASIO_HAS_LOCAL_SOCKETS
 template<typename Packer, typename Unpacker, typename Matrix = i_matrix,
-	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
-	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
+	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename...> class InContainer = ASCS_INPUT_CONTAINER,
+	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename...> class OutContainer = ASCS_OUTPUT_CONTAINER>
 class unix_socket_base : public generic_socket<Packer, Unpacker, Matrix, boost::asio::local::datagram_protocol::socket, boost::asio::local::datagram_protocol, InQueue, InContainer, OutQueue, OutContainer>
 {
 private:

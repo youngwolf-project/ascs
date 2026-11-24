@@ -13,44 +13,49 @@
 #ifndef _ASCS_EXECUTOR_H_
 #define _ASCS_EXECUTOR_H_
 
-#include <functional>
-
 #include <boost/asio.hpp>
-
-#include "config.h"
 
 namespace ascs
 {
 
-class executor
+class forwarder
 {
 protected:
-	virtual ~executor() {}
-	executor(boost::asio::io_context& _io_context_) : io_context_(_io_context_) {}
+	template<typename F> auto track_async_call(F&& handler) const -> decltype(std::forward<F>(handler)) {return std::forward<F>(handler);}
+};
+
+template<typename Tracker> class executor_base : public Tracker
+{
+protected:
+	executor_base(boost::asio::io_context& _io_context_) : io_context_(_io_context_) {}
+	virtual ~executor_base() {}
 
 public:
 	bool stopped() const {return io_context_.stopped();}
 
 #if BOOST_ASIO_VERSION >= 101100
-	template<typename F> void post(F&& handler) {boost::asio::post(io_context_, std::forward<F>(handler));}
-	template<typename F> void defer(F&& handler) {boost::asio::defer(io_context_, std::forward<F>(handler));}
-	template<typename F> void dispatch(F&& handler) {boost::asio::dispatch(io_context_, std::forward<F>(handler));}
-	template<typename F> void post_strand(boost::asio::io_context::strand& strand, F&& handler) {boost::asio::post(strand, std::forward<F>(handler));}
-	template<typename F> void defer_strand(boost::asio::io_context::strand& strand, F&& handler) {boost::asio::defer(strand, std::forward<F>(handler));}
-	template<typename F> void dispatch_strand(boost::asio::io_context::strand& strand, F&& handler) {boost::asio::dispatch(strand, std::forward<F>(handler));}
+	template<typename F> void post(F&& handler) {boost::asio::post(io_context_, this->track_async_call(std::forward<F>(handler)));}
+	template<typename F> void defer(F&& handler) {boost::asio::defer(io_context_, this->track_async_call(std::forward<F>(handler)));}
+	template<typename F> void dispatch(F&& handler) {boost::asio::dispatch(io_context_, this->track_async_call(std::forward<F>(handler)));}
+	template<typename F> void post_strand(const boost::asio::io_context::strand& strand, F&& handler) const
+		{assert(&io_context_ == &strand.context()); boost::asio::post(strand, this->track_async_call(std::forward<F>(handler)));}
+	template<typename F> void defer_strand(const boost::asio::io_context::strand& strand, F&& handler) const
+		{assert(&io_context_ == &strand.context()); boost::asio::defer(strand, this->track_async_call(std::forward<F>(handler)));}
+	template<typename F> void dispatch_strand(const boost::asio::io_context::strand& strand, F&& handler) const
+		{assert(&io_context_ == &strand.context()); boost::asio::dispatch(strand, this->track_async_call(std::forward<F>(handler)));}
 #else
-	template<typename F> void post(F&& handler) {io_context_.post(std::forward<F>(handler));}
-	template<typename F> void dispatch(F&& handler) {io_context_.dispatch(std::forward<F>(handler));}
-	template<typename F> void post_strand(boost::asio::io_context::strand& strand, F&& handler) {strand.post(std::forward<F>(handler));}
-	template<typename F> void dispatch_strand(boost::asio::io_context::strand& strand, F&& handler) {strand.dispatch(std::forward<F>(handler));}
+	template<typename F> void post(F&& handler) {io_context_.post(this->track_async_call(std::forward<F>(handler)));}
+	template<typename F> void dispatch(F&& handler) {io_context_.dispatch(this->track_async_call(std::forward<F>(handler)));}
+	template<typename F> void post_strand(boost::asio::io_context::strand& strand, F&& handler)
+		{assert(&io_context_ == &strand.get_io_service()); strand.post(this->track_async_call(std::forward<F>(handler)));}
+	template<typename F> void dispatch_strand(boost::asio::io_context::strand& strand, F&& handler)
+		{assert(&io_context_ == &strand.get_io_service()); strand.dispatch(this->track_async_call(std::forward<F>(handler)));}
 #endif
-
-	template<typename F> inline F&& make_handler_error(F&& f) const {return std::forward<F>(f);}
-	template<typename F> inline F&& make_handler_error_size(F&& f) const {return std::forward<F>(f);}
 
 protected:
 	boost::asio::io_context& io_context_;
 };
+using executor = executor_base<forwarder>;
 
 } //namespace
 
