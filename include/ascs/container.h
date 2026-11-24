@@ -21,10 +21,10 @@ namespace ascs
 class dummy_lockable
 {
 public:
-	typedef std::lock_guard<dummy_lockable> lock_guard;
+	typedef std::lock_guard<const dummy_lockable> lock_guard;
 
 	//lockable, dummy
-	bool is_lockable() const {return false;}
+	constexpr bool is_lockable() const {return false;}
 	void lock() const {}
 	void unlock() const {}
 };
@@ -32,15 +32,15 @@ public:
 class lockable
 {
 public:
-	typedef std::lock_guard<lockable> lock_guard;
+	typedef std::lock_guard<const lockable> lock_guard;
 
 	//lockable
-	bool is_lockable() const {return true;}
-	void lock() {mutex.lock();}
-	void unlock() {mutex.unlock();}
+	constexpr bool is_lockable() const {return true;}
+	void lock() const {mutex.lock();}
+	void unlock() const {mutex.unlock();}
 
 private:
-	std::mutex mutex; //std::mutex is more efficient than std::shared_(timed_)mutex
+	mutable std::mutex mutex; //std::mutex is more efficient than std::shared_(timed_)mutex
 };
 
 //Container must at least has the following functions (like std::list):
@@ -59,7 +59,7 @@ private:
 // back
 // begin
 // end
-template<typename Container, typename Lockable> //thread safety depends on Container or Lockable
+template<typename Container, typename Lockable = lockable> //thread safety depends on Container or Lockable
 class queue : private Container, public Lockable
 {
 public:
@@ -72,13 +72,13 @@ public:
 	using Container::empty;
 
 	//thread safe
-	bool is_thread_safe() const {return Lockable::is_lockable();}
-	size_t size_in_byte() const {return total_size;}
+	constexpr bool is_thread_safe() const {return Lockable::is_lockable();}
+	constexpr size_t size_in_byte() const {return total_size;}
 	/*
 	if your queue is lock free, you must guarantee that after the content of the container been changed in one thread, function 'is_empty' (not 'empty')
-	should returns exact state (empty or not) of the container in another thread, for example, via an std::atomic with appropriate std::memory_order.
+	should returns exact state (empty or not) of the container in other threads, for example, via an std::atomic with appropriate std::memory_order.
 	*/
-	bool is_empty() {typename Lockable::lock_guard lock(*this); return empty();}
+	constexpr bool is_empty() const {typename Lockable::lock_guard lock(*this); return empty();}
 	void clear() {typename Lockable::lock_guard lock(*this); Container::clear(); total_size = 0;}
 	void swap(Container& can)
 	{
@@ -222,7 +222,7 @@ private:
 
 //ascs requires that queue must take one and only one template argument
 template<typename Container> using non_lock_queue = queue<Container, dummy_lockable>; //thread safety depends on Container
-template<typename Container> using lock_queue = queue<Container, lockable>;
+template<typename Container> using lock_queue = queue<Container>;
 
 } //namespace
 

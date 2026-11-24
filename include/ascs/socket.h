@@ -13,7 +13,6 @@
 #ifndef _ASCS_SOCKET_H_
 #define _ASCS_SOCKET_H_
 
-#include "tracked_executor.h"
 #include "timer.h"
 #include "container.h"
 
@@ -21,7 +20,7 @@ namespace ascs
 {
 
 template<typename Socket, typename Packer, typename Unpacker, typename InMsgType, typename OutMsgType,
-	template<typename> class InQueue, template<typename> class InContainer, template<typename> class OutQueue, template<typename> class OutContainer>
+	template<typename> class InQueue, template<typename...> class InContainer, template<typename> class OutQueue, template<typename...> class OutContainer>
 class socket : public timer<tracked_executor>
 {
 private:
@@ -46,10 +45,9 @@ protected:
 	template<typename Arg> void reset_next_layer(Arg&& arg) {reset_next_layer(next_layer_.get_io_service(), std::forward<Arg>(arg));}
 #elif BOOST_ASIO_VERSION < 101300
 	void reset_next_layer() {reset_next_layer(next_layer_.get_executor().context());}
-	template<typename Arg>
-	void reset_next_layer(Arg&& arg) {reset_next_layer(next_layer_.get_executor().context(), std::forward<Arg>(arg));}
+	template<typename Arg> void reset_next_layer(Arg&& arg) {reset_next_layer(next_layer_.get_executor().context(), std::forward<Arg>(arg));}
 #else
-	void reset_next_layer() {reset_next_layer((const boost::asio::any_io_executor&) next_layer_.get_executor());}
+	void reset_next_layer() {reset_next_layer(next_layer_.get_executor());}
 	template<typename Arg> void reset_next_layer(Arg&& arg) {reset_next_layer(next_layer_.get_executor(), std::forward<Arg>(arg));}
 #endif
 
@@ -87,19 +85,27 @@ protected:
 		recv_buffer.clear();
 	}
 
-	//convert the result to RE is a waste
-	template<typename RE, typename F> RE make_io_strand_handler(F&& handler)
-		{return is_single_thread() ? std::forward<F>(handler) : RE(make_strand_handler(rw_strand, std::forward<F>(handler)));}
+#define ASCS_STRAND_QUALIFIER
+#if BOOST_ASIO_VERSION >= 101100
+#undef ASCS_STRAND_QUALIFIER
+#define ASCS_STRAND_QUALIFIER const
+	template<typename F> void defer_in_io_strand(F&& handler) ASCS_STRAND_QUALIFIER {defer_strand(rw_strand, std::forward<F>(handler));}
+	template<typename F> void defer_in_dis_strand(F&& handler) ASCS_STRAND_QUALIFIER {defer_strand(dis_strand, std::forward<F>(handler));}
+#endif
+
+	template<typename F> auto make_io_strand_handler(F&& handler) ASCS_STRAND_QUALIFIER
+		-> decltype(make_strand_handler(std::declval<ASCS_STRAND_QUALIFIER boost::asio::io_context::strand&>(), track_async_call(std::forward<F>(handler))))
+		{return make_strand_handler(rw_strand, track_async_call(std::forward<F>(handler)));}
 
 	//execute in the IO strand -- rw_strand
-	template<typename F> void post_in_io_strand(F&& handler) {post_strand(rw_strand, std::forward<F>(handler));}
+	template<typename F> void post_in_io_strand(F&& handler) ASCS_STRAND_QUALIFIER {post_strand(rw_strand, std::forward<F>(handler));}
 	//execute in the IO strand -- rw_strand, or current thead, use it carefully
-	template<typename F> void dispatch_in_io_strand(F&& handler) {dispatch_strand(rw_strand, std::forward<F>(handler));}
+	template<typename F> void dispatch_in_io_strand(F&& handler) ASCS_STRAND_QUALIFIER {dispatch_strand(rw_strand, std::forward<F>(handler));}
 
 	//execute in the dispatch strand -- dis_strand
-	template<typename F> void post_in_dis_strand(F&& handler) {post_strand(dis_strand, std::forward<F>(handler));}
+	template<typename F> void post_in_dis_strand(F&& handler) ASCS_STRAND_QUALIFIER {post_strand(dis_strand, std::forward<F>(handler));}
 	//execute in the dispatch strand -- dis_strand, or current thead, use it carefully
-	template<typename F> void dispatch_in_dis_strand(F&& handler) {dispatch_strand(dis_strand, std::forward<F>(handler));}
+	template<typename F> void dispatch_in_dis_strand(F&& handler) ASCS_STRAND_QUALIFIER {dispatch_strand(dis_strand, std::forward<F>(handler));}
 
 public:
 #ifdef ASCS_SYNC_SEND
@@ -464,9 +470,9 @@ protected:
 
 	bool handle_msg()
 	{
-		size_t size = 0;
-		auto size_in_byte = ascs::get_size_in_byte(temp_msg_can, size);
-		stat.recv_msg_sum += size;
+		size_t item_count = 0;
+		auto size_in_byte = ascs::get_size_in_byte(temp_msg_can, item_count);
+		stat.recv_msg_sum += item_count;
 		stat.recv_byte_sum += size_in_byte;
 #ifdef ASCS_SYNC_RECV
 		std::unique_lock<std::mutex> lock(sync_recv_mutex);
@@ -780,15 +786,15 @@ private:
 };
 
 template<typename Socket, typename Packer, typename Unpacker,
-	template<typename> class InQueue, template<typename> class InContainer, template<typename> class OutQueue, template<typename> class OutContainer>
+	template<typename> class InQueue, template<typename...> class InContainer, template<typename> class OutQueue, template<typename...> class OutContainer>
 using socket2 = socket<Socket, Packer, Unpacker, typename Packer::msg_type, typename Unpacker::msg_type, InQueue, InContainer, OutQueue, OutContainer>;
 
 template<typename Socket, typename Family, typename Packer, typename Unpacker, template<typename, typename> class InMsgWrapper, template<typename, typename> class OutMsgWrapper,
-	template<typename> class InQueue, template<typename> class InContainer, template<typename> class OutQueue, template<typename> class OutContainer>
+	template<typename> class InQueue, template<typename...> class InContainer, template<typename> class OutQueue, template<typename...> class OutContainer>
 using socket3 = socket<Socket, Packer, Unpacker, InMsgWrapper<typename Packer::msg_type, Family>, OutMsgWrapper<typename Unpacker::msg_type, Family>, InQueue, InContainer, OutQueue, OutContainer>;
 
 template<typename Socket, typename Family, typename Packer, typename Unpacker, template<typename, typename> class MsgWrapper,
-	template<typename> class InQueue, template<typename> class InContainer, template<typename> class OutQueue, template<typename> class OutContainer>
+	template<typename> class InQueue, template<typename...> class InContainer, template<typename> class OutQueue, template<typename...> class OutContainer>
 using socket4 = socket3<Socket, Family, Packer, Unpacker, MsgWrapper, MsgWrapper, InQueue, InContainer, OutQueue, OutContainer>;
 
 } //namespace
