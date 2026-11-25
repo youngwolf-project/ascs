@@ -121,7 +121,7 @@ protected:
 		return true;
 	}
 
-	virtual bool do_start() {assert(!this->is_connected()); return connect(true);} //connect
+	virtual bool do_start() {assert(!this->is_connected()); return connect();} //connect
 	virtual void connect_handler(const asio::error_code& ec) {ec ? prepare_next_reconnect(ec) : super::do_start();} //already started, so cannot call start()
 
 	//after how much time (ms), generic_client_socket will try to reconnect the server, negative value means give up.
@@ -159,10 +159,9 @@ private:
 	virtual void attach_io_context(asio::io_context& io_context_, unsigned refs) {if (nullptr != matrix) matrix->get_service_pump().assign_io_context(io_context_, refs);}
 	virtual void detach_io_context(asio::io_context& io_context_, unsigned refs) {if (nullptr != matrix) matrix->get_service_pump().return_io_context(io_context_, refs);}
 
-	bool connect(bool first)
+	bool connect()
 	{
-		auto cb = this->make_handler_error([this](const asio::error_code& ec) {connect_handler(ec);});
-		first ? this->lowest_layer().async_connect(server_addr, std::move(cb)) : this->lowest_layer().async_connect(server_addr, this->make_io_strand_handler(std::move(cb)));
+		this->lowest_layer().async_connect(server_addr, this->track_async_call([this](const asio::error_code& ec) {connect_handler(ec);}));
 		return true;
 	}
 
@@ -186,7 +185,7 @@ private:
 				if (this->set_timer(TIMER_CONNECT, delay, ASCS_COPY_ALL_AND_THIS(typename super::tid id)->bool {prepare_next_reconnect(ec); return false;}))
 					return true;
 			}
-			else if (this->set_timer(TIMER_CONNECT, delay, this->make_io_strand_handler([this](typename super::tid id)->bool {connect(false); return false;})))
+			else if (this->set_timer(TIMER_CONNECT, delay, [this](typename super::tid id)->bool {connect(); return false;}))
 				return true;
 		}
 
@@ -203,8 +202,8 @@ private:
 };
 
 template<typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = asio::ip::tcp::socket,
-	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
-	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER,
+	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename...> class InContainer = ASCS_INPUT_CONTAINER,
+	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename...> class OutContainer = ASCS_OUTPUT_CONTAINER,
 	template<typename, typename> class ReaderWriter = reader_writer>
 class client_socket_base : public generic_client_socket<socket_base<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>, Matrix>
 {
@@ -250,8 +249,8 @@ private:
 
 #ifdef ASIO_HAS_LOCAL_SOCKETS
 template<typename Packer, typename Unpacker, typename Matrix = i_matrix,
-	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
-	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER,
+	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename...> class InContainer = ASCS_INPUT_CONTAINER,
+	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename...> class OutContainer = ASCS_OUTPUT_CONTAINER,
 	template<typename, typename> class ReaderWriter = reader_writer>
 class unix_client_socket_base : public generic_client_socket<socket_base<asio::local::stream_protocol::socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>, Matrix, asio::local::stream_protocol>
 {

@@ -114,8 +114,8 @@ public:
 	virtual service_pump& get_service_pump() {return Pool::get_service_pump();}
 	virtual const service_pump& get_service_pump() const {return Pool::get_service_pump();}
 
-	virtual bool socket_exist(uint_fast64_t id) {return this->exist(id);}
-	virtual std::shared_ptr<tracked_executor> find_socket(uint_fast64_t id) {return this->find(id);}
+	virtual bool socket_exist(uint_fast64_t id) const {return this->exist(id);}
+	virtual std::shared_ptr<tracked_executor> find_socket(uint_fast64_t id) const {return this->find(id);}
 	virtual bool del_socket(const std::shared_ptr<tracked_executor>& socket_ptr, bool need_shutdown = true)
 	{
 		auto raw_socket_ptr(std::dynamic_pointer_cast<Socket>(socket_ptr));

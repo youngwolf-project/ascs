@@ -13,85 +13,52 @@
 #ifndef _ASCS_TRACKED_EXECUTOR_H_
 #define _ASCS_TRACKED_EXECUTOR_H_
 
+#include "config.h"
 #include "executor.h"
 
 namespace ascs
 {
 	
 #if 0 == ASCS_DELAY_CLOSE
-class tracked_executor
+class async_call_tracker
 {
 protected:
-	virtual ~tracked_executor() {}
-	tracked_executor(asio::io_context& _io_context_) : io_context_(_io_context_) {}
-
-public:
-	bool stopped() const {return io_context_.stopped();}
-
-#if (_MSVC_LANG > 201103L || __cplusplus > 201103L)
-	#if ASIO_VERSION >= 101100
-	template<typename F> void post(F&& handler) {asio::post(io_context_, [ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
-	template<typename F> void defer(F&& handler) {asio::defer(io_context_, [ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
-	template<typename F> void dispatch(F&& handler) {asio::dispatch(io_context_, [ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
-	template<typename F> void post_strand(asio::io_context::strand& strand, F&& handler) {asio::post(strand, [ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
-	template<typename F> void defer_strand(asio::io_context::strand& strand, F&& handler) {asio::defer(strand, [ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
-	template<typename F> void dispatch_strand(asio::io_context::strand& strand, F&& handler) {asio::dispatch(strand, [ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
-	#else
-	template<typename F> void post(F&& handler) {io_context_.post([ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
-	template<typename F> void dispatch(F&& handler) {io_context_.dispatch([ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
-	template<typename F> void post_strand(asio::io_context::strand& strand, F&& handler) {strand.post([ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
-	template<typename F> void dispatch_strand(asio::io_context::strand& strand, F&& handler) {strand.dispatch([ref_holder(aci), handler(std::forward<F>(handler))]() {handler();});}
-	#endif
-
-	template<typename F> auto make_handler_error(F&& handler) const {return [ref_holder(aci), handler(std::forward<F>(handler))](const auto& ec) {handler(ec);};}
-	template<typename F> auto make_handler_error_size(F&& handler) const
-		{return [ref_holder(aci), handler(std::forward<F>(handler))](const auto& ec, auto bytes_transferred) {handler(ec, bytes_transferred);};}
-#else
-	#if ASIO_VERSION >= 101100
-	template<typename F> void post(const F& handler) {auto ref_holder(aci); asio::post(io_context_, [=]() {(void) ref_holder; handler();});}
-	template<typename F> void defer(const F& handler) {auto ref_holder(aci); asio::defer(io_context_, [=]() {(void) ref_holder; handler();});}
-	template<typename F> void dispatch(const F& handler) {auto ref_holder(aci); asio::dispatch(io_context_, [=]() {(void) ref_holder; handler();});}
-	template<typename F> void post_strand(asio::io_context::strand& strand, const F& handler) {auto ref_holder(aci); asio::post(strand, [=]() {(void) ref_holder; handler();});}
-	template<typename F> void defer_strand(asio::io_context::strand& strand, const F& handler) {auto ref_holder(aci); asio::defer(strand, [=]() {(void) ref_holder; handler();});}
-	template<typename F> void dispatch_strand(asio::io_context::strand& strand, const F& handler) {auto ref_holder(aci); asio::dispatch(strand, [=]() {(void) ref_holder; handler();});}
-	#else
-	template<typename F> void post(const F& handler) {auto ref_holder(aci); io_context_.post([=]() {(void) ref_holder; handler();});}
-	template<typename F> void dispatch(const F& handler) {auto ref_holder(aci); io_context_.dispatch([=]() {(void) ref_holder; handler();});}
-	template<typename F> void post_strand(asio::io_context::strand& strand, const F& handler) {auto ref_holder(aci); strand.post([=]() {(void) ref_holder; handler();});}
-	template<typename F> void dispatch_strand(asio::io_context::strand& strand, const F& handler) {auto ref_holder(aci); strand.dispatch([=]() {(void) ref_holder; handler();});}
-	#endif
-
-	//convert lambda to std::function is a waste, but we have no choice without c++14
-	template<typename F> std::function<void(const asio::error_code&)> make_handler_error(const F& handler) const
-		{auto ref_holder(aci); return [=](const asio::error_code& ec) {(void) ref_holder; handler(ec);};}
-	template<typename F> std::function<void(const asio::error_code&, size_t)> make_handler_error_size(const F& handler) const
-		{auto ref_holder(aci); return [=](const asio::error_code& ec, size_t bytes_transferred) {(void) ref_holder; handler(ec, bytes_transferred);};}
-#endif
-
 	bool is_async_calling() const {return aci.use_count() > 1;}
 	bool is_last_async_call() const {return aci.use_count() <= 2;} //can only be called in callbacks
 	inline void set_async_calling(bool) {}
 
-protected:
-	asio::io_context& io_context_;
+#if (_MSVC_LANG > 201103L || __cplusplus > 201103L)
+	template<typename F> auto track_async_call(F&& handler) const -> decltype(auto)
+		{return [ref_holder(aci), handler(std::forward<F>(handler))](auto&&... args) -> decltype(auto) {return handler(std::forward<decltype(args)>(args)...);};}
+#else
+	template<typename F, typename = typename std::enable_if<!std::is_reference<F>::value>::type> struct track_forwarder
+	{
+		std::shared_ptr<char> aci;
+		F handler;
+		template<typename... Args> auto operator()(Args&&... args) -> decltype(handler(std::forward<Args>(args)...)) {return handler(std::forward<Args>(args)...);}
+	};
+	template<typename F> track_forwarder<F> track_async_call(F&& handler) const {return {aci, std::forward<F>(handler)};}
+#endif
 
 private:
 	std::shared_ptr<char> aci{std::make_shared<char>('\0')}; //asynchronous calling indicator
 };
+using tracked_executor = executor_base<async_call_tracker>;
 #else
-class tracked_executor : public executor
+class dummy_async_call_tracker : public forwarder
 {
 protected:
-	using executor::executor;
+	dummy_async_call_tracker() = default;
+	~dummy_async_call_tracker() = default;
 
-public:
-	inline bool is_async_calling() const {return aci;}
-	inline bool is_last_async_call() const {return true;}
+	inline constexpr bool is_async_calling() const {return aci;}
+	inline constexpr bool is_last_async_call() const {return true;}
 	inline void set_async_calling(bool value) {aci = value;}
 
 private:
 	bool aci{false}; //asynchronous calling indicator
 };
+using tracked_executor = executor_base<dummy_async_call_tracker>;
 #endif
 
 } //namespace

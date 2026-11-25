@@ -19,6 +19,8 @@
 
 namespace ascs { namespace ext { namespace callbacks {
 
+#define define_cb(fun) std::pair<std::function<fo_##fun>, bool> cb_##fun
+
 #define call_cb_void(super, fun) virtual void fun() {if (cb_##fun.first) cb_##fun.first(this); if (!cb_##fun.second) super::fun();}
 #define call_cb_1_void(super, fun, p) {if (cb_##fun.first) cb_##fun.first(this, p); if (!cb_##fun.second) super::fun(p);}
 #define call_cb_2_void(super, fun, p1, p2) {if (cb_##fun.first) cb_##fun.first(this, p1, p2); if (!cb_##fun.second) super::fun(p1, p2);}
@@ -29,30 +31,22 @@ namespace ascs { namespace ext { namespace callbacks {
 #define call_cb_1_return(super, type, fun, p) {auto re = type(); if (cb_##fun.first) re = cb_##fun.first(this, p); if (!cb_##fun.second) re = super::fun(p); return re;}
 #define call_cb_2_combine(super, fun, p1, p2) {auto re = cb_##fun.first ? cb_##fun.first(this, p1, p2) : true; if (re && !cb_##fun.second) re = super::fun(p1, p2); return re;}
 
+template<typename CB, typename = typename std::enable_if<std::is_pointer<CB>::value && std::is_function<typename std::remove_pointer<CB>::type>::value>::type>
 #if (_MSVC_LANG > 201103L || __cplusplus > 201103L)
-#define register_cb_1(fun, init) \
-template<typename CallBack> void register_##fun(CallBack&& cb, bool pass_on = init) {cb_##fun.first = std::forward<CallBack>(cb); cb_##fun.second = !pass_on;} \
-void register_##fun(fo_##fun* cb, bool pass_on = init) {cb_##fun.first = [=](auto&& p1) {return cb(std::forward<decltype(p1)>(p1));}; cb_##fun.second = !pass_on;}
-#define register_cb_2(fun, init) \
-template<typename CallBack> void register_##fun(CallBack&& cb, bool pass_on = init) {cb_##fun.first = std::forward<CallBack>(cb); cb_##fun.second = !pass_on;} \
-void register_##fun(fo_##fun* cb, bool pass_on = init) \
-	{cb_##fun.first = [=](auto&& p1, auto&& p2) {return cb(std::forward<decltype(p1)>(p1), std::forward<decltype(p2)>(p2));}; cb_##fun.second = !pass_on;}
-#define register_cb_3(fun, init) \
-template<typename CallBack> void register_##fun(CallBack&& cb, bool pass_on = init) {cb_##fun.first = std::forward<CallBack>(cb); cb_##fun.second = !pass_on;} \
-void register_##fun(fo_##fun* cb, bool pass_on = init) \
-	{cb_##fun.first = [=](auto&& p1, auto&& p2, auto &&p3) {return cb(std::forward<decltype(p1)>(p1), std::forward<decltype(p2)>(p2), std::forward<decltype(p3)>(p3));}; cb_##fun.second = !pass_on;}
+auto forwarder(const CB cb) -> decltype(auto) {return [=](auto&&... args) ->decltype(auto) {return cb(std::forward<decltype(args)>(args)...);};}
+#define fun_x forwarder(cb)
 #else
-#define register_cb_1(fun, init) \
-template<typename CallBack> void register_##fun(CallBack&& cb, bool pass_on = init) {cb_##fun.first = std::forward<CallBack>(cb); cb_##fun.second = !pass_on;} \
-void register_##fun(fo_##fun* cb, bool pass_on = init) {cb_##fun.first = std::bind(cb, std::placeholders::_1); cb_##fun.second = !pass_on;}
-#define register_cb_2(fun, init) \
-template<typename CallBack> void register_##fun(CallBack&& cb, bool pass_on = init) {cb_##fun.first = std::forward<CallBack>(cb); cb_##fun.second = !pass_on;} \
-void register_##fun(fo_##fun* cb, bool pass_on = init) {cb_##fun.first = std::bind(cb, std::placeholders::_1, std::placeholders::_2); cb_##fun.second = !pass_on;}
-#define register_cb_3(fun, init) \
-template<typename CallBack> void register_##fun(CallBack&& cb, bool pass_on = init) {cb_##fun.first = std::forward<CallBack>(cb); cb_##fun.second = !pass_on;} \
-void register_##fun(fo_##fun* cb, bool pass_on = init) \
-	{cb_##fun.first = std::bind(cb, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3); cb_##fun.second = !pass_on;}
+struct forwarder
+{
+	const CB cb;
+	template<typename... Args> auto operator()(Args&&... args) const -> decltype(cb(std::forward<Args>(args)...)) {return cb(std::forward<Args>(args)...);}
+};
+#define fun_x forwarder<decltype(cb)>{cb}
 #endif
+
+#define register_cb(fun, init) template<typename CallBack> \
+void register_##fun(CallBack&& cb, bool pass_on = init) {cb_##fun = {std::forward<CallBack>(cb), !pass_on};} \
+void register_##fun(fo_##fun* cb, bool pass_on = init) {register_##fun(fun_x, pass_on);}
 
 template<typename Socket> class g_socket : public Socket //udp socket will use g_socket only
 {
@@ -91,28 +85,28 @@ public:
 public:
 	using Socket::Socket;
 
-	register_cb_1(obsoleted, true)
-	register_cb_1(is_ready, true)
-	register_cb_1(send_heartbeat, false)
-	register_cb_1(reset, true)
-	register_cb_1(on_heartbeat_error, true)
-	register_cb_3(on_send_error, true)
-	register_cb_2(on_recv_error, true)
-	register_cb_1(on_close, true)
-	register_cb_1(after_close, true)
+	register_cb(obsoleted, true)
+	register_cb(is_ready, true)
+	register_cb(send_heartbeat, false)
+	register_cb(reset, true)
+	register_cb(on_heartbeat_error, true)
+	register_cb(on_send_error, true)
+	register_cb(on_recv_error, true)
+	register_cb(on_close, true)
+	register_cb(after_close, true)
 #ifdef ASCS_SYNC_DISPATCH
-	register_cb_2(on_msg, false)
+	register_cb(on_msg, false)
 #endif
-	register_cb_2(on_msg_handle, false)
+	register_cb(on_msg_handle, false)
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
-	register_cb_2(on_msg_send, false)
+	register_cb(on_msg_send, false)
 #endif
 #ifdef ASCS_WANT_ALL_MSG_SEND_NOTIFY
-	register_cb_2(on_all_msg_send, false)
+	register_cb(on_all_msg_send, false)
 #endif
 #ifdef ASCS_SHRINK_SEND_BUFFER
-	register_cb_2(calc_shrink_size, false)
-	register_cb_2(on_msg_discard, false)
+	register_cb(calc_shrink_size, false)
+	register_cb(on_msg_discard, false)
 #endif
 
 public:
@@ -150,30 +144,30 @@ private:
 #endif
 
 private:
-	std::pair<std::function<fo_obsoleted>, bool> cb_obsoleted;
-	std::pair<std::function<fo_is_ready>, bool> cb_is_ready;
-	std::pair<std::function<fo_send_heartbeat>, bool> cb_send_heartbeat;
-	std::pair<std::function<fo_reset>, bool> cb_reset;
-	std::pair<std::function<fo_on_heartbeat_error>, bool> cb_on_heartbeat_error;
-	std::pair<std::function<fo_on_send_error>, bool> cb_on_send_error;
-	std::pair<std::function<fo_on_recv_error>, bool> cb_on_recv_error;
-	std::pair<std::function<fo_on_close>, bool> cb_on_close;
-	std::pair<std::function<fo_after_close>, bool> cb_after_close;
+	define_cb(obsoleted);
+	define_cb(is_ready);
+	define_cb(send_heartbeat);
+	define_cb(reset);
+	define_cb(on_heartbeat_error);
+	define_cb(on_send_error);
+	define_cb(on_recv_error);
+	define_cb(on_close);
+	define_cb(after_close);
 
 #ifdef ASCS_SYNC_DISPATCH
-	std::pair<std::function<fo_on_msg>, bool> cb_on_msg;
+	define_cb(on_msg);
 #endif
-	std::pair<std::function<fo_on_msg_handle>, bool> cb_on_msg_handle;
+	define_cb(on_msg_handle);
 #ifdef ASCS_WANT_MSG_SEND_NOTIFY
-	std::pair<std::function<fo_on_msg_send>, bool> cb_on_msg_send;
+	define_cb(on_msg_send);
 #endif
 #ifdef ASCS_WANT_ALL_MSG_SEND_NOTIFY
-	std::pair<std::function<fo_on_all_msg_send>, bool> cb_on_all_msg_send;
+	define_cb(on_all_msg_send);
 #endif
 
 #ifdef ASCS_SHRINK_SEND_BUFFER
-	std::pair<std::function<fo_calc_shrink_size>, bool> cb_calc_shrink_size;
-	std::pair<std::function<fo_on_msg_discard>, bool> cb_on_msg_discard;
+	define_cb(calc_shrink_size);
+	define_cb(on_msg_discard);
 #endif
 };
 
@@ -187,9 +181,9 @@ public:
 public:
 	using g_socket<Socket>::g_socket;
 
-	register_cb_1(on_connect, false)
-	register_cb_1(on_unpack_error, true)
-	register_cb_1(on_async_shutdown_error, true)
+	register_cb(on_connect, false)
+	register_cb(on_unpack_error, true)
+	register_cb(on_async_shutdown_error, true)
 
 private:
 	call_cb_void(Socket, on_connect)
@@ -197,9 +191,9 @@ private:
 	call_cb_void(Socket, on_async_shutdown_error)
 
 private:
-	std::pair<std::function<fo_on_connect>, bool> cb_on_connect;
-	std::pair<std::function<fo_on_unpack_error>, bool> cb_on_unpack_error;
-	std::pair<std::function<fo_on_async_shutdown_error>, bool> cb_on_async_shutdown_error;
+	define_cb(on_connect);
+	define_cb(on_unpack_error);
+	define_cb(on_async_shutdown_error);
 };
 
 template<typename Socket> class c_socket : public tcp_socket<Socket> //for client socket
@@ -210,13 +204,13 @@ public:
 public:
 	using tcp_socket<Socket>::tcp_socket;
 
-	register_cb_2(prepare_reconnect, false)
+	register_cb(prepare_reconnect, false)
 
 private:
 	virtual int prepare_reconnect(const asio::error_code& ec) call_cb_1_return(Socket, int, prepare_reconnect, ec)
 
 private:
-	std::pair<std::function<fo_prepare_reconnect>, bool> cb_prepare_reconnect;
+	define_cb(prepare_reconnect);
 };
 
 template<typename Socket> class s_socket : public tcp_socket<Socket> //for server socket
@@ -227,13 +221,13 @@ public:
 public:
 	using tcp_socket<Socket>::tcp_socket;
 
-	register_cb_2(take_over, false)
+	register_cb(take_over, false)
 
 public:
 	virtual void take_over(std::shared_ptr<typename Socket::type_of_object_restore> socket_ptr) call_cb_1_void(Socket, take_over, socket_ptr)
 
 private:
-	std::pair<std::function<fo_take_over>, bool> cb_take_over;
+	define_cb(take_over);
 };
 
 template<typename Server> class server : public Server //for server
@@ -247,10 +241,10 @@ public:
 public:
 	using Server::Server;
 
-	register_cb_1(async_accept_num, false)
-	register_cb_1(start_next_accept, true)
-	register_cb_2(on_accept, true)
-	register_cb_3(on_accept_error, true)
+	register_cb(async_accept_num, false)
+	register_cb(start_next_accept, true)
+	register_cb(on_accept, true)
+	register_cb(on_accept_error, true)
 
 private:
 	call_cb_return(Server, int, async_accept_num)
@@ -259,10 +253,10 @@ private:
 	virtual bool on_accept_error(const asio::error_code& ec, typename Server::object_ctype& socket_ptr) call_cb_2_combine(Server, on_accept_error, ec, socket_ptr)
 
 private:
-	std::pair<std::function<fo_async_accept_num>, bool> cb_async_accept_num;
-	std::pair<std::function<fo_start_next_accept>, bool> cb_start_next_accept;
-	std::pair<std::function<fo_on_accept>, bool> cb_on_accept;
-	std::pair<std::function<fo_on_accept_error>, bool> cb_on_accept_error;
+	define_cb(async_accept_num);
+	define_cb(start_next_accept);
+	define_cb(on_accept);
+	define_cb(on_accept_error);
 };
 
 template<typename ObjectPool> class object_pool : public ObjectPool
@@ -273,7 +267,7 @@ public:
 public:
 	using ObjectPool::ObjectPool;
 
-	register_cb_2(on_create, false)
+	register_cb(on_create, false)
 
 protected:
 	~object_pool() {}
@@ -282,7 +276,7 @@ private:
 	virtual void on_create(typename ObjectPool::object_ctype& object_ptr) call_cb_1_void(ObjectPool, on_create, object_ptr)
 
 private:
-	std::pair<std::function<fo_on_create>, bool> cb_on_create;
+	define_cb(on_create);
 };
 
 }}} //namespace
