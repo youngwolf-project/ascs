@@ -13,20 +13,22 @@
 #ifndef _ASCS_EXECUTOR_H_
 #define _ASCS_EXECUTOR_H_
 
-#include <functional>
-
 #include <asio.hpp>
-
-#include "config.h"
 
 namespace ascs
 {
 
-class executor
+class forwarder
 {
 protected:
-	virtual ~executor() {}
-	executor(asio::io_context& _io_context_) : io_context_(_io_context_) {}
+	template<typename F> auto track_async_call(F&& handler) const -> decltype(std::forward<F>(handler)) {return std::forward<F>(handler);}
+};
+
+template<typename Tracker> class executor_base : public Tracker
+{
+protected:
+	executor_base(asio::io_context& _io_context_) : io_context_(_io_context_) {}
+	virtual ~executor_base() {}
 
 	void set_single_thread() {single_thread = true;}
 	bool is_single_thread() const {return single_thread;}
@@ -35,33 +37,44 @@ public:
 	bool stopped() const {return io_context_.stopped();}
 
 #if ASIO_VERSION >= 101100
-	template<typename F> void post(F&& handler) {asio::post(io_context_, std::forward<F>(handler));}
-	template<typename F> void defer(F&& handler) {asio::defer(io_context_, std::forward<F>(handler));}
-	template<typename F> void dispatch(F&& handler) {asio::dispatch(io_context_, std::forward<F>(handler));}
-
-	template<typename F> void post_strand(asio::io_context::strand& strand, F&& handler)
-		{single_thread ? post(std::forward<F>(handler)) : asio::post(strand, std::forward<F>(handler));}
-	template<typename F> void defer_strand(asio::io_context::strand& strand, F&& handler)
-		{single_thread ? defer(std::forward<F>(handler)) : asio::defer(strand, std::forward<F>(handler));}
-	template<typename F> void dispatch_strand(asio::io_context::strand& strand, F&& handler)
-		{single_thread ? dispatch(std::forward<F>(handler)) : asio::dispatch(strand, std::forward<F>(handler));}
+	template<typename F> void post(F&& handler) const {asio::post(io_context_, this->track_async_call(std::forward<F>(handler)));}
+	template<typename F> void defer(F&& handler) const {asio::defer(io_context_, this->track_async_call(std::forward<F>(handler)));}
+	template<typename F> void dispatch(F&& handler) const {asio::dispatch(io_context_, this->track_async_call(std::forward<F>(handler)));}
+	template<typename F> void post_strand(const asio::io_context::strand& strand, F&& handler) const
+	{
+		assert(&io_context_ == &strand.context());
+		single_thread ? post(std::forward<F>(handler)) : asio::post(strand, this->track_async_call(std::forward<F>(handler)));
+	}
+	template<typename F> void defer_strand(const asio::io_context::strand& strand, F&& handler) const
+	{
+		assert(&io_context_ == &strand.context());
+		single_thread ? defer(std::forward<F>(handler)) : asio::defer(strand, this->track_async_call(std::forward<F>(handler)));
+	}
+	template<typename F> void dispatch_strand(const asio::io_context::strand& strand, F&& handler) const
+	{
+		assert(&io_context_ == &strand.context());
+		single_thread ? dispatch(std::forward<F>(handler)) : asio::dispatch(strand, this->track_async_call(std::forward<F>(handler)));
+	}
 #else
-	template<typename F> void post(F&& handler) {io_context_.post(std::forward<F>(handler));}
-	template<typename F> void dispatch(F&& handler) {io_context_.dispatch(std::forward<F>(handler));}
-
+	template<typename F> void post(F&& handler) {io_context_.post(this->track_async_call(std::forward<F>(handler)));}
+	template<typename F> void dispatch(F&& handler) {io_context_.dispatch(this->track_async_call(std::forward<F>(handler)));}
 	template<typename F> void post_strand(asio::io_context::strand& strand, F&& handler)
-		{single_thread ? post(std::forward<F>(handler)) : strand.post(std::forward<F>(handler));}
+	{
+		assert(&io_context_ == &strand.get_io_service());
+		single_thread ? post(std::forward<F>(handler)) : strand.post(this->track_async_call(std::forward<F>(handler)));
+	}
 	template<typename F> void dispatch_strand(asio::io_context::strand& strand, F&& handler)
-		{single_thread ? dispatch(std::forward<F>(handler)) : strand.dispatch(std::forward<F>(handler));}
+	{
+		assert(&io_context_ == &strand.get_io_service());
+		single_thread ? dispatch(std::forward<F>(handler)) : strand.dispatch(this->track_async_call(std::forward<F>(handler)));
+	}
 #endif
-
-	template<typename F> inline F&& make_handler_error(F&& f) const {return std::forward<F>(f);}
-	template<typename F> inline F&& make_handler_error_size(F&& f) const {return std::forward<F>(f);}
 
 protected:
 	asio::io_context& io_context_;
 	bool single_thread{false};
 };
+using executor = executor_base<forwarder>;
 
 } //namespace
 

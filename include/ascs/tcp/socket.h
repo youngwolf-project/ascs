@@ -59,7 +59,7 @@ private:
 };
 
 template<typename Socket, typename Packer, typename Unpacker,
-	template<typename> class InQueue, template<typename> class InContainer, template<typename> class OutQueue, template<typename> class OutContainer,
+	template<typename> class InQueue, template<typename...> class InContainer, template<typename> class OutQueue, template<typename...> class OutContainer,
 	template<typename, typename> class ReaderWriter = reader_writer>
 class socket_base : public ReaderWriter<socket2<Socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer>, typename Unpacker::msg_type>
 {
@@ -318,18 +318,14 @@ private:
 	virtual void do_recv_msg()
 	{
 #ifdef ASCS_PASSIVE_RECV
-		if (!is_ready())
-			return;
-		else if (this->test_and_set_reading())
+		if (!is_ready() || this->test_and_set_reading())
 			return;
 #endif
-		auto cb = this->template make_io_strand_handler<typename super::handler_with_error_size>(
-			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}));
+		auto cb = [this](const asio::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);};
+		if (this->is_single_thread() ? this->async_read(this->track_async_call(std::move(cb))) : this->async_read(this->make_io_strand_handler(std::move(cb))));
 #ifdef ASCS_PASSIVE_RECV
-		if (!this->async_read(std::move(cb)))
+		else
 			this->clear_reading();
-#else
-		this->async_read(std::move(cb));
 #endif
 	}
 
@@ -386,8 +382,10 @@ private:
 		if (!sending_buffer.empty())
 		{
 			sending_msgs.front().restart();
-			this->async_write(sending_buffer, this->template make_io_strand_handler<typename super::handler_with_error_size>(
-				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);})));
+			auto cb = [this](const asio::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);};
+			this->is_single_thread() ? this->async_write(sending_buffer, this->track_async_call(std::move(cb))) :
+				this->async_write(sending_buffer, this->make_io_strand_handler(std::move(cb)));
+
 			return true;
 		}
 

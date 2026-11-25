@@ -49,7 +49,7 @@ protected:
 		this->dispatch_in_io_strand([this]() {
 			this->show_info("ssl link:", "been shutting down.");
 			this->start_graceful_shutdown_monitoring();
-			this->next_layer().async_shutdown(this->make_handler_error([this](const asio::error_code& ec) {
+			this->next_layer().async_shutdown(this->track_async_call([this](const asio::error_code& ec) {
 				//do not stop the shutdown monitoring at here, sometimes, this async_shutdown cannot trigger on_recv_error,
 				//very strange, maybe, there's a bug in Asio. so we stop it in on_recv_error.
 				//this->stop_graceful_shutdown_monitoring();
@@ -64,8 +64,8 @@ private:
 };
 
 template<typename Packer, typename Unpacker, typename Matrix = i_matrix,
-	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
-	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
+	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename...> class InContainer = ASCS_INPUT_CONTAINER,
+	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename...> class OutContainer = ASCS_OUTPUT_CONTAINER>
 class client_socket_base : public socket<tcp::client_socket_base<Packer, Unpacker, Matrix, asio::ssl::stream<asio::ip::tcp::socket>, InQueue, InContainer, OutQueue, OutContainer>>
 {
 private:
@@ -105,7 +105,7 @@ private:
 		if (!ec)
 		{
 			this->status = super::link_status::HANDSHAKING;
-			this->next_layer().async_handshake(asio::ssl::stream_base::client, this->make_handler_error([this](const asio::error_code& ec) {handle_handshake(ec);}));
+			this->next_layer().async_handshake(asio::ssl::stream_base::client, this->track_async_call([this](const asio::error_code& ec) {handle_handshake(ec);}));
 		}
 		else
 			super::connect_handler(ec);
@@ -138,8 +138,8 @@ private:
 };
 
 template<typename Packer, typename Unpacker, typename Server = tcp::i_server,
-	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
-	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
+	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename...> class InContainer = ASCS_INPUT_CONTAINER,
+	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename...> class OutContainer = ASCS_OUTPUT_CONTAINER>
 class server_socket_base : public socket<tcp::server_socket_base<Packer, Unpacker, Server, asio::ssl::stream<asio::ip::tcp::socket>, InQueue, InContainer, OutQueue, OutContainer>>
 {
 private:
@@ -160,7 +160,7 @@ protected:
 	virtual bool do_start() //intercept tcp::server_socket_base::do_start (to add handshake)
 	{
 		this->status = super::link_status::HANDSHAKING;
-		this->next_layer().async_handshake(asio::ssl::stream_base::server, this->make_handler_error([this](const asio::error_code& ec) {handle_handshake(ec);}));
+		this->next_layer().async_handshake(asio::ssl::stream_base::server, this->track_async_call([this](const asio::error_code& ec) {handle_handshake(ec);}));
 		return true;
 	}
 

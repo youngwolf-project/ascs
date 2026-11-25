@@ -40,7 +40,7 @@
 #endif
 
 #define ASCS_HEAD_LEN	(sizeof(ASCS_HEAD_TYPE))
-static_assert(100 * 1024 * 1024 >= ASCS_MSG_BUFFER_SIZE && ASCS_MSG_BUFFER_SIZE >= ASCS_HEAD_LEN, "invalid message buffer size.");
+static_assert(ASCS_MSG_BUFFER_SIZE <= 100 * 1024 * 1024 && ASCS_MSG_BUFFER_SIZE >= ASCS_HEAD_LEN, "invalid message buffer size.");
 
 namespace ascs { namespace ext {
 
@@ -62,16 +62,17 @@ class basic_buffer
 public:
 	basic_buffer() {}
 	virtual ~basic_buffer() {clean();}
-	basic_buffer(size_t len) {resize(len);}
-	basic_buffer(int len) {if (len > 0) resize((size_t) len);}
+	explicit basic_buffer(size_t len) {resize(len);}
+	basic_buffer(int len) noexcept {if (len > 0) resize((size_t) len);}
 	basic_buffer(size_t count, char c) {append(count, c);}
 	basic_buffer(char* buff) {operator+=(buff);}
 	basic_buffer(const char* buff) {operator+=(buff);}
 	basic_buffer(const char* buff, size_t len) {append(buff, len);}
 	template<size_t size> basic_buffer(char(&buff)[size], size_t len) {append(buff, len);}
 	template<size_t size> basic_buffer(const char(&buff)[size], size_t len) {append(buff, len);}
-	basic_buffer(std::initializer_list<char> ilist) {operator+=(ilist);}
-	basic_buffer(const basic_buffer& other) {append(other);}
+	basic_buffer(std::initializer_list<char> ilist) noexcept {operator+=(ilist);}
+	basic_buffer(const basic_buffer& other) noexcept {append(other);}
+	basic_buffer(basic_buffer&& other) noexcept {do_attach(other.buff, other.len, other.cap); other.do_detach();}
 	template<typename Buff> basic_buffer(const Buff& other) {append(other);}
 	template<typename Buff> basic_buffer(const Buff& other, size_t pos) {if (pos < other.size()) append(std::next(other.data(), pos), other.size() - pos);}
 	template<typename Buff> basic_buffer(const Buff& other, size_t pos, size_t len)
@@ -79,15 +80,14 @@ public:
 		if (pos < other.size())
 			append(std::next(other.data(), pos), pos + len > other.size() ? other.size() - pos : len);
 	}
-	basic_buffer(basic_buffer&& other) {do_attach(other.buff, other.len, other.cap); other.do_detach();}
 
-	inline basic_buffer& operator=(char c) {resize(0); return operator+=(c);}
+	inline basic_buffer& operator=(char c) noexcept {resize(0); return operator+=(c);}
 	inline basic_buffer& operator=(char* buff) {resize(0); return operator+=(buff);}
 	inline basic_buffer& operator=(const char* buff) {resize(0); return operator+=(buff);}
 	inline basic_buffer& operator=(std::initializer_list<char> ilist) {resize(0); return operator+=(ilist);}
-	inline basic_buffer& operator=(const basic_buffer& other) {resize(0); return operator+=(other);}
+	inline basic_buffer& operator=(const basic_buffer& other) noexcept {resize(0); return operator+=(other);}
+	inline basic_buffer& operator=(basic_buffer&& other) noexcept {clean(); swap(other); return *this;}
 	template<typename Buff> inline basic_buffer& operator=(const Buff& other) {resize(0); return operator+=(other);}
-	inline basic_buffer& operator=(basic_buffer&& other) {clean(); swap(other); return *this;}
 
 	inline basic_buffer& operator+=(char c) {return append(c);}
 	inline basic_buffer& operator+=(char* buff) {return append(buff);}
@@ -112,9 +112,6 @@ public:
 
 		return *this;
 	}
-
-	basic_buffer& append(std::initializer_list<char> ilist) {return append(std::begin(ilist), ilist.size());}
-	template<typename Buff> basic_buffer& append(const Buff& other) {return append(other.data(), other.size());}
 	basic_buffer& append(char* buff) {return append((const char*) buff);}
 	basic_buffer& append(const char* buff) {return append(buff, strlen(buff));}
 	basic_buffer& append(const char* _buff, size_t _len)
@@ -135,17 +132,19 @@ public:
 	}
 	template<size_t size> basic_buffer& append(char(&buff)[size], size_t len) {return append((const char*) buff, std::min(size, len));}
 	template<size_t size> basic_buffer& append(const char(&buff)[size], size_t len) {return append((const char*) buff, std::min(size, len));}
+	basic_buffer& append(std::initializer_list<char> ilist) {return append(std::begin(ilist), ilist.size());}
+	template<typename Buff> basic_buffer& append(const Buff& other) {return append(other.data(), other.size());}
 
 	//nonstandard function append2 -- delete the last character if it's '\0' before appending another string.
 	//this feature makes basic_buffer to be able to works as std::string, which will append '\0' automatically.
-	//please note that the first and the third verion of append2 still need you to provide '\0' at the end of the fed string.
+	//please note that only the first verion of append2 will append '\0' automatically, others still need you to provide '\0' at the end of the fed string.
 	//usage:
 	/*
 		basic_buffer bb("1"); //not include the '\0' character
 		printf("%s\n", bb.data()); //not ok, random characters can be outputted after "1", use basic_buffer bb("1", 2) instead.
-		bb.append2("23"); //include the '\0' character, but just append2, please note.
+		bb.append2("23"); //include the '\0' character automatically, but just append2, please note.
 		printf("%s\n", bb.data()); //ok, additional '\0' has been added automatically so no random characters can be outputted after "123".
-		bb.append2("456", 4); //include the '\0' character
+		bb.append2("456", 4); //include the '\0' character manually
 		printf("%s\n", bb.data()); //ok, additional '\0' has been added manually so no random characters can be outputted after "123456".
 		bb.append2("789", 3); //not include the '\0' character
 		printf("%s\n", bb.data()); //not ok, random characters can be outputted after "123456789"
@@ -154,7 +153,6 @@ public:
 		printf("%zu\n", bb.size()); //the final length of bb is 13, just include the last '\0' character, all middle '\0' characters have been deleted.
 	*/
 	//by the way, deleting the last character which is not '\0' before appending another string is very efficient, please use it freely.
-	basic_buffer& append2(std::initializer_list<char> ilist) {return append2(std::begin(ilist), ilist.size());}
 	basic_buffer& append2(const char* buff) {return append(buff, strlen(buff) + 1);} //include the '\0' character
 	basic_buffer& append2(const char* _buff, size_t _len)
 	{
@@ -163,6 +161,8 @@ public:
 
 		return append(_buff, _len);
 	}
+	basic_buffer& append2(std::initializer_list<char> ilist) {return append2(std::begin(ilist), ilist.size());}
+	template<typename Buff> basic_buffer& append2(const Buff& other) {return append2(other.data(), other.size());}
 
 	basic_buffer& erase(size_t pos = 0, size_t len = UINT_MAX)
 	{
@@ -197,7 +197,7 @@ public:
 	void assign(size_t len) {resize(len);}
 	void assign(const char* buff, size_t len) {resize(0); append(buff, len);}
 
-	void shrink_to_fit() {reserve(0);}
+	void shrink_to_fit() noexcept {reserve(0);}
 	void reserve(size_t capacity)
 	{
 		if (capacity > max_size())
@@ -242,25 +242,25 @@ public:
 		}
 	}
 
-	size_t max_size() const {return UINT_MAX;}
-	size_t capacity() const {return cap;}
+	size_t max_size() const noexcept {return UINT_MAX;}
+	size_t capacity() const noexcept {return cap;}
 
 	//nonstandard function clean -- free internal buffer without destructing this basic_buffer object
-	void clean() {free(buff); do_detach();}
+	void clean() noexcept {free(buff); do_detach();}
 
 	//the following five functions are needed by ascs
-	void clear() {resize(0);}
-	const char* data() const {return buff;}
-	size_t size() const {return nullptr == buff ? 0 : len;}
-	bool empty() const {return 0 == len || nullptr == buff;}
-	void swap(basic_buffer& other) {std::swap(buff, other.buff); std::swap(len, other.len); std::swap(cap, other.cap);}
+	void clear() noexcept {resize(0);}
+	const char* data() const noexcept {return buff;}
+	size_t size() const noexcept {return nullptr == buff ? 0 : len;}
+	bool empty() const noexcept {return 0 == len || nullptr == buff;}
+	void swap(basic_buffer& other) noexcept {std::swap(buff, other.buff); std::swap(len, other.len); std::swap(cap, other.cap);}
 
 	//functions needed by packer and unpacker
-	char* data() {return buff;}
+	char* data() noexcept {return buff;}
 
 protected:
-	void do_attach(char* _buff, size_t _len, size_t capacity) {buff = _buff; len = (unsigned) _len; cap = (unsigned) capacity;}
-	void do_detach() {buff = nullptr; len = cap = 0;}
+	void do_attach(char* _buff, size_t _len, size_t capacity) noexcept {buff = _buff; len = (unsigned) _len; cap = (unsigned) capacity;}
+	void do_detach() noexcept {buff = nullptr; len = cap = 0;}
 
 	void check_length(size_t add_len) {if (add_len > max_size() || max_size() - add_len < len) throw std::length_error("too big memory request");}
 
@@ -277,10 +277,18 @@ public:
 	void restart() {started = false; elapsed_seconds = .0f; start();}
 	void start() {if (started) return; started = true; start_time = std::chrono::system_clock::now();}
 	void resume() {start();}
-	void stop() {if (!started) return; started = false; elapsed_seconds += std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::system_clock::now() - start_time).count();}
+	void stop()
+	{
+		if (started)
+		{
+			started = false;
+			elapsed_seconds += std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::system_clock::now() - start_time).count();
+		}
+	}
 
 	bool stopped() const {return !started;}
-	float elapsed() const {if (!started) return elapsed_seconds; return std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::system_clock::now() - start_time).count();}
+	float elapsed() const
+		{return !started ? elapsed_seconds : std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::system_clock::now() - start_time).count();}
 
 protected:
 	bool started{false};

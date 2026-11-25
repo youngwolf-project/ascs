@@ -20,8 +20,8 @@ namespace ascs { namespace tcp { namespace proxy {
 namespace socks4 {
 
 template<typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = asio::ip::tcp::socket,
-	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
-	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
+	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename...> class InContainer = ASCS_INPUT_CONTAINER,
+	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename...> class OutContainer = ASCS_OUTPUT_CONTAINER>
 class client_socket_base : public ascs::tcp::client_socket_base<Packer, Unpacker, Matrix, Socket, InQueue, InContainer, OutQueue, OutContainer>
 {
 private:
@@ -63,7 +63,7 @@ private:
 		unified_out::info_out("connected to the proxy server, begin to negotiate with it.");
 		this->status = super::link_status::HANDSHAKING;
 		asio::async_write(this->next_layer(), asio::buffer(buff, req_len),
-			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);}));
+			this->track_async_call([this](const asio::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);}));
 	}
 
 	void send_handler(const asio::error_code& ec, size_t bytes_transferred)
@@ -75,7 +75,7 @@ private:
 		}
 		else
 			asio::async_read(this->next_layer(), asio::buffer(buff, 8),
-				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}));
+				this->track_async_call([this](const asio::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}));
 	}
 
 	void recv_handler(const asio::error_code& ec, size_t bytes_transferred)
@@ -106,8 +106,8 @@ private:
 namespace socks5 {
 
 template<typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = asio::ip::tcp::socket,
-	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename> class InContainer = ASCS_INPUT_CONTAINER,
-	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename> class OutContainer = ASCS_OUTPUT_CONTAINER>
+	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename...> class InContainer = ASCS_INPUT_CONTAINER,
+	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename...> class OutContainer = ASCS_OUTPUT_CONTAINER>
 class client_socket_base : public ascs::tcp::client_socket_base<Packer, Unpacker, Matrix, Socket, InQueue, InContainer, OutQueue, OutContainer>
 {
 private:
@@ -187,7 +187,7 @@ private:
 		buff[2] = 0;
 
 		asio::async_write(this->next_layer(), asio::buffer(buff, req_len),
-			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);}));
+			this->track_async_call([this](const asio::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);}));
 	}
 
 	void send_auth()
@@ -202,7 +202,7 @@ private:
 		req_len = 1 + 1 + username.size() + 1 + password.size();
 
 		asio::async_write(this->next_layer(), asio::buffer(buff, req_len),
-			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);}));
+			this->track_async_call([this](const asio::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);}));
 	}
 
 	void send_request()
@@ -244,7 +244,7 @@ private:
 		}
 
 		asio::async_write(this->next_layer(), asio::buffer(buff, req_len),
-			this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);}));
+			this->track_async_call([this](const asio::error_code& ec, size_t bytes_transferred) {send_handler(ec, bytes_transferred);}));
 	}
 
 	void send_handler(const asio::error_code& ec, size_t bytes_transferred)
@@ -258,7 +258,7 @@ private:
 		{
 			++step;
 			this->next_layer().async_read_some(asio::buffer(buff, sizeof(buff)),
-				this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}));
+				this->track_async_call([this](const asio::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}));
 		}
 	}
 
@@ -358,7 +358,7 @@ private:
 			}
 			else
 				this->next_layer().async_read_some(asio::buffer(std::next(buff, res_len), sizeof(buff) - res_len),
-					this->make_handler_error_size([this](const asio::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}));
+					this->track_async_call([this](const asio::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}));
 		}
 	}
 
