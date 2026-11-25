@@ -34,9 +34,9 @@ public:
 	bool stopped() const {return io_context_.stopped();}
 
 #if BOOST_ASIO_VERSION >= 101100
-	template<typename F> void post(F&& handler) {boost::asio::post(io_context_, this->track_async_call(std::forward<F>(handler)));}
-	template<typename F> void defer(F&& handler) {boost::asio::defer(io_context_, this->track_async_call(std::forward<F>(handler)));}
-	template<typename F> void dispatch(F&& handler) {boost::asio::dispatch(io_context_, this->track_async_call(std::forward<F>(handler)));}
+	template<typename F> void post(F&& handler) const {boost::asio::post(io_context_, this->track_async_call(std::forward<F>(handler)));}
+	template<typename F> void defer(F&& handler) const {boost::asio::defer(io_context_, this->track_async_call(std::forward<F>(handler)));}
+	template<typename F> void dispatch(F&& handler) const {boost::asio::dispatch(io_context_, this->track_async_call(std::forward<F>(handler)));}
 	template<typename F> void post_strand(const boost::asio::io_context::strand& strand, F&& handler) const
 		{assert(&io_context_ == &strand.context()); boost::asio::post(strand, this->track_async_call(std::forward<F>(handler)));}
 	template<typename F> void defer_strand(const boost::asio::io_context::strand& strand, F&& handler) const

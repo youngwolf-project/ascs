@@ -270,18 +270,17 @@ private:
 		auto recv_buff = this->unpacker()->prepare_next_recv();
 		assert(boost::asio::buffer_size(recv_buff) > 0);
 		if (0 == boost::asio::buffer_size(recv_buff))
-			unified_out::error_out(ASCS_LLF " the unpacker returned an empty buffer, quit receiving!", this->id());
-		else
 		{
-			auto cb = this->make_io_strand_handler([this](const boost::system::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);});
-			is_connected ? this->next_layer().async_receive(std::move(recv_buff), std::move(cb)) :
-				this->next_layer().async_receive_from(std::move(recv_buff), temp_addr, std::move(cb));
+			unified_out::error_out(ASCS_LLF " the unpacker returned an empty buffer, quit receiving!", this->id());
+#ifdef ASCS_PASSIVE_RECV
+			this->clear_reading();
+#endif
 			return;
 		}
 
-#ifdef ASCS_PASSIVE_RECV
-		this->clear_reading();
-#endif
+		auto cb = this->make_io_strand_handler([this](const boost::system::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);});
+		is_connected ? this->next_layer().async_receive(std::move(recv_buff), std::move(cb)) :
+			this->next_layer().async_receive_from(std::move(recv_buff), temp_addr, std::move(cb));
 	}
 
 	void recv_handler(const boost::system::error_code& ec, size_t bytes_transferred)
@@ -299,9 +298,7 @@ private:
 			if (is_connected)
 				pre_handle_msg(msg_can);
 
-			ascs::do_something_to_all(msg_can, [this](typename Unpacker::msg_type& msg) {
-				temp_msg_can.emplace_back(is_connected ? peer_addr : temp_addr, std::move(msg));
-			});
+			ascs::do_something_to_all(msg_can, [this](typename Unpacker::msg_type& msg) {temp_msg_can.emplace_back(is_connected ? peer_addr : temp_addr, std::move(msg));});
 			if (handle_msg()) //if macro ASCS_PASSIVE_RECV been defined, handle_msg will always return false
 				do_recv_msg(); //receive msg in sequence
 		}
