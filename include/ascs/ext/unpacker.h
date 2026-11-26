@@ -155,9 +155,11 @@ public:
 #ifdef ASCS_SCATTERED_RECV_BUFFER
 	//this is just to satisfy the compiler, it's not a real scatter-gather buffer,
 	//if you introduce a ring buffer, then you will have the chance to provide a real scatter-gather buffer.
-	virtual typename super::buffer_type prepare_next_recv() {assert(remain_len < ASCS_MSG_BUFFER_SIZE); return typename super::buffer_type(1, boost::asio::buffer(raw_buff) + remain_len);}
+	virtual typename super::buffer_type prepare_next_recv()
+		{assert(remain_len < ASCS_MSG_BUFFER_SIZE); return typename super::buffer_type(1, boost::asio::buffer(raw_buff) + remain_len);}
 #elif BOOST_ASIO_VERSION <= 101100
-	virtual typename super::buffer_type prepare_next_recv() {assert(remain_len < ASCS_MSG_BUFFER_SIZE); return boost::asio::buffer(boost::asio::buffer(raw_buff) + remain_len);}
+	virtual typename super::buffer_type prepare_next_recv()
+		{assert(remain_len < ASCS_MSG_BUFFER_SIZE); return boost::asio::buffer(boost::asio::buffer(raw_buff) + remain_len);}
 #else
 	virtual typename super::buffer_type prepare_next_recv() {assert(remain_len < ASCS_MSG_BUFFER_SIZE); return boost::asio::buffer(raw_buff) + remain_len;}
 #endif
@@ -537,9 +539,11 @@ public:
 	//this is just to satisfy the compiler, it's not a real scatter-gather buffer,
 	//if you introduce a ring buffer, then you will have the chance to provide a real scatter-gather buffer.
 #ifdef ASCS_SCATTERED_RECV_BUFFER
-	virtual buffer_type prepare_next_recv() {return buffer_type(1, raw_buff.empty() ? boost::asio::buffer((char*) &head, ASCS_HEAD_LEN) : boost::asio::buffer(raw_buff.data(), raw_buff.size()));}
+	virtual buffer_type prepare_next_recv()
+		{return buffer_type(1, raw_buff.empty() ? boost::asio::buffer((char*) &head, ASCS_HEAD_LEN) : boost::asio::buffer(raw_buff.data(), raw_buff.size()));}
 #else
-	virtual buffer_type prepare_next_recv() {return raw_buff.empty() ? boost::asio::buffer((char*) &head, ASCS_HEAD_LEN) : boost::asio::buffer(raw_buff.data(), raw_buff.size());}
+	virtual buffer_type prepare_next_recv()
+		{return raw_buff.empty() ? boost::asio::buffer((char*) &head, ASCS_HEAD_LEN) : boost::asio::buffer(raw_buff.data(), raw_buff.size());}
 #endif
 
 private:
@@ -580,7 +584,8 @@ public:
 
 	//a return value of 0 indicates that the read operation is complete. a non-zero value indicates the maximum number
 	//of bytes to be read on the next call to the stream's async_read_some function. ---boost::asio::async_read
-	virtual size_t completion_condition(const boost::system::error_code& ec, size_t bytes_transferred) {return ec || bytes_transferred == raw_buff.size() ? 0 : _fixed_length;}
+	virtual size_t completion_condition(const boost::system::error_code& ec, size_t bytes_transferred)
+		{return ec || bytes_transferred == raw_buff.size() ? 0 : _fixed_length;}
 
 	//this is just to satisfy the compiler, it's not a real scatter-gather buffer,
 	//if you introduce a ring buffer, then you will have the chance to provide a real scatter-gather buffer.
@@ -599,7 +604,8 @@ private:
 class prefix_suffix_unpacker : public i_unpacker<std::string>
 {
 public:
-	void prefix_suffix(const std::string& prefix, const std::string& suffix) {assert(!suffix.empty() && prefix.size() + suffix.size() < ASCS_MSG_BUFFER_SIZE); _prefix = prefix; _suffix = suffix;}
+	void prefix_suffix(const std::string& prefix, const std::string& suffix)
+		{assert(!suffix.empty() && prefix.size() + suffix.size() < ASCS_MSG_BUFFER_SIZE); _prefix = prefix; _suffix = suffix;}
 	const std::string& prefix() const {return _prefix;}
 	const std::string& suffix() const {return _suffix;}
 

@@ -87,13 +87,7 @@ public:
 	using Socket::Socket;
 
 protected:
-	virtual void on_handshake(const boost::system::error_code& ec)
-	{
-		if (!ec)
-			this->show_info(nullptr, "handshake success.");
-		else
-			this->show_info(ec, nullptr, "handshake failed");
-	}
+	virtual void on_handshake(const boost::system::error_code& ec) {this->show_info_2(ec, nullptr, "handshake failed", "handshake success.");}
 
 	void shutdown_websocket()
 	{
@@ -103,18 +97,19 @@ protected:
 			this->start_graceful_shutdown_monitoring();
 			this->next_layer().async_close(boost::beast::websocket::close_code::normal, this->track_async_call([this](const boost::system::error_code& ec) {
 				this->stop_graceful_shutdown_monitoring();
-				if (ec)
-					this->show_info(ec, "websocket link", "async shutdown failed");
+				this->show_error_info(ec, "websocket link", "async shutdown failed");
 			}));
 		});
 	}
 };
 
-template<typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = boost::beast::tcp_stream, template<typename> class LowestLayerGetter = lowest_layer_getter,
+template<typename Packer, typename Unpacker, typename Matrix = i_matrix, typename Socket = boost::beast::tcp_stream,
+	template<typename> class LowestLayerGetter = lowest_layer_getter,
 	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename...> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename...> class OutContainer = ASCS_OUTPUT_CONTAINER,
 	template<typename, typename> class ReaderWriter = reader_writer>
-class client_socket_base : public socket<tcp::client_socket_base<Packer, Unpacker, Matrix, stream<Socket, LowestLayerGetter>, InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>>
+class client_socket_base : public socket<tcp::client_socket_base<Packer, Unpacker, Matrix, stream<Socket, LowestLayerGetter>,
+	InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>>
 {
 private:
 	typedef socket<tcp::client_socket_base<Packer, Unpacker, Matrix, stream<Socket, LowestLayerGetter>, InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>> super;
@@ -140,7 +135,8 @@ public:
 	}
 
 protected:
-	virtual void on_unpack_error() {unified_out::info_out(ASCS_LLF " can not unpack msg.", this->id()); this->unpacker()->dump_left_data(); force_shutdown(this->is_reconnect());}
+	virtual void on_unpack_error()
+		{unified_out::info_out(ASCS_LLF " can not unpack msg.", this->id()); this->unpacker()->dump_left_data(); force_shutdown(this->is_reconnect());}
 
 	virtual void connect_handler(const boost::system::error_code& ec) //intercept tcp::client_socket_base::connect_handler
 	{
@@ -165,7 +161,8 @@ protected:
 		// Provide the value of the Host HTTP header during the WebSocket handshake.
 		// See https://tools.ietf.org/html/rfc7230#section-5.4
 		// Perform the websocket handshake
-		this->next_layer().async_handshake(this->endpoint_to_string(this->get_server_addr()), "/", this->track_async_call([this](const boost::system::error_code& ec) {handle_handshake(ec);}));
+		this->next_layer().async_handshake(this->endpoint_to_string(this->get_server_addr()), "/",
+			this->track_async_call([this](const boost::system::error_code& ec) {handle_handshake(ec);}));
 	}
 
 private:
@@ -178,11 +175,13 @@ private:
 	using super::shutdown_websocket;
 };
 
-template<typename Packer, typename Unpacker, typename Server = tcp::i_server, typename Socket = boost::beast::tcp_stream, template<typename> class LowestLayerGetter = lowest_layer_getter,
+template<typename Packer, typename Unpacker, typename Server = tcp::i_server, typename Socket = boost::beast::tcp_stream,
+	template<typename> class LowestLayerGetter = lowest_layer_getter,
 	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename...> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename...> class OutContainer = ASCS_OUTPUT_CONTAINER,
 	template<typename, typename> class ReaderWriter = reader_writer>
-class server_socket_base : public socket<tcp::server_socket_base<Packer, Unpacker, Server, stream<Socket, LowestLayerGetter>, InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>>
+class server_socket_base : public socket<tcp::server_socket_base<Packer, Unpacker, Server, stream<Socket, LowestLayerGetter>,
+	InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>>
 {
 private:
 	typedef socket<tcp::server_socket_base<Packer, Unpacker, Server, stream<Socket, LowestLayerGetter>, InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>> super;

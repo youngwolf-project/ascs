@@ -34,13 +34,7 @@ public:
 	boost::asio::ssl::context& get_context() {return ctx;}
 
 protected:
-	virtual void on_handshake(const boost::system::error_code& ec)
-	{
-		if (!ec)
-			this->show_info(nullptr, "handshake success.");
-		else
-			this->show_info(ec, nullptr, "handshake failed");
-	}
+	virtual void on_handshake(const boost::system::error_code& ec) {this->show_info_2(ec, nullptr, "handshake failed", "handshake success.");}
 	virtual void on_recv_error(const boost::system::error_code& ec) {this->stop_graceful_shutdown_monitoring(); Socket::on_recv_error(ec);}
 
 	void shutdown_ssl()
@@ -53,8 +47,7 @@ protected:
 				//do not stop the shutdown monitoring at here, sometimes, this async_shutdown cannot trigger on_recv_error,
 				//very strange, maybe, there's a bug in Asio. so we stop it in on_recv_error.
 				//this->stop_graceful_shutdown_monitoring();
-				if (ec)
-					this->show_info(ec, "ssl link", "async shutdown failed");
+				this->show_error_info(ec, "ssl link", "async shutdown failed");
 			}));
 		});
 	}
@@ -66,10 +59,12 @@ private:
 template<typename Packer, typename Unpacker, typename Matrix = i_matrix,
 	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename...> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename...> class OutContainer = ASCS_OUTPUT_CONTAINER>
-class client_socket_base : public socket<tcp::client_socket_base<Packer, Unpacker, Matrix, boost::asio::ssl::stream<boost::asio::ip::tcp::socket>, InQueue, InContainer, OutQueue, OutContainer>>
+class client_socket_base : public socket<tcp::client_socket_base<Packer, Unpacker, Matrix, boost::asio::ssl::stream<boost::asio::ip::tcp::socket>,
+	InQueue, InContainer, OutQueue, OutContainer>>
 {
 private:
-	typedef socket<tcp::client_socket_base<Packer, Unpacker, Matrix, boost::asio::ssl::stream<boost::asio::ip::tcp::socket>, InQueue, InContainer, OutQueue, OutContainer>> super;
+	typedef socket<tcp::client_socket_base<Packer, Unpacker, Matrix, boost::asio::ssl::stream<boost::asio::ip::tcp::socket>,
+		InQueue, InContainer, OutQueue, OutContainer>> super;
 
 public:
 	using super::super;
@@ -92,7 +87,8 @@ public:
 	}
 
 protected:
-	virtual void on_unpack_error() {unified_out::info_out(ASCS_LLF " can not unpack msg.", this->id()); this->unpacker()->dump_left_data(); force_shutdown(this->is_reconnect());}
+	virtual void on_unpack_error()
+		{unified_out::info_out(ASCS_LLF " can not unpack msg.", this->id()); this->unpacker()->dump_left_data(); force_shutdown(this->is_reconnect());}
 	virtual void on_close()
 	{
 		this->reset_next_layer(this->get_context());
@@ -105,7 +101,8 @@ private:
 		if (!ec)
 		{
 			this->status = super::link_status::HANDSHAKING;
-			this->next_layer().async_handshake(boost::asio::ssl::stream_base::client, this->track_async_call([this](const boost::system::error_code& ec) {handle_handshake(ec);}));
+			this->next_layer().async_handshake(boost::asio::ssl::stream_base::client,
+				this->track_async_call([this](const boost::system::error_code& ec) {handle_handshake(ec);}));
 		}
 		else
 			super::connect_handler(ec);
@@ -140,10 +137,12 @@ private:
 template<typename Packer, typename Unpacker, typename Server = tcp::i_server,
 	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename...> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename...> class OutContainer = ASCS_OUTPUT_CONTAINER>
-class server_socket_base : public socket<tcp::server_socket_base<Packer, Unpacker, Server, boost::asio::ssl::stream<boost::asio::ip::tcp::socket>, InQueue, InContainer, OutQueue, OutContainer>>
+class server_socket_base : public socket<tcp::server_socket_base<Packer, Unpacker, Server, boost::asio::ssl::stream<boost::asio::ip::tcp::socket>,
+	InQueue, InContainer, OutQueue, OutContainer>>
 {
 private:
-	typedef socket<tcp::server_socket_base<Packer, Unpacker, Server, boost::asio::ssl::stream<boost::asio::ip::tcp::socket>, InQueue, InContainer, OutQueue, OutContainer>> super;
+	typedef socket<tcp::server_socket_base<Packer, Unpacker, Server, boost::asio::ssl::stream<boost::asio::ip::tcp::socket>,
+		InQueue, InContainer, OutQueue, OutContainer>> super;
 
 public:
 	using super::super;
@@ -160,7 +159,8 @@ protected:
 	virtual bool do_start() //intercept tcp::server_socket_base::do_start (to add handshake)
 	{
 		this->status = super::link_status::HANDSHAKING;
-		this->next_layer().async_handshake(boost::asio::ssl::stream_base::server, this->track_async_call([this](const boost::system::error_code& ec) {handle_handshake(ec);}));
+		this->next_layer().async_handshake(boost::asio::ssl::stream_base::server,
+			this->track_async_call([this](const boost::system::error_code& ec) {handle_handshake(ec);}));
 		return true;
 	}
 

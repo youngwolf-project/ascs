@@ -127,7 +127,8 @@ protected:
 	//after how much time (ms), generic_client_socket will try to reconnect the server, negative value means give up.
 	virtual int prepare_reconnect(const boost::system::error_code& ec) {return ASCS_RECONNECT_INTERVAL;}
 	virtual void on_connect() {unified_out::info_out(ASCS_LLF " connecting success.", this->id());}
-	virtual void on_unpack_error() {unified_out::info_out(ASCS_LLF " can not unpack msg.", this->id()); this->unpacker()->dump_left_data(); force_shutdown(need_reconnect);}
+	virtual void on_unpack_error()
+		{unified_out::info_out(ASCS_LLF " can not unpack msg.", this->id()); this->unpacker()->dump_left_data(); force_shutdown(need_reconnect);}
 	virtual void on_recv_error(const boost::system::error_code& ec) {this->show_info(ec, "client link:", "broken/been shut down"); force_shutdown(need_reconnect);}
 	virtual void on_async_shutdown_error() {force_shutdown(need_reconnect);}
 	virtual bool on_heartbeat_error() {this->show_info("client link:", "broke unexpectedly."); force_shutdown(need_reconnect); return false;}
@@ -224,7 +225,8 @@ public:
 
 	using super::set_server_addr;
 #ifdef _WIN32
-	bool set_server_addr(unsigned short port, const std::string& ip = ASCS_SERVER_IP) {return set_addr(port, ip.empty() ? ASCS_SERVER_IP : ip, &super::set_server_addr, this);}
+	bool set_server_addr(unsigned short port, const std::string& ip = ASCS_SERVER_IP)
+		{return set_addr(port, ip.empty() ? ASCS_SERVER_IP : ip, &super::set_server_addr, this);}
 #else
 	bool set_server_addr(unsigned short port, const std::string& ip = ASCS_SERVER_IP) {return set_addr(port, ip, &super::set_server_addr, this);}
 #endif
@@ -252,7 +254,8 @@ template<typename Packer, typename Unpacker, typename Matrix = i_matrix,
 	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename...> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename...> class OutContainer = ASCS_OUTPUT_CONTAINER,
 	template<typename, typename> class ReaderWriter = reader_writer>
-class unix_client_socket_base : public generic_client_socket<socket_base<boost::asio::local::stream_protocol::socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>, Matrix, boost::asio::local::stream_protocol>
+class unix_client_socket_base : public generic_client_socket<socket_base<boost::asio::local::stream_protocol::socket, Packer, Unpacker,
+	InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>, Matrix, boost::asio::local::stream_protocol>
 {
 private:
 	typedef boost::asio::local::stream_protocol Family;

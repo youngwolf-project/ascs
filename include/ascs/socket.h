@@ -176,8 +176,9 @@ public:
 	}
 
 	//interval's unit is second
-	//if macro ASCS_HEARTBEAT_INTERVAL been defined and is bigger than zero, start_heartbeat will be called automatically with interval equal to ASCS_HEARTBEAT_INTERVAL,
-	//and max_absence equal to ASCS_HEARTBEAT_MAX_ABSENCE (so check_heartbeat will be called regularly). otherwise, you can call check_heartbeat with you own logic.
+	//if macro ASCS_HEARTBEAT_INTERVAL been defined and is bigger than zero, start_heartbeat will be called automatically with interval equal to
+	//ASCS_HEARTBEAT_INTERVAL, and max_absence equal to ASCS_HEARTBEAT_MAX_ABSENCE (so check_heartbeat will be called regularly).
+	//otherwise, you can call check_heartbeat with you own logic.
 	//return false for timeout (timeout check will only be performed on valid links), otherwise true (even the link has not established yet).
 	bool check_heartbeat(int interval, int max_absence = ASCS_HEARTBEAT_MAX_ABSENCE)
 	{
@@ -621,7 +622,7 @@ private:
 	}
 #endif
 
-	bool check_receiving(bool raise_recv)
+	bool check_suspend_receiving(bool raise_recv)
 	{
 		if (is_recv_buffer_available())
 		{
@@ -634,7 +635,7 @@ private:
 			if (raise_recv)
 				recv_msg(); //receive msg in sequence
 
-			return true;
+			return false;
 		}
 		else if (!recv_idle_began)
 		{
@@ -642,16 +643,16 @@ private:
 			recv_idle_begin_time = statistic::now();
 		}
 
-		return false;
+		return true;
 	}
 
 	bool handled_msg()
 	{
 #ifndef ASCS_PASSIVE_RECV
-		if (check_receiving(false))
+		if (!check_suspend_receiving(false))
 			return true;
 
-		set_timer(TIMER_CHECK_RECV, msg_resuming_interval_, [this](tid id)->bool {return !check_receiving(true);});
+		set_timer(TIMER_CHECK_RECV, msg_resuming_interval_, [this](tid id)->bool {return check_suspend_receiving(true);});
 #endif
 		return false;
 	}
@@ -789,9 +790,11 @@ template<typename Socket, typename Packer, typename Unpacker,
 	template<typename> class InQueue, template<typename...> class InContainer, template<typename> class OutQueue, template<typename...> class OutContainer>
 using socket2 = socket<Socket, Packer, Unpacker, typename Packer::msg_type, typename Unpacker::msg_type, InQueue, InContainer, OutQueue, OutContainer>;
 
-template<typename Socket, typename Family, typename Packer, typename Unpacker, template<typename, typename> class InMsgWrapper, template<typename, typename> class OutMsgWrapper,
+template<typename Socket, typename Family, typename Packer, typename Unpacker,
+	template<typename, typename> class InMsgWrapper, template<typename, typename> class OutMsgWrapper,
 	template<typename> class InQueue, template<typename...> class InContainer, template<typename> class OutQueue, template<typename...> class OutContainer>
-using socket3 = socket<Socket, Packer, Unpacker, InMsgWrapper<typename Packer::msg_type, Family>, OutMsgWrapper<typename Unpacker::msg_type, Family>, InQueue, InContainer, OutQueue, OutContainer>;
+using socket3 = socket<Socket, Packer, Unpacker, InMsgWrapper<typename Packer::msg_type, Family>, OutMsgWrapper<typename Unpacker::msg_type, Family>,
+	InQueue, InContainer, OutQueue, OutContainer>;
 
 template<typename Socket, typename Family, typename Packer, typename Unpacker, template<typename, typename> class MsgWrapper,
 	template<typename> class InQueue, template<typename...> class InContainer, template<typename> class OutQueue, template<typename...> class OutContainer>

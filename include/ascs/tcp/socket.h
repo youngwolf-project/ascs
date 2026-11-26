@@ -33,8 +33,8 @@ protected:
 			return false;
 		}
 
-		boost::asio::async_read(this->next_layer(), std::move(recv_buff), [this](const boost::system::error_code& ec, size_t bytes_transferred) {
-			return completion_checker(ec, bytes_transferred);}, std::forward<F>(handler));
+		boost::asio::async_read(this->next_layer(), std::move(recv_buff),
+			[this](const boost::system::error_code& ec, size_t bytes_transferred) {return completion_checker(ec, bytes_transferred);}, std::forward<F>(handler));
 		return true;
 	}
 	bool parse_msg(size_t bytes_transferred, std::list<OutMsgType>& msg_can) {return this->unpacker()->parse_msg(bytes_transferred, msg_can);}
@@ -47,8 +47,8 @@ protected:
 		return boost::asio::detail::default_max_transfer_size;
 #endif
 	}
-	template<typename Buffer, typename F> void async_write(const Buffer& msg_can, F&& handler)
-		{boost::asio::async_write(this->next_layer(), msg_can, std::forward<F>(handler));}
+	template<typename Buffer, typename F>
+	void async_write(const Buffer& msg_can, F&& handler) {boost::asio::async_write(this->next_layer(), msg_can, std::forward<F>(handler));}
 
 private:
 	size_t completion_checker(const boost::system::error_code& ec, size_t bytes_transferred)
@@ -148,6 +148,10 @@ public:
 			local_addr.data(), remote_addr.data(), nullptr == tail ? "" : tail, ec.value(), ec.message().data());
 	}
 
+	void show_info_2(const boost::system::error_code& ec, const char* head = nullptr, const char* error_info = nullptr, const char* succ_info = nullptr) const
+		{ec ? show_info(ec, head, error_info) : show_info(head, succ_info);}
+	void show_error_info(const boost::system::error_code& ec, const char* head = nullptr, const char* tail = nullptr) const {if (ec) show_info(ec, head, tail);}
+
 	void show_status() const
 	{
 		std::stringstream s;
@@ -222,7 +226,7 @@ public:
 	///////////////////////////////////////////////////
 
 protected:
-	void force_shutdown() {this->dispatch_in_io_strand([this]() {_force_shutdown();});}
+	void force_shutdown() {this->dispatch_in_io_strand([this]() {if (link_status::FORCE_SHUTTING_DOWN != status) shutdown();});}
 	void graceful_shutdown() {this->dispatch_in_io_strand([this]() {_graceful_shutdown();});}
 
 	//used by ssl and websocket
@@ -286,7 +290,6 @@ private:
 	using super::do_direct_sync_send_msg;
 #endif
 
-	void _force_shutdown() {if (link_status::FORCE_SHUTTING_DOWN != status) shutdown();}
 	void _graceful_shutdown()
 	{
 		if (is_broken())
@@ -320,7 +323,8 @@ private:
 #ifdef ASCS_PASSIVE_RECV
 		if (!is_ready() || this->test_and_set_reading())
 			;
-		else if (!this->async_read(this->make_io_strand_handler([this](const boost::system::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);})))
+		else if (!this->async_read(this->make_io_strand_handler(
+			[this](const boost::system::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);})))
 			this->clear_reading();
 #else
 		this->async_read(this->make_io_strand_handler([this](const boost::system::error_code& ec, size_t bytes_transferred) {recv_handler(ec, bytes_transferred);}));

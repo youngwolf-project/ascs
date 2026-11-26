@@ -51,8 +51,8 @@ public:
 		socket_ptr->set_server_addr(port, ip);
 		return add_socket(socket_ptr, additional_io_context_refs) ? socket_ptr : typename Pool::object_type();
 	}
-	typename Pool::object_type add_socket(unsigned short port, unsigned short local_port, const std::string& ip = ASCS_SERVER_IP, const std::string& local_ip = std::string(),
-		unsigned additional_io_context_refs = 0)
+	typename Pool::object_type add_socket(unsigned short port, unsigned short local_port, const std::string& ip = ASCS_SERVER_IP,
+		const std::string& local_ip = std::string(), unsigned additional_io_context_refs = 0)
 	{
 		auto socket_ptr(this->create_object());
 		if (!socket_ptr)

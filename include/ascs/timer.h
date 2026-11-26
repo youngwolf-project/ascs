@@ -104,7 +104,7 @@ public:
 		}
 		assert (nullptr != ti);
 
-		std::unique_lock<std::mutex> lock(ti->mutex);
+		std::lock_guard<std::mutex> lock(ti->mutex);
 		ti->interval_ms = interval;
 		ti->handler = std::forward<T>(handler);
 

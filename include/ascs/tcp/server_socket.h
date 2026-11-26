@@ -17,7 +17,8 @@
 
 namespace ascs { namespace tcp {
 
-template<typename Socket, typename Server = i_server> class generic_server_socket : public Socket, public std::enable_shared_from_this<generic_server_socket<Socket, Server>>
+template<typename Socket, typename Server = i_server>
+class generic_server_socket : public Socket, public std::enable_shared_from_this<generic_server_socket<Socket, Server>>
 {
 public:
 	typedef generic_server_socket<Socket, Server> type_of_object_restore;
@@ -96,7 +97,8 @@ template<typename Packer, typename Unpacker, typename Server = i_server,
 	template<typename> class InQueue = ASCS_INPUT_QUEUE, template<typename...> class InContainer = ASCS_INPUT_CONTAINER,
 	template<typename> class OutQueue = ASCS_OUTPUT_QUEUE, template<typename...> class OutContainer = ASCS_OUTPUT_CONTAINER,
 	template<typename, typename> class ReaderWriter = reader_writer>
-using unix_server_socket_base = generic_server_socket<socket_base<boost::asio::local::stream_protocol::socket, Packer, Unpacker, InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>, Server>;
+using unix_server_socket_base = generic_server_socket<socket_base<boost::asio::local::stream_protocol::socket, Packer, Unpacker,
+	InQueue, InContainer, OutQueue, OutContainer, ReaderWriter>, Server>;
 #endif
 
 }} //namespace
