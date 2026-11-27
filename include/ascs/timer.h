@@ -61,8 +61,12 @@ public:
 		handler_with_tid handler; //return true from handler to continue the timer, or the timer will stop
 
 		timer_info(tid id_, boost::asio::io_context& io_context_) : id(id_), timer(io_context_) {}
-		bool operator ==(const timer_info& other) const {return id == other.id;}
-		bool operator ==(tid id_) const {return id == id_;}
+		inline bool operator==(const timer_info& other) const {return other == id;}
+		inline bool operator!=(const timer_info& other) const {return other != id;}
+		inline bool operator==(tid id_) const {return id == id_;}
+		inline bool operator!=(tid id_) const {return id != id_;}
+		friend inline bool operator==(tid id, const timer_info& other) {return other == id;}
+		friend inline bool operator!=(tid id, const timer_info& other) {return other != id;}
 	};
 	typedef const timer_info timer_cinfo;
 
@@ -151,7 +155,7 @@ public:
 	bool start_timer(tid id) {auto ti = find_timer(id); if (nullptr == ti) return false; std::lock_guard<std::mutex> lock(ti->mutex); return start_timer(*ti);}
 	void stop_timer(tid id) {auto ti = find_timer(id); if (nullptr != ti) stop_timer(*ti);}
 	void stop_all_timer() {do_something_to_all([this](timer_info& item) {stop_timer(item);});}
-	void stop_all_timer(tid excepted_id) {do_something_to_all(ASCS_COPY_ALL_AND_THIS(timer_info& item) {if (excepted_id != item.id) stop_timer(item);});}
+	void stop_all_timer(tid excepted_id) {do_something_to_all(ASCS_COPY_ALL_AND_THIS(timer_info& item) {if (excepted_id != item) stop_timer(item);});}
 
 	DO_SOMETHING_TO_ALL_MUTEX(timer_can, timer_can_mutex, std::lock_guard<std::mutex>)
 	DO_SOMETHING_TO_ONE_MUTEX(timer_can, timer_can_mutex, std::lock_guard<std::mutex>)
